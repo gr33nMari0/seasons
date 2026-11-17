@@ -8,3 +8,10 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # paper-api is chosen by hand (docs/questions.md, M0 item 8): the main entry stays on the
+      # oldest supported drop, and the MockBukkit entry follows the Paper build MockBukkit names.
+      - dependency-name: io.papermc.paper:paper-api
+      # repo.bluecolored.de refuses Dependabot (403), which fails the whole Gradle update run.
+      # Check BlueMap releases by hand.
+      - dependency-name: de.bluecolored:bluemap-api
