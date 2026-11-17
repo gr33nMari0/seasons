@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ public final class Messages {
   static final String FILE_NAME = "messages.yml";
   private static final String BUNDLED = "/com/petepeterepeat/seasons/core/messages.yml";
   private static final Logger LOG = LoggerFactory.getLogger(Messages.class);
+  private static final Pattern TAG = Pattern.compile("</?[a-z_#!:][^<>]*>");
 
   private final Map<String, String> templates;
 
@@ -34,22 +36,21 @@ public final class Messages {
   /**
    * Loads messages, writing the bundled defaults to the config directory first if the server has no
    * messages.yml yet.
+   *
+   * @throws IOException if the file can't be read; a {@link
+   *     org.spongepowered.configurate.loader.ParsingException} says where a syntax error is
    */
-  public static Messages load(Path configDirectory) {
-    try {
-      Path file = configDirectory.resolve(FILE_NAME);
-      if (Files.notExists(file)) {
-        Files.createDirectories(configDirectory);
-        try (InputStream in = bundled()) {
-          Files.copy(in, file);
-        }
+  public static Messages load(Path configDirectory) throws IOException {
+    Path file = configDirectory.resolve(FILE_NAME);
+    if (Files.notExists(file)) {
+      Files.createDirectories(configDirectory);
+      try (InputStream in = bundled()) {
+        Files.copy(in, file);
       }
-      ConfigurationNode merged = YamlConfigurationLoader.builder().path(file).build().load();
-      merged.mergeFrom(loadBundled());
-      return new Messages(flatten(merged));
-    } catch (IOException e) {
-      throw new UncheckedIOException("Can't load " + FILE_NAME, e);
     }
+    ConfigurationNode merged = YamlConfigurationLoader.builder().path(file).build().load();
+    merged.mergeFrom(loadBundled());
+    return new Messages(flatten(merged));
   }
 
   /** The bundled defaults only. */
@@ -80,6 +81,29 @@ public final class Messages {
       return new Message("<red>Missing message: <key></red>", Map.of("key", key));
     }
     return new Message(template, values);
+  }
+
+  /**
+   * A message as plain text, for Discord posts, logs and text placed inside another message's
+   * placeholder. Placeholders are substituted as written; MiniMessage tags in the template are left
+   * out.
+   */
+  public String text(String key, String... placeholders) {
+    return plain(get(key, placeholders));
+  }
+
+  /** Any message as plain text, as {@link #text} describes. */
+  public static String plain(Message message) {
+    String out = message.template();
+    for (Map.Entry<String, String> placeholder : message.placeholders().entrySet()) {
+      out =
+          out.replace("<" + placeholder.getKey() + ">", "\u0000" + placeholder.getKey() + "\u0000");
+    }
+    out = TAG.matcher(out).replaceAll("");
+    for (Map.Entry<String, String> placeholder : message.placeholders().entrySet()) {
+      out = out.replace("\u0000" + placeholder.getKey() + "\u0000", placeholder.getValue());
+    }
+    return out;
   }
 
   private static ConfigurationNode loadBundled() throws ConfigurateException {

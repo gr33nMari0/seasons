@@ -2,7 +2,13 @@
 package com.petepeterepeat.seasons.paper;
 
 import com.mojang.brigadier.Command;
-import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.petepeterepeat.seasons.core.command.ArgumentType;
+import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -11,7 +17,9 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -30,7 +38,10 @@ final class PaperCommands implements Commands {
             LifecycleEvents.COMMANDS,
             event -> {
               for (CommandNode root : roots) {
-                event.registrar().register(toBrigadier(root).build());
+                if (toBrigadier(root, List.of()).build()
+                    instanceof LiteralCommandNode<CommandSourceStack> literal) {
+                  event.registrar().register(literal);
+                }
               }
             });
   }
@@ -40,22 +51,50 @@ final class PaperCommands implements Commands {
     roots.add(root);
   }
 
-  LiteralArgumentBuilder<CommandSourceStack> toBrigadier(CommandNode node) {
-    LiteralArgumentBuilder<CommandSourceStack> builder =
-        io.papermc.paper.command.brigadier.Commands.literal(node.literal());
+  ArgumentBuilder<CommandSourceStack, ?> toBrigadier(CommandNode node, List<CommandNode> scope) {
+    ArgumentBuilder<CommandSourceStack, ?> builder =
+        switch (node.argument().orElse(null)) {
+          case null -> io.papermc.paper.command.brigadier.Commands.literal(node.name());
+          case ArgumentType.IntegerArgument integer ->
+              io.papermc.paper.command.brigadier.Commands.argument(
+                  node.name(), IntegerArgumentType.integer(integer.min(), integer.max()));
+          case ArgumentType.WordArgument word ->
+              io.papermc.paper.command.brigadier.Commands.argument(
+                  node.name(), StringArgumentType.word());
+          case ArgumentType.GreedyArgument greedy ->
+              io.papermc.paper.command.brigadier.Commands.argument(
+                  node.name(), StringArgumentType.greedyString());
+        };
+    List<CommandNode> inScope = new ArrayList<>(scope);
+    if (!node.isLiteral()) {
+      inScope.add(node);
+    }
     node.permission()
         .ifPresent(
             permission -> builder.requires(source -> source.getSender().hasPermission(permission)));
     node.action()
         .ifPresent(action ->
             builder.executes(context -> {
-              action.run(source(context.getSource().getSender()));
+              action.run(source(context.getSource().getSender()), arguments(context, inScope));
               return Command.SINGLE_SUCCESS;
             }));
     for (CommandNode child : node.children()) {
-      builder.then(toBrigadier(child));
+      builder.then(toBrigadier(child, inScope));
     }
     return builder;
+  }
+
+  private static Arguments arguments(
+      CommandContext<CommandSourceStack> context, List<CommandNode> scope) {
+    Map<String, Object> values = new HashMap<>();
+    for (CommandNode argument : scope) {
+      Class<?> type =
+          argument.argument().orElseThrow() instanceof ArgumentType.IntegerArgument
+              ? Integer.class
+              : String.class;
+      values.put(argument.name(), context.getArgument(argument.name(), type));
+    }
+    return new Arguments(values);
   }
 
   private CommandSource source(CommandSender sender) {

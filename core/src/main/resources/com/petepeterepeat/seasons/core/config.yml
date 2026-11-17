@@ -1,0 +1,65 @@
+# Seasons settings. Every key and its default is listed here; edit, then /season reload.
+# Durations are written like 7d, 1h30m, 10m or 10s. Reference: docs/spec.md, Configuration.
+schema-version: 1
+
+schedule:
+  # false: the season ends only when an admin runs /season end, whatever the planned end says.
+  # true: the end countdown starts by itself at the planned end (or 5 minutes after the next
+  # start, if the server was down then).
+  autoEnd: false
+  # How long before the planned end each reminder goes out, in chat and on Discord.
+  reminders: [7d, 1d, 1h, 10m]
+  # The boss-bar countdown /season end starts. /season end --now skips it.
+  endCountdown: 10m
+
+launch:
+  # The next season starts only with /season launch or the launch button in the Hall.
+  requireManual: true
+
+# What archiving resets for the new season.
+resets:
+  xp: reset                      # reset, keep
+  enderChest: vault              # vault, archive, keep
+  respawnPoint: clear            # clear, keep
+  effects: clear                 # clear, keep
+  advancements: archive-and-reset   # archive-and-reset, keep
+  recipes: keep                  # keep, reset
+
+cells:
+  assignment: random             # random, claim, ordered, manual
+  # Play time a player needs in the season to get a cell.
+  minPlaytime: 0
+  access: open                   # open, bounds, gate
+  # Containers owners may place in their cell during decorating; view-only after the lock.
+  containers: [chest, barrel, shulker_box, decorated_pot]
+
+decorating:
+  # The decorating window opens this long before the planned end (or with /season decorate open).
+  opensBefore: 7d
+  lockAtEnd: true
+  # Time owners get to arrange their cell once archived; then it locks. 0 turns it off.
+  afterArchive: 15m
+
+pets:
+  enabled: true
+  # 0 to 10.
+  maxPerPlayer: 5
+
+firsts:
+  # Items whose first pickup each season is a season first.
+  rareItems: [heavy_core, totem_of_undying, trident, nether_star]
+
+hof:
+  # Where /hof works from: near a bed, no monsters near, no recent damage.
+  entry: { bedDistance: 3, anyBed: true, noHostiles: true, noDamageFor: 10s }
+  # Where /hof leave puts a player when their saved spot is unsafe, in order.
+  returnSafety: { hostileRadius: 8, fallbacks: [bed, nearby, spawn] }
+  # Damage immunity after every Seasons teleport.
+  arrivalImmunity: 5s
+
+dragon:
+  newEggEachSeason: true
+  eggTo: slayer                  # slayer, portal
+
+deaths:
+  display: list

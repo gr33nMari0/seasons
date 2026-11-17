@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Runs acceptance scenarios against a running server and writes results.json.
-// Usage: node run.mjs --host 127.0.0.1 --port 25599 --version 26.1 --admin SeasonsAdmin --out <dir> [scenario...]
+// Usage: node run.mjs --host 127.0.0.1 --port 25599 --version 26.1 --admin SeasonsAdmin --out <dir>
+//        [--server-dir <dir>] [--tls <webhook.p12>] [--session <n>] [scenario...]
 // With no scenario names, every file in scenarios/ runs. Exit code 0 means every scenario passed.
+// A scenario either exports run(ctx), or sessions: [fn, fn, ...] with "// @sessions <n>" at the
+// top of its file; Gradle restarts the server between sessions and --session picks which runs.
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -17,7 +20,10 @@ const { values, positionals } = parseArgs({
     port: { type: 'string', default: '25565' },
     version: { type: 'string' },
     admin: { type: 'string', default: 'SeasonsAdmin' },
-    out: { type: 'string', default: '.' }
+    out: { type: 'string', default: '.' },
+    'server-dir': { type: 'string', default: '.' },
+    tls: { type: 'string' },
+    session: { type: 'string', default: '1' }
   }
 })
 
@@ -38,14 +44,18 @@ for (const name of wanted) {
     port: Number(values.port),
     version: values.version,
     adminName: values.admin,
+    serverDir: values['server-dir'],
+    tls: values.tls,
     log
   })
+  const session = Number(values.session)
+  const body = scenario.sessions ? scenario.sessions[session - 1] : scenario.run
   const started = Date.now()
-  log(`START ${name}`)
+  log(`START ${name} (session ${session})`)
   try {
     let timer
     await Promise.race([
-      scenario.run(ctx),
+      body ? body(ctx) : Promise.reject(new Error(`${name} has no session ${session}`)),
       new Promise((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error(`timed out after ${SCENARIO_TIMEOUT_MS} ms`)), SCENARIO_TIMEOUT_MS)
       })

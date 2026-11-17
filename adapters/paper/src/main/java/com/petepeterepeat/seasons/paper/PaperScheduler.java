@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
 import java.time.Duration;
 import java.util.concurrent.ExecutorService;
@@ -37,6 +38,14 @@ final class PaperScheduler implements Scheduler {
   public void runGlobalLater(Duration delay, Runnable task) {
     long ticks = Math.max(1, delay.toMillis() / MILLIS_PER_TICK);
     server.getGlobalRegionScheduler().runDelayed(plugin, scheduled -> task.run(), ticks);
+  }
+
+  @Override
+  public ScheduledTask runGlobalRepeating(Duration period, Runnable task) {
+    long ticks = Math.max(1, period.toMillis() / MILLIS_PER_TICK);
+    io.papermc.paper.threadedregions.scheduler.ScheduledTask scheduled =
+        server.getGlobalRegionScheduler().runAtFixedRate(plugin, t -> task.run(), ticks, ticks);
+    return scheduled::cancel;
   }
 
   @Override

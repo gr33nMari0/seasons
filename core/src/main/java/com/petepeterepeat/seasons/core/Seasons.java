@@ -2,34 +2,140 @@
 package com.petepeterepeat.seasons.core;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
-import com.petepeterepeat.seasons.core.command.CommandNode;
-import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.announce.Announcer;
+import com.petepeterepeat.seasons.core.announce.Webhooks;
+import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.config.ConfigLoader;
+import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.event.Decision;
-import com.petepeterepeat.seasons.core.message.Messages;
-import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.season.RolloverArchiver;
+import com.petepeterepeat.seasons.core.season.SeasonService;
+import com.petepeterepeat.seasons.core.season.SeasonState;
+import com.petepeterepeat.seasons.core.season.SeasonStore;
+import com.petepeterepeat.seasons.core.store.Journal;
+import com.petepeterepeat.seasons.core.store.JournalRecovery;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.Set;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The Seasons core. An adapter builds its {@link Platform} and starts one of these. */
 public final class Seasons implements SeasonsApi {
   /** Permission for season admin commands such as {@code /season status}. */
   public static final String PERMISSION_ADMIN_SEASON = "seasons.admin.season";
 
+  /** Permission for {@code /season reload} and the other config commands. */
+  public static final String PERMISSION_ADMIN_CONFIG = "seasons.admin.config";
+
+  /** Permission for {@code /season info}. */
+  public static final String PERMISSION_INFO = "seasons.info";
+
+  private static final Logger LOG = LoggerFactory.getLogger(Seasons.class);
+
   private final Platform platform;
   private final String version;
-  private final Messages messages;
+  private final Clock clock;
+  private final Webhooks webhooks;
+  private final RolloverArchiver archiver;
+  private final Map<String, String> environment;
+  private final SerialWriter writer;
+  private final ConfigHolder config = new ConfigHolder(ConfigLoader.defaults());
 
-  public Seasons(Platform platform, String version, Messages messages) {
+  private @Nullable SeasonService service;
+  private @Nullable SeasonCommands commands;
+
+  /**
+   * @param archiver archives players at season end; M1 part 2 replaces the stub
+   * @param environment environment variables, for the webhook overrides
+   * @param writer the file writer thread; Seasons closes it at {@link #stop}
+   */
+  public Seasons(
+      Platform platform,
+      String version,
+      Clock clock,
+      Webhooks webhooks,
+      RolloverArchiver archiver,
+      Map<String, String> environment,
+      SerialWriter writer) {
     this.platform = platform;
     this.version = version;
-    this.messages = messages;
+    this.clock = clock;
+    this.webhooks = webhooks;
+    this.archiver = archiver;
+    this.environment = Map.copyOf(environment);
+    this.writer = writer;
   }
 
-  /** Registers commands and starts deciding intents. */
+  /**
+   * Loads config and state, replays the journal, registers commands and starts the season
+   * lifecycle. Runs on the server thread while the plugin enables.
+   */
   public void start() {
+    Path world = platform.storage().worldDataDirectory();
+    ConfigLoader loader =
+        new ConfigLoader(platform.storage().configDirectory(), world, environment);
+    List<ConfigProblem> startupProblems = loadConfig(loader);
+
+    Journal journal = null;
+    Optional<String> journalError = Optional.empty();
+    try {
+      journal = Journal.open(world.resolve("data/journal.log"), writer, clock);
+      new JournalRecovery(journal).recoverAll();
+    } catch (IOException | RuntimeException e) {
+      journalError = Optional.of(String.valueOf(e.getMessage()));
+      LOG.error("Can't open the journal", e);
+    }
+
+    Announcer announcer =
+        new Announcer(platform.players(), platform.permissions(), webhooks, config);
+    SeasonService seasons =
+        new SeasonService(
+            platform.players(),
+            platform.scheduler(),
+            clock,
+            new SeasonStore(world.resolve("data/season.json"), writer),
+            writer,
+            config,
+            announcer,
+            archiver,
+            world.resolve("seasons"),
+            world.resolve("backups"));
+    service = seasons;
+    seasons.start();
+
+    SeasonCommands built =
+        new SeasonCommands(
+            platform,
+            version,
+            clock,
+            seasons,
+            announcer,
+            config,
+            loader,
+            writer,
+            Optional.ofNullable(journal),
+            journalError,
+            startupProblems);
+    commands = built;
     platform.events().handle(intent -> Decision.allow());
-    platform.commands().register(seasonCommand());
+    platform.commands().register(built.root());
+  }
+
+  /** Stops the lifecycle and finishes queued writes and posts. */
+  public void stop() {
+    if (service != null) {
+      service.stop();
+    }
+    writer.close();
+    webhooks.close();
   }
 
   @Override
@@ -39,34 +145,30 @@ public final class Seasons implements SeasonsApi {
 
   @Override
   public OptionalInt currentSeason() {
-    return OptionalInt.empty();
+    Optional<SeasonState> state = service == null ? Optional.empty() : service.state();
+    return state.map(s -> OptionalInt.of(s.season())).orElse(OptionalInt.empty());
   }
 
-  CommandNode seasonCommand() {
-    return CommandNode.literal("season")
-        .then(
-            CommandNode.literal("status")
-                .permission(PERMISSION_ADMIN_SEASON)
-                .executes(this::status))
-        .build();
+  /** The command handlers, once started. */
+  Optional<SeasonCommands> commands() {
+    return Optional.ofNullable(commands);
   }
 
-  private void status(CommandSource source) {
-    String name = platform.name();
-    source.reply(messages.get("status.header", "version", version, "platform", name));
-    OptionalInt season = currentSeason();
-    if (season.isPresent()) {
-      source.reply(messages.get("status.season", "season", String.valueOf(season.getAsInt())));
-    } else {
-      source.reply(messages.get("status.no-season"));
+  private List<ConfigProblem> loadConfig(ConfigLoader loader) {
+    try {
+      loader.writeDefaults();
+    } catch (IOException e) {
+      LOG.error("Can't write the default config files", e);
     }
-    Set<Capability> gaps = platform.capabilities().gaps();
-    if (gaps.isEmpty()) {
-      source.reply(messages.get("status.capabilities-ok", "platform", name));
+    ConfigLoader.Result result = loader.load();
+    result.warnings().forEach(warning -> LOG.warn("{}", warning));
+    if (result.snapshot().isPresent()) {
+      config.set(result.snapshot().get());
+      return List.of();
     }
-    for (Capability gap : gaps) {
-      source.reply(
-          messages.get("status.capability-gap", "platform", name, "capability", gap.name()));
+    for (ConfigProblem problem : result.problems()) {
+      LOG.error("Config problem, using the bundled defaults: {}", problem);
     }
+    return result.problems();
   }
 }

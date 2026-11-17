@@ -3,6 +3,8 @@
 # The oldest supported drop; the build number stays dynamic within it, as Paper advises.
 paper = "26.3.build.+"
 configurate = "4.2.0"
+# configurate-gson asks for Gson 2.8.0 (2016); the bundled copy is this newer one.
+gson = "2.15.0"
 bstats = "3.2.1"
 bluemap = "2.8.2"
 slf4j = "2.0.20"
@@ -22,6 +24,9 @@ viabackwards = "5.12.2"
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
 configurate-yaml = { module = "org.spongepowered:configurate-yaml", version.ref = "configurate" }
+# JSON data files (docs/adr/0002-configurate-gson.md).
+configurate-gson = { module = "org.spongepowered:configurate-gson", version.ref = "configurate" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 bluemap-api = { module = "de.bluecolored:bluemap-api", version.ref = "bluemap" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }

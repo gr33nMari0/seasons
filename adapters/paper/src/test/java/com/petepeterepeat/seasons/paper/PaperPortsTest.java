@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.port.ProgressBar;
 import java.util.Map;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
@@ -80,5 +81,33 @@ class PaperPortsTest {
 
     assertThat(alex.getInventory().isEmpty()).isTrue();
     assertThat(chest.contains(Material.DIAMOND)).isTrue();
+  }
+
+  @Test
+  void broadcastsReachEveryone() {
+    PlayerMock alex = server.addPlayer("Alex");
+
+    players.broadcast(Message.of("Season 2 ends in 7 days"));
+
+    assertThat(PlainTextComponentSerializer.plainText().serialize(alex.nextComponentMessage()))
+        .isEqualTo("Season 2 ends in 7 days");
+  }
+
+  @Test
+  void theCountdownBarIsShownUpdatedAndHidden() {
+    PlayerMock alex = server.addPlayer("Alex");
+
+    ProgressBar bar = players.showProgressBar(Message.of("Season 2 ends in 10:00"), 1f);
+    assertThat(alex.activeBossBars()).hasSize(1);
+    bar.update(Message.of("Season 2 ends in 9:59"), 2f);
+    assertThat(alex.activeBossBars())
+        .singleElement()
+        .satisfies(shown -> {
+          assertThat(PlainTextComponentSerializer.plainText().serialize(shown.name()))
+              .isEqualTo("Season 2 ends in 9:59");
+          assertThat(shown.progress()).isEqualTo(1f);
+        });
+    bar.hide();
+    assertThat(alex.activeBossBars()).isEmpty();
   }
 }
