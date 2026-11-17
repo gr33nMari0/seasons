@@ -45,4 +45,13 @@ tasks.runServer {
     minecraftVersion(providers.gradleProperty("minecraftVersions").get().split(",").first().trim())
     pluginJars.from(project(":web").tasks.named("shadowJar"))
     jvmArgs("-Dcom.mojang.eula.agree=true")
+    // 26.3 turns the whitelist on for newly created server configs, which locks you out of
+    // your own dev server. Seed run/server.properties with it off; later edits are kept.
+    doFirst {
+        val properties = runDirectory.get().asFile.resolve("server.properties")
+        if (!properties.exists()) {
+            properties.parentFile.mkdirs()
+            properties.writeText("white-list=false\n")
+        }
+    }
 }

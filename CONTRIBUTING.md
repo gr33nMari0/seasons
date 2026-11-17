@@ -15,7 +15,7 @@ Seasons is source-available under the PolyForm Noncommercial License 1.0.0, and 
 - Public Paper API only, and list every Paper API you call in `docs/paper-api.md`.
 - Player-facing text goes in `messages.yml`.
 - Add a changelog entry for every behaviour change.
-- No new dependency without a short record in `docs/adr/`.
+- No new dependency without a short record in `docs/adr/`. After any dependency change (Dependabot pull requests included), refresh `gradle/verification-metadata.xml` with `./gradlew --write-verification-metadata sha256 build scenarioTest` and commit it. Run it with an empty Gradle cache (`GRADLE_USER_HOME=$(mktemp -d)`) so it records everything CI will download.
 
 ## Reporting dupes or exploits
 
