@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -66,7 +67,11 @@ class NbtNeutralityTest {
     assertThat(root.get("id")).asString().startsWith("minecraft:");
   }
 
-  /** A10: archives and vault pages open the same way, and every item in them is vanilla NBT. */
+  /**
+   * A10: archives and vault pages open the same way, and every item in them is vanilla NBT. Some
+   * players, like the admin bot, are archived with nothing; {@link #theArchivesHoldItems} checks
+   * that the run archived items at all.
+   */
   @ParameterizedTest
   @MethodSource("archives")
   void archivesOpenWithAPlainNbtReader(Path file) throws IOException {
@@ -76,9 +81,17 @@ class NbtNeutralityTest {
     assertThat((Integer) root.get("DataVersion")).isPositive();
     List<Map<?, ?>> items = new ArrayList<>();
     collectItems(root, items);
-    assertThat(items).as("items in " + file.getFileName()).isNotEmpty();
     assertThat(items)
         .allSatisfy(item -> assertThat(item.get("id")).asString().startsWith("minecraft:"));
+  }
+
+  @Test
+  void theArchivesHoldItems() throws IOException {
+    List<Map<?, ?>> items = new ArrayList<>();
+    for (Path file : archives().toList()) {
+      collectItems(PlainNbtReader.read(Files.readAllBytes(file)), items);
+    }
+    assertThat(items).as("items in any archive").isNotEmpty();
   }
 
   /** Every compound stored under an "item" key, however deep. */
