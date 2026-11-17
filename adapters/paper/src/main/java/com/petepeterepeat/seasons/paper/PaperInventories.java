@@ -10,11 +10,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -44,24 +44,41 @@ final class PaperInventories implements Inventories {
         encode(player.getEnderChest().getContents()));
   }
 
-  /** The cursor and crafting grid are emptied, and what was there is returned as overflow. */
+  /**
+   * Cursor and crafting-grid items go into free inventory slots first. Whatever doesn't fit stays
+   * where it is, so a crash or a failed write never loses it, and the menu stays open, because
+   * closing it would drop those items.
+   */
   @Override
   public List<NeutralItem> settle(PlayerId id) {
     Player player = online(id);
-    List<NeutralItem> overflow = new ArrayList<>();
-    codec.encode(player.getItemOnCursor()).ifPresent(overflow::add);
-    player.setItemOnCursor(null);
+    PlayerInventory inventory = player.getInventory();
+    ItemStack cursor = player.getItemOnCursor();
+    if (!cursor.isEmpty()) {
+      player.setItemOnCursor(leftover(inventory.addItem(cursor.clone())));
+    }
     // The player's own 2x2 grid, or a crafting table's grid while one is open: both hold items
     // the player put there. Other containers belong to the world and are never touched.
     if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
-      for (ItemStack stack : crafting.getMatrix()) {
-        if (stack != null) {
-          codec.encode(stack).ifPresent(overflow::add);
+      @Nullable ItemStack[] matrix = crafting.getMatrix();
+      for (int slot = 0; slot < matrix.length; slot++) {
+        ItemStack stack = matrix[slot];
+        if (stack != null && !stack.isEmpty()) {
+          matrix[slot] = leftover(inventory.addItem(stack.clone()));
         }
       }
-      crafting.setMatrix(new ItemStack[crafting.getMatrix().length]);
+      crafting.setMatrix(matrix);
     }
-    return overflow;
+    List<NeutralItem> loose = loose(player);
+    if (loose.isEmpty()) {
+      player.closeInventory();
+    }
+    return loose;
+  }
+
+  @Override
+  public List<NeutralItem> loose(PlayerId id) {
+    return loose(online(id));
   }
 
   @Override
@@ -69,15 +86,15 @@ final class PaperInventories implements Inventories {
     Player player = online(id);
     player.getInventory().clear();
     player.setItemOnCursor(null);
-    // The top inventory is the player's own crafting grid only when no container is open.
-    // Otherwise it is a real chest, furnace or the like, which is never cleared.
-    Inventory top = player.getOpenInventory().getTopInventory();
-    if (top.getType() == InventoryType.CRAFTING) {
-      top.clear();
+    // Only the grid: a crafting table's other slot is its result, and every other container is a
+    // real chest, furnace or the like, which is never cleared.
+    if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
+      crafting.setMatrix(new ItemStack[crafting.getMatrix().length]);
     }
     if (enderChest) {
       player.getEnderChest().clear();
     }
+    player.closeInventory();
   }
 
   @Override
@@ -145,6 +162,24 @@ final class PaperInventories implements Inventories {
         inventory.setItem(slot, null);
       }
     }
+  }
+
+  private List<NeutralItem> loose(Player player) {
+    List<NeutralItem> loose = new ArrayList<>();
+    codec.encode(player.getItemOnCursor()).ifPresent(loose::add);
+    if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
+      for (ItemStack stack : crafting.getMatrix()) {
+        if (stack != null) {
+          codec.encode(stack).ifPresent(loose::add);
+        }
+      }
+    }
+    return loose;
+  }
+
+  /** What {@code addItem} couldn't place, as one stack (it was given one), or nothing. */
+  private static @Nullable ItemStack leftover(Map<Integer, ItemStack> notPlaced) {
+    return notPlaced.isEmpty() ? null : notPlaced.values().iterator().next();
   }
 
   private Player online(PlayerId id) {

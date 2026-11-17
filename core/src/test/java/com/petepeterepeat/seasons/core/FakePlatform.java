@@ -277,14 +277,19 @@ public final class FakePlatform {
 
           @Override
           public List<NeutralItem> settle(PlayerId player) {
-            List<NeutralItem> cursor = List.copyOf(state(player).cursor);
-            state(player).cursor.clear();
-            return cursor;
+            // As if the inventory were full: the cursor stays where it is.
+            return List.copyOf(state(player).cursor);
+          }
+
+          @Override
+          public List<NeutralItem> loose(PlayerId player) {
+            return List.copyOf(state(player).cursor);
           }
 
           @Override
           public void clear(PlayerId player, boolean enderChest) {
             InventorySnapshot was = state(player).inventory;
+            state(player).cursor.clear();
             state(player).inventory =
                 new InventorySnapshot(
                     FakeItems.empty(was.storage().size()),

@@ -9,13 +9,20 @@ public interface Inventories {
   InventorySnapshot snapshot(PlayerId player);
 
   /**
-   * Closes any open menu and returns the cursor and crafting-grid items to the inventory. Items
-   * with no room left are taken off the cursor and grid and returned, never dropped.
+   * Returns the cursor and crafting-grid items to the inventory, then closes any open menu. Items
+   * with no room left stay where they are, on the player, and the menu stays open so closing it
+   * can't drop them; {@link #clear} takes them off later. Nothing leaves the player here.
+   *
+   * @return the items left on the cursor and grid, as {@link #loose} would
    */
   List<NeutralItem> settle(PlayerId player);
 
+  /** What is on the player's cursor and crafting grid right now. */
+  List<NeutralItem> loose(PlayerId player);
+
   /**
-   * Empties inventory, armour, off hand, cursor and crafting grid, and the ender chest if asked.
+   * Empties inventory, armour, off hand, cursor and crafting grid, and the ender chest if asked,
+   * then closes any open menu.
    */
   void clear(PlayerId player, boolean enderChest);
 

@@ -34,6 +34,16 @@ public final class ArchiveHash {
     return HexFormat.of().formatHex(digest.digest());
   }
 
+  /**
+   * The same hash over loose items, the cursor and crafting grid, so two copies of them compare by
+   * canonical NBT rather than by the bytes each encoding happened to produce.
+   */
+  public static String ofLoose(List<Optional<NeutralItem>> items) {
+    MessageDigest digest = sha256();
+    section(digest, "loose", items);
+    return HexFormat.of().formatHex(digest.digest());
+  }
+
   /** Whether every slot the hash covers is empty: what a cleared player looks like. */
   public static boolean isEmpty(InventorySnapshot inventory, boolean includeEnderChest) {
     return inventory.storage().stream().allMatch(Optional::isEmpty)

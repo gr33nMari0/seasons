@@ -53,10 +53,12 @@ import org.slf4j.LoggerFactory;
  * Archives one player into one season, exactly once (see Archiving a player in the spec):
  *
  * <ol>
- *   <li>Hold the player, settle cursor and crafting grid, save their file, copy everything.
+ *   <li>Hold the player, return cursor and crafting-grid items to the inventory and close the menu,
+ *       save their file, copy everything. Nothing leaves the player before step 4.
  *   <li>Write the archive file and fsync it, then journal {@code ARCHIVE_STARTED} with its hash.
  *   <li>Seal the vault page, then journal {@code VAULT_SEALED}.
- *   <li>Check the live inventory still matches, clear it, reset the player, save their file.
+ *   <li>Check the live inventory, cursor and grid still match, clear them, reset the player, save
+ *       their file.
  *   <li>Mark them archived in their record, then journal {@code ARCHIVE_DONE}.
  *   <li>Draw their displays, then send them on (their cell, or the new spawn).
  * </ol>
@@ -409,6 +411,15 @@ public final class Archiver implements RolloverArchiver {
       throw new IllegalStateException(
           archive.name() + "'s inventory changed after it was copied, so it wasn't cleared");
     }
+    // The cursor and grid aren't in the hash, since the game doesn't save them; while the player
+    // is online they must still hold exactly the overflow. After a crash they hold whatever the
+    // game kept, and clearing takes that.
+    if (!allowEmpty && !looseMatches(player, archive)) {
+      throw new IllegalStateException(
+          archive.name()
+              + "'s cursor or crafting grid changed after it was copied, so it wasn't"
+              + " cleared");
+    }
     clearAndReset(player, archive.clearsEnderChest());
     platform.players().saveData(player);
     crash.reached(CrashPoint.RESET, player);
@@ -422,6 +433,12 @@ public final class Archiver implements RolloverArchiver {
           crash.reached(CrashPoint.ARCHIVE_DONE, player);
           return (Outcome) new Outcome.Archived(archive);
         });
+  }
+
+  private boolean looseMatches(PlayerId player, ArchiveRecord archive) {
+    List<Optional<NeutralItem>> loose =
+        platform.inventories().loose(player).stream().map(Optional::of).toList();
+    return ArchiveHash.ofLoose(loose).equals(ArchiveHash.ofLoose(archive.overflow()));
   }
 
   private void clearAndReset(PlayerId player, boolean enderChest) {
