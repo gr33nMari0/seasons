@@ -6,4 +6,5 @@ base.archivesName = "seasons-integrations"
 dependencies {
     implementation(project(":core"))
     compileOnly(libs.bluemap.api)
+    testImplementation(libs.slf4j.api)
 }

@@ -3,10 +3,13 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.Seasons;
-import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.season.StubArchiver;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.integrations.discord.DiscordWebhooks;
+import java.time.Clock;
 import java.util.EnumSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +31,7 @@ public final class SeasonsPlugin extends JavaPlugin {
               Capability.FULL_PROTECTION_COVERAGE));
 
   private @Nullable ExecutorService async;
+  private @Nullable Seasons seasons;
 
   @Override
   public void onEnable() {
@@ -63,16 +67,29 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(menus, this);
 
-    Seasons seasons =
+    Seasons started =
         new Seasons(
-            platform, getPluginMeta().getVersion(), Messages.load(storage.configDirectory()));
-    seasons.start();
-    server.getServicesManager().register(SeasonsApi.class, seasons, this, ServicePriority.Normal);
+            platform,
+            getPluginMeta().getVersion(),
+            Clock.systemUTC(),
+            new DiscordWebhooks(),
+            // M1 part 2 replaces this with real archiving.
+            new StubArchiver(),
+            System.getenv(),
+            new SerialWriter());
+    started.start();
+    seasons = started;
+    server.getServicesManager().register(SeasonsApi.class, started, this, ServicePriority.Normal);
   }
 
   @Override
   public void onDisable() {
     getServer().getServicesManager().unregisterAll(this);
+    Seasons running = seasons;
+    if (running != null) {
+      running.stop();
+      seasons = null;
+    }
     ExecutorService executor = async;
     if (executor != null) {
       executor.shutdown();

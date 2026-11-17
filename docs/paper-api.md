@@ -12,12 +12,13 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `paper-plugin.yml` (`dependencies.server`, `permissions`) | resources | Packaging, optional BlueMap, permission defaults |
 | `ServicesManager#register`, `#unregisterAll` | `SeasonsPlugin` | Publishing `SeasonsApi` |
 | `PluginManager#registerEvents` | `SeasonsPlugin` | Listeners |
-| `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `ReloadableRegistrarEvent#registrar()`, `Commands#register`, `Commands.literal` | `PaperCommands` | Brigadier commands |
-| `CommandSourceStack#getSender`; Brigadier `LiteralArgumentBuilder#requires`, `#executes`, `#then`, `Command.SINGLE_SUCCESS` | `PaperCommands` | Command tree, permission checks per node |
+| `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `ReloadableRegistrarEvent#registrar()`, `Commands#register`, `Commands.literal`, `Commands.argument` | `PaperCommands` | Brigadier commands |
+| `CommandSourceStack#getSender`; Brigadier `ArgumentBuilder#requires`, `#executes`, `#then`, `#build`, `LiteralCommandNode`, `CommandContext#getArgument`, `IntegerArgumentType.integer`, `StringArgumentType.word`, `StringArgumentType.greedyString`, `Command.SINGLE_SUCCESS` | `PaperCommands` | Command tree, arguments, permission checks per node |
 | `Permissible#hasPermission` | `PaperCommands`, `PaperPermissions` | Permission checks |
 | `Server#getOnlinePlayers`, `#getPlayer(UUID)`, `#getEntity(UUID)`, `#getWorlds`, `#advancementIterator`, `#createInventory(InventoryHolder, int, Component)` | ports | Lookups |
-| `Server#getGlobalRegionScheduler` (`execute`, `runDelayed`), `#getRegionScheduler().execute`, `Entity#getScheduler().run` | `PaperScheduler` | Folia-compatible scheduling |
+| `Server#getGlobalRegionScheduler` (`execute`, `runDelayed`, `runAtFixedRate`), `ScheduledTask#cancel`, `#getRegionScheduler().execute`, `Entity#getScheduler().run` | `PaperScheduler` | Folia-compatible scheduling, the once-a-second season tick |
 | `Audience#sendMessage(Component)`; Adventure `MiniMessage#deserialize`, `TagResolver`, `Placeholder.unparsed` | `PaperText`, ports | Messages with literal placeholders |
+| `Server#broadcast(Component)`; Adventure `BossBar.bossBar`, `BossBar#name`, `#progress`, `Audience#showBossBar`, `#hideBossBar` (on `Server`) | `PaperPlayers` | Reminders and announcements, the end countdown bar |
 | `PlayerInventory#getStorageContents`, `#getArmorContents`, `#getItemInOffHand`, `#setStorageContents`, `#setArmorContents`, `#setItemInOffHand`, `#clear`; `HumanEntity#getEnderChest`, `#setItemOnCursor`, `#getOpenInventory().getTopInventory()` | `PaperInventories` | Capturing and restoring gear |
 | `ItemStack#serializeAsBytes`, `ItemStack.deserializeBytes`, `ItemStack#isEmpty`, `ItemStack.empty` | `PaperItemCodec` | Neutral item data with its DataVersion |
 | `Advancement#getDisplay`, `#getKey`, `Player#getAdvancementProgress`, `AdvancementProgress#getAwardedCriteria` | `PaperAdvancements` | Visible advancements and progress |
