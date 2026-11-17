@@ -5,7 +5,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Milestone | State | Scenarios passing |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Part 1 done (#8); part 2 in review (#9, branch `m1-archiving`); part 3 next | A1, A2, A4–A12, A15, A40, A47; A13 and A14 moved to M4 (pending confirmation) |
+| M1 Core rollover | Part 1 done (#8); part 2 in review (#9, branch `m1-archiving`); part 3 next | Whole: A1, A2, A7, A8, A9, A10, A40. Part 2's half only: A4 and A5 (no cells yet), A6 (no zone lock until M3), A11 (no displays yet), A12 (no plaque yet), A15 (no Hall yet), A47. A13 and A14 moved to M4 (pending confirmation) |
 | M2 to M7 | Not started | — |
 
 ## M1
@@ -26,18 +26,19 @@ Built: the state machine (Active with Frontier and Open, Ending as countdown the
 
 | Scenario | Test |
 | --- | --- |
-| A4 end state: everyone online archived (inventory, ender chest, XP, advancements, vault), then cleared and reset | `a04-end-state.mjs`; unit: `ArchivingTest#theEndArchivesEveryoneOnlineIntoTheSeason`, `#archivingAgainTakesNothing` |
-| A5 catch-up: an offline player is archived at login, then enters the new season after launch | `a05-catch-up.mjs`; unit: `ArchivingTest#anOfflinePlayerIsArchivedAtLogin…`, `LoginPlanTest` |
-| A6 `/season launch`: refused without a spawn, `--dry-run`, everyone online teleported to the new spawn, deaths objective, announcement | `a06-launch.mjs`; unit: `SeasonsTest`, `LoginPlanTest` |
+| A4 (part 2's half) end state: everyone online archived (inventory, ender chest, XP, advancements, vault), then cleared and reset; "in their own cell" waits for part 3 | `a04-end-state.mjs`; unit: `ArchivingTest#theEndArchivesEveryoneOnlineIntoTheSeason`, `#archivingAgainTakesNothing` |
+| A5 (part 2's half) catch-up: an offline player is archived at login, then enters the new season after launch; "into their cell" waits for part 3 | `a05-catch-up.mjs`; unit: `ArchivingTest#anOfflinePlayerIsArchivedAtLogin…`, `LoginPlanTest` |
+| A6 (part 2's half) `/season launch`: refused without a spawn or while anyone online isn't archived, `--dry-run`, everyone online teleported to the new spawn with title, sound and fireworks, deaths objective, announcement; locking the old-world zones waits for M3 | `a06-launch.mjs`; unit: `SeasonsTest`, `LoginPlanTest` |
 | A7 a crash at each step (file written, `ARCHIVE_STARTED`, `VAULT_SEALED`, reset, `ARCHIVE_DONE`) ends with every item exactly once | `a07-crash-*.mjs` (five, two sessions each); unit: `ArchivingTest#aCrashAtAnyStepEndsWithEveryItemExactlyOnce`, `#recoveryStopsIfTheInventory…`, `JournalRecoveryTest` |
-| A8 the archive view: paged, view only, nothing can be taken | `a08-archive-view.mjs` (opened through the scenario hooks, ADR 0003); unit: `ArchivePagesTest`, `PaperMenusTest` |
+| A8 the archive view: paged, view only, nothing can be taken by any click type, the off-hand swap included | `a08-archive-view.mjs` (opened through the scenario hooks, ADR 0003); unit: `ArchivePagesTest`, `PaperMenusTest` |
 | A9 tripwire: an archived item found in the world is deleted, audited and logged | `a09-tripwire.mjs`; unit: `PaperPortsTest` |
 | A10 archive files are NBT neutral | `NbtNeutralityTest` (archive samples from the testkit) |
-| A11 `/season unarchive`, refused over a full inventory, `--force` keeps what was in the way | `a11-unarchive.mjs`; unit: `ArchivingTest#unarchiveRestoresAndKeeps…` |
-| A12 advancements archived and restored without announcements | `a12-advancements.mjs` |
-| A15 (part 2's half) the furthest block placed from 0,0, in `/season status` | `a15-furthest-block.mjs`; unit: `FurthestBlockTest`, `ArchivingTest#theFurthestBlockCounts…` |
+| A11 (part 2's half) `/season unarchive` restores items and advancements, refused over a full inventory, `--force` keeps what was in the way; removing the displays waits for part 3 | `a11-unarchive.mjs`; unit: `ArchivingTest#unarchiveRestoresAndKeeps…` |
+| A12 (part 2's half) advancements archived with the completed / visible count, the screen empty afterwards, restored without announcements; the plaque waits for part 3 | `a12-advancements.mjs` |
+| A15 (part 2's half) the furthest block placed from 0,0, in `/season status`; "placing one in the Hall doesn't count" waits for the Hall in part 3 | `a15-furthest-block.mjs`; unit: `FurthestBlockTest`, `ArchivingTest#theFurthestBlockCounts…` |
 | A47 (second half) players from before Seasons are archived into the init season | `ArchivingTest#aPlayerFromBeforeSeasons…`, `m1-archive-commands.mjs` |
 | `/season archive`, `spawn set`, `reprocess` | `m1-archive-commands.mjs` (two sessions) |
+| Review fixes: nothing leaves the player before the clear (cursor and grid), archive files never overwritten, unarchive never re-archived into an older season, launch waits for unarchived players, players held at login | unit: `ArchivingTest#aCrashAtAnyStep…` (with a cursor item), `#aFailedWriteLeavesEverything…`, `#aJoiningPlayerIsHeld…`, `#unarchivingDuringALaterSeason…`, `#unarchivingAnOlderSeason…`, `#anArchiveFileIsMovedAside…`, `PaperPortsTest#settling…` |
 
 A13 (firsts) and A14 (season card): moved to M4 (pending confirmation), see `docs/questions.md` 27. Not failing; not part of M1.
 
@@ -47,6 +48,6 @@ Movement spike (folded into A5, A6, A15): server-side teleports of bots work thr
 
 Part 3 seams, empty until then: `Galleries.lockAll`, `CellDirectory` (returns no cells, which is why archived players "stay"), `DisplayRenderer`, `HallBounds`.
 
-**Part 3: the Hall** (next). Cells (random assignment, swaps, tagging by command), figure displays, the plaque, archive anchors, legacy import. Scenarios A3, A20, A21, A46, A50, A51, and the Hall halves of A4, A5, A11, A15 and A47. A8 switches from the scenario hook to clicking an archive anchor (the TODO in `a08-archive-view.mjs`).
+**Part 3: the Hall** (next). Cells (random assignment, swaps, tagging by command), figure displays, the plaque, archive anchors, legacy import. Scenarios A3, A20, A21, A46, A50, A51, and the Hall halves of A4, A5, A11, A12, A15 and A47. A6's zone lock comes with zones in M3. A8 switches from the scenario hook to clicking an archive anchor (the TODO in `a08-archive-view.mjs`).
 
 Known limits: test bots stand still and send no movement packets, and can't place blocks themselves (ADR 0001); M2/M3's walking, flying and pearl scenarios need a Mineflayer that speaks the server's version.
