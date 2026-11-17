@@ -375,6 +375,11 @@ final class PaperImports implements Imports {
     return frame.getUniqueId();
   }
 
+  @Override
+  public void saveWorld(String dimension) {
+    PaperPositions.world(dimension).ifPresent(World::save);
+  }
+
   private static Byte flag(boolean value) {
     return value ? (byte) 1 : (byte) 0;
   }

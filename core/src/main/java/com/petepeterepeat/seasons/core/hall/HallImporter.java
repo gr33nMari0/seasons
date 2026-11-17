@@ -455,11 +455,21 @@ public final class HallImporter {
             live -> {
               clear(imported, live);
               crash.reached(CrashPoint.IMPORT_CLEARED, owner);
+              platform.imports().saveWorld(bounds.dimension());
               tag(ref.get(), owner, season, imported);
               return journal.append(JournalKind.IMPORT_DONE, owner, season, record.contentHash());
             },
             serverThread)
-        .thenComposeAsync(done -> renderer.render(owner, season), serverThread);
+        .thenComposeAsync(
+            done ->
+                renderer
+                    .render(owner, season)
+                    .exceptionally(e -> {
+                      // The import is done; /hof reconcile draws the figure again.
+                      LOG.error("Drawing the imported figure of {} failed", owner, e);
+                      return null;
+                    }),
+            serverThread);
   }
 
   /**
@@ -651,7 +661,14 @@ public final class HallImporter {
                 platform
                     .imports()
                     .scan(bounds.min(), bounds.max())
-                    .thenApplyAsync(live -> putBack(gallery, cell, record, live), serverThread),
+                    .thenApplyAsync(
+                        live -> {
+                          ArchiveRecord putBack = putBack(gallery, cell, record, live);
+                          // On disk before the record goes aside, so no item is ever in neither.
+                          platform.imports().saveWorld(bounds.dimension());
+                          return putBack;
+                        },
+                        serverThread),
             serverThread)
         .thenCompose(record ->
             writer

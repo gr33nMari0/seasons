@@ -21,8 +21,11 @@ export default {
     const built = await buildSeasonOneCell(ctx, admin, { x: 60, z: 40, head: 'Owner', chests: 3 })
     const stand = at('minecraft:armor_stand', built.stand)
     const frame = at('minecraft:item_frame', built.frame)
+    // One command at a time: replies are matched by their text, not by which command asked.
+    const chests = []
+    for (const chest of built.chests) chests.push(await blockItems(ctx, admin, chest))
     const before = {
-      chests: await Promise.all(built.chests.map((c) => blockItems(ctx, admin, c))),
+      chests,
       stand: await selectorData(ctx, admin, stand, 'equipment'),
       frame: await selectorData(ctx, admin, frame, 'Item')
     }

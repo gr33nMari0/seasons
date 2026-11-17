@@ -177,17 +177,8 @@ public final class Seasons implements SeasonsApi {
       replay.register(Operation.UNARCHIVE, unarchiving.recovery());
       HallImporter importing =
           new HallImporter(
-              platform,
-              writer,
-              journal,
-              archives,
-              players,
-              halls,
-              renderer,
-              audit,
-              crash,
-              clock,
-              world.resolve("seasons"));
+              platform, writer, journal, archives, players, halls, renderer, audit, crash, clock,
+              world);
       replay.register(Operation.IMPORT, importing.recovery());
       replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
       importer = Optional.of(importing);

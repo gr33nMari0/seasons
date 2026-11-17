@@ -104,7 +104,6 @@ final class PaperDisplays implements Displays {
                   for (int i = 0; i < FIGURE_SLOTS.size() && i < figure.equipment().size(); i++) {
                     EquipmentSlot slot = FIGURE_SLOTS.get(i);
                     equipment.setItem(slot, copy(figure.equipment().get(i)));
-                    equipment.setDropChance(slot, 0f);
                   }
                   tag(spawned, figure.tag());
                 });

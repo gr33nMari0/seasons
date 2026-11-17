@@ -15,6 +15,7 @@ export const FLOOR = -60
  */
 export async function buildGallery (ctx, admin, { id = 'season-2', season = 2, cells = 4, x = 20, z = 20 } = {}) {
   const width = 6 * (cells + 1)
+  await forceload(ctx, admin, x, z, x + width, z + 10)
   await ctx.command(admin, `/hof gallery create ${id} ${season}`, new RegExp(`^Created gallery ${id} for Season ${season}\\.$`))
   await ctx.command(admin, `/hof gallery bounds ${id} ${x} ${FLOOR - 1} ${z} ${x + width} ${FLOOR + 10} ${z + 10}`, new RegExp(`^Gallery ${id} now spans `))
   await ctx.command(admin, `/hof gallery entry ${id} ${x + 1} ${FLOOR} ${z + 1}`, new RegExp(`^Gallery ${id}'s entry is now at `))
@@ -43,6 +44,11 @@ export async function buildGallery (ctx, admin, { id = 'season-2', season = 2, c
     built.push(cell)
   }
   return built
+}
+
+/** Keeps the chunks under a build loaded, so commands can reach them however far from spawn. */
+async function forceload (ctx, admin, x1, z1, x2, z2) {
+  await ctx.command(admin, `/forceload add ${x1} ${z1} ${x2} ${z2}`, /^(Marked|No chunks were marked)/)
 }
 
 async function anchor (ctx, admin, cell, type, at, yaw) {
@@ -129,46 +135,55 @@ export function uuidIntArray (bytes) {
   return `[I;${ints.join(',')}]`
 }
 
-/** A textures property value naming a fake skin, so each head's skin can be told apart. */
+/**
+ * A textures property value naming a fake skin, so each head's skin can be told apart. Short,
+ * because chat commands stop at 256 characters.
+ */
 export function skinValue (name) {
-  return Buffer.from(JSON.stringify({ textures: { SKIN: { url: `http://textures.minecraft.net/texture/${name.toLowerCase()}seasons` } } })).toString('base64')
+  return Buffer.from(JSON.stringify({ n: name })).toString('base64')
 }
 
-/** A player head item as NBT, with the profile and skin of `name`. */
-export function headNbt (name) {
-  return `{id:"minecraft:player_head",count:1,components:{"minecraft:profile":{id:${uuidIntArray(offlineUuid(name))},name:"${name}",properties:[{name:"textures",value:"${skinValue(name)}"}]}}}`
+/** A player head item with the profile and skin of `name`, as /item takes it. */
+export function headItem (name) {
+  return `player_head[profile={id:${uuidIntArray(offlineUuid(name))},name:"${name}",properties:[{name:"textures",value:"${skinValue(name)}"}]}]`
 }
 
 /**
  * Builds a Season 1 cell by hand at x..x+10, z..z+8: an armour stand with gear and (unless
  * `head` is null) a player head, `chests` single chests of items along the back wall, and an item
- * frame with an emerald on a stone block. Resolves with the positions.
+ * frame with an emerald on a stone block. Items go in one /item at a time: chat commands stop at
+ * 256 characters. Resolves with the positions.
  */
 export async function buildSeasonOneCell (ctx, admin, { x, z, head, chests = 3 }) {
+  await forceload(ctx, admin, x, z, x + 16, z + 10)
   const stand = { x: x + 5, y: FLOOR, z: z + 4 }
   const chestAt = []
   for (let i = 0; i < chests; i++) {
     const at = { x: x + 2 + 3 * i, y: FLOOR, z: z + 7 }
     chestAt.push(at)
-    const items = [
-      `{Slot:0b,id:"minecraft:diamond",count:${i + 1}}`,
-      `{Slot:${4 + i}b,id:"minecraft:oak_log",count:${10 + i}}`,
-      `{Slot:26b,id:"minecraft:shulker_box",count:1,components:{"minecraft:container":[{slot:0,item:{id:"minecraft:gold_ingot",count:${i + 2}}}]}}`
-    ]
-    await ctx.command(admin, `/setblock ${at.x} ${at.y} ${at.z} minecraft:chest[facing=north]{Items:[${items.join(',')}]}`, /^Changed the block/)
+    const block = `block ${at.x} ${at.y} ${at.z}`
+    await ctx.command(admin, `/setblock ${at.x} ${at.y} ${at.z} minecraft:chest[facing=north]`, /^Changed the block/)
+    await ctx.command(admin, `/item replace ${block} container.0 with minecraft:diamond ${i + 1}`, /^Replaced /)
+    await ctx.command(admin, `/item replace ${block} container.${4 + i} with minecraft:oak_log ${10 + i}`, /^Replaced /)
+    await ctx.command(admin, `/item replace ${block} container.26 with minecraft:shulker_box[container=[{slot:0,item:{id:"minecraft:gold_ingot",count:${i + 2}}}]]`, /^Replaced /)
   }
   const wall = { x: x + 1, y: FLOOR + 1, z: z + 8 }
   const frame = { x: x + 1, y: FLOOR + 1, z: z + 7 }
   await ctx.command(admin, `/setblock ${wall.x} ${wall.y} ${wall.z} minecraft:stone`, /^Changed the block/)
   await ctx.command(admin, `/summon minecraft:item_frame ${frame.x} ${frame.y} ${frame.z} {Facing:2b,Item:{id:"minecraft:emerald",count:1}}`, /^Summoned /)
-  const equipment = [
-    'chest:{id:"minecraft:iron_chestplate",count:1}',
-    'feet:{id:"minecraft:golden_boots",count:1}',
-    'mainhand:{id:"minecraft:diamond_sword",count:1}',
-    'offhand:{id:"minecraft:torch",count:5}'
+  const tag = `s1x${x}`
+  await ctx.command(admin, `/summon minecraft:armor_stand ${stand.x + 0.5} ${stand.y} ${stand.z + 0.5} {ShowArms:1b,Rotation:[180f,0f],Tags:["${tag}"]}`, /^Summoned /)
+  const target = `entity @e[type=armor_stand,tag=${tag}]`
+  const gear = [
+    ['armor.chest', 'minecraft:iron_chestplate'],
+    ['armor.feet', 'minecraft:golden_boots'],
+    ['weapon.mainhand', 'minecraft:diamond_sword'],
+    ['weapon.offhand', 'minecraft:torch 5']
   ]
-  if (head) equipment.push(`head:${headNbt(head)}`)
-  await ctx.command(admin, `/summon minecraft:armor_stand ${stand.x + 0.5} ${stand.y} ${stand.z + 0.5} {ShowArms:1b,Rotation:[180f,0f],equipment:{${equipment.join(',')}}}`, /^Summoned /)
+  if (head) gear.push(['armor.head', headItem(head)])
+  for (const [slot, item] of gear) {
+    await ctx.command(admin, `/item replace ${target} ${slot} with ${item}`, /^Replaced /)
+  }
   return { stand, chests: chestAt, frame }
 }
 

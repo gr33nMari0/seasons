@@ -18,6 +18,8 @@ export function importCrashScenario (name, point) {
         await ctx.command(admin, '/hof gallery bounds season-1 58 -61 38 76 -50 50', /^Gallery season-1 now spans /)
         await ctx.command(admin, '/hof cell new season-1 owner', /^Created cell owner /)
         await ctx.command(admin, '/hof cell bounds season-1:owner 59 -61 39 75 -52 49', /^Cell season-1:owner now spans /)
+        // The cell was built long before the import: on disk, as a halt keeps only what is saved.
+        await ctx.command(admin, '/save-all flush', /^Saved the game/)
         await ctx.command(admin, `/scenario crash-at ${point} Owner`, /^Armed crash point /)
         const gone = ctx.disconnected(admin)
         admin.chat('/hof import season-1')

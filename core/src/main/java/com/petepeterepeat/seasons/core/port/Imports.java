@@ -34,6 +34,12 @@ public interface Imports {
   UUID spawnFrame(Position at, Map<String, Object> properties, Optional<NeutralItem> item);
 
   /**
+   * Writes a dimension's changed chunks to disk, so a crash can't bring back what an import took
+   * out or lose what an undo put back.
+   */
+  void saveWorld(String dimension);
+
+  /**
    * Everything in a box that an import cares about.
    *
    * @param signs the text of each sign, one string per sign
