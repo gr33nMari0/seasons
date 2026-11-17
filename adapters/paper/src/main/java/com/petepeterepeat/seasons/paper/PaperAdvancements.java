@@ -8,28 +8,35 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.advancement.Advancement;
 import org.bukkit.advancement.AdvancementProgress;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
 
 /**
  * Advancements, including the hidden ones without a display. Recipe unlocks ({@code
  * minecraft:recipes/...}) are left alone unless recipes reset too.
  */
-final class PaperAdvancements implements Advancements {
+final class PaperAdvancements implements Advancements, Listener {
   private static final String RECIPES = "recipes/";
 
   private final Server server;
   private final PaperPlayers players;
+  private final Set<UUID> restoring = new HashSet<>();
 
   PaperAdvancements(Server server, PaperPlayers players) {
     this.server = server;
@@ -115,13 +122,26 @@ final class PaperAdvancements implements Advancements {
   @Override
   public void award(PlayerId id, Map<String, Map<String, Instant>> criteria) {
     Player player = online(id);
-    criteria.forEach((key, awarded) ->
-        Optional.ofNullable(NamespacedKey.fromString(key))
-            .map(server::getAdvancement)
-            .ifPresent(advancement -> {
-              AdvancementProgress progress = progress(player, advancement);
-              awarded.keySet().forEach(progress::awardCriteria);
-            }));
+    restoring.add(player.getUniqueId());
+    try {
+      criteria.forEach((key, awarded) ->
+          Optional.ofNullable(NamespacedKey.fromString(key))
+              .map(server::getAdvancement)
+              .ifPresent(advancement -> {
+                AdvancementProgress progress = progress(player, advancement);
+                awarded.keySet().forEach(progress::awardCriteria);
+              }));
+    } finally {
+      restoring.remove(player.getUniqueId());
+    }
+  }
+
+  /** Advancements given back by unarchive aren't announced in chat. */
+  @EventHandler(priority = EventPriority.HIGHEST)
+  void onDone(PlayerAdvancementDoneEvent event) {
+    if (restoring.contains(event.getPlayer().getUniqueId())) {
+      event.message(null);
+    }
   }
 
   @Override

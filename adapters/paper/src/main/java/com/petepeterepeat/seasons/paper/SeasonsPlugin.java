@@ -48,6 +48,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperInventories inventories = new PaperInventories(players, codec, archived);
     PaperEvents events = new PaperEvents(this, text, inventories);
     PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
+    PaperAdvancements advancements = new PaperAdvancements(server, players);
     PaperStorage storage = new PaperStorage(this, server);
     Platform platform =
         new Platform(
@@ -55,7 +56,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             CAPABILITIES,
             players,
             inventories,
-            new PaperAdvancements(server, players),
+            advancements,
             new PaperWorld(),
             new PaperEntities(server),
             new PaperDisplays(server, text, new NamespacedKey(this, "display")),
@@ -70,6 +71,7 @@ public final class SeasonsPlugin extends JavaPlugin {
 
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(menus, this);
+    server.getPluginManager().registerEvents(advancements, this);
 
     // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
     Optional<ScenarioHooks> hooks =
