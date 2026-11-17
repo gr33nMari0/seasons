@@ -9,6 +9,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
@@ -37,7 +39,12 @@ final class PaperInventories implements Inventories {
     Player player = online(id);
     player.getInventory().clear();
     player.setItemOnCursor(null);
-    player.getOpenInventory().getTopInventory().clear();
+    // The top inventory is the player's own crafting grid only when no container is open.
+    // Otherwise it is a real chest, furnace or the like, which is never cleared.
+    Inventory top = player.getOpenInventory().getTopInventory();
+    if (top.getType() == InventoryType.CRAFTING) {
+      top.clear();
+    }
     player.getEnderChest().clear();
   }
 

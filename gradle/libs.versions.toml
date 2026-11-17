@@ -13,6 +13,7 @@ junit = "6.1.3"
 assertj = "3.27.7"
 mockbukkit = "4.120.0"
 # The Paper build MockBukkit was made against (Paper-Version in its manifest); tests run on it.
+# Dependabot ignores paper-api: bump this by hand whenever mockbukkit changes.
 paper-mockbukkit = "26.3.build.200-stable"
 # Test servers only: lets the Mineflayer bots, which trail the newest drop, join (docs/adr/0001).
 viaversion = "5.12.2"
