@@ -98,6 +98,10 @@ public final class SeasonStore {
       setInstant(node, "launchedAt", state.launchedAt());
       setInstant(node, "homecomingAt", state.homecomingAt());
       setInstant(node, "countdownInterrupted", state.countdownInterrupted());
+      if (state.initSeason().isPresent()) {
+        node.node("initSeason").set(state.initSeason().get());
+      }
+      node.node("launchApplied").set(state.launchApplied());
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -149,7 +153,11 @@ public final class SeasonStore {
         node.node("autoEndStarted").getBoolean(false),
         optional(node.node("launchedAt"), Instant::parse),
         optional(node.node("homecomingAt"), Instant::parse),
-        optional(node.node("countdownInterrupted"), Instant::parse));
+        optional(node.node("countdownInterrupted"), Instant::parse),
+        node.node("initSeason").virtual()
+            ? Optional.empty()
+            : Optional.of(node.node("initSeason").getInt()),
+        node.node("launchApplied").getBoolean(true));
   }
 
   private static GsonConfigurationLoader loader(@Nullable StringWriter out) {

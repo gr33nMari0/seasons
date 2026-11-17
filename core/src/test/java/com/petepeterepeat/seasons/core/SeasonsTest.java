@@ -4,11 +4,10 @@ package com.petepeterepeat.seasons.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.petepeterepeat.seasons.core.announce.Webhooks;
-import com.petepeterepeat.seasons.core.command.ArgumentType;
-import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
@@ -16,7 +15,6 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
-import com.petepeterepeat.seasons.core.season.StubArchiver;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.net.URI;
@@ -26,12 +24,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -75,16 +73,25 @@ class SeasonsTest {
     return start(new Capabilities(EnumSet.allOf(Capability.class)), recordingArchiver);
   }
 
-  private Seasons start(Capabilities capabilities, RolloverArchiver archiver) {
+  /**
+   * Starts Seasons on the fake platform.
+   *
+   * @param archiver ends seasons instead of the real archiver, or null for the real one
+   */
+  private Seasons start(Capabilities capabilities, @Nullable RolloverArchiver archiver) {
     seasons =
         new Seasons(
             fake.platform(capabilities, dir),
             "1.2.3",
             fake.clock,
             webhooks,
-            archiver,
+            Hall.none(),
             Map.of(),
-            new SerialWriter(Runnable::run));
+            new SerialWriter(Runnable::run),
+            Optional.empty());
+    if (archiver != null) {
+      seasons.useArchiver(archiver);
+    }
     seasons.start();
     return seasons;
   }
@@ -114,35 +121,7 @@ class SeasonsTest {
 
   /** Runs a command line against the registered tree, as an adapter would. */
   private void run(TestSource source, String command) {
-    CommandNode node = fake.commands.getFirst();
-    String[] words = command.split(" ");
-    Map<String, Object> values = new HashMap<>();
-    for (int i = 1; i < words.length; i++) {
-      String word = words[i];
-      Optional<CommandNode> literal =
-          node.children().stream().filter(c -> c.isLiteral() && c.name().equals(word)).findFirst();
-      if (literal.isPresent()) {
-        node = literal.get();
-        continue;
-      }
-      CommandNode argument =
-          node.children().stream()
-              .filter(c -> !c.isLiteral())
-              .findFirst()
-              .orElseThrow(() -> new AssertionError("no command at '" + word + "' in " + command));
-      if (argument.argument().get() instanceof ArgumentType.GreedyArgument) {
-        values.put(argument.name(), String.join(" ", List.of(words).subList(i, words.length)));
-        node = argument;
-        break;
-      }
-      values.put(
-          argument.name(),
-          argument.argument().get() instanceof ArgumentType.IntegerArgument
-              ? (Object) Integer.parseInt(word)
-              : word);
-      node = argument;
-    }
-    node.action().orElseThrow().run(source, new Arguments(values));
+    TestCommands.run(fake.commands.getFirst(), source, command);
   }
 
   private List<String> broadcasts() {
@@ -174,7 +153,7 @@ class SeasonsTest {
 
   @Test
   void statusReportsVersionNoSeasonJournalAndCapabilityGaps() {
-    start(new Capabilities(EnumSet.of(Capability.MANNEQUINS)), new StubArchiver());
+    start(new Capabilities(EnumSet.of(Capability.MANNEQUINS)), null);
 
     TestSource source = run("/season status");
 

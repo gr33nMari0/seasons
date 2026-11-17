@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.config;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.AtomicFiles;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.yaml.NodeStyle;
@@ -40,6 +42,25 @@ public final class SeasonFiles {
         node ->
             node.node("schedule", "plannedEnd")
                 .set(plannedEnd.map(ZonedTimes::format).orElse(null)));
+  }
+
+  /**
+   * Sets {@code spawn}. Whole-block positions are written as the block's centre, which is where a
+   * player stands.
+   */
+  public static void writeSpawn(Path file, Path backupDir, int season, Position spawn)
+      throws IOException {
+    edit(
+        file,
+        backupDir,
+        season,
+        node -> {
+          ConfigurationNode at = node.node("spawn");
+          at.node("dimension").set(spawn.dimension());
+          at.node("pos")
+              .setList(Integer.class, List.of(spawn.blockX(), spawn.blockY(), spawn.blockZ()));
+          at.node("yaw").set(Math.round(spawn.yaw()));
+        });
   }
 
   private interface Edit {

@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.ProgressBar;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
@@ -51,6 +52,22 @@ public final class SeasonService {
   public static final String ADMIN_PERMISSION = "seasons.admin.season";
 
   private static final Logger LOG = LoggerFactory.getLogger(SeasonService.class);
+
+  /** What launch does to the world and the players, once the new season is saved. */
+  public interface Launcher {
+    /**
+     * Why the next season can't launch now, as a messages.yml key whose placeholders are {@code
+     * <season>} and {@code <next>}; empty if it can.
+     */
+    Optional<String> refusal(int nextSeason);
+
+    /**
+     * Sets the world spawn, resets the dragon flag, creates the deaths objective and brings
+     * everyone online into the launched season. Harmless to run again after a crash.
+     */
+    CompletableFuture<Void> apply(SeasonState launched);
+  }
+
   private static final Duration TICK = Duration.ofSeconds(1);
 
   private final Players players;
@@ -61,6 +78,7 @@ public final class SeasonService {
   private final Supplier<ConfigSnapshot> config;
   private final Announcer announcer;
   private final RolloverArchiver archiver;
+  private final Launcher launcher;
   private final Path seasonsDirectory;
   private final Path backupsDirectory;
   private final Executor serverThread;
@@ -85,6 +103,7 @@ public final class SeasonService {
       Supplier<ConfigSnapshot> config,
       Announcer announcer,
       RolloverArchiver archiver,
+      Launcher launcher,
       Path seasonsDirectory,
       Path backupsDirectory) {
     this.players = players;
@@ -95,6 +114,7 @@ public final class SeasonService {
     this.config = config;
     this.announcer = announcer;
     this.archiver = archiver;
+    this.launcher = launcher;
     this.seasonsDirectory = seasonsDirectory;
     this.backupsDirectory = backupsDirectory;
     this.serverThread = scheduler::runGlobal;
@@ -129,6 +149,10 @@ public final class SeasonService {
       reconcilePlannedEnd(config.get());
       if (state.get().phase() instanceof Archiving) {
         endAfterSave();
+      }
+      if (state.get().phase() instanceof Phase.Active && !state.get().launchApplied()) {
+        LOG.warn("Season {} launched but didn't finish; finishing it now", seasonNumber());
+        launchAfterSave();
       }
     }
     ticker = scheduler.runGlobalRepeating(TICK, this::tick);
@@ -200,6 +224,47 @@ public final class SeasonService {
       }
     }
     return transition;
+  }
+
+  /**
+   * Why {@code /season launch} would be refused now, as a messages.yml key; empty if it wouldn't.
+   */
+  public Optional<String> launchRefusal() {
+    Transition would = SeasonMachine.apply(state, new SeasonEvent.Launch(), clock.instant());
+    if (would instanceof Transition.Refused refused) {
+      return Optional.of(refused.messageKey());
+    }
+    return launcher.refusal(state.map(SeasonState::season).orElse(0) + 1);
+  }
+
+  /** {@code /season launch}. */
+  public Transition launch() {
+    Optional<String> refusal = launchRefusal();
+    if (refusal.isPresent()) {
+      return new Transition.Refused(refusal.get());
+    }
+    Transition transition = apply(new SeasonEvent.Launch());
+    if (transition instanceof Changed) {
+      launchAfterSave();
+    }
+    return transition;
+  }
+
+  /**
+   * {@code /season spawn set}: the next season's spawn, written to its season file. Completes with
+   * that season's number once the file is on disk.
+   */
+  public CompletableFuture<Integer> setNextSpawn(Position spawn) {
+    if (state.isEmpty()) {
+      return CompletableFuture.failedFuture(new IllegalStateException("no season is recorded"));
+    }
+    int next = state.get().season() + 1;
+    Path file = seasonFile(next);
+    Path backups = backupsDirectory.resolve("seasons");
+    return writer.submit(() -> {
+      SeasonFiles.writeSpawn(file, backups, next, spawn);
+      return next;
+    });
   }
 
   /** {@code /season cancel}. */
@@ -347,6 +412,29 @@ public final class SeasonService {
               }
             },
             serverThread);
+  }
+
+  /** Applies the launch once the new season is on disk, then records that it finished. */
+  private void launchAfterSave() {
+    var _ =
+        lastSave
+            .thenComposeAsync(saved -> launcher.apply(state.orElseThrow()), serverThread)
+            .whenCompleteAsync(
+                (done, failure) -> {
+                  if (failure != null) {
+                    LOG.error("Launching Season {} stopped", seasonNumber(), failure);
+                    announcer.admins(
+                        ADMIN_PERMISSION,
+                        "launch.failed",
+                        "season",
+                        seasonNumber(),
+                        "error",
+                        String.valueOf(failure.getMessage()));
+                    return;
+                  }
+                  state.ifPresent(current -> update(current.withLaunchApplied()));
+                },
+                serverThread);
   }
 
   private void updateBar(Countdown running) {

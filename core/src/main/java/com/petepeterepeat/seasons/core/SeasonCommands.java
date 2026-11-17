@@ -6,6 +6,10 @@ import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_SEASON;
 import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_INFO;
 
 import com.petepeterepeat.seasons.core.announce.Announcer;
+import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
+import com.petepeterepeat.seasons.core.archive.Archiver;
+import com.petepeterepeat.seasons.core.archive.Unarchiver;
+import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
@@ -18,9 +22,16 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.player.FurthestTracker;
+import com.petepeterepeat.seasons.core.player.LoginPlan;
+import com.petepeterepeat.seasons.core.player.LoginService;
+import com.petepeterepeat.seasons.core.player.PlayerRecord;
+import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.Phase;
 import com.petepeterepeat.seasons.core.season.SeasonEvent;
@@ -40,6 +51,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -50,6 +62,7 @@ import org.slf4j.LoggerFactory;
 final class SeasonCommands {
   private static final String DRY_RUN = "--dry-run";
   private static final String NOW = "--now";
+  private static final String FORCE = "--force";
   private static final Logger LOG = LoggerFactory.getLogger(SeasonCommands.class);
 
   private final Platform platform;
@@ -63,6 +76,21 @@ final class SeasonCommands {
   private final Optional<Journal> journal;
   private final Optional<String> journalError;
   private final List<ConfigProblem> startupProblems;
+  private final Services services;
+
+  /**
+   * What the archive commands work with. The archiving services are empty when the journal couldn't
+   * be opened, and those commands are then refused.
+   */
+  record Services(
+      Optional<Archiver> archiver,
+      Optional<Unarchiver> unarchiver,
+      Optional<JournalRecovery> recovery,
+      PlayerStore players,
+      FurthestTracker furthest,
+      Optional<LoginService> login,
+      ArchiveFiles archives,
+      VaultFiles vaults) {}
 
   SeasonCommands(
       Platform platform,
@@ -75,7 +103,8 @@ final class SeasonCommands {
       SerialWriter writer,
       Optional<Journal> journal,
       Optional<String> journalError,
-      List<ConfigProblem> startupProblems) {
+      List<ConfigProblem> startupProblems,
+      Services services) {
     this.platform = platform;
     this.version = version;
     this.clock = clock;
@@ -87,6 +116,7 @@ final class SeasonCommands {
     this.journal = journal;
     this.journalError = journalError;
     this.startupProblems = List.copyOf(startupProblems);
+    this.services = services;
   }
 
   CommandNode root() {
@@ -115,6 +145,37 @@ final class SeasonCommands {
                 .permission(PERMISSION_ADMIN_SEASON)
                 .executes(this::end)
                 .then(CommandNode.argument("options", ArgumentType.greedy()).executes(this::end)))
+        .then(
+            CommandNode.literal("launch")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::launch)
+                .then(
+                    CommandNode.argument("options", ArgumentType.greedy()).executes(this::launch)))
+        .then(
+            CommandNode.literal("spawn")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(CommandNode.literal("set").executes(this::setSpawn)))
+        .then(
+            CommandNode.literal("archive")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(CommandNode.argument("player", ArgumentType.word()).executes(this::archive)))
+        .then(
+            CommandNode.literal("unarchive")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(
+                    CommandNode.argument("player", ArgumentType.word())
+                        .then(
+                            CommandNode.argument(
+                                    "season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                                .executes(this::unarchive)
+                                .then(
+                                    CommandNode.argument("options", ArgumentType.greedy())
+                                        .executes(this::unarchive)))))
+        .then(
+            CommandNode.literal("reprocess")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(
+                    CommandNode.argument("player", ArgumentType.word()).executes(this::reprocess)))
         .then(
             CommandNode.literal("cancel")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -158,6 +219,7 @@ final class SeasonCommands {
                       "time",
                       HumanTime.time(at.atZone(ZoneId.systemDefault())))));
     }
+    state.ifPresent(current -> playerStatus(source, messages, current));
     journalStatus(source, messages);
     for (ConfigProblem problem : startupProblems) {
       source.reply(
@@ -194,7 +256,12 @@ final class SeasonCommands {
 
   void init(CommandSource source, Arguments arguments) {
     int season = arguments.integer("season");
-    reply(source, seasons.init(season), "init.done");
+    Transition transition = seasons.init(season);
+    reply(source, transition, "init.done");
+    if (transition instanceof Transition.Changed) {
+      // Everyone online now is playing the season init recorded.
+      services.login().ifPresent(login -> login.markPlaying(platform.players().online()));
+    }
   }
 
   void scheduleEnd(CommandSource source, Arguments arguments) {
@@ -250,6 +317,297 @@ final class SeasonCommands {
     } else if (flags.has(NOW)) {
       source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
     }
+  }
+
+  void launch(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Flags.Parsed parsed = Flags.parse(arguments.optionalString("options"), Set.of(DRY_RUN));
+    if (parsed instanceof Flags.Parsed.Unknown unknown) {
+      source.reply(messages.get("launch.unknown-flag", "flag", unknown.word()));
+      return;
+    }
+    if (((Flags.Parsed.Ok) parsed).has(DRY_RUN)) {
+      launchDryRun(source);
+      return;
+    }
+    if (seasons.launch() instanceof Transition.Refused refused) {
+      refuse(source, refused);
+    }
+  }
+
+  void setSpawn(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    if (source.player().isEmpty()) {
+      source.reply(messages.get("spawn.player-only"));
+      return;
+    }
+    if (seasons.state().isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    Position at = platform.players().position(source.player().get());
+    var _ =
+        seasons
+            .setNextSpawn(at)
+            .thenCompose(
+                next -> writer.submit(loader::load).thenApply(result -> Map.entry(next, result)))
+            .whenComplete((done, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      if (failure != null) {
+                        LOG.error("/season spawn set failed", failure);
+                        source.reply(
+                            messages()
+                                .get(
+                                    "spawn.failed", "error", String.valueOf(failure.getMessage())));
+                        return;
+                      }
+                      done.getValue()
+                          .snapshot()
+                          .ifPresent(snapshot -> {
+                            config.set(snapshot);
+                            seasons.reloaded(snapshot);
+                          });
+                      source.reply(
+                          messages()
+                              .get(
+                                  "spawn.set",
+                                  "season",
+                                  Integer.toString(done.getKey()),
+                                  "x",
+                                  Integer.toString(at.blockX()),
+                                  "y",
+                                  Integer.toString(at.blockY()),
+                                  "z",
+                                  Integer.toString(at.blockZ()),
+                                  "dimension",
+                                  at.dimension()));
+                    }));
+  }
+
+  void archive(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    String name = arguments.string("player");
+    if (services.login().isEmpty() || seasons.state().isEmpty()) {
+      source.reply(messages.get("archive.unavailable"));
+      return;
+    }
+    Optional<PlayerRef> player = platform.players().findByName(name);
+    if (player.isEmpty()) {
+      source.reply(messages.get("archive.offline", "name", name));
+      return;
+    }
+    PlayerRef online = player.get();
+    LoginPlan.Plan plan =
+        LoginPlan.decide(services.players().find(online.id()), true, seasons.state().get());
+    if (!(plan instanceof LoginPlan.Plan.Archive target)) {
+      source.reply(messages.get("archive.nothing", "name", online.name()));
+      return;
+    }
+    String season = Integer.toString(target.season());
+    var _ =
+        services
+            .login()
+            .get()
+            .archiveAndMove(online.id(), target)
+            .whenComplete((outcome, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      Messages now = messages();
+                      if (failure != null) {
+                        source.reply(
+                            now.get(
+                                "archive.failed",
+                                "name",
+                                online.name(),
+                                "season",
+                                season,
+                                "reason",
+                                String.valueOf(failure.getMessage())));
+                        return;
+                      }
+                      source.reply(
+                          switch (outcome) {
+                            case Archiver.Outcome.Archived a ->
+                                now.get(
+                                    "archive.archived", "name", online.name(), "season", season);
+                            case Archiver.Outcome.AlreadyArchived a ->
+                                now.get("archive.nothing", "name", online.name());
+                            case Archiver.Outcome.Offline o ->
+                                now.get("archive.offline", "name", online.name());
+                            case Archiver.Outcome.Busy b ->
+                                now.get("archive.busy", "name", online.name());
+                            case Archiver.Outcome.Failed f ->
+                                now.get(
+                                    "archive.failed",
+                                    "name",
+                                    online.name(),
+                                    "season",
+                                    season,
+                                    "reason",
+                                    f.reason());
+                          });
+                    }));
+  }
+
+  void unarchive(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    String name = arguments.string("player");
+    int season = arguments.integer("season");
+    Flags.Parsed parsed = Flags.parse(arguments.optionalString("options"), Set.of(FORCE));
+    if (parsed instanceof Flags.Parsed.Unknown unknown) {
+      source.reply(messages.get("unarchive.unknown-flag", "flag", unknown.word()));
+      return;
+    }
+    boolean force = ((Flags.Parsed.Ok) parsed).has(FORCE);
+    if (services.unarchiver().isEmpty()) {
+      source.reply(messages.get("archive.unavailable"));
+      return;
+    }
+    Optional<PlayerRef> player = platform.players().findByName(name);
+    if (player.isEmpty()) {
+      source.reply(messages.get("unarchive.offline", "name", name));
+      return;
+    }
+    PlayerRef online = player.get();
+    String number = Integer.toString(season);
+    String actor = actor(source);
+    var _ =
+        services
+            .unarchiver()
+            .get()
+            .unarchive(online, season, force, actor)
+            .whenComplete((outcome, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      Messages now = messages();
+                      if (failure != null) {
+                        source.reply(
+                            now.get(
+                                "unarchive.failed",
+                                "name",
+                                online.name(),
+                                "season",
+                                number,
+                                "reason",
+                                String.valueOf(failure.getMessage())));
+                        return;
+                      }
+                      source.reply(
+                          switch (outcome) {
+                            case Unarchiver.Outcome.Restored r ->
+                                r.displacedFile().isEmpty()
+                                    ? now.get(
+                                        "unarchive.done", "name", online.name(), "season", number)
+                                    : now.get(
+                                        "unarchive.done-displaced",
+                                        "name",
+                                        online.name(),
+                                        "season",
+                                        number,
+                                        "count",
+                                        Integer.toString(r.displacedItems()),
+                                        "file",
+                                        r.displacedFile().get().getFileName().toString());
+                            case Unarchiver.Outcome.Offline o ->
+                                now.get("unarchive.offline", "name", online.name());
+                            case Unarchiver.Outcome.NoArchive n ->
+                                now.get(
+                                    "unarchive.no-archive",
+                                    "name",
+                                    online.name(),
+                                    "season",
+                                    number);
+                            case Unarchiver.Outcome.NotEmpty n ->
+                                now.get("unarchive.not-empty", "name", online.name());
+                            case Unarchiver.Outcome.Busy b ->
+                                now.get("archive.busy", "name", online.name());
+                            case Unarchiver.Outcome.Failed f ->
+                                now.get(
+                                    "unarchive.failed",
+                                    "name",
+                                    online.name(),
+                                    "season",
+                                    number,
+                                    "reason",
+                                    f.reason());
+                          });
+                    }));
+  }
+
+  void reprocess(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    String name = arguments.string("player");
+    if (services.recovery().isEmpty()) {
+      source.reply(messages.get("archive.unavailable"));
+      return;
+    }
+    Optional<PlayerId> id =
+        platform
+            .players()
+            .findByName(name)
+            .map(PlayerRef::id)
+            .or(() ->
+                services.players().all().stream()
+                    .filter(record -> record.lastName().equalsIgnoreCase(name))
+                    .map(PlayerRecord::id)
+                    .findFirst());
+    JournalRecovery recovery = services.recovery().get();
+    if (id.isEmpty() || recovery.open(id.get()).isEmpty()) {
+      source.reply(messages.get("reprocess.nothing", "name", name));
+      return;
+    }
+    if (platform.players().find(id.get()).isEmpty()) {
+      source.reply(
+          messages.get(
+              "reprocess.offline",
+              "name",
+              name,
+              "count",
+              Integer.toString(recovery.open(id.get()).size())));
+      return;
+    }
+    var _ =
+        recovery
+            .retry(id.get())
+            .whenComplete((finished, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      int left = recovery.open(id.get()).size();
+                      if (failure != null || left > 0) {
+                        String reason =
+                            failure != null
+                                ? String.valueOf(failure.getMessage())
+                                : recovery.failures().entrySet().stream()
+                                    .filter(e -> e.getKey().player().equals(id))
+                                    .map(Map.Entry::getValue)
+                                    .findFirst()
+                                    .orElse("see the server log");
+                        source.reply(
+                            messages()
+                                .get(
+                                    "reprocess.failed",
+                                    "name",
+                                    name,
+                                    "count",
+                                    Integer.toString(left),
+                                    "reason",
+                                    reason));
+                      } else {
+                        source.reply(
+                            messages()
+                                .get(
+                                    "reprocess.done",
+                                    "name",
+                                    name,
+                                    "count",
+                                    Integer.toString(finished)));
+                      }
+                    }));
   }
 
   void cancel(CommandSource source, Arguments arguments) {
@@ -370,6 +728,105 @@ final class SeasonCommands {
     source.reply(messages.get("end.dry-run.next", "season", season()));
   }
 
+  private void launchDryRun(CommandSource source) {
+    Messages messages = messages();
+    Optional<String> refusal = seasons.launchRefusal();
+    String next = seasons.state().map(s -> Integer.toString(s.season() + 1)).orElse("?");
+    if (refusal.isPresent()) {
+      source.reply(
+          messages.get(
+              "launch.dry-run.refused",
+              "reason",
+              messages.text(refusal.get(), "season", season(), "next", next)));
+      return;
+    }
+    Position spawn =
+        config.get().season(Integer.parseInt(next)).flatMap(file -> file.spawn()).orElseThrow();
+    source.reply(messages.get("launch.dry-run.header", "season", next));
+    source.reply(
+        messages.get(
+            "launch.dry-run.players",
+            "count",
+            Integer.toString(platform.players().online().size()),
+            "x",
+            Integer.toString(spawn.blockX()),
+            "y",
+            Integer.toString(spawn.blockY()),
+            "z",
+            Integer.toString(spawn.blockZ()),
+            "dimension",
+            spawn.dimension()));
+  }
+
+  /** The players line for the last finished season, and the season's furthest block. */
+  private void playerStatus(CommandSource source, Messages messages, SeasonState state) {
+    int finished = LoginPlan.isBetweenSeasons(state.phase()) ? state.season() : state.season() - 1;
+    if (finished >= 1
+        && (state.launchedAt().isPresent() || LoginPlan.isBetweenSeasons(state.phase()))) {
+      long archived =
+          services.players().all().stream().filter(r -> r.archivedThrough() >= finished).count();
+      long waiting =
+          services.players().all().stream()
+              .filter(r -> r.archivedThrough() < finished && r.played(finished))
+              .count();
+      source.reply(
+          messages.get(
+              "status.players",
+              "archived",
+              Long.toString(archived),
+              "season",
+              Integer.toString(finished),
+              "waiting",
+              Long.toString(waiting)));
+    }
+    if (!LoginPlan.isBetweenSeasons(state.phase())) {
+      Optional<FurthestTracker.SeasonBest> best = services.furthest().seasonBest(state.season());
+      if (best.isEmpty()) {
+        source.reply(messages.get("status.no-furthest"));
+      } else {
+        Position at = best.get().best().at();
+        source.reply(
+            messages.get(
+                "status.furthest",
+                "distance",
+                Long.toString(best.get().best().distance()),
+                "name",
+                best.get().name(),
+                "x",
+                Integer.toString(at.blockX()),
+                "z",
+                Integer.toString(at.blockZ())));
+      }
+    }
+    services
+        .recovery()
+        .ifPresent(recovery ->
+            recovery
+                .failures()
+                .forEach((operation, reason) ->
+                    source.reply(
+                        messages.get(
+                            "status.recovery-failed",
+                            "name",
+                            operation
+                                .player()
+                                .flatMap(id -> services.players().find(id))
+                                .map(PlayerRecord::lastName)
+                                .orElse("?"),
+                            "season",
+                            Integer.toString(operation.season()),
+                            "reason",
+                            reason))));
+  }
+
+  private String actor(CommandSource source) {
+    return source
+        .player()
+        .flatMap(id -> platform.players().find(id))
+        .map(PlayerRef::name)
+        .orElse(messages().text("config.console-name"));
+  }
+
   private void plannedEnd(CommandSource source, String prefix, SeasonState state) {
     Messages messages = messages();
     if (state.plannedEnd().isEmpty()) {
@@ -452,7 +909,8 @@ final class SeasonCommands {
   }
 
   private void refuse(CommandSource source, Transition.Refused refused) {
-    source.reply(messages().get(refused.messageKey(), "season", season()));
+    String next = seasons.state().map(s -> Integer.toString(s.season() + 1)).orElse("?");
+    source.reply(messages().get(refused.messageKey(), "season", season(), "next", next));
   }
 
   private static String phase(Messages messages, Phase phase) {
