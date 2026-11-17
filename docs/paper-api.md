@@ -55,4 +55,5 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | --- | --- |
 | `ServerLoadEvent`, `PlayerJoinEvent`, `Player#setOp`, `Server#getPort`, `Server#shutdown`, `PluginManager#isPluginEnabled` | Driving the scenario run |
 | `LifecycleEvents.COMMANDS`, `Commands#register(String, String, BasicCommand)`, `BasicCommand#execute`, `#permission`, `CommandSourceStack#getSender`, `ServicesManager#getRegistration`, `Server#getPlayerExact`, `#getOfflinePlayerIfCached`, `GlobalRegionScheduler#execute` | `/scenario` and the scenario hooks (ADR 0003) |
+| `Material#matchMaterial`, `Player#getWorld`, `World#getChunkAt`, `Chunk#addPluginChunkTicket`, `World#getBlockAt`, `Block#getState`, `#getRelative`, `#setType`, `new BlockPlaceEvent(...)`, `PluginManager#callEvent` | `/scenario place`: a bot's block placement, which the protocol translation drops (A15) |
 | `ItemStack.of`, `#addUnsafeEnchantment`, `#editMeta`, `ItemMeta#customName`, `BlockStateMeta#getBlockState`, `#setBlockState`, `ShulkerBox#getInventory` | Item samples for the NBT neutrality test |

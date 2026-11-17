@@ -10,9 +10,17 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.bukkit.Chunk;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.World;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
@@ -24,6 +32,9 @@ import org.bukkit.plugin.RegisteredServiceProvider;
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
+ *   <li>{@code place <player> <x> <y> <z> <block>} places a block as that player would, firing the
+ *       same {@code BlockPlaceEvent}, because bots can't place blocks through the protocol
+ *       translation (docs/adr/0001)
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand {
@@ -89,11 +100,44 @@ final class ScenarioCommands implements BasicCommand {
                               ? "Opened " + args[2] + "'s Season " + args[3] + " archive"
                               : "No archive to open: " + failure));
         }
-        default -> sender.sendMessage("Usage: /scenario crash-at|archive|open-archive ...");
+        case "place" -> place(sender, args);
+        default -> sender.sendMessage("Usage: /scenario crash-at|archive|open-archive|place ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
     }
+  }
+
+  private void place(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    Material material = Material.matchMaterial(args[5]);
+    if (player == null || material == null) {
+      sender.sendMessage("Can't place " + args[5] + " as " + args[1]);
+      return;
+    }
+    World world = player.getWorld();
+    int x = Integer.parseInt(args[2]);
+    int y = Integer.parseInt(args[3]);
+    int z = Integer.parseInt(args[4]);
+    Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
+    chunk.addPluginChunkTicket(plugin);
+    Block block = world.getBlockAt(x, y, z);
+    BlockPlaceEvent event =
+        new BlockPlaceEvent(
+            block,
+            block.getState(),
+            block.getRelative(BlockFace.DOWN),
+            ItemStack.of(material),
+            player,
+            true,
+            EquipmentSlot.HAND);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      sender.sendMessage("Placing " + material.getKey() + " was refused");
+      return;
+    }
+    block.setType(material);
+    sender.sendMessage("Placed " + material.getKey() + " at " + x + ", " + y + ", " + z);
   }
 
   @Override

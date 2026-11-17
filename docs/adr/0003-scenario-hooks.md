@@ -25,5 +25,6 @@ The test plugin (`testkit`, never shipped) finds the hooks through the services 
 ## Consequences
 
 - A production server is unaffected: the hooks are inert unless an operator adds the JVM flag by hand.
+- The test plugin also has `/scenario place`, which fires a `BlockPlaceEvent` for a bot and sets the block if nothing cancels it. It is not one of the hooks and touches nothing in Seasons: through ViaBackwards the server drops a Mineflayer bot's own block placement, so A15 can't place blocks otherwise (see ADR 0001).
 - Opening the archive view through the hooks is temporary. M1 part 3 switches A8 to clicking an archive anchor (the TODO in `a08-archive-view.mjs`).
 - Alternatives rejected: a config key could be switched on by mistake or by `/season reload`; reflection into Seasons from the test plugin breaks the public-API rule and hides what the tests depend on; killing the server process from outside can't stop it at an exact journal step.
