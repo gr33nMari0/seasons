@@ -16,6 +16,10 @@ import java.util.Optional;
  * <p>Page 1 is the player as they stood: armour from helmet to boots and the off hand on the top
  * row, the main inventory on the next three, the hotbar on the fifth. Overflow from the cursor and
  * crafting grid follows, then the ender chest when the policy archived it.
+ *
+ * <p>An imported cell shows its stand's gear and its item frames' items on the first page, if it
+ * had any, then one page per container in the container's own slot order. A double chest's sixth
+ * row doesn't fit beside the page buttons, so it follows on a page of its own.
  */
 public final class ArchivePages {
   private static final int ROW = 9;
@@ -25,6 +29,9 @@ public final class ArchivePages {
   private ArchivePages() {}
 
   public static List<List<Optional<NeutralItem>>> pages(ArchiveRecord archive) {
+    if (archive.imported().isPresent()) {
+      return importedPages(archive.imported().get());
+    }
     List<List<Optional<NeutralItem>>> pages = new ArrayList<>();
     pages.add(firstPage(archive));
     List<Optional<NeutralItem>> overflow =
@@ -38,6 +45,53 @@ public final class ArchivePages {
       pages.add(ender.subList(0, Math.min(ender.size(), PagedView.PAGE_SIZE)));
     }
     return pages;
+  }
+
+  /** For each of an imported cell's containers, the page (0-based) its items start on. */
+  public static List<Integer> containerPages(ImportedCell imported) {
+    List<Integer> starts = new ArrayList<>();
+    int page = hasGearPage(imported) ? 1 : 0;
+    for (ImportedCell.Container container : imported.containers()) {
+      starts.add(page);
+      page += pagesFor(container.slots().size());
+    }
+    return starts;
+  }
+
+  private static List<List<Optional<NeutralItem>>> importedPages(ImportedCell imported) {
+    List<List<Optional<NeutralItem>>> pages = new ArrayList<>();
+    if (hasGearPage(imported)) {
+      List<Optional<NeutralItem>> gear =
+          new ArrayList<>(Collections.nCopies(PagedView.PAGE_SIZE, Optional.<NeutralItem>empty()));
+      List<Optional<NeutralItem>> worn =
+          imported.stand().map(ImportedCell.Stand::equipment).orElse(List.of());
+      for (int i = 0; i < worn.size(); i++) {
+        gear.set(i, worn.get(i));
+      }
+      for (int i = 0; i < Math.min(imported.frames().size(), PagedView.PAGE_SIZE - ROW); i++) {
+        gear.set(ROW + i, imported.frames().get(i).item());
+      }
+      pages.add(gear);
+    }
+    for (ImportedCell.Container container : imported.containers()) {
+      List<Optional<NeutralItem>> slots = container.slots();
+      for (int page = 0; page < pagesFor(slots.size()); page++) {
+        int from = page * PagedView.PAGE_SIZE;
+        pages.add(slots.subList(from, Math.min(slots.size(), from + PagedView.PAGE_SIZE)));
+      }
+    }
+    if (pages.isEmpty()) {
+      pages.add(List.of());
+    }
+    return pages;
+  }
+
+  private static boolean hasGearPage(ImportedCell imported) {
+    return imported.stand().isPresent() || !imported.frames().isEmpty();
+  }
+
+  private static int pagesFor(int slots) {
+    return Math.max(1, (slots + PagedView.PAGE_SIZE - 1) / PagedView.PAGE_SIZE);
   }
 
   /** The view, with titles and buttons from messages.yml. */

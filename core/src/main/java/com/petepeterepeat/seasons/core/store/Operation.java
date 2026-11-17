@@ -13,7 +13,11 @@ public enum Operation {
   /** {@code /season unarchive}: one archive restored to its player. */
   UNARCHIVE(JournalKind.UNARCHIVE_STARTED, JournalKind.UNARCHIVE_DONE),
   /** A curator's change to one archive. */
-  CURATE(JournalKind.CURATE_STARTED, JournalKind.CURATE_DONE);
+  CURATE(JournalKind.CURATE_STARTED, JournalKind.CURATE_DONE),
+  /** {@code /hof import}: one Season 1 cell turned into its owner's record. */
+  IMPORT(JournalKind.IMPORT_STARTED, JournalKind.IMPORT_DONE),
+  /** {@code /hof import undo}: one imported cell's items put back where they were. */
+  IMPORT_UNDO(JournalKind.IMPORT_UNDO_STARTED, JournalKind.IMPORT_UNDO_DONE);
 
   private final JournalKind started;
   private final JournalKind finished;
@@ -39,6 +43,8 @@ public enum Operation {
       case ARCHIVE_STARTED, VAULT_SEALED, ARCHIVE_DONE -> Optional.of(ARCHIVE);
       case UNARCHIVE_STARTED, UNARCHIVE_DONE -> Optional.of(UNARCHIVE);
       case CURATE_STARTED, CURATE_DONE -> Optional.of(CURATE);
+      case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);
+      case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
       case VAULT_WITHDRAW, EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
     };
   }

@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 
 /**
@@ -33,7 +34,7 @@ import java.util.UUID;
  */
 public final class ArchiveFiles {
   /** The {@code format-version} this build reads and writes. */
-  public static final int FORMAT_VERSION = 1;
+  public static final int FORMAT_VERSION = 2;
 
   private final Path directory;
 
@@ -150,7 +151,83 @@ public final class ArchiveFiles {
           skin.signature().ifPresent(signature -> textures.put("signature", signature));
           root.put("skin", textures);
         });
+    record.heldSlot().ifPresent(slot -> root.put("heldSlot", slot));
+    record.imported().ifPresent(imported -> root.put("imported", imported(imported)));
     return Nbt.writeCompressed(root);
+  }
+
+  private static Map<String, Object> imported(ImportedCell imported) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    map.put("gallery", imported.gallery());
+    map.put("cell", imported.cell());
+    imported
+        .stand()
+        .ifPresent(stand -> {
+          Map<String, Object> s = position(stand.at());
+          s.put("equipment", slots(stand.equipment()));
+          s.put("properties", new LinkedHashMap<>(stand.properties()));
+          map.put("stand", s);
+        });
+    List<Map<String, Object>> containers = new ArrayList<>();
+    for (ImportedCell.Container container : imported.containers()) {
+      Map<String, Object> c = position(container.block());
+      c.put("type", container.type());
+      c.put("size", container.slots().size());
+      c.put("slots", slots(container.slots()));
+      containers.add(c);
+    }
+    map.put("containers", NbtList.ofCompounds(containers));
+    List<Map<String, Object>> frames = new ArrayList<>();
+    for (ImportedCell.Frame frame : imported.frames()) {
+      Map<String, Object> f = position(frame.at());
+      frame.item().ifPresent(item -> f.put("item", item(item)));
+      f.put("properties", new LinkedHashMap<>(frame.properties()));
+      frames.add(f);
+    }
+    map.put("frames", NbtList.ofCompounds(frames));
+    map.put("signs", new NbtList(Nbt.stringType(), new ArrayList<Object>(imported.signs())));
+    return map;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ImportedCell imported(Map<String, Object> map) {
+    Optional<ImportedCell.Stand> stand =
+        Optional.ofNullable((Map<String, Object>) map.get("stand"))
+            .map(s ->
+                new ImportedCell.Stand(
+                    position(s),
+                    slots(s.getOrDefault("equipment", ""), ImportedCell.EQUIPMENT.size()),
+                    compound(s, "properties")));
+    List<ImportedCell.Container> containers = new ArrayList<>();
+    for (Map<String, Object> c : compounds(map.getOrDefault("containers", ""))) {
+      containers.add(
+          new ImportedCell.Container(
+              position(c),
+              value(c, "type", String.class),
+              slots(c.getOrDefault("slots", ""), value(c, "size", Integer.class))));
+    }
+    List<ImportedCell.Frame> frames = new ArrayList<>();
+    for (Map<String, Object> f : compounds(map.getOrDefault("frames", ""))) {
+      Optional<NeutralItem> item =
+          Optional.ofNullable((Map<String, Object>) f.get("item"))
+              .map(compound -> new NeutralItem(Nbt.writeCompressed(compound)));
+      frames.add(new ImportedCell.Frame(position(f), item, compound(f, "properties")));
+    }
+    List<String> signs = new ArrayList<>();
+    if (map.get("signs") instanceof NbtList list) {
+      list.values().forEach(v -> signs.add(String.valueOf(v)));
+    }
+    return new ImportedCell(
+        value(map, "gallery", String.class),
+        value(map, "cell", String.class),
+        stand,
+        containers,
+        frames,
+        signs);
+  }
+
+  private static List<Map<String, Object>> compounds(Object list) {
+    return list instanceof NbtList nbt ? nbt.compounds() : List.of();
   }
 
   @SuppressWarnings("unchecked")
@@ -226,7 +303,10 @@ public final class ArchiveFiles {
           furthest,
           position(compound(root, "finalPosition")),
           skin,
-          string(root, "contentHash"));
+          string(root, "contentHash"),
+          root.get("heldSlot") instanceof Integer held ? OptionalInt.of(held) : OptionalInt.empty(),
+          Optional.ofNullable((Map<String, Object>) root.get("imported"))
+              .map(ArchiveFiles::imported));
     } catch (ClassCastException | NullPointerException | IllegalArgumentException e) {
       throw new IOException("Archive is damaged: " + e, e);
     }
