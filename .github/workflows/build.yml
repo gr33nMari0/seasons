@@ -14,7 +14,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
       - uses: gradle/actions/setup-gradle@v6
