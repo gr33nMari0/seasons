@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.paper;
 
 import com.mojang.brigadier.Command;
+import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
@@ -15,12 +16,15 @@ import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.Commands;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.command.brigadier.argument.ArgumentTypes;
+import io.papermc.paper.command.brigadier.argument.CustomArgumentType;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.kyori.adventure.key.Key;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -61,6 +65,8 @@ final class PaperCommands implements Commands {
           case ArgumentType.WordArgument word ->
               io.papermc.paper.command.brigadier.Commands.argument(
                   node.name(), StringArgumentType.word());
+          case ArgumentType.IdArgument id ->
+              io.papermc.paper.command.brigadier.Commands.argument(node.name(), new IdArgument());
           case ArgumentType.GreedyArgument greedy ->
               io.papermc.paper.command.brigadier.Commands.argument(
                   node.name(), StringArgumentType.greedyString());
@@ -111,5 +117,25 @@ final class PaperCommands implements Commands {
         sender.sendMessage(text.render(message));
       }
     };
+  }
+
+  /**
+   * One word that may hold a colon, such as {@code season-2:c1}, which Brigadier's own word
+   * refuses. Clients see it as a resource key, which allows the same characters.
+   */
+  private static final class IdArgument implements CustomArgumentType<String, Key> {
+    @Override
+    public String parse(StringReader reader) {
+      int start = reader.getCursor();
+      while (reader.canRead() && reader.peek() != ' ') {
+        reader.skip();
+      }
+      return reader.getString().substring(start, reader.getCursor());
+    }
+
+    @Override
+    public com.mojang.brigadier.arguments.ArgumentType<Key> getNativeType() {
+      return ArgumentTypes.key();
+    }
   }
 }

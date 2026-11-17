@@ -3,7 +3,6 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.Seasons;
-import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -46,7 +45,9 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperPlayers players = new PaperPlayers(server, text, new NamespacedKey(this, "celebration"));
     NamespacedKey archived = new NamespacedKey(this, "archived");
     PaperInventories inventories = new PaperInventories(players, codec, archived);
-    PaperEvents events = new PaperEvents(this, text, inventories, players);
+    PaperDisplays displays =
+        new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
+    PaperEvents events = new PaperEvents(this, text, inventories, players, displays);
     PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperAdvancements advancements = new PaperAdvancements(server, players);
     PaperStorage storage = new PaperStorage(this, server);
@@ -59,7 +60,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             advancements,
             new PaperWorld(),
             new PaperEntities(server),
-            new PaperDisplays(server, text, new NamespacedKey(this, "display")),
+            displays,
             menus,
             new PaperCommands(this, text),
             new PaperPermissions(players),
@@ -67,7 +68,8 @@ public final class SeasonsPlugin extends JavaPlugin {
             new PaperScheduler(this, server, players, executor),
             new PaperDragonFight(),
             new PaperStatistics(players),
-            storage);
+            storage,
+            new PaperImports(this, server, codec));
 
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(menus, this);
@@ -84,8 +86,6 @@ public final class SeasonsPlugin extends JavaPlugin {
             getPluginMeta().getVersion(),
             Clock.systemUTC(),
             new DiscordWebhooks(),
-            // M1 part 3 fills in the Hall of Fame.
-            Hall.none(),
             System.getenv(),
             new SerialWriter(),
             hooks);

@@ -169,6 +169,36 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public com.petepeterepeat.seasons.core.port.GameMode gameMode(PlayerId id) {
+    return com.petepeterepeat.seasons.core.port.GameMode.valueOf(online(id).getGameMode().name());
+  }
+
+  @Override
+  public void setGameMode(PlayerId id, com.petepeterepeat.seasons.core.port.GameMode mode) {
+    online(id).setGameMode(GameMode.valueOf(mode.name()));
+  }
+
+  @Override
+  public int heldSlot(PlayerId id) {
+    return online(id).getInventory().getHeldItemSlot();
+  }
+
+  @Override
+  public Optional<Position> targetBlock(PlayerId id, int range) {
+    return player(id)
+        .map(p -> p.getTargetBlockExact(range))
+        .map(block -> PaperPositions.toPosition(block.getLocation()));
+  }
+
+  @Override
+  public Optional<String> knownName(PlayerId id) {
+    var offline = server.getOfflinePlayer(id.uuid());
+    return offline.hasPlayedBefore() || offline.isOnline()
+        ? Optional.ofNullable(offline.getName())
+        : Optional.empty();
+  }
+
+  @Override
   public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
     Optional<Player> found = player(id);
     Optional<World> world = PaperPositions.world(destination.dimension());
