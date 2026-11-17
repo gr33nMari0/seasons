@@ -41,6 +41,7 @@ public final class ConfigLoader {
   public static final String CONFIG = "config.yml";
   public static final String MESSAGES = "messages.yml";
   public static final String SECRETS = "secrets.yml";
+  private static final String SECRETS_TEMPLATE = "secrets.template.yml";
   public static final String DISCORD_WEBHOOK_ENV = "SEASONS_DISCORD_WEBHOOK";
   public static final String ADMIN_WEBHOOK_ENV = "SEASONS_ADMIN_WEBHOOK";
 
@@ -95,10 +96,12 @@ public final class ConfigLoader {
   /** Writes the bundled config.yml, messages.yml and secrets.yml where a server has none. */
   public void writeDefaults() throws IOException {
     Files.createDirectories(configDirectory);
-    for (String name : List.of(CONFIG, SECRETS)) {
-      Path file = configDirectory.resolve(name);
+    // The secrets template has its own name: .gitignore keeps every secrets.yml out of the repo.
+    Map<String, String> defaults = Map.of(CONFIG, CONFIG, SECRETS, SECRETS_TEMPLATE);
+    for (Map.Entry<String, String> entry : defaults.entrySet()) {
+      Path file = configDirectory.resolve(entry.getKey());
       if (Files.notExists(file)) {
-        try (InputStream in = bundled(name)) {
+        try (InputStream in = bundled(entry.getValue())) {
           Files.copy(in, file);
         }
       }
