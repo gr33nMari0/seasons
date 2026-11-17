@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.player;
 
 import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Scheduler;
@@ -34,6 +35,7 @@ public final class LoginService implements Sessions {
   private final PlayerStore store;
   private final JournalRecovery recovery;
   private final Archiver archiver;
+  private final ArchiveHold hold;
   private final SeasonEntry entry;
   private final Clock clock;
   private final Executor serverThread;
@@ -44,6 +46,7 @@ public final class LoginService implements Sessions {
       PlayerStore store,
       JournalRecovery recovery,
       Archiver archiver,
+      ArchiveHold hold,
       SeasonEntry entry,
       Scheduler scheduler,
       Clock clock) {
@@ -51,9 +54,21 @@ public final class LoginService implements Sessions {
     this.store = store;
     this.recovery = recovery;
     this.archiver = archiver;
+    this.hold = hold;
     this.entry = entry;
     this.clock = clock;
     this.serverThread = scheduler::runGlobal;
+  }
+
+  /**
+   * Holds the player as they join, so they can't drop, hand over or use anything before recovery
+   * and catch-up have checked what they carry. {@link #joined} releases them.
+   */
+  @Override
+  public void arriving(PlayerId player) {
+    if (state.get().isPresent()) {
+      hold.holdArriving(player);
+    }
   }
 
   @Override
@@ -61,6 +76,7 @@ public final class LoginService implements Sessions {
     joinedAt.put(player.id(), clock.instant());
     if (state.get().isEmpty()) {
       // Seasons isn't in use until /season init: nobody gets a record before then.
+      hold.releaseArriving(player.id());
       return;
     }
     var _ =
@@ -71,11 +87,13 @@ public final class LoginService implements Sessions {
             .exceptionally(e -> {
               LOG.error("Login catch-up for {} stopped", player.name(), e);
               return null;
-            });
+            })
+            .whenComplete((done, failure) -> hold.releaseArriving(player.id()));
   }
 
   @Override
   public void left(PlayerId player) {
+    hold.releaseArriving(player);
     Instant joined = joinedAt.remove(player);
     Optional<SeasonState> current = state.get();
     if (joined == null || current.isEmpty() || !isPlaying(current.get().phase())) {

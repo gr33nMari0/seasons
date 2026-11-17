@@ -8,10 +8,10 @@ import java.util.Set;
 
 /**
  * Advancements and a player's progress in them. Recipe unlocks are the advancements under {@code
- * recipes/}; they have no display, so they are never visible.
+ * recipes/}; they have no display, so they are never visible. Hidden entries aren't visible either.
  */
 public interface Advancements {
-  /** Ids of every advancement that has a display, such as {@code minecraft:story/mine_stone}. */
+  /** Ids of every visible advancement, such as {@code minecraft:story/mine_stone}. */
   List<String> visible();
 
   /** Awarded criteria per visible advancement the player has any progress in. */

@@ -18,14 +18,21 @@ import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
 import net.kyori.adventure.title.Title;
+import org.bukkit.Color;
+import org.bukkit.FireworkEffect;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -34,10 +41,16 @@ import org.bukkit.scoreboard.Scoreboard;
 final class PaperPlayers implements Players {
   private final Server server;
   private final PaperText text;
+  private final NamespacedKey celebration;
 
-  PaperPlayers(Server server, PaperText text) {
+  /**
+   * @param celebration the tag on launch fireworks, which {@link PaperEvents} keeps from hurting
+   *     anyone
+   */
+  PaperPlayers(Server server, PaperText text, NamespacedKey celebration) {
     this.server = server;
     this.text = text;
+    this.celebration = celebration;
   }
 
   @Override
@@ -191,7 +204,32 @@ final class PaperPlayers implements Players {
           player.showTitle(Title.title(text.render(title), text.render(subtitle)));
           player.playSound(
               Sound.sound(Key.key("ui.toast.challenge_complete"), Sound.Source.MASTER, 1f, 1f));
+          player
+              .getWorld()
+              .spawn(
+                  player.getLocation(),
+                  Firework.class,
+                  firework -> {
+                    FireworkMeta meta = firework.getFireworkMeta();
+                    meta.addEffect(
+                        FireworkEffect.builder()
+                            .with(FireworkEffect.Type.BALL_LARGE)
+                            .withColor(Color.ORANGE, Color.YELLOW)
+                            .withFade(Color.WHITE)
+                            .withTrail()
+                            .build());
+                    meta.setPower(1);
+                    firework.setFireworkMeta(meta);
+                    firework
+                        .getPersistentDataContainer()
+                        .set(celebration, PersistentDataType.BOOLEAN, true);
+                  });
         });
+  }
+
+  /** Whether an entity is one of the launch fireworks. */
+  boolean isCelebration(Entity entity) {
+    return entity instanceof Firework && entity.getPersistentDataContainer().has(celebration);
   }
 
   @Override

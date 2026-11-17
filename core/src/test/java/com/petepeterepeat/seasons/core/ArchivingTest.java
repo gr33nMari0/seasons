@@ -267,6 +267,8 @@ class ArchivingTest {
   void aCrashAtAnyStepEndsWithEveryItemExactlyOnce(CrashPoint point) throws IOException {
     start();
     PlayerRef casey = withGear("Casey");
+    NeutralItem torch = FakeItems.item("minecraft:torch", 3);
+    fake.player(casey).cursor.add(torch);
     run("/season init 2");
     hooks.arm(point, casey.id());
 
@@ -276,7 +278,9 @@ class ArchivingTest {
 
     assertThat(record(casey).archivedThrough()).isEqualTo(2);
     assertThat(isEmpty(casey)).isTrue();
+    assertThat(fake.player(casey).cursor).isEmpty();
     assertThat(archive(casey, 2).orElseThrow().inventory()).isEqualTo(FakeItems.gear());
+    assertThat(archive(casey, 2).orElseThrow().overflow()).containsExactly(Optional.of(torch));
     assertThat(vault(casey, 2).orElseThrow().stream().filter(Optional::isPresent)).hasSize(1);
     assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
   }
@@ -341,6 +345,108 @@ class ArchivingTest {
     fake.player(undo).inventory = FakeItems.gear();
     assertThat(run("/season archive Undo")).containsExactly("Archived Undo into Season 2.");
     assertThat(isEmpty(undo)).isTrue();
+  }
+
+  @Test
+  void aFailedWriteLeavesEverythingOnThePlayerAndLaunchWaitsForThem() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    NeutralItem torch = FakeItems.item("minecraft:torch", 3);
+    fake.player(casey).cursor.add(torch);
+    run("/season init 2");
+    // A file where the season's archive folder should be, so the archive can't be written.
+    Path folder = dir.resolve("world/seasons/data/archives/s2");
+    Files.createDirectories(folder.getParent());
+    Files.writeString(folder, "in the way");
+
+    run("/season end --now");
+
+    assertThat(fake.player(casey).inventory).isEqualTo(FakeItems.gear());
+    assertThat(fake.player(casey).cursor).containsExactly(torch);
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+    setSpawn(500, 300);
+    assertThat(run("/season launch").getFirst())
+        .startsWith("Someone online isn't archived into Season 2 yet");
+    assertThat(fake.player(casey).position.x()).isEqualTo(10);
+
+    Files.delete(folder);
+    assertThat(run("/season archive Casey")).containsExactly("Archived Casey into Season 2.");
+    assertThat(fake.player(casey).cursor).isEmpty();
+    assertThat(archive(casey, 2).orElseThrow().overflow()).containsExactly(Optional.of(torch));
+    assertThat(run("/season launch")).isEmpty();
+    assertThat(fake.player(casey).position.x()).isEqualTo(500.5);
+  }
+
+  @Test
+  void aJoiningPlayerIsHeldUntilCatchUpHasRun() {
+    start();
+    run("/season init 2");
+    PlayerRef ari = fake.join("Ari");
+
+    fake.sessions.arriving(ari.id());
+    assertThat(fake.handler.decide(new Intent.DropItem(ari.id()))).isNotEqualTo(Decision.allow());
+
+    fake.sessions.joined(ari, false);
+    assertThat(fake.handler.decide(new Intent.DropItem(ari.id()))).isEqualTo(Decision.allow());
+  }
+
+  @Test
+  void unarchivingDuringALaterSeasonIsNeverArchivedAgainAtLogin() throws IOException {
+    start();
+    PlayerRef alex = withGear("Alex");
+    run("/season init 2");
+    run("/season end --now");
+    setSpawn(500, 300);
+    run("/season launch");
+    fake.player(alex).inventory = FakeItems.stone(1);
+
+    assertThat(run("/season unarchive Alex 2 --force").getFirst())
+        .startsWith("Restored Alex's Season 2 archive to them.");
+    fake.leave(alex);
+    join("Alex");
+
+    assertThat(fake.player(alex).inventory.storage()).isEqualTo(FakeItems.gear().storage());
+    assertThat(archive(alex, 2)).isEmpty();
+  }
+
+  @Test
+  void unarchivingAnOlderSeasonLeavesALaterArchiveAlone() throws IOException {
+    start();
+    PlayerRef alex = withGear("Alex");
+    run("/season init 2");
+    run("/season end --now");
+    setSpawn(500, 300);
+    run("/season launch");
+    fake.player(alex).inventory = FakeItems.stone(7);
+    run("/season end --now");
+    ArchiveRecord third = archive(alex, 3).orElseThrow();
+    assertThat(isEmpty(alex)).isTrue();
+
+    assertThat(run("/season unarchive Alex 2").getFirst())
+        .startsWith("Restored Alex's Season 2 archive to them.");
+    assertThat(record(alex).archivedThrough()).isEqualTo(3);
+    fake.leave(alex);
+    join("Alex");
+
+    assertThat(fake.player(alex).inventory.storage()).isEqualTo(FakeItems.gear().storage());
+    assertThat(archive(alex, 3).orElseThrow().contentHash()).isEqualTo(third.contentHash());
+  }
+
+  @Test
+  void anArchiveFileIsMovedAsideRatherThanOverwritten() throws IOException {
+    start();
+    PlayerRef alex = withGear("Alex");
+    run("/season init 2");
+    run("/season end --now");
+    ArchiveRecord first = archive(alex, 2).orElseThrow();
+    ArchiveFiles files = new ArchiveFiles(dir.resolve("world/seasons/data/archives"));
+
+    files.write(first, FakeItems.DATA_VERSION);
+
+    try (Stream<Path> listed = Files.list(dir.resolve("world/seasons/data/archives/s2"))) {
+      assertThat(listed.map(f -> f.getFileName().toString()))
+          .anyMatch(name -> name.contains(".superseded-"));
+    }
   }
 
   @Test

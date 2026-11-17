@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.paper;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Advancements;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import io.papermc.paper.advancement.AdvancementDisplay;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -47,7 +48,7 @@ final class PaperAdvancements implements Advancements, Listener {
   public List<String> visible() {
     List<String> ids = new ArrayList<>();
     for (Advancement advancement : all()) {
-      if (advancement.getDisplay() != null) {
+      if (counted(advancement)) {
         ids.add(advancement.getKey().asString());
       }
     }
@@ -82,7 +83,7 @@ final class PaperAdvancements implements Advancements, Listener {
     int completed = 0;
     int visible = 0;
     for (Advancement advancement : all()) {
-      boolean shown = advancement.getDisplay() != null;
+      boolean shown = counted(advancement);
       AdvancementProgress progress = progress(player, advancement);
       if (shown) {
         visible++;
@@ -168,5 +169,14 @@ final class PaperAdvancements implements Advancements, Listener {
       all.add(it.next());
     }
     return all;
+  }
+
+  /**
+   * Whether an advancement counts toward "completed / visible": as the advancement screen shows
+   * them, so no recipe unlocks (they have no display) and no hidden entries.
+   */
+  private static boolean counted(Advancement advancement) {
+    AdvancementDisplay display = advancement.getDisplay();
+    return display != null && !display.isHidden();
   }
 }

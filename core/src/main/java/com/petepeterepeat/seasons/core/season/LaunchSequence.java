@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -34,6 +35,13 @@ public final class LaunchSequence implements SeasonService.Launcher {
   private final Announcer announcer;
   private final SeasonEntry entry;
   private final Supplier<Set<PlayerId>> busy;
+
+  /**
+   * Whether an online player isn't archived into the season that ended, or has an operation still
+   * open in the journal.
+   */
+  private final BiPredicate<PlayerId, Integer> unsettled;
+
   private final Optional<Journal> journal;
   private final Executor serverThread;
 
@@ -43,12 +51,14 @@ public final class LaunchSequence implements SeasonService.Launcher {
       Announcer announcer,
       SeasonEntry entry,
       Supplier<Set<PlayerId>> busy,
+      BiPredicate<PlayerId, Integer> unsettled,
       Optional<Journal> journal) {
     this.platform = platform;
     this.config = config;
     this.announcer = announcer;
     this.entry = entry;
     this.busy = busy;
+    this.unsettled = unsettled;
     this.journal = journal;
     this.serverThread = platform.scheduler()::runGlobal;
   }
@@ -64,6 +74,13 @@ public final class LaunchSequence implements SeasonService.Launcher {
     }
     if (!busy.get().isEmpty()) {
       return Optional.of("launch.busy");
+    }
+    // Everyone online goes into the new season with what they carry, so each must be archived
+    // into the season that ended first: a failed archive or a crash still open would carry
+    // archived items across.
+    int ended = nextSeason - 1;
+    if (platform.players().online().stream().anyMatch(p -> unsettled.test(p.id(), ended))) {
+      return Optional.of("launch.not-archived");
     }
     return Optional.empty();
   }

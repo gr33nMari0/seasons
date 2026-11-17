@@ -24,6 +24,7 @@ import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 class PaperPortsTest {
   private static final NamespacedKey ARCHIVED = new NamespacedKey("seasons", "archived");
+  private static final NamespacedKey CELEBRATION = new NamespacedKey("seasons", "celebration");
 
   private ServerMock server;
   private PaperText text;
@@ -33,7 +34,7 @@ class PaperPortsTest {
   void setUp() {
     server = MockBukkit.mock();
     text = new PaperText();
-    players = new PaperPlayers(server, text);
+    players = new PaperPlayers(server, text, CELEBRATION);
   }
 
   @AfterEach
@@ -100,12 +101,31 @@ class PaperPortsTest {
   }
 
   @Test
-  void settlingEmptiesTheCursorIntoOverflow() {
+  void settlingReturnsTheCursorToTheInventory() {
     PlayerMock alex = server.addPlayer("Alex");
     alex.setItemOnCursor(ItemStack.of(Material.TORCH, 3));
 
-    assertThat(inventories().settle(new PlayerId(alex.getUniqueId()))).hasSize(1);
+    assertThat(inventories().settle(new PlayerId(alex.getUniqueId()))).isEmpty();
     assertThat(alex.getItemOnCursor().isEmpty()).isTrue();
+    assertThat(alex.getInventory().contains(Material.TORCH, 3)).isTrue();
+  }
+
+  @Test
+  void settlingLeavesWhatDoesntFitOnTheCursorUntilTheClear() {
+    PlayerMock alex = server.addPlayer("Alex");
+    for (int slot = 0; slot < alex.getInventory().getSize(); slot++) {
+      alex.getInventory().setItem(slot, ItemStack.of(Material.DIRT, 64));
+    }
+    alex.setItemOnCursor(ItemStack.of(Material.TORCH, 3));
+    PlayerId id = new PlayerId(alex.getUniqueId());
+
+    assertThat(inventories().settle(id)).hasSize(1);
+    assertThat(alex.getItemOnCursor().getType()).isEqualTo(Material.TORCH);
+    assertThat(inventories().loose(id)).hasSize(1);
+
+    inventories().clear(id, true);
+    assertThat(alex.getItemOnCursor().isEmpty()).isTrue();
+    assertThat(inventories().loose(id)).isEmpty();
   }
 
   @Test

@@ -20,6 +20,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
@@ -47,14 +48,16 @@ final class PaperEvents implements Events, Listener {
   private final Plugin plugin;
   private final PaperText text;
   private final PaperInventories inventories;
+  private final PaperPlayers players;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
   private @Nullable TripwireReport tripwire;
 
-  PaperEvents(Plugin plugin, PaperText text, PaperInventories inventories) {
+  PaperEvents(Plugin plugin, PaperText text, PaperInventories inventories, PaperPlayers players) {
     this.plugin = plugin;
     this.text = text;
     this.inventories = inventories;
+    this.players = players;
   }
 
   @Override
@@ -76,6 +79,11 @@ final class PaperEvents implements Events, Listener {
   void onJoin(PlayerJoinEvent event) {
     Player player = event.getPlayer();
     boolean playedBefore = player.hasPlayedBefore();
+    Sessions joining = sessions;
+    if (joining != null) {
+      // Held from now, so nothing they carry moves before catch-up has looked at it.
+      joining.arriving(id(player));
+    }
     // A tick later, once the join has finished, so catch-up may move and clear them.
     player
         .getScheduler()
@@ -183,6 +191,14 @@ final class PaperEvents implements Events, Listener {
   void onDamage(EntityDamageEvent event) {
     if (event.getEntity() instanceof Player player) {
       apply(event, player, new Intent.TakeDamage(id(player)));
+    }
+  }
+
+  /** Launch fireworks celebrate; they never hurt anyone, player or not. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onFireworkDamage(EntityDamageByEntityEvent event) {
+    if (players.isCelebration(event.getDamager())) {
+      event.setCancelled(true);
     }
   }
 

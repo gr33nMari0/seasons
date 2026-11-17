@@ -102,6 +102,7 @@ launch:
   no-spawn: "<red>Set Season <next>'s spawn first: stand there and run /season spawn set.</red>"
   bad-dimension: "<red>Season <next>'s spawn is in a dimension this server doesn't have. Set it again with /season spawn set.</red>"
   busy: "<red>Someone is being archived or unarchived right now. Try again in a moment.</red>"
+  not-archived: "<red>Someone online isn't archived into Season <season> yet, or has a crash waiting for recovery. See /season status, then /season archive or /season reprocess them.</red>"
   unknown-flag: "<red>Unknown option <flag>. /season launch takes --dry-run.</red>"
   failed: "<red>Launching Season <season> stopped: <error>. See the server log; it is finished at the next restart.</red>"
   loading: "<gray>Loading the spawn at <x>, <y>, <z>...</gray>"
@@ -146,7 +147,7 @@ reprocess:
   failed: "<red><name> still has <count> operation(s) pending: <reason></red>"
 
 view:
-  title: "<name>, Season <season>"
+  title: "<name> · Season <season>"
   page: "<gray>Page <page> of <pages></gray>"
   previous: "<yellow>Previous page</yellow>"
   next: "<yellow>Next page</yellow>"

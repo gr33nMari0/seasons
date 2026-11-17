@@ -37,7 +37,8 @@ class PaperMenusTest {
   void setUp() {
     server = MockBukkit.mock();
     PaperText text = new PaperText();
-    PaperPlayers players = new PaperPlayers(server, text);
+    PaperPlayers players =
+        new PaperPlayers(server, text, new NamespacedKey("seasons", "celebration"));
     codec = new PaperItemCodec();
     menus = new PaperMenus(server, players, codec, text, ARCHIVED);
     inventories = new PaperInventories(players, codec, ARCHIVED);

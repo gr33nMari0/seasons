@@ -22,6 +22,7 @@ import com.petepeterepeat.seasons.core.player.LoginService;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
@@ -43,6 +44,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -164,7 +166,13 @@ public final class Seasons implements SeasonsApi {
 
     LaunchSequence launch =
         new LaunchSequence(
-            platform, config, announcer, entry, hold::held, Optional.ofNullable(journal));
+            platform,
+            config,
+            announcer,
+            entry,
+            hold::held,
+            unsettled(players, recovery),
+            Optional.ofNullable(journal));
     SeasonService seasons =
         new SeasonService(
             platform.players(),
@@ -191,6 +199,7 @@ public final class Seasons implements SeasonsApi {
                 players,
                 replaying.orElseThrow(),
                 a,
+                hold,
                 entry,
                 platform.scheduler(),
                 clock));
@@ -295,12 +304,25 @@ public final class Seasons implements SeasonsApi {
       }
 
       @Override
-      public CompletableFuture<Void> archive(
-          com.petepeterepeat.seasons.core.port.PlayerId player, int season) {
+      public CompletableFuture<Void> archive(PlayerId player, int season) {
         return CompletableFuture.failedFuture(
             new IllegalStateException("the journal is unavailable, so nobody can be archived"));
       }
     };
+  }
+
+  /**
+   * For launch: whether a player who played the season that ended isn't archived into it, or has an
+   * archive or unarchive still open in the journal.
+   */
+  private static BiPredicate<PlayerId, Integer> unsettled(
+      PlayerStore players, Optional<JournalRecovery> recovery) {
+    return (player, ended) ->
+        recovery.map(r -> !r.open(player).isEmpty()).orElse(false)
+            || players
+                .find(player)
+                .map(r -> r.played(ended) && r.archivedThrough() < ended)
+                .orElse(false);
   }
 
   private static void logFailure(CompletableFuture<?> future) {
