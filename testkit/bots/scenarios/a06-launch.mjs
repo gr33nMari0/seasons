@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A6. /season launch teleports everyone online to the new spawn in survival with 5 s of immunity,
-// sets the world spawn and creates the new deaths objective. The dragon flag is reset too (unit
-// test: the bots can't reach the End); locking old-world zones arrives with zones in M3.
+// a title, a sound and fireworks, sets the world spawn and creates the new deaths objective. The
+// dragon flag is reset too (unit test: the bots can't reach the End); locking old-world zones
+// arrives with zones in M3.
 import { SECOND, assert, sleep } from '../lib/context.mjs'
 
 export default {
@@ -24,6 +25,8 @@ export default {
     assert(await ctx.entityData(admin, 'Pat', 'playerGameType') === '2', 'the dry run changed nothing')
 
     await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
+    // A firework for each arriving player; immune or not, it hurts nobody (Pat's health below).
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:firework_rocket]'), 'launch fireworks are in the air')
     for (const name of ['Pat', 'SeasonsAdmin']) {
       await ctx.eventually(async () => {
         const at = await ctx.position(admin, name)

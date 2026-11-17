@@ -48,7 +48,8 @@ export default {
       'right click': () => viewer.clickWindow(dirt, 1, 0),
       'shift click': () => viewer.clickWindow(sword, 0, 1),
       'number key 3': () => viewer.clickWindow(sword, 2, 2),
-      'off-hand swap': () => viewer.clickWindow(sword, 40, 2),
+      // Mineflayer refuses button 40 ("invalid operation"), so the swap goes as a raw packet.
+      'off-hand swap': () => raw(viewer, window, [[sword, 40, 2]]),
       'drop one (Q)': () => viewer.clickWindow(dirt, 0, 4),
       'drop stack (Ctrl+Q)': () => viewer.clickWindow(dirt, 1, 4),
       'shift click from own inventory': () => viewer.clickWindow(HOTBAR_START + 2, 0, 1),
@@ -95,7 +96,7 @@ function snapshot (window) {
   }
 }
 
-/** Sends clicks as raw packets, for the click types Mineflayer doesn't model. */
+/** Sends clicks as raw packets, for the click types Mineflayer doesn't model or refuses. */
 async function raw (bot, window, clicks) {
   const Item = itemLoader(bot.registry)
   for (const [slot, mouseButton, mode] of clicks) {
@@ -114,7 +115,8 @@ async function raw (bot, window, clicks) {
 
 async function expectNothingMoved (ctx, admin, viewer, before, name, click) {
   ctx.log(`click: ${name}`)
-  await click().catch((err) => ctx.log(`  (${name}: ${err.message})`))
+  // A click that throws was never sent, so it would prove nothing: that fails the scenario.
+  await click()
   await viewer._syncWindow(viewer.currentWindow)
   const after = snapshot(viewer.currentWindow)
   assert(JSON.stringify(after.view) === JSON.stringify(before.view), `${name}: the view is unchanged: ${JSON.stringify(after.view)}`)
