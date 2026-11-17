@@ -16,6 +16,8 @@ export default {
     await giveGear(ctx, admin, 'Late')
     await ctx.leave(early)
     await ctx.leave(late)
+    // The bots are gone at once; wait until the server has seen them leave too.
+    await ctx.eventually(async () => assert(!await ctx.holds(admin, 'entity @a[name=Early]') && !await ctx.holds(admin, 'entity @a[name=Late]'), 'Early and Late have left'))
 
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
     await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
@@ -29,7 +31,7 @@ export default {
 
     // After launch: a late joiner goes straight to the new spawn.
     await ctx.command(admin, '/tp SeasonsAdmin 500 -60 300', /^Teleported /)
-    await ctx.eventually(async () => assert(Math.round((await ctx.position(admin, 'SeasonsAdmin')).x) === 500, 'admin moved'))
+    await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 500, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 500, -60, 300 in minecraft:overworld\.$/)
     await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     await ctx.join('Late')

@@ -26,7 +26,7 @@ export default {
     }, 32 * SECOND)
 
     const month = new Date().toISOString().slice(0, 7)
-    const audit = ctx.readFile(`world/seasons/audit/${month}.jsonl`).trim().split('\n').map((line) => JSON.parse(line))
+    const audit = ctx.readFile(`world/dimensions/minecraft/overworld/seasons/audit/${month}.jsonl`).trim().split('\n').map((line) => JSON.parse(line))
     const hits = audit.filter((entry) => entry.action === 'tripwire')
     assert(hits.some((entry) => entry.target === 'Tripper' && /3 × minecraft:stone/.test(entry.details)), `the inventory hit is audited: ${JSON.stringify(hits)}`)
     assert(hits.some((entry) => /on the ground/.test(entry.details) && /2 × minecraft:stone/.test(entry.details)), `the ground hit is audited: ${JSON.stringify(hits)}`)

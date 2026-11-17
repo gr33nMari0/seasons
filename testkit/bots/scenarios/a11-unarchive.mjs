@@ -32,7 +32,7 @@ export default {
 
     // The apples that were in the way are kept in a displaced-items file, never destroyed.
     const month = new Date().toISOString().slice(0, 7)
-    const audit = ctx.readFile(`world/seasons/audit/${month}.jsonl`).trim().split('\n').map((line) => JSON.parse(line))
+    const audit = ctx.readFile(`world/dimensions/minecraft/overworld/seasons/audit/${month}.jsonl`).trim().split('\n').map((line) => JSON.parse(line))
     const entry = audit.find((e) => e.action === 'unarchive' && e.target === 'Undo')
     assert(entry && /displaced 2 items/.test(entry.details), `the unarchive is audited with the displaced items: ${JSON.stringify(entry)}`)
 

@@ -193,7 +193,9 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
    * neutrality test (A10).
    */
   private void copyArchives() {
-    Path data = Path.of("world", "seasons", "data");
+    // Where the Paper adapter keeps Seasons' files: the overworld's folder.
+    Path data =
+        getServer().getWorlds().getFirst().getWorldFolder().toPath().resolve("seasons/data");
     Path into = nbt.resolve("archives");
     String prefix =
         property("seasons.scenario.name") + "-" + property("seasons.scenario.session") + "-";

@@ -35,7 +35,7 @@ export default {
       await ctx.command(admin, '/season reprocess Nobody', /^Nobody has nothing pending\.$/)
 
       await ctx.command(admin, '/tp SeasonsAdmin 300 -60 300', /^Teleported /)
-      await ctx.eventually(async () => assert(Math.round((await ctx.position(admin, 'SeasonsAdmin')).x) === 300, 'admin moved'))
+      await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 300, 'admin moved'))
       await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 300, -60, 300/)
       await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     },

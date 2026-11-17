@@ -91,7 +91,8 @@ export class ScenarioContext {
    */
   waitForMessages (bot, expect, timeoutMs = REPLY_TIMEOUT_MS, what = 'messages') {
     const patterns = Array.isArray(expect) ? [...expect] : [expect]
-    const matched = new Array(patterns.length)
+    // Filled, not holes: every() skips holes and would resolve after the first match.
+    const matched = new Array(patterns.length).fill(undefined)
     return new Promise((resolve, reject) => {
       const onMessage = (text) => {
         const i = patterns.findIndex((p, j) => matched[j] === undefined && p.test(text))

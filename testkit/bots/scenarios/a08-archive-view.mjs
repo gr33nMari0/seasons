@@ -21,19 +21,19 @@ export default {
     // With the ender chest archived too, the archive has a second page.
     ctx.writeFile('plugins/Seasons/config.yml', 'schema-version: 1\nresets:\n  enderChest: archive\n')
     await ctx.command(admin, '/season reload', /^Reloaded /)
-    await ctx.command(admin, '/item replace entity Viewer hotbar.0 with minecraft:diamond_sword', /^Replaced a slot/)
-    await ctx.command(admin, '/item replace entity Viewer hotbar.1 with minecraft:dirt 64', /^Replaced a slot/)
-    await ctx.command(admin, '/item replace entity Viewer inventory.4 with minecraft:torch 32', /^Replaced a slot/)
-    await ctx.command(admin, '/item replace entity Viewer armor.head with minecraft:iron_helmet', /^Replaced a slot/)
-    await ctx.command(admin, '/item replace entity Viewer weapon.offhand with minecraft:shield', /^Replaced a slot/)
-    await ctx.command(admin, '/item replace entity Viewer enderchest.0 with minecraft:emerald 5', /^Replaced a slot/)
+    await ctx.command(admin, '/item replace entity Viewer hotbar.0 with minecraft:diamond_sword', /^Replaced \d+ slot/)
+    await ctx.command(admin, '/item replace entity Viewer hotbar.1 with minecraft:dirt 64', /^Replaced \d+ slot/)
+    await ctx.command(admin, '/item replace entity Viewer inventory.4 with minecraft:torch 32', /^Replaced \d+ slot/)
+    await ctx.command(admin, '/item replace entity Viewer armor.head with minecraft:iron_helmet', /^Replaced \d+ slot/)
+    await ctx.command(admin, '/item replace entity Viewer weapon.offhand with minecraft:shield', /^Replaced \d+ slot/)
+    await ctx.command(admin, '/item replace entity Viewer enderchest.0 with minecraft:emerald 5', /^Replaced \d+ slot/)
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
     await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     const archived = await ctx.archive(admin, 'Viewer', 2)
     assert(archived.items === GEAR_ITEMS + 5 && archived.stacks === GEAR_STACKS + 1, `the archive holds gear and ender chest: ${JSON.stringify(archived)}`)
 
     // Something of the viewer's own, so clicks in their inventory have something to move.
-    await ctx.command(admin, '/item replace entity Viewer hotbar.2 with minecraft:dirt 10', /^Replaced a slot/)
+    await ctx.command(admin, '/item replace entity Viewer hotbar.2 with minecraft:dirt 10', /^Replaced \d+ slot/)
 
     const window = await openView(ctx, admin, viewer)
     assert(window.slots.length >= 90, `a 54-slot view, saw ${window.slots.length} slots`)

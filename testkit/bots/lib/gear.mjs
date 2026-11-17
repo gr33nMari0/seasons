@@ -11,12 +11,12 @@ export const ENDER_ITEMS = 5
 
 /** Gives `name` the standard gear: a sword, dirt, torches, a helmet, a shield, ender emeralds. */
 export async function giveGear (ctx, admin, name) {
-  await ctx.command(admin, `/item replace entity ${name} hotbar.0 with minecraft:diamond_sword`, /^Replaced a slot/)
-  await ctx.command(admin, `/item replace entity ${name} hotbar.1 with minecraft:dirt 64`, /^Replaced a slot/)
-  await ctx.command(admin, `/item replace entity ${name} inventory.4 with minecraft:torch 32`, /^Replaced a slot/)
-  await ctx.command(admin, `/item replace entity ${name} armor.head with minecraft:iron_helmet`, /^Replaced a slot/)
-  await ctx.command(admin, `/item replace entity ${name} weapon.offhand with minecraft:shield`, /^Replaced a slot/)
-  await ctx.command(admin, `/item replace entity ${name} enderchest.0 with minecraft:emerald 5`, /^Replaced a slot/)
+  await ctx.command(admin, `/item replace entity ${name} hotbar.0 with minecraft:diamond_sword`, /^Replaced \d+ slot/)
+  await ctx.command(admin, `/item replace entity ${name} hotbar.1 with minecraft:dirt 64`, /^Replaced \d+ slot/)
+  await ctx.command(admin, `/item replace entity ${name} inventory.4 with minecraft:torch 32`, /^Replaced \d+ slot/)
+  await ctx.command(admin, `/item replace entity ${name} armor.head with minecraft:iron_helmet`, /^Replaced \d+ slot/)
+  await ctx.command(admin, `/item replace entity ${name} weapon.offhand with minecraft:shield`, /^Replaced \d+ slot/)
+  await ctx.command(admin, `/item replace entity ${name} enderchest.0 with minecraft:emerald 5`, /^Replaced \d+ slot/)
 }
 
 /** XP, an effect, a respawn point and some advancements, all of which archiving resets. */

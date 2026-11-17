@@ -36,9 +36,10 @@ export default {
       const archive = await ctx.archive(admin, name, 2)
       assert(archive.present && archive.items === GEAR_ITEMS, `${name}'s gear is in the archive: ${JSON.stringify(archive)}`)
       assert(archive.vault === ENDER_ITEMS, `${name}'s ender chest is sealed in the vault: ${JSON.stringify(archive)}`)
-      assert(archive.completed === 2, `the archive holds ${name}'s two advancements: ${JSON.stringify(archive)}`)
+      // Stone Age and Minecraft, plus Suit Up, which the iron helmet in the gear earns.
+      assert(archive.completed === 3, `the archive holds ${name}'s three advancements: ${JSON.stringify(archive)}`)
       assert(archive.archivedThrough === 2, `${name} is archived through Season 2`)
     }
-    await ctx.command(admin, '/recipe take Alex *', /^Took \d+ recipes? from Alex/)
+    await ctx.command(admin, '/recipe take Alex *', /^Took \d+ recipe\(s\) from Alex/)
   }
 }

@@ -16,7 +16,7 @@ export default {
     await ctx.command(admin, '/season launch', /^Set Season 3's spawn first/)
 
     await ctx.command(admin, '/tp SeasonsAdmin 2000 -60 -1500', /^Teleported /)
-    await ctx.eventually(async () => assert(Math.round((await ctx.position(admin, 'SeasonsAdmin')).x) === 2000, 'admin moved'))
+    await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 2000, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 2000, -60, -1500 in minecraft:overworld\.$/)
     await ctx.command(admin, '/tp SeasonsAdmin 0 -60 0', /^Teleported /)
     await ctx.command(admin, '/gamemode adventure Pat', /^Set Pat's game mode/)
@@ -38,7 +38,7 @@ export default {
     assert(await ctx.entityData(admin, 'Pat', 'Health') === '16.0f', 'Pat takes damage once immunity ends')
 
     assert(await ctx.holds(admin, 'loaded 2000 -60 -1500'), 'the spawn chunk is loaded')
-    await ctx.command(admin, '/scoreboard objectives list', /seasons_deaths_s3/)
+    await ctx.command(admin, '/scoreboard objectives list', /\[Deaths, Season 3\]/)
     await ctx.command(admin, '/season info', /^Phase: Active, Frontier stage$/)
     // The world spawn: a player with no respawn point respawns there after dying elsewhere.
     await ctx.command(admin, '/tp Pat 50 -60 50', /^Teleported /)
