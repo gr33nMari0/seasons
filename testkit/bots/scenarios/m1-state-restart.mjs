@@ -2,8 +2,7 @@
 // @sessions 2
 // Season state survives a restart: the planned end and the reminders already sent are kept,
 // and a countdown interrupted by the restart is cancelled rather than resumed.
-import { DAY, SECOND, assert } from '../lib/context.mjs'
-import { isoIn } from '../lib/context.mjs'
+import { DAY, SECOND, assert, isoIn } from '../lib/context.mjs'
 
 const ONE_DAY = /^Season 2 ends in 1 day\b/
 

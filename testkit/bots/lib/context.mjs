@@ -10,6 +10,7 @@ import mineflayer from 'mineflayer'
 const JOIN_TIMEOUT_MS = 60_000
 const REPLY_TIMEOUT_MS = 10_000
 const POLL_MS = 200
+const MOVEMENT_PACKETS = new Set(['position', 'look', 'position_look', 'flying'])
 /** Fixed, so a webhook URL written in one session still works in the next. */
 const WEBHOOK_PORT = 25601
 
@@ -40,17 +41,30 @@ export class ScenarioContext {
     this.servers = []
   }
 
-  /** Joins a player bot and resolves once it has spawned. */
-  async join (username) {
+  /**
+   * Joins a player bot and resolves once it has spawned. Unless `physics` is asked for, the bot
+   * stands still and sends no movement packets: through the protocol translation
+   * (docs/adr/0001) Mineflayer's once-a-second position packet gets the bot kicked with "Invalid
+   * move player packet", and scenarios that only chat and watch don't need to move.
+   */
+  async join (username, { physics = false } = {}) {
     const bot = mineflayer.createBot({
       host: this.host,
       port: this.port,
       username,
       version: this.version,
       auth: 'offline',
-      hideErrors: false
+      hideErrors: false,
+      physicsEnabled: physics
     })
     this.bots.push(bot)
+    if (!physics) {
+      const write = bot._client.write.bind(bot._client)
+      bot._client.write = (name, params) => {
+        if (MOVEMENT_PACKETS.has(name)) return
+        write(name, params)
+      }
+    }
     bot.seasonsBars = new Map()
     bot.on('messagestr', (text) => this.log(`[${username}] <- ${text}`))
     bot.on('bossBarCreated', (bar) => bot.seasonsBars.set(bar.entityUUID, bar))
