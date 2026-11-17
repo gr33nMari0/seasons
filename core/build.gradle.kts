@@ -8,4 +8,6 @@ dependencies {
     compileOnlyApi(libs.slf4j.api)
     testImplementation(libs.slf4j.api)
     implementation(libs.configurate.yaml)
+    implementation(libs.configurate.gson)
+    implementation(libs.gson)
 }

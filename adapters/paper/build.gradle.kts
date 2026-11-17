@@ -35,6 +35,9 @@ tasks.shadowJar {
     relocate("org.spongepowered.configurate", "$shaded.configurate")
     relocate("io.leangen.geantyref", "$shaded.geantyref")
     relocate("net.kyori.option", "$shaded.option")
+    relocate("com.google.gson", "$shaded.gson")
+    // Gson's compile-time annotations are not needed at run time.
+    dependencies { exclude(dependency("com.google.errorprone:error_prone_annotations")) }
     exclude("META-INF/maven/**", "META-INF/versions/*/module-info.class", "module-info.class")
     mergeServiceFiles()
 }

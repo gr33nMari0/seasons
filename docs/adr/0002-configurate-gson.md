@@ -8,7 +8,7 @@ The spec stores plugin-owned data as JSON: the season state (`data/season.json`)
 
 ## Decision
 
-Add `org.spongepowered:configurate-gson`, from the same Configurate release as `configurate-yaml`. It brings Gson, which is small and widely used. Both are shaded and relocated under `com.petepeterepeat.seasons.lib`, like the rest of Configurate, and pinned by Gradle dependency verification.
+Add `org.spongepowered:configurate-gson`, from the same Configurate release as `configurate-yaml`. It brings Gson, which is small and widely used. configurate-gson asks for Gson 2.8.0 from 2016, so `libs.versions.toml` pins the current Gson instead; Gson's compile-time annotations are left out of the jar. Both are shaded and relocated under `com.petepeterepeat.seasons.lib`, like the rest of Configurate, and pinned by Gradle dependency verification.
 
 ## Consequences
 
