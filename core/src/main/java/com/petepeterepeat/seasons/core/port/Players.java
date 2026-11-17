@@ -13,4 +13,14 @@ public interface Players {
 
   /** Sends a message. Placeholders are always inserted as literal text. */
   void sendMessage(PlayerId id, Message message);
+
+  /** Sends a message to every online player and the console. */
+  void broadcast(Message message);
+
+  /**
+   * Shows a boss bar to every online player.
+   *
+   * @param progress from 0 (empty) to 1 (full)
+   */
+  ProgressBar showProgressBar(Message title, float progress);
 }

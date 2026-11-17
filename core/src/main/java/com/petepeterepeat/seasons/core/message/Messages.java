@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ public final class Messages {
   static final String FILE_NAME = "messages.yml";
   private static final String BUNDLED = "/com/petepeterepeat/seasons/core/messages.yml";
   private static final Logger LOG = LoggerFactory.getLogger(Messages.class);
+  private static final Pattern TAG = Pattern.compile("</?[a-z_#!:][^<>]*>");
 
   private final Map<String, String> templates;
 
@@ -87,13 +89,17 @@ public final class Messages {
    * out.
    */
   public String text(String key, String... placeholders) {
-    Message message = get(key, placeholders);
+    return plain(get(key, placeholders));
+  }
+
+  /** Any message as plain text, as {@link #text} describes. */
+  public static String plain(Message message) {
     String out = message.template();
     for (Map.Entry<String, String> placeholder : message.placeholders().entrySet()) {
       out =
           out.replace("<" + placeholder.getKey() + ">", "\u0000" + placeholder.getKey() + "\u0000");
     }
-    out = out.replaceAll("</?[a-z_#!:][^<>]*>", "");
+    out = TAG.matcher(out).replaceAll("");
     for (Map.Entry<String, String> placeholder : message.placeholders().entrySet()) {
       out = out.replace("\u0000" + placeholder.getKey() + "\u0000", placeholder.getValue());
     }

@@ -1,0 +1,435 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+package com.petepeterepeat.seasons.core;
+
+import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_CONFIG;
+import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_SEASON;
+import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_INFO;
+
+import com.petepeterepeat.seasons.core.command.ArgumentType;
+import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Flags;
+import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.config.ConfigLoader;
+import com.petepeterepeat.seasons.core.config.ConfigProblem;
+import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.config.ZonedTimes;
+import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.Capability;
+import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.season.HumanTime;
+import com.petepeterepeat.seasons.core.season.Phase;
+import com.petepeterepeat.seasons.core.season.SeasonEvent;
+import com.petepeterepeat.seasons.core.season.SeasonMachine;
+import com.petepeterepeat.seasons.core.season.SeasonService;
+import com.petepeterepeat.seasons.core.season.SeasonState;
+import com.petepeterepeat.seasons.core.season.Stage;
+import com.petepeterepeat.seasons.core.season.Transition;
+import com.petepeterepeat.seasons.core.store.Journal;
+import com.petepeterepeat.seasons.core.store.JournalHealth;
+import com.petepeterepeat.seasons.core.store.JournalRecovery;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+/** The {@code /season} command tree and what each command does. */
+final class SeasonCommands {
+  private static final String DRY_RUN = "--dry-run";
+  private static final String NOW = "--now";
+
+  private final Platform platform;
+  private final String version;
+  private final Clock clock;
+  private final SeasonService seasons;
+  private final ConfigHolder config;
+  private final ConfigLoader loader;
+  private final SerialWriter writer;
+  private final Optional<Journal> journal;
+  private final Optional<String> journalError;
+  private final List<ConfigProblem> startupProblems;
+
+  SeasonCommands(
+      Platform platform,
+      String version,
+      Clock clock,
+      SeasonService seasons,
+      ConfigHolder config,
+      ConfigLoader loader,
+      SerialWriter writer,
+      Optional<Journal> journal,
+      Optional<String> journalError,
+      List<ConfigProblem> startupProblems) {
+    this.platform = platform;
+    this.version = version;
+    this.clock = clock;
+    this.seasons = seasons;
+    this.config = config;
+    this.loader = loader;
+    this.writer = writer;
+    this.journal = journal;
+    this.journalError = journalError;
+    this.startupProblems = List.copyOf(startupProblems);
+  }
+
+  CommandNode root() {
+    return CommandNode.literal("season")
+        .then(
+            CommandNode.literal("status")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::status))
+        .then(CommandNode.literal("info").permission(PERMISSION_INFO).executes(this::info))
+        .then(
+            CommandNode.literal("init")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::init)))
+        .then(
+            CommandNode.literal("schedule")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(
+                    CommandNode.literal("end")
+                        .then(
+                            CommandNode.argument("time", ArgumentType.greedy())
+                                .executes(this::scheduleEnd))))
+        .then(
+            CommandNode.literal("end")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::end)
+                .then(CommandNode.argument("options", ArgumentType.greedy()).executes(this::end)))
+        .then(
+            CommandNode.literal("cancel")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::cancel))
+        .then(
+            CommandNode.literal("reload")
+                .permission(PERMISSION_ADMIN_CONFIG)
+                .executes(this::reload))
+        .then(
+            CommandNode.literal("validate")
+                .permission(PERMISSION_ADMIN_CONFIG)
+                .executes(this::validate))
+        .build();
+  }
+
+  void status(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    String name = platform.name();
+    source.reply(messages.get("status.header", "version", version, "platform", name));
+    seasons
+        .loadError()
+        .ifPresent(error -> source.reply(messages.get("status.unreadable", "error", error)));
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages.get("status.no-season"));
+    } else {
+      SeasonState current = state.get();
+      source.reply(messages.get("status.season", "season", Integer.toString(current.season())));
+      source.reply(messages.get("status.phase", "phase", phase(messages, current.phase())));
+      plannedEnd(source, "status", current);
+      if (current.phase() instanceof Phase.Countdown countdown) {
+        Duration left = Duration.between(clock.instant(), countdown.endsAt());
+        source.reply(messages.get("status.countdown", "time", HumanTime.clock(left)));
+      }
+      current
+          .countdownInterrupted()
+          .ifPresent(at ->
+              source.reply(
+                  messages.get(
+                      "status.interrupted",
+                      "time",
+                      HumanTime.time(at.atZone(ZoneId.systemDefault())))));
+    }
+    journalStatus(source, messages);
+    for (ConfigProblem problem : startupProblems) {
+      source.reply(
+          messages.get(
+              "status.config-problem",
+              "problem",
+              messages.text(problemKey(problem), problemPlaceholders(problem))));
+    }
+    var gaps = platform.capabilities().gaps();
+    if (gaps.isEmpty()) {
+      source.reply(messages.get("status.capabilities-ok", "platform", name));
+    }
+    for (Capability gap : gaps) {
+      source.reply(
+          messages.get("status.capability-gap", "platform", name, "capability", gap.name()));
+    }
+  }
+
+  void info(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages.get("info.no-season"));
+      return;
+    }
+    SeasonState current = state.get();
+    source.reply(messages.get("info.season", "season", Integer.toString(current.season())));
+    source.reply(messages.get("info.phase", "phase", phase(messages, current.phase())));
+    plannedEnd(source, "info", current);
+    if (source.player().isPresent()) {
+      source.reply(messages.get("info.no-cell"));
+    }
+  }
+
+  void init(CommandSource source, Arguments arguments) {
+    int season = arguments.integer("season");
+    reply(source, seasons.init(season), "init.done");
+  }
+
+  void scheduleEnd(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    ZonedDateTime at;
+    try {
+      at = ZonedTimes.parse(arguments.string("time"));
+    } catch (IllegalArgumentException e) {
+      source.reply(messages.get("schedule.invalid-time", "error", String.valueOf(e.getMessage())));
+      return;
+    }
+    if (!at.toInstant().isAfter(clock.instant())) {
+      source.reply(messages.get("schedule.past"));
+      return;
+    }
+    Transition transition = seasons.scheduleEnd(at);
+    if (transition instanceof Transition.Refused refused) {
+      refuse(source, refused);
+      return;
+    }
+    String key =
+        config.get().config().schedule().autoEnd() ? "schedule.done-auto" : "schedule.done";
+    source.reply(
+        messages.get(
+            key,
+            "season",
+            season(),
+            "time",
+            HumanTime.time(at),
+            "utc",
+            HumanTime.time(at, ZoneOffset.UTC)));
+    if (Duration.between(clock.instant(), at.toInstant()).compareTo(Duration.ofDays(7)) < 0) {
+      source.reply(messages.get("schedule.soon"));
+    }
+  }
+
+  void end(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Flags.Parsed parsed = Flags.parse(arguments.optionalString("options"), Set.of(DRY_RUN, NOW));
+    if (parsed instanceof Flags.Parsed.Unknown unknown) {
+      source.reply(messages.get("end.unknown-flag", "flag", unknown.word()));
+      return;
+    }
+    Flags.Parsed.Ok flags = (Flags.Parsed.Ok) parsed;
+    if (flags.has(DRY_RUN)) {
+      dryRun(source, flags.has(NOW));
+      return;
+    }
+    int online = platform.players().online().size();
+    Transition transition = seasons.end(flags.has(NOW));
+    if (transition instanceof Transition.Refused refused) {
+      refuse(source, refused);
+    } else if (flags.has(NOW)) {
+      source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
+    }
+  }
+
+  void cancel(CommandSource source, Arguments arguments) {
+    if (seasons.cancel() instanceof Transition.Refused refused) {
+      refuse(source, refused);
+    }
+  }
+
+  void reload(CommandSource source, Arguments arguments) {
+    var _ =
+        writer
+            .submit(loader::load)
+            .whenComplete((result, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      if (failure != null || result.snapshot().isEmpty()) {
+                        source.reply(messages().get("config.reload-failed"));
+                        if (result != null) {
+                          problems(source, result.problems());
+                        }
+                        return;
+                      }
+                      ConfigSnapshot snapshot = result.snapshot().get();
+                      config.set(snapshot);
+                      seasons.reloaded(snapshot);
+                      source.reply(messages().get("config.reloaded"));
+                      for (String warning : result.warnings()) {
+                        source.reply(messages().get("config.warning", "warning", warning));
+                      }
+                    }));
+  }
+
+  void validate(CommandSource source, Arguments arguments) {
+    var _ =
+        writer
+            .submit(loader::load)
+            .whenComplete((result, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      if (failure == null && result.snapshot().isPresent()) {
+                        source.reply(messages().get("config.valid"));
+                      } else {
+                        source.reply(messages().get("config.invalid"));
+                        if (result != null) {
+                          problems(source, result.problems());
+                        }
+                      }
+                    }));
+  }
+
+  private void dryRun(CommandSource source, boolean now) {
+    Messages messages = messages();
+    Duration countdown = now ? Duration.ZERO : config.get().config().schedule().endCountdown();
+    Transition would =
+        SeasonMachine.apply(seasons.state(), new SeasonEvent.End(countdown), clock.instant());
+    if (would instanceof Transition.Refused refused) {
+      source.reply(
+          messages.get(
+              "end.dry-run.refused",
+              "reason",
+              messages.text(refused.messageKey(), "season", season())));
+      return;
+    }
+    source.reply(messages.get("end.dry-run.header", "season", season()));
+    if (now) {
+      source.reply(messages.get("end.dry-run.now"));
+    } else {
+      source.reply(
+          messages.get("end.dry-run.countdown", "when", HumanTime.duration(messages, countdown)));
+    }
+    List<String> names =
+        platform.players().online().stream().map(PlayerRef::name).sorted().toList();
+    if (names.isEmpty()) {
+      source.reply(messages.get("end.dry-run.no-players"));
+    } else {
+      source.reply(
+          messages.get(
+              "end.dry-run.players",
+              "count",
+              Integer.toString(names.size()),
+              "names",
+              String.join(", ", names)));
+    }
+    source.reply(messages.get("end.dry-run.next", "season", season()));
+  }
+
+  private void plannedEnd(CommandSource source, String prefix, SeasonState state) {
+    Messages messages = messages();
+    if (state.plannedEnd().isEmpty()) {
+      source.reply(messages.get(prefix + ".no-planned-end"));
+      return;
+    }
+    ZonedDateTime end = state.plannedEnd().get();
+    source.reply(
+        messages.get(
+            prefix + ".planned-end",
+            "time",
+            HumanTime.time(end, ZoneId.systemDefault()),
+            "utc",
+            HumanTime.time(end, ZoneOffset.UTC)));
+  }
+
+  private void journalStatus(CommandSource source, Messages messages) {
+    if (journal.isEmpty()) {
+      source.reply(
+          messages.get("status.journal-unavailable", "error", journalError.orElse("not opened")));
+      return;
+    }
+    JournalHealth health = journal.get().health();
+    int pending = JournalRecovery.openOperations(journal.get().entries()).size();
+    source.reply(
+        messages.get(
+            "status.journal",
+            "entries",
+            Integer.toString(health.entries()),
+            "sequence",
+            Long.toString(health.lastSequence()),
+            "pending",
+            Integer.toString(pending)));
+    if (health.damagedLines() > 0) {
+      source.reply(
+          messages.get("status.journal-damaged", "count", Integer.toString(health.damagedLines())));
+    }
+    health
+        .lastError()
+        .ifPresent(error -> source.reply(messages.get("status.journal-error", "error", error)));
+  }
+
+  private void problems(CommandSource source, List<ConfigProblem> problems) {
+    Messages messages = messages();
+    for (ConfigProblem problem : problems) {
+      source.reply(messages.get(problemKey(problem), problemPlaceholders(problem)));
+    }
+  }
+
+  private static String problemKey(ConfigProblem problem) {
+    if (problem.line().isPresent()) {
+      return "config.problem-line";
+    }
+    return problem.path().isPresent() ? "config.problem-path" : "config.problem-file";
+  }
+
+  private static String[] problemPlaceholders(ConfigProblem problem) {
+    if (problem.line().isPresent()) {
+      return new String[] {
+        "file", problem.file(),
+        "line", Integer.toString(problem.line().get().line()),
+        "column", Integer.toString(problem.line().get().column()),
+        "message", problem.message()
+      };
+    }
+    if (problem.path().isPresent()) {
+      return new String[] {
+        "file", problem.file(), "path", problem.path().get(), "message", problem.message()
+      };
+    }
+    return new String[] {"file", problem.file(), "message", problem.message()};
+  }
+
+  private void reply(CommandSource source, Transition transition, String doneKey) {
+    if (transition instanceof Transition.Refused refused) {
+      refuse(source, refused);
+    } else {
+      source.reply(messages().get(doneKey, "season", season()));
+    }
+  }
+
+  private void refuse(CommandSource source, Transition.Refused refused) {
+    source.reply(messages().get(refused.messageKey(), "season", season()));
+  }
+
+  private static String phase(Messages messages, Phase phase) {
+    String key =
+        switch (phase) {
+          case Phase.Active active ->
+              active.stage() == Stage.FRONTIER ? "phase.active-frontier" : "phase.active-open";
+          case Phase.Countdown countdown -> "phase.ending-countdown";
+          case Phase.Archiving archiving -> "phase.ending-archiving";
+          case Phase.Intermission intermission -> "phase.intermission";
+        };
+    return messages.text(key);
+  }
+
+  private String season() {
+    return seasons.state().map(s -> Integer.toString(s.season())).orElse("?");
+  }
+
+  private Messages messages() {
+    return config.get().messages();
+  }
+}

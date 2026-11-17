@@ -1,9 +1,109 @@
 # Every player-facing string in Seasons, as MiniMessage (https://docs.papermc.io/adventure/minimessage/).
 # Placeholders such as <version> are filled in as plain text. Edit freely, then /season reload.
+# Discord posts use the same text with the formatting tags left out.
 schema-version: 1
+
+time:
+  day: "<n> day"
+  days: "<n> days"
+  hour: "<n> hour"
+  hours: "<n> hours"
+  minute: "<n> minute"
+  minutes: "<n> minutes"
+  second: "<n> second"
+  seconds: "<n> seconds"
+
+phase:
+  active-frontier: "Active, Frontier stage"
+  active-open: "Active, Open stage"
+  ending-countdown: "Ending, countdown running"
+  ending-archiving: "Ending, archiving players"
+  intermission: "Intermission"
+
+season:
+  none: "<red>No season recorded yet. Run /season init with the number of the season in progress first.</red>"
+  unreadable: "<red>season.json can't be read, so season commands are refused. See the server log, fix or restore the file, then restart.</red>"
+  save-failed: "<red>Seasons couldn't save season.json: <error></red>"
+
 status:
   header: "<gold>Seasons <version></gold> <gray>on <platform></gray>"
   no-season: "<gray>No season recorded yet. Run /season init to record the season in progress.</gray>"
   season: "<gray>Season</gray> <white><season></white>"
+  phase: "<gray>Phase:</gray> <white><phase></white>"
+  planned-end: "<gray>Planned end:</gray> <white><time></white> <gray>(<utc>)</gray>"
+  no-planned-end: "<gray>No planned end set. /season schedule end sets one.</gray>"
+  countdown: "<gray>Countdown:</gray> <white><time></white> <gray>left</gray>"
+  interrupted: "<yellow>The end countdown was interrupted by a restart at <time>. Run /season end to start it again.</yellow>"
+  journal: "<gray>Journal: <entries> entries, last <sequence>, <pending> waiting for recovery</gray>"
+  journal-damaged: "<yellow>Journal: <count> damaged lines were dropped at startup; a copy of the original is beside journal.log</yellow>"
+  journal-error: "<red>Journal: the last write failed: <error></red>"
+  journal-unavailable: "<red>Journal: unavailable (<error>). Nothing that moves items can run.</red>"
+  config-problem: "<red>Config problem at startup, so the bundled defaults are in use:</red> <problem>"
+  unreadable: "<red>season.json can't be read: <error></red>"
   capabilities-ok: "<green>The <platform> adapter supports everything Seasons uses.</green>"
   capability-gap: "<yellow>Not available on <platform>: <capability></yellow>"
+
+info:
+  season: "<gray>Season</gray> <white><season></white>"
+  phase: "<gray>Phase:</gray> <white><phase></white>"
+  planned-end: "<gray>Planned end:</gray> <white><time></white> <gray>(<utc>)</gray>"
+  no-planned-end: "<gray>No planned end yet.</gray>"
+  no-cell: "<gray>Your cell: none yet</gray>"
+  no-season: "<gray>No season is recorded yet.</gray>"
+
+init:
+  done: "<green>Recorded Season <season> as the season in progress.</green>"
+  refused: "<red>Season <season> is already recorded. /season init only works on a server that has never run Seasons.</red>"
+  invalid: "<red>Season numbers start at 1.</red>"
+
+schedule:
+  done: "<green>Season <season> now ends at <time> (<utc>).</green> <gray>Reminders count down to it; the season ends when an admin runs /season end.</gray>"
+  done-auto: "<green>Season <season> now ends at <time> (<utc>).</green> <gray>Reminders count down to it, and the countdown starts by itself then (schedule.autoEnd).</gray>"
+  soon: "<yellow>That is less than a week away.</yellow>"
+  past: "<red>That time has already passed.</red>"
+  invalid-time: "<red><error></red>"
+  refused: "<red>The planned end can only be set while Season <season> is Active.</red>"
+
+reminder: "<gold>Season <season> ends in <when>, at <time>.</gold>"
+
+end:
+  started: "<gold>Season <season> ends in <when>.</gold> <yellow>Finish what you're doing!</yellow>"
+  bar: "<gold>Season <season> ends in <time></gold>"
+  now: "<gold>Ending Season <season> now: archiving <count> online players.</gold>"
+  cancelled: "<green>The end of Season <season> was cancelled. Play on!</green>"
+  intermission: "<gold>Season <season> has ended. Welcome to the Intermission.</gold>"
+  interrupted: "<yellow>The server restarted during the end countdown of Season <season>, so it was cancelled. Run /season end to start it again.</yellow>"
+  archiving-failed: "<red>Archiving for Season <season> stopped: <error>. See the server log.</red>"
+  already-ending: "<red>Season <season> is already ending. /season cancel stops the countdown.</red>"
+  already-ended: "<red>Season <season> has already ended. /season launch starts the next one.</red>"
+  not-counting: "<red>No countdown is running.</red>"
+  not-archiving: "<red>Season <season> isn't archiving.</red>"
+  unknown-flag: "<red>Unknown option <flag>. /season end takes --dry-run and --now.</red>"
+  dry-run:
+    header: "<gold>Dry run of /season end for Season <season>. Nothing changes.</gold>"
+    countdown: "<gray>A <when> countdown would start, then every online player would be archived.</gray>"
+    now: "<gray>No countdown (--now): every online player would be archived at once.</gray>"
+    players: "<gray>Online players to archive (<count>):</gray> <white><names></white>"
+    no-players: "<gray>Nobody is online to archive; players catch up when they next log in.</gray>"
+    next: "<gray>Then Season <season> would move to the Intermission.</gray>"
+    refused: "<red>/season end would be refused:</red> <reason>"
+
+cancel:
+  too-late: "<red>Archiving has started and can't be cancelled.</red>"
+  nothing: "<red>There is no countdown to cancel.</red>"
+
+launch:
+  refused: "<red>Season <season> can only be launched from the Intermission.</red>"
+
+homecoming:
+  refused: "<red>Homecoming only happens once, in the Frontier stage.</red>"
+
+config:
+  reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml and the season files.</green>"
+  reload-failed: "<red>Reload failed. The previous config stays live.</red>"
+  valid: "<green>All config files are valid.</green>"
+  invalid: "<red>Some config files have problems. Nothing was changed.</red>"
+  warning: "<yellow><warning></yellow>"
+  problem-line: "<red><file>, line <line>, column <column>:</red> <message>"
+  problem-path: "<red><file>, at <path>:</red> <message>"
+  problem-file: "<red><file>:</red> <message>"

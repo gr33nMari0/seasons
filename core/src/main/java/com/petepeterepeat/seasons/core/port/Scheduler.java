@@ -14,6 +14,9 @@ public interface Scheduler {
   /** Runs later on the thread that owns global state. */
   void runGlobalLater(Duration delay, Runnable task);
 
+  /** Runs every {@code period} on the thread that owns global state, first after one period. */
+  ScheduledTask runGlobalRepeating(Duration period, Runnable task);
+
   /** Runs on the thread that owns the player. Skipped if they are offline. */
   void runForPlayer(PlayerId player, Runnable task);
 

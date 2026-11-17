@@ -3,120 +3,444 @@ package com.petepeterepeat.seasons.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.petepeterepeat.seasons.core.announce.Webhooks;
+import com.petepeterepeat.seasons.core.command.ArgumentType;
+import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
-import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
-import com.petepeterepeat.seasons.core.event.IntentHandler;
-import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
-import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.season.RolloverArchiver;
+import com.petepeterepeat.seasons.core.season.StubArchiver;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class SeasonsTest {
-  private final List<CommandNode> registered = new ArrayList<>();
-  private IntentHandler handler = intent -> Decision.deny(Message.of("unset"));
+  private static final PlayerId ALEX =
+      new PlayerId(UUID.fromString("00000000-0000-0000-0000-00000000a1e7"));
 
-  private Seasons start(Capabilities capabilities) {
-    Platform platform =
-        new Platform(
-            "Test",
-            capabilities,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            registered::add,
-            null,
-            h -> handler = h,
-            null,
-            null,
-            null,
-            null);
-    Seasons seasons = new Seasons(platform, "1.2.3", Messages.defaults());
+  @TempDir Path dir;
+  private FakePlatform fake = new FakePlatform();
+  private final List<String> posts = new ArrayList<>();
+  private final List<PlayerId> archived = new ArrayList<>();
+  private Seasons seasons;
+
+  private final Webhooks webhooks =
+      new Webhooks() {
+        @Override
+        public void post(URI webhook, String content) {
+          posts.add(content);
+        }
+
+        @Override
+        public void close() {}
+      };
+
+  private final RolloverArchiver recordingArchiver =
+      new RolloverArchiver() {
+        @Override
+        public CompletableFuture<Void> lockGalleries(int season) {
+          return CompletableFuture.completedFuture(null);
+        }
+
+        @Override
+        public CompletableFuture<Void> archive(PlayerId player, int season) {
+          archived.add(player);
+          return CompletableFuture.completedFuture(null);
+        }
+      };
+
+  private Seasons start() {
+    return start(new Capabilities(EnumSet.allOf(Capability.class)), recordingArchiver);
+  }
+
+  private Seasons start(Capabilities capabilities, RolloverArchiver archiver) {
+    seasons =
+        new Seasons(
+            fake.platform(capabilities, dir),
+            "1.2.3",
+            fake.clock,
+            webhooks,
+            archiver,
+            Map.of(),
+            new SerialWriter(Runnable::run));
     seasons.start();
     return seasons;
   }
 
-  @Test
-  void registersTheSeasonCommandWithAnAdminOnlyStatus() {
-    start(new Capabilities(EnumSet.allOf(Capability.class)));
+  /** Stops the running instance and starts a new one on the same files, as a restart would. */
+  private void restart() {
+    seasons.stop();
+    FakePlatform before = fake;
+    fake = new FakePlatform();
+    fake.clock.advance(Duration.between(fake.clock.instant(), before.clock.instant()));
+    fake.online.addAll(before.online);
+    start();
+  }
 
-    assertThat(registered)
+  @AfterEach
+  void stop() {
+    if (seasons != null) {
+      seasons.stop();
+    }
+  }
+
+  private TestSource run(String command) {
+    TestSource source = TestSource.console();
+    run(source, command);
+    return source;
+  }
+
+  /** Runs a command line against the registered tree, as an adapter would. */
+  private void run(TestSource source, String command) {
+    CommandNode node = fake.commands.getFirst();
+    String[] words = command.split(" ");
+    Map<String, Object> values = new HashMap<>();
+    for (int i = 1; i < words.length; i++) {
+      String word = words[i];
+      Optional<CommandNode> literal =
+          node.children().stream().filter(c -> c.isLiteral() && c.name().equals(word)).findFirst();
+      if (literal.isPresent()) {
+        node = literal.get();
+        continue;
+      }
+      CommandNode argument =
+          node.children().stream()
+              .filter(c -> !c.isLiteral())
+              .findFirst()
+              .orElseThrow(() -> new AssertionError("no command at '" + word + "' in " + command));
+      if (argument.argument().get() instanceof ArgumentType.GreedyArgument) {
+        values.put(argument.name(), String.join(" ", List.of(words).subList(i, words.length)));
+        node = argument;
+        break;
+      }
+      values.put(
+          argument.name(),
+          argument.argument().get() instanceof ArgumentType.IntegerArgument
+              ? (Object) Integer.parseInt(word)
+              : word);
+      node = argument;
+    }
+    node.action().orElseThrow().run(source, new Arguments(values));
+  }
+
+  private List<String> broadcasts() {
+    return fake.broadcasts.stream().map(TestSource::plain).toList();
+  }
+
+  private Path worldFile(String path) {
+    return dir.resolve("world/seasons").resolve(path);
+  }
+
+  @Test
+  void registersTheSeasonCommandWithPermissions() {
+    start();
+
+    assertThat(fake.commands)
         .singleElement()
         .satisfies(root -> {
-          assertThat(root.literal()).isEqualTo("season");
+          assertThat(root.name()).isEqualTo("season");
           assertThat(root.children())
-              .anySatisfy(child -> {
-                assertThat(child.literal()).isEqualTo("status");
-                assertThat(child.permission()).contains(Seasons.PERMISSION_ADMIN_SEASON);
-              });
+              .extracting(CommandNode::name, CommandNode::permission)
+              .contains(
+                  org.assertj.core.groups.Tuple.tuple(
+                      "status", Optional.of(Seasons.PERMISSION_ADMIN_SEASON)),
+                  org.assertj.core.groups.Tuple.tuple("info", Optional.of(Seasons.PERMISSION_INFO)),
+                  org.assertj.core.groups.Tuple.tuple(
+                      "reload", Optional.of(Seasons.PERMISSION_ADMIN_CONFIG)));
         });
   }
 
   @Test
-  void statusReportsVersionNoSeasonAndCapabilityGaps() {
-    start(new Capabilities(EnumSet.of(Capability.MANNEQUINS)));
-    List<Message> replies = new ArrayList<>();
+  void statusReportsVersionNoSeasonJournalAndCapabilityGaps() {
+    start(new Capabilities(EnumSet.of(Capability.MANNEQUINS)), new StubArchiver());
 
-    status()
-        .run(
-            new CommandSource() {
-              @Override
-              public Optional<PlayerId> player() {
-                return Optional.empty();
-              }
-
-              @Override
-              public void reply(Message message) {
-                replies.add(message);
-              }
-            });
+    TestSource source = run("/season status");
 
     Messages messages = Messages.defaults();
-    assertThat(replies)
-        .extracting(Message::template)
-        .containsExactly(
-            messages.get("status.header").template(),
+    assertThat(source.replies.getFirst().placeholders()).containsEntry("version", "1.2.3");
+    assertThat(source.replies)
+        .extracting(m -> m.template())
+        .contains(
             messages.get("status.no-season").template(),
-            messages.get("status.capability-gap").template(),
+            messages.get("status.journal").template(),
             messages.get("status.capability-gap").template());
-    assertThat(replies.getFirst().placeholders()).containsEntry("version", "1.2.3");
   }
 
   @Test
   void allowsEverythingForNow() {
-    start(new Capabilities(EnumSet.noneOf(Capability.class)));
+    start();
     PlayerId player = new PlayerId(UUID.randomUUID());
 
     assertThat(
-            handler.decide(
+            fake.handler.decide(
                 new Intent.BreakBlock(player, Position.of("minecraft:overworld", 0, 64, 0))))
         .isEqualTo(Decision.allow());
   }
 
   @Test
-  void hasNoSeasonBeforeInit() {
-    assertThat(start(new Capabilities(EnumSet.noneOf(Capability.class))).currentSeason()).isEmpty();
+  void initRecordsTheSeasonOnceAndWritesItsFile() {
+    start();
+    assertThat(seasons.currentSeason()).isEmpty();
+
+    assertThat(run("/season init 2").text())
+        .containsExactly("Recorded Season 2 as the season in progress.");
+
+    assertThat(seasons.currentSeason()).hasValue(2);
+    assertThat(worldFile("seasons/2.yml")).exists();
+    assertThat(worldFile("data/season.json")).exists();
+    assertThat(run("/season init 3").text().getFirst()).startsWith("Season 2 is already recorded");
+    assertThat(run("/season status").text()).contains("Season 2", "Phase: Active, Open stage");
   }
 
-  private com.petepeterepeat.seasons.core.command.CommandAction status() {
-    return registered.getFirst().children().stream()
-        .filter(child -> child.literal().equals("status"))
-        .findFirst()
-        .flatMap(CommandNode::action)
-        .orElseThrow();
+  @Test
+  void scheduleEndWritesTheSeasonFileAndNeedsATimeZone() throws IOException {
+    start();
+    run("/season init 2");
+
+    assertThat(run("/season schedule end 2026-12-05T20:00").text().getFirst())
+        .contains("is not an ISO time with a time zone");
+    assertThat(run("/season schedule end 2026-11-01T20:00Z").text())
+        .containsExactly("That time has already passed.");
+    List<String> reply = run("/season schedule end 2026-12-05T20:00-05:00").text();
+
+    assertThat(reply.getFirst())
+        .startsWith("Season 2 now ends at 2026-12-05 20:00 -05:00 (2026-12-06 01:00 UTC)");
+    assertThat(reply).hasSize(1);
+    assertThat(Files.readString(worldFile("seasons/2.yml")))
+        .contains("plannedEnd: '2026-12-05T20:00:00-05:00'");
+    assertThat(run("/season schedule end 2026-11-20T20:00Z").text())
+        .contains("That is less than a week away.");
+  }
+
+  @Test
+  void remindersGoToChatAndDiscordOnceEach() throws IOException {
+    Files.createDirectories(dir.resolve("plugins/Seasons"));
+    Files.writeString(
+        dir.resolve("plugins/Seasons/secrets.yml"),
+        "schema-version: 1\ndiscordWebhook: \"https://discord.example/hook\"\n");
+    start();
+    run("/season init 2");
+    Instant end = fake.clock.instant().plus(Duration.ofDays(8));
+    run("/season schedule end " + end);
+
+    fake.clock.advance(Duration.ofDays(1).minusSeconds(5));
+    fake.runFor(Duration.ofSeconds(10));
+    fake.clock.advance(Duration.ofDays(6).minusSeconds(10));
+    fake.runFor(Duration.ofSeconds(10));
+    fake.clock.advance(Duration.ofHours(23).minusSeconds(10));
+    fake.runFor(Duration.ofSeconds(10));
+    fake.clock.advance(Duration.ofMinutes(50).minusSeconds(10));
+    fake.runFor(Duration.ofSeconds(10));
+    fake.clock.advance(Duration.ofMinutes(20));
+    fake.runFor(Duration.ofSeconds(10));
+
+    assertThat(broadcasts())
+        .extracting(s -> s.replaceAll(",.*", ""))
+        .containsExactly(
+            "Season 2 ends in 7 days",
+            "Season 2 ends in 1 day",
+            "Season 2 ends in 1 hour",
+            "Season 2 ends in 10 minutes");
+    assertThat(posts).hasSize(4).allMatch(p -> p.startsWith("Season 2 ends in "));
+    assertThat(fake.visibleBars()).isEmpty();
+    assertThat(run("/season info").text()).contains("Phase: Active, Open stage");
+  }
+
+  @Test
+  void theCountdownShowsABarCanBeCancelledAndEndsInTheIntermission() {
+    start();
+    fake.online.add(new PlayerRef(ALEX, "Alex"));
+    run("/season init 2");
+
+    run("/season end");
+    assertThat(broadcasts())
+        .containsExactly("Season 2 ends in 10 minutes. Finish what you're doing!");
+    assertThat(fake.visibleBars())
+        .singleElement()
+        .satisfies(
+            bar -> assertThat(TestSource.plain(bar.title)).isEqualTo("Season 2 ends in 10:00"));
+    fake.runFor(Duration.ofSeconds(61));
+    assertThat(TestSource.plain(fake.visibleBars().getFirst().title))
+        .isEqualTo("Season 2 ends in 8:59");
+    assertThat(run("/season end").text().getFirst()).startsWith("Season 2 is already ending");
+
+    run("/season cancel");
+    assertThat(fake.visibleBars()).isEmpty();
+    assertThat(broadcasts()).last().isEqualTo("The end of Season 2 was cancelled. Play on!");
+    assertThat(archived).isEmpty();
+    assertThat(run("/season info").text()).contains("Phase: Active, Open stage");
+
+    run("/season end");
+    fake.runFor(Duration.ofMinutes(10));
+    assertThat(archived).containsExactly(ALEX);
+    assertThat(broadcasts()).last().isEqualTo("Season 2 has ended. Welcome to the Intermission.");
+    assertThat(run("/season info").text()).contains("Phase: Intermission");
+    assertThat(run("/season cancel").text()).containsExactly("There is no countdown to cancel.");
+    assertThat(run("/season end").text().getFirst()).startsWith("Season 2 has already ended");
+  }
+
+  @Test
+  void endNowSkipsTheCountdown() {
+    start();
+    fake.online.add(new PlayerRef(ALEX, "Alex"));
+    run("/season init 2");
+
+    assertThat(run("/season end --now").text())
+        .containsExactly("Ending Season 2 now: archiving 1 online players.");
+
+    assertThat(fake.bars).isEmpty();
+    assertThat(archived).containsExactly(ALEX);
+    assertThat(run("/season info").text()).contains("Phase: Intermission");
+  }
+
+  @Test
+  void theDryRunChangesNothing() {
+    start();
+    fake.online.add(new PlayerRef(ALEX, "Alex"));
+    run("/season init 2");
+
+    List<String> report = run("/season end --dry-run").text();
+
+    assertThat(report.getFirst()).startsWith("Dry run of /season end for Season 2");
+    assertThat(report).contains("Online players to archive (1): Alex");
+    assertThat(run("/season info").text()).contains("Phase: Active, Open stage");
+    assertThat(run("/season end --force").text())
+        .containsExactly("Unknown option --force. /season end takes --dry-run and --now.");
+  }
+
+  @Test
+  void aRestartCancelsTheCountdownAndKeepsSentReminders() {
+    start();
+    run("/season init 2");
+    run("/season schedule end " + fake.clock.instant().plus(Duration.ofDays(1)).plusSeconds(3));
+    fake.runFor(Duration.ofSeconds(5));
+    run("/season end");
+    assertThat(broadcasts()).hasSize(2);
+
+    restart();
+    fake.runFor(Duration.ofSeconds(5));
+
+    assertThat(broadcasts()).isEmpty();
+    assertThat(fake.visibleBars()).isEmpty();
+    assertThat(run("/season info").text())
+        .contains("Phase: Active, Open stage")
+        .anyMatch(l -> l.startsWith("Planned end: "));
+    assertThat(run("/season status").text())
+        .anyMatch(l -> l.startsWith("The end countdown was interrupted by a restart at "));
+  }
+
+  @Test
+  void aRestartDuringArchivingFinishesTheEndSequence() {
+    start(
+        new Capabilities(EnumSet.allOf(Capability.class)),
+        new RolloverArchiver() {
+          @Override
+          public CompletableFuture<Void> lockGalleries(int season) {
+            return new CompletableFuture<>();
+          }
+
+          @Override
+          public CompletableFuture<Void> archive(PlayerId player, int season) {
+            return new CompletableFuture<>();
+          }
+        });
+    run("/season init 2");
+    run("/season end --now");
+    assertThat(run("/season info").text()).contains("Phase: Ending, archiving players");
+
+    restart();
+
+    assertThat(run("/season info").text()).contains("Phase: Intermission");
+  }
+
+  @Test
+  void reloadSwapsEverythingOrNothing() throws IOException {
+    start();
+    run("/season init 2");
+    Path config = dir.resolve("plugins/Seasons/config.yml");
+    Files.writeString(config, "schema-version: 1\nschedule:\n  endCountdown: 2m\n");
+    assertThat(run("/season reload").text())
+        .containsExactly("Reloaded config.yml, messages.yml, secrets.yml and the season files.");
+
+    Files.writeString(
+        config, "schema-version: 1\nschedule:\n  endCountdown: 3m\n  reminders: [7d, 1d\n");
+    List<String> failed = run("/season reload").text();
+    assertThat(failed.getFirst()).isEqualTo("Reload failed. The previous config stays live.");
+    assertThat(failed.get(1)).matches("config\\.yml, line \\d+, column \\d+: \\S.*");
+    assertThat(run("/season validate").text().get(1))
+        .matches("config\\.yml, line \\d+, column \\d+: \\S.*");
+
+    run("/season end");
+    assertThat(broadcasts())
+        .containsExactly("Season 2 ends in 2 minutes. Finish what you're doing!");
+  }
+
+  @Test
+  void aHandEditedPlannedEndTakesEffectOnReload() throws IOException {
+    start();
+    run("/season init 2");
+    Files.writeString(
+        worldFile("seasons/2.yml"),
+        "schema-version: 1\nseason: 2\nschedule:\n  plannedEnd: \"2026-12-24T18:00Z\"\n");
+
+    run("/season reload");
+
+    assertThat(run("/season info").text())
+        .anyMatch(
+            line -> line.startsWith("Planned end: ") && line.endsWith("(2026-12-24 18:00 UTC)"));
+  }
+
+  @Test
+  void autoEndStartsTheCountdownAtThePlannedEndOnce() throws IOException {
+    Files.createDirectories(dir.resolve("plugins/Seasons"));
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nschedule:\n  autoEnd: true\n");
+    start();
+    run("/season init 2");
+    run("/season schedule end " + fake.clock.instant().plusSeconds(30));
+
+    fake.runFor(Duration.ofSeconds(31));
+    assertThat(run("/season info").text()).contains("Phase: Ending, countdown running");
+    run("/season cancel");
+    fake.runFor(Duration.ofSeconds(5));
+
+    assertThat(run("/season info").text()).contains("Phase: Active, Open stage");
+  }
+
+  @Test
+  void aBrokenConfigAtStartupFallsBackToDefaultsAndSaysSo() throws IOException {
+    Files.createDirectories(dir.resolve("plugins/Seasons"));
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"), "schema-version: 1\nschedule: [\n");
+
+    start();
+
+    assertThat(run("/season status").text())
+        .anyMatch(line ->
+            line.startsWith(
+                "Config problem at startup, so the bundled defaults are in use: config.yml, line"));
   }
 }

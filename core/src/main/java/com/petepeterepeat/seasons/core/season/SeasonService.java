@@ -1,0 +1,377 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+package com.petepeterepeat.seasons.core.season;
+
+import com.petepeterepeat.seasons.core.announce.Announcer;
+import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.config.SeasonFile;
+import com.petepeterepeat.seasons.core.config.SeasonFiles;
+import com.petepeterepeat.seasons.core.message.Message;
+import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.port.Players;
+import com.petepeterepeat.seasons.core.port.ProgressBar;
+import com.petepeterepeat.seasons.core.port.ScheduledTask;
+import com.petepeterepeat.seasons.core.port.Scheduler;
+import com.petepeterepeat.seasons.core.season.Phase.Archiving;
+import com.petepeterepeat.seasons.core.season.Phase.Countdown;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.AllArchived;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.Cancel;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.CountdownElapsed;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.End;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.Init;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.Restarted;
+import com.petepeterepeat.seasons.core.season.SeasonEvent.ScheduleEnd;
+import com.petepeterepeat.seasons.core.season.Transition.Changed;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Runs the season lifecycle on the server thread: applies events through {@link SeasonMachine},
+ * saves the state, and does what each change means (the countdown bar, reminders, the end
+ * sequence).
+ *
+ * <p>The state in memory changes at once, so a second command in the same tick sees it. Saving runs
+ * on the writer thread; archiving starts only once the Archiving phase is on disk, so a crash
+ * during it always finds Archiving and runs the end sequence again.
+ */
+public final class SeasonService {
+  /** Who hears about failures and interrupted countdowns. */
+  public static final String ADMIN_PERMISSION = "seasons.admin.season";
+
+  private static final Logger LOG = LoggerFactory.getLogger(SeasonService.class);
+  private static final Duration TICK = Duration.ofSeconds(1);
+
+  private final Players players;
+  private final Scheduler scheduler;
+  private final Clock clock;
+  private final SeasonStore store;
+  private final SerialWriter writer;
+  private final Supplier<ConfigSnapshot> config;
+  private final Announcer announcer;
+  private final RolloverArchiver archiver;
+  private final Path seasonsDirectory;
+  private final Path backupsDirectory;
+  private final Executor serverThread;
+
+  private Optional<SeasonState> state = Optional.empty();
+  private Optional<String> loadError = Optional.empty();
+  private CompletableFuture<Void> lastSave = CompletableFuture.completedFuture(null);
+  private Instant startedAt;
+  private @Nullable ProgressBar bar;
+  private @Nullable ScheduledTask ticker;
+
+  /**
+   * @param seasonsDirectory {@code <world>/seasons/seasons}, where season files live
+   * @param backupsDirectory {@code <world>/seasons/backups}
+   */
+  public SeasonService(
+      Players players,
+      Scheduler scheduler,
+      Clock clock,
+      SeasonStore store,
+      SerialWriter writer,
+      Supplier<ConfigSnapshot> config,
+      Announcer announcer,
+      RolloverArchiver archiver,
+      Path seasonsDirectory,
+      Path backupsDirectory) {
+    this.players = players;
+    this.scheduler = scheduler;
+    this.clock = clock;
+    this.store = store;
+    this.writer = writer;
+    this.config = config;
+    this.announcer = announcer;
+    this.archiver = archiver;
+    this.seasonsDirectory = seasonsDirectory;
+    this.backupsDirectory = backupsDirectory;
+    this.serverThread = scheduler::runGlobal;
+    this.startedAt = clock.instant();
+  }
+
+  /** The current state, or empty before {@code /season init}. */
+  public Optional<SeasonState> state() {
+    return state;
+  }
+
+  /** Why season.json couldn't be read at startup, if it couldn't. */
+  public Optional<String> loadError() {
+    return loadError;
+  }
+
+  /** At startup, on the server thread: loads the state and resumes whatever was in progress. */
+  public void start() {
+    startedAt = clock.instant();
+    try {
+      state = store.load();
+    } catch (Exception e) {
+      loadError = Optional.of(String.valueOf(e.getMessage()));
+      LOG.error("Can't read season.json; season commands are refused until it is fixed", e);
+    }
+    if (state.isPresent()) {
+      boolean counting = state.get().phase() instanceof Countdown;
+      apply(new Restarted());
+      if (counting) {
+        announcer.admins(ADMIN_PERMISSION, "end.interrupted", "season", seasonNumber());
+      }
+      reconcilePlannedEnd(config.get());
+      if (state.get().phase() instanceof Archiving) {
+        afterSave(this::runEndSequence);
+      }
+    }
+    ticker = scheduler.runGlobalRepeating(TICK, this::tick);
+  }
+
+  /** At shutdown. */
+  public void stop() {
+    if (ticker != null) {
+      ticker.cancel();
+      ticker = null;
+    }
+    hideBar();
+  }
+
+  /** {@code /season init}. */
+  public Transition init(int season) {
+    if (loadError.isPresent()) {
+      return new Transition.Refused("season.unreadable");
+    }
+    Transition transition = apply(new Init(season));
+    if (transition instanceof Changed) {
+      Path file = seasonFile(season);
+      Path backups = backupsDirectory.resolve("seasons");
+      writer
+          .submit(() -> {
+            SeasonFiles.create(file, backups, season);
+            return Boolean.TRUE;
+          })
+          .exceptionally(e -> logFailure("Can't write " + file, e));
+    }
+    return transition;
+  }
+
+  /** {@code /season schedule end}. */
+  public Transition scheduleEnd(ZonedDateTime at) {
+    Transition transition = apply(new ScheduleEnd(Optional.of(at)));
+    if (transition instanceof Changed changed) {
+      int season = changed.state().season();
+      Path file = seasonFile(season);
+      Path backups = backupsDirectory.resolve("seasons");
+      writer
+          .submit(() -> {
+            SeasonFiles.writePlannedEnd(file, backups, season, Optional.of(at));
+            return Boolean.TRUE;
+          })
+          .exceptionally(e -> logFailure("Can't write " + file, e));
+    }
+    return transition;
+  }
+
+  /** {@code /season end}, with {@code --now} as {@code skipCountdown}. */
+  public Transition end(boolean skipCountdown) {
+    Duration countdown =
+        skipCountdown ? Duration.ZERO : config.get().config().schedule().endCountdown();
+    Transition transition = apply(new End(countdown));
+    if (transition instanceof Changed changed) {
+      switch (changed.state().phase()) {
+        case Countdown running -> {
+          announcer.broadcast(
+              "end.started",
+              "season",
+              seasonNumber(),
+              "when",
+              HumanTime.duration(config.get().messages(), running.length()));
+          updateBar(running);
+        }
+        case Archiving archiving -> afterSave(this::runEndSequence);
+        default -> {}
+      }
+    }
+    return transition;
+  }
+
+  /** {@code /season cancel}. */
+  public Transition cancel() {
+    Transition transition = apply(new Cancel());
+    if (transition instanceof Changed) {
+      hideBar();
+      announcer.broadcast("end.cancelled", "season", seasonNumber());
+    }
+    return transition;
+  }
+
+  /** After a successful reload, on the server thread. */
+  public void reloaded(ConfigSnapshot snapshot) {
+    reconcilePlannedEnd(snapshot);
+  }
+
+  /** Once a second: the countdown, reminders and the automatic end. */
+  void tick() {
+    if (state.isEmpty()) {
+      return;
+    }
+    SeasonState current = state.get();
+    Instant now = clock.instant();
+    if (current.phase() instanceof Countdown running) {
+      if (now.isBefore(running.endsAt())) {
+        updateBar(running);
+      } else {
+        hideBar();
+        apply(new CountdownElapsed());
+        afterSave(this::runEndSequence);
+      }
+      return;
+    }
+    ConfigSnapshot snapshot = config.get();
+    Optional<Reminders.Due> due =
+        Reminders.due(current, snapshot.config().schedule().reminders(), now);
+    if (due.isPresent()) {
+      update(current.withRemindersSent(due.get().sent()));
+      String when = HumanTime.duration(snapshot.messages(), due.get().before());
+      String time = HumanTime.time(due.get().plannedEnd());
+      announcer.broadcast("reminder", "season", seasonNumber(), "when", when, "time", time);
+      announcer.discord("reminder", "season", seasonNumber(), "when", when, "time", time);
+    }
+    if (snapshot.config().schedule().autoEnd()) {
+      Optional<Instant> at = Reminders.autoEndAt(state.get(), startedAt);
+      if (at.isPresent() && !now.isBefore(at.get())) {
+        update(state.get().withAutoEndStarted());
+        end(false);
+      }
+    }
+  }
+
+  /** Online players are archived, then the season moves to the Intermission. */
+  private void runEndSequence() {
+    if (state.isEmpty() || !(state.get().phase() instanceof Archiving)) {
+      return;
+    }
+    int season = state.get().season();
+    List<PlayerId> online = players.online().stream().map(PlayerRef::id).toList();
+    var _ =
+        archiver
+            .lockGalleries(season)
+            .thenComposeAsync(
+                locked ->
+                    CompletableFuture.allOf(
+                        online.stream()
+                            .map(player -> archiver.archive(player, season))
+                            .toArray(CompletableFuture[]::new)),
+                serverThread)
+            .whenCompleteAsync(
+                (done, failure) -> {
+                  if (failure != null) {
+                    LOG.error("The end sequence stopped", failure);
+                    announcer.admins(
+                        ADMIN_PERMISSION,
+                        "end.archiving-failed",
+                        "season",
+                        Integer.toString(season),
+                        "error",
+                        String.valueOf(failure.getMessage()));
+                    return;
+                  }
+                  if (apply(new AllArchived()) instanceof Changed) {
+                    announcer.broadcast("end.intermission", "season", Integer.toString(season));
+                  }
+                },
+                serverThread);
+  }
+
+  /** Brings the state's planned end in line with the season file, the source of truth. */
+  private void reconcilePlannedEnd(ConfigSnapshot snapshot) {
+    if (state.isEmpty()) {
+      return;
+    }
+    SeasonState current = state.get();
+    Optional<ZonedDateTime> inFile =
+        snapshot.season(current.season()).flatMap(SeasonFile::plannedEnd);
+    if (!inFile.equals(current.plannedEnd()) && !(inFile.isEmpty() && fileMissing(snapshot))) {
+      apply(new ScheduleEnd(inFile));
+    }
+  }
+
+  /** A season with no file yet keeps the planned end it has. */
+  private boolean fileMissing(ConfigSnapshot snapshot) {
+    return state.isPresent() && snapshot.season(state.get().season()).isEmpty();
+  }
+
+  private Transition apply(SeasonEvent event) {
+    Transition transition = SeasonMachine.apply(state, event, clock.instant());
+    if (transition instanceof Changed changed) {
+      update(changed.state());
+    }
+    return transition;
+  }
+
+  private void update(SeasonState next) {
+    state = Optional.of(next);
+    lastSave =
+        store
+            .save(next)
+            .exceptionally(e -> {
+              LOG.error("Can't save season.json", e);
+              scheduler.runGlobal(() ->
+                  announcer.admins(
+                      ADMIN_PERMISSION,
+                      "season.save-failed",
+                      "error",
+                      String.valueOf(e.getMessage())));
+              return null;
+            });
+  }
+
+  private void afterSave(Runnable task) {
+    var _ = lastSave.thenRunAsync(task, serverThread);
+  }
+
+  private void updateBar(Countdown running) {
+    Duration remaining = Duration.between(clock.instant(), running.endsAt());
+    float progress =
+        running.length().isZero()
+            ? 0f
+            : Math.clamp((float) remaining.toMillis() / running.length().toMillis(), 0f, 1f);
+    Message title =
+        config
+            .get()
+            .messages()
+            .get("end.bar", "season", seasonNumber(), "time", HumanTime.clock(remaining));
+    if (bar == null) {
+      bar = players.showProgressBar(title, progress);
+    } else {
+      bar.update(title, progress);
+    }
+  }
+
+  private void hideBar() {
+    if (bar != null) {
+      bar.hide();
+      bar = null;
+    }
+  }
+
+  private Path seasonFile(int season) {
+    return seasonsDirectory.resolve(season + ".yml");
+  }
+
+  private String seasonNumber() {
+    return state.map(s -> Integer.toString(s.season())).orElse("?");
+  }
+
+  private static Boolean logFailure(String what, Throwable e) {
+    LOG.error(what, e);
+    return Boolean.FALSE;
+  }
+}
