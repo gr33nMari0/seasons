@@ -12,6 +12,10 @@
          <trust file=".*-javadoc[.]jar" regex="true"/>
          <trust file=".*-sources[.]jar" regex="true"/>
          <trust group="gradle" name="gradle"/>
+         <!-- IntelliJ's Gradle sync adds its own Kotlin tooling (such as kotlin-reflect) to the
+              build, in versions the command line never resolves. Kotlin is build tooling only:
+              nothing from it is bundled in either plugin jar. -->
+         <trust group="org.jetbrains.kotlin"/>
       </trusted-artifacts>
    </configuration>
    <components>
