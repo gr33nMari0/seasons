@@ -8,6 +8,10 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import java.util.Map;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
+import org.bukkit.Material;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,5 +66,19 @@ class PaperPortsTest {
     assertThat(permissions.has(id, "seasons.admin.season")).isFalse();
     alex.setOp(true);
     assertThat(permissions.has(id, "seasons.admin.season")).isTrue();
+  }
+
+  @Test
+  void clearingAPlayerLeavesTheContainerTheyHaveOpen() {
+    PlayerMock alex = server.addPlayer("Alex");
+    alex.getInventory().addItem(ItemStack.of(Material.DIRT));
+    Inventory chest = server.createInventory(null, InventoryType.CHEST);
+    chest.addItem(ItemStack.of(Material.DIAMOND));
+    alex.openInventory(chest);
+
+    new PaperInventories(players, new PaperItemCodec()).clear(new PlayerId(alex.getUniqueId()));
+
+    assertThat(alex.getInventory().isEmpty()).isTrue();
+    assertThat(chest.contains(Material.DIAMOND)).isTrue();
   }
 }
