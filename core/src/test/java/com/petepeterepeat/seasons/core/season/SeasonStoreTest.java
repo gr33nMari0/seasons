@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core.season;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -13,6 +14,7 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -51,6 +53,22 @@ class SeasonStoreTest {
       store().save(state).join();
       assertThat(store().load()).contains(state);
     }
+  }
+
+  @Test
+  void theDecoratingWindowRoundTrips() throws IOException {
+    PlayerId owner = new PlayerId(UUID.randomUUID());
+    SeasonState state =
+        SeasonState.start(2, Stage.OPEN, Optional.empty())
+            .withPhase(new Phase.Intermission())
+            .withDecorating(
+                Decorating.NONE.opened(NOW).lockedAtEnd().withLockAt(owner, NOW.plusSeconds(900)));
+    store().save(state).join();
+
+    assertThat(store().load()).contains(state);
+    assertThat(state.decorating().afterArchive(owner, NOW)).isTrue();
+    assertThat(state.decorating().afterArchive(owner, NOW.plusSeconds(900))).isFalse();
+    assertThat(state.next(NOW).decorating()).isEqualTo(Decorating.NONE);
   }
 
   @Test

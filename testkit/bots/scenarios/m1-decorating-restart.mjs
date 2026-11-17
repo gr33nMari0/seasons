@@ -26,7 +26,8 @@ export default {
       const cells = sessionOneCells()
       const cell = await cellOf(ctx, admin, 'season-2', cells, 'Owner')
       await ctx.eventually(async () => assert(inside(cell, await ctx.position(admin, 'Owner')), 'the owner logged back in inside their cell'))
-      assert(await place(ctx, admin, 'Owner', { x: cell.x0 + 1, y: -60, z: cell.z0 + 5 }), 'the cell is still open after the restart')
+      // Retried: a player is held until their login catch-up is done.
+      await ctx.eventually(async () => assert(await place(ctx, admin, 'Owner', { x: cell.x0 + 1, y: -60, z: cell.z0 + 5 }), 'the cell is still open after the restart'))
       await ctx.command(admin, '/season decorate close', /^The decorating window for Season 2 is closed\.$/)
       assert(!await place(ctx, admin, 'Owner', { x: cell.x0 + 1, y: -60, z: cell.z0 + 6 }), 'closing locks every cell')
     }
