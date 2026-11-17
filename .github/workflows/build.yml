@@ -1,0 +1,29 @@
+name: build
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - run: ./gradlew build scenarioTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seasons-dev-${{ github.sha }}
+          path: |
+            adapters/paper/build/libs/Seasons-*.jar
+            web/build/libs/SeasonsWeb-*.jar

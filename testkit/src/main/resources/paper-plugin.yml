@@ -1,0 +1,15 @@
+name: SeasonsTestkit
+version: '${version}'
+main: com.petepeterepeat.seasons.testkit.ScenarioPlugin
+api-version: '26.3'
+description: Drives the Seasons scenario suite on test servers. Never install it on a real server.
+authors: [Peter Woodhead]
+dependencies:
+  server:
+    Seasons:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    SeasonsWeb:
+      load: BEFORE
+      required: false

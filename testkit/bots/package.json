@@ -1,0 +1,16 @@
+{
+  "name": "seasons-scenario-bots",
+  "private": true,
+  "description": "Mineflayer bots that play the player side of the Seasons acceptance scenarios",
+  "license": "SEE LICENSE IN ../../LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "scenarios": "node run.mjs"
+  },
+  "dependencies": {
+    "mineflayer": "4.39.0"
+  }
+}

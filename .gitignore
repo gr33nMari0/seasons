@@ -1,0 +1,10 @@
+build/
+.gradle/
+run/
+.idea/
+.direnv/
+secrets.yml
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+node_modules/
+.DS_Store
