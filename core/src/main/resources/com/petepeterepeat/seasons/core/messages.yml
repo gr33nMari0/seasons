@@ -1,0 +1,9 @@
+# Every player-facing string in Seasons, as MiniMessage (https://docs.papermc.io/adventure/minimessage/).
+# Placeholders such as <version> are filled in as plain text. Edit freely, then /season reload.
+schema-version: 1
+status:
+  header: "<gold>Seasons <version></gold> <gray>on <platform></gray>"
+  no-season: "<gray>No season recorded yet. Run /season init to record the season in progress.</gray>"
+  season: "<gray>Season</gray> <white><season></white>"
+  capabilities-ok: "<green>The <platform> adapter supports everything Seasons uses.</green>"
+  capability-gap: "<yellow>Not available on <platform>: <capability></yellow>"
