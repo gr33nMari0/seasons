@@ -10,7 +10,8 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | --- | --- | --- |
 | `JavaPlugin#onEnable`, `#onDisable`, `#getPluginMeta().getVersion()`, `#getDataPath()`, `#getSLF4JLogger()` | `SeasonsPlugin`, `PaperStorage` | Lifecycle, version, config folder, logging |
 | `paper-plugin.yml` (`dependencies.server`, `permissions`) | resources | Packaging, optional BlueMap, permission defaults |
-| `ServicesManager#register`, `#unregisterAll` | `SeasonsPlugin` | Publishing `SeasonsApi` |
+| `ServicesManager#register`, `#unregisterAll` | `SeasonsPlugin` | Publishing `SeasonsApi`, and `ScenarioHooks` on scenario servers only (ADR 0003) |
+| `NamespacedKey(Plugin, String)` | `SeasonsPlugin` | The `seasons:archived` key |
 | `PluginManager#registerEvents` | `SeasonsPlugin` | Listeners |
 | `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `ReloadableRegistrarEvent#registrar()`, `Commands#register`, `Commands.literal`, `Commands.argument` | `PaperCommands` | Brigadier commands |
 | `CommandSourceStack#getSender`; Brigadier `ArgumentBuilder#requires`, `#executes`, `#then`, `#build`, `LiteralCommandNode`, `CommandContext#getArgument`, `IntegerArgumentType.integer`, `StringArgumentType.word`, `StringArgumentType.greedyString`, `Command.SINGLE_SUCCESS` | `PaperCommands` | Command tree, arguments, permission checks per node |
@@ -19,14 +20,24 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `Server#getGlobalRegionScheduler` (`execute`, `runDelayed`, `runAtFixedRate`), `ScheduledTask#cancel`, `#getRegionScheduler().execute`, `Entity#getScheduler().run` | `PaperScheduler` | Folia-compatible scheduling, the once-a-second season tick |
 | `Audience#sendMessage(Component)`; Adventure `MiniMessage#deserialize`, `TagResolver`, `Placeholder.unparsed` | `PaperText`, ports | Messages with literal placeholders |
 | `Server#broadcast(Component)`; Adventure `BossBar.bossBar`, `BossBar#name`, `#progress`, `Audience#showBossBar`, `#hideBossBar` (on `Server`) | `PaperPlayers` | Reminders and announcements, the end countdown bar |
-| `PlayerInventory#getStorageContents`, `#getArmorContents`, `#getItemInOffHand`, `#setStorageContents`, `#setArmorContents`, `#setItemInOffHand`, `#clear`; `HumanEntity#getEnderChest`, `#setItemOnCursor`, `#getOpenInventory().getTopInventory()` | `PaperInventories` | Capturing and restoring gear |
+| `PlayerInventory#getStorageContents`, `#getArmorContents`, `#getItemInOffHand`, `#setStorageContents`, `#setArmorContents`, `#setItemInOffHand`, `#clear`; `HumanEntity#getEnderChest`, `#getItemOnCursor`, `#setItemOnCursor`, `#getOpenInventory().getTopInventory()`; `CraftingInventory#getMatrix`, `#setMatrix`; `Inventory#getContents`, `#setContents`, `#setItem`, `#getSize`, `#clear` | `PaperInventories` | Capturing, clearing and restoring gear; settling the cursor and crafting grid |
+| `ItemStack#getPersistentDataContainer`, `#editPersistentDataContainer`, `PersistentDataContainerView#has`, `PersistentDataType.BOOLEAN`, `ItemStack#getAmount`, `#getType`, `ItemStack.of` | `PaperInventories`, `PaperMenus` | The `seasons:archived` tag on archive-view copies; the tripwire; the DataVersion probe |
+| `Player#saveData`, `#getLevel`, `#setLevel`, `#getExp`, `#setExp`, `#getTotalExperience`, `#setTotalExperience`, `#setFireTicks`, `#setFreezeTicks`, `#setFallDistance`, `#setHealth`, `#getAttribute(Attribute.MAX_HEALTH)`, `#setFoodLevel`, `#setSaturation`, `#setExhaustion`, `#clearActivePotionEffects`, `#setRespawnLocation`, `#setGameMode`, `#getPlayerProfile().getProperties()`, `ProfileProperty#getName`, `#getValue`, `#getSignature` | `PaperPlayers` | Archiving: saving the player file, resets, XP, skins |
+| `Player#leaveVehicle`, `#setGliding`, `#closeInventory`, `#isOnline`, `World#getChunkAtAsync`, `Entity#teleportAsync(Location, TeleportCause.PLUGIN)` | `PaperPlayers` | Safe teleports |
+| `Server#getPlayerExact`; Adventure `Title.title`, `Audience#showTitle`, `Sound.sound`, `Key.key`, `Audience#playSound` | `PaperPlayers` | Finding players by name; the launch title |
+| `ScoreboardManager#getMainScoreboard`, `Scoreboard#getObjective`, `#registerNewObjective(String, Criteria, Component)`, `Criteria.DEATH_COUNT`, `Objective#setDisplaySlot`, `DisplaySlot` | `PaperPlayers` | The season's deaths objective |
+| `World#setSpawnLocation(Location)` | `PaperWorld` | The new season's world spawn |
+| `Server#getAdvancement`, `AdvancementProgress#isDone`, `#getDateAwarded`, `#awardCriteria`, `#revokeCriteria`, `Player#getDiscoveredRecipes`, `#undiscoverRecipes`, `PlayerAdvancementDoneEvent#message` | `PaperAdvancements` | Advancement snapshots, revoking, quiet restoring, recipe resets |
 | `ItemStack#serializeAsBytes`, `ItemStack.deserializeBytes`, `ItemStack#isEmpty`, `ItemStack.empty` | `PaperItemCodec` | Neutral item data with its DataVersion |
 | `Advancement#getDisplay`, `#getKey`, `Player#getAdvancementProgress`, `AdvancementProgress#getAwardedCriteria` | `PaperAdvancements` | Visible advancements and progress |
 | `NamespacedKey.fromString`, `NamespacedKey.minecraft`, `Server#getWorld(NamespacedKey)`, `World#getKey`, `#getSpawnLocation`, `#getChunkAtAsync(int, int, boolean)` | `PaperPositions`, `PaperWorld` | Dimensions, spawn, chunk loading |
 | `Entity#teleportAsync(Location, TeleportCause)`, `#getLocation`, `#remove`, `#getPersistentDataContainer`; `Tameable#getOwnerUniqueId` | `PaperEntities`, `PaperDisplays`, `PaperEvents` | Moving entities, tamed owners |
 | `World#spawn(Location, Class, Consumer)`, `TextDisplay#text`, `Entity#setPersistent`, `PersistentDataContainer#set`, `#has` | `PaperDisplays` | Tagged text displays |
-| `InventoryHolder`, `Inventory#getHolder(boolean)`, `InventoryClickEvent`, `InventoryDragEvent`, `InventoryMoveItemEvent`, `Player#updateInventory`, `HumanEntity#openInventory` | `PaperMenus` | View-only menus |
+| `InventoryHolder`, `Inventory#getHolder(boolean)`, `InventoryClickEvent` (`#getRawSlot`, `#getClick`), `InventoryCreativeEvent`, `InventoryDragEvent`, `InventoryMoveItemEvent`, `Player#updateInventory`, `HumanEntity#openInventory`, `ItemStack#editMeta`, `ItemMeta#customName` | `PaperMenus` | View-only menus and the paged archive view |
 | `BlockBreakEvent`, `BlockPlaceEvent`, `Block#getLocation`, `Material#getKey`, `Cancellable#setCancelled` | `PaperEvents` | Intents and decisions |
+| `InventoryClickEvent`, `InventoryDragEvent`, `PlayerDropItemEvent`, `EntityPickupItemEvent`, `PlayerSwapHandItemsEvent`, `PlayerItemConsumeEvent`, `PlayerInteractEvent#setUseInteractedBlock`, `#setUseItemInHand`, `PlayerInteractEntityEvent`, `EntityDamageEvent` | `PaperEvents` | Intents: the archive hold and arrival immunity |
+| `PlayerJoinEvent`, `PlayerQuitEvent`, `OfflinePlayer#hasPlayedBefore`, `Entity#getScheduler().run` | `PaperEvents` | Login catch-up and play time |
+| `ItemSpawnEvent`, `Item#getItemStack`, `Entity#remove`, `InventoryCloseEvent` | `PaperEvents` | The tripwire |
 | `World#getEnderDragonBattle`, `DragonBattle#setPreviouslyKilled`, `#getEndPortalLocation` | `PaperDragonFight` | The dragon fight |
 | `Statistic#values`, `#getType`, `#getKey`, `Player#getStatistic(Statistic)` | `PaperStatistics` | General-tab statistics |
 | `World#getWorldFolder` | `PaperStorage` | World data folder |
@@ -43,4 +54,5 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | API | For |
 | --- | --- |
 | `ServerLoadEvent`, `PlayerJoinEvent`, `Player#setOp`, `Server#getPort`, `Server#shutdown`, `PluginManager#isPluginEnabled` | Driving the scenario run |
+| `LifecycleEvents.COMMANDS`, `Commands#register(String, String, BasicCommand)`, `BasicCommand#execute`, `#permission`, `CommandSourceStack#getSender`, `ServicesManager#getRegistration`, `Server#getPlayerExact`, `#getOfflinePlayerIfCached`, `GlobalRegionScheduler#execute` | `/scenario` and the scenario hooks (ADR 0003) |
 | `ItemStack.of`, `#addUnsafeEnchantment`, `#editMeta`, `ItemMeta#customName`, `BlockStateMeta#getBlockState`, `#setBlockState`, `ShulkerBox#getInventory` | Item samples for the NBT neutrality test |
