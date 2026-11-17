@@ -1,15 +1,43 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// What a scenario gets: bots that play the player side, and an op'd admin bot for admin commands.
+// What a scenario gets: bots that play the player side, an op'd admin bot for admin commands,
+// the server's files, and an https webhook receiver standing in for Discord.
 // Scenarios drive the server only through these, so the same suite runs against every adapter.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import https from 'node:https'
+import { dirname, join } from 'node:path'
 import mineflayer from 'mineflayer'
 
 const JOIN_TIMEOUT_MS = 60_000
 const REPLY_TIMEOUT_MS = 10_000
+const POLL_MS = 200
+/** Fixed, so a webhook URL written in one session still works in the next. */
+const WEBHOOK_PORT = 25601
+
+export const SECOND = 1_000
+export const MINUTE = 60 * SECOND
+export const HOUR = 60 * MINUTE
+export const DAY = 24 * HOUR
+
+export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** An ISO-8601 time `ms` from now, in UTC, as /season schedule end takes it. */
+export const isoIn = (ms) => new Date(Date.now() + ms).toISOString()
+
+/** Resolves once `check()` is true; rejects with `what` after `timeoutMs`. */
+export async function waitUntil (check, timeoutMs, what) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (check()) return
+    await sleep(POLL_MS)
+  }
+  throw new Error(`timed out after ${timeoutMs} ms waiting for ${what}`)
+}
 
 export class ScenarioContext {
-  constructor ({ host, port, version, adminName, log }) {
-    Object.assign(this, { host, port, version, adminName, log })
+  constructor ({ host, port, version, adminName, serverDir = '.', tls, log }) {
+    Object.assign(this, { host, port, version, adminName, serverDir, tls, log })
     this.bots = []
+    this.servers = []
   }
 
   /** Joins a player bot and resolves once it has spawned. */
@@ -23,7 +51,10 @@ export class ScenarioContext {
       hideErrors: false
     })
     this.bots.push(bot)
+    bot.seasonsBars = new Map()
     bot.on('messagestr', (text) => this.log(`[${username}] <- ${text}`))
+    bot.on('bossBarCreated', (bar) => bot.seasonsBars.set(bar.entityUUID, bar))
+    bot.on('bossBarDeleted', (bar) => bot.seasonsBars.delete(bar.entityUUID))
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`${username} did not spawn within ${JOIN_TIMEOUT_MS} ms`)), JOIN_TIMEOUT_MS)
       const fail = (why) => { clearTimeout(timer); reject(new Error(`${username} could not join: ${why}`)) }
@@ -41,29 +72,126 @@ export class ScenarioContext {
   }
 
   /**
-   * Runs a command as a bot and resolves with the first chat line matching `expect`.
-   * Rejects if no matching line arrives in time.
+   * Resolves with the chat lines matching every pattern in `expect` (one pattern or a list),
+   * each matched by a different line, in any order. Rejects if they don't all arrive in time.
    */
-  command (bot, command, expect, timeoutMs = REPLY_TIMEOUT_MS) {
+  waitForMessages (bot, expect, timeoutMs = REPLY_TIMEOUT_MS, what = 'messages') {
+    const patterns = Array.isArray(expect) ? [...expect] : [expect]
+    const matched = new Array(patterns.length)
     return new Promise((resolve, reject) => {
       const onMessage = (text) => {
-        if (expect.test(text)) {
+        const i = patterns.findIndex((p, j) => matched[j] === undefined && p.test(text))
+        if (i < 0) return
+        matched[i] = text
+        if (matched.every((m) => m !== undefined)) {
           cleanup()
-          resolve(text)
+          resolve(Array.isArray(expect) ? matched : matched[0])
         }
       }
       const timer = setTimeout(() => {
         cleanup()
-        reject(new Error(`no reply matching ${expect} to "${command}" within ${timeoutMs} ms`))
+        const missing = patterns.filter((_p, j) => matched[j] === undefined)
+        reject(new Error(`no line matching ${missing.join(', ')} for ${what} within ${timeoutMs} ms`))
       }, timeoutMs)
       const cleanup = () => { clearTimeout(timer); bot.off('messagestr', onMessage) }
       bot.on('messagestr', onMessage)
-      this.log(`[${bot.username}] -> ${command}`)
-      bot.chat(command)
     })
   }
 
-  /** Disconnects every bot this scenario joined. */
+  /** Resolves with no value if no chat line matches `pattern` within `ms`; rejects if one does. */
+  expectNoMessage (bot, pattern, ms) {
+    return new Promise((resolve, reject) => {
+      const onMessage = (text) => {
+        if (pattern.test(text)) {
+          clearTimeout(timer)
+          bot.off('messagestr', onMessage)
+          reject(new Error(`unexpected line matching ${pattern}: ${text}`))
+        }
+      }
+      const timer = setTimeout(() => { bot.off('messagestr', onMessage); resolve() }, ms)
+      bot.on('messagestr', onMessage)
+    })
+  }
+
+  /**
+   * Runs a command as a bot and resolves with the chat lines matching `expect` (see
+   * waitForMessages). Rejects if they don't all arrive in time.
+   */
+  command (bot, command, expect, timeoutMs = REPLY_TIMEOUT_MS) {
+    const reply = this.waitForMessages(bot, expect, timeoutMs, `"${command}"`)
+    this.log(`[${bot.username}] -> ${command}`)
+    bot.chat(command)
+    return reply
+  }
+
+  /** The titles of the boss bars a bot currently sees, as plain text. */
+  bossBars (bot) {
+    return [...bot.seasonsBars.values()].map((bar) => bar.title.toString())
+  }
+
+  /** Resolves once a bot sees a boss bar whose title matches `pattern`. */
+  async waitForBossBar (bot, pattern, timeoutMs = REPLY_TIMEOUT_MS) {
+    await waitUntil(() => this.bossBars(bot).some((t) => pattern.test(t)), timeoutMs, `a boss bar matching ${pattern}`)
+    return this.bossBars(bot).find((t) => pattern.test(t))
+  }
+
+  /** Resolves once a bot sees no boss bars. */
+  waitForNoBossBar (bot, timeoutMs = REPLY_TIMEOUT_MS) {
+    return waitUntil(() => bot.seasonsBars.size === 0, timeoutMs, `${bot.username}'s boss bars to go`)
+  }
+
+  /** Writes a file relative to the server's run directory, such as plugins/Seasons/config.yml. */
+  writeFile (path, text) {
+    const file = join(this.serverDir, path)
+    mkdirSync(dirname(file), { recursive: true })
+    writeFileSync(file, text)
+    this.log(`wrote ${path}`)
+  }
+
+  /** Reads a file relative to the server's run directory. */
+  readFile (path) {
+    return readFileSync(join(this.serverDir, path), 'utf8')
+  }
+
+  /**
+   * Starts an https webhook receiver standing in for Discord. Every JSON body posted to it lands
+   * in `posts`, in order.
+   */
+  async webhook () {
+    if (!this.tls) throw new Error('no --tls certificate for the webhook receiver')
+    const posts = []
+    const server = https.createServer({ pfx: readFileSync(this.tls), passphrase: 'changeit' }, (req, res) => {
+      let body = ''
+      req.setEncoding('utf8')
+      req.on('data', (chunk) => { body += chunk })
+      req.on('end', () => {
+        try {
+          posts.push(JSON.parse(body))
+        } catch {
+          posts.push({ invalid: body })
+        }
+        this.log(`[webhook] <- ${body}`)
+        res.writeHead(204)
+        res.end()
+      })
+    })
+    await new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(WEBHOOK_PORT, '127.0.0.1', resolve)
+    })
+    this.servers.push(server)
+    return {
+      url: `https://127.0.0.1:${WEBHOOK_PORT}/webhook`,
+      posts,
+      /** Resolves with the first post whose content matches `pattern`. */
+      waitFor: async (pattern, timeoutMs = REPLY_TIMEOUT_MS) => {
+        await waitUntil(() => posts.some((p) => pattern.test(p.content ?? '')), timeoutMs, `a webhook post matching ${pattern}`)
+        return posts.find((p) => pattern.test(p.content ?? ''))
+      }
+    }
+  }
+
+  /** Disconnects every bot and stops every receiver this scenario started. */
   async close () {
     await Promise.all(this.bots.map((bot) => new Promise((resolve) => {
       if (!bot._client || bot._client.ended) return resolve()
@@ -72,6 +200,11 @@ export class ScenarioContext {
       setTimeout(resolve, 5_000)
     })))
     this.bots = []
+    await Promise.all(this.servers.map((server) => new Promise((resolve) => {
+      server.closeAllConnections()
+      server.close(() => resolve())
+    })))
+    this.servers = []
   }
 }
 

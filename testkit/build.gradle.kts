@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import groovy.json.JsonSlurper
 import java.time.Duration
+import org.gradle.kotlin.dsl.support.serviceOf
 import xyz.jpenilla.runpaper.task.RunServer
 
 description = "Seasons testkit: the scenario suite (Mineflayer bots plus admin commands) and the test plugin that drives it"
@@ -42,69 +43,149 @@ val installBots = tasks.register<Exec>("installBots") {
     outputs.dir(botsDir.dir("node_modules"))
 }
 
-val scenarioOutputs = minecraftVersions.map { version ->
-    val runDir = layout.buildDirectory.dir("scenario/$version")
-    val outDir = layout.buildDirectory.dir("scenario-results/$version")
-    val task = tasks.register<RunServer>("scenarioServer_${version.replace('.', '_')}") {
-        group = "verification"
-        description = "Runs the scenario suite on a Paper $version server."
-        dependsOn(installBots)
-        minecraftVersion(version)
-        runDirectory(runDir.get().asFile)
-        pluginJars.from(
-            project(":adapters:paper").tasks.named("shadowJar"),
-            project(":web").tasks.named("shadowJar"),
-            tasks.jar,
-        )
-        downloadPlugins {
-            modrinth("viaversion", libs.versions.viaversion.get())
-            modrinth("viabackwards", libs.versions.viabackwards.get())
-        }
-        jvmArgs(
-            "-Dcom.mojang.eula.agree=true",
-            "-Dseasons.scenario.out=${outDir.get().asFile}",
-            "-Dseasons.scenario.admin=$adminBot",
-            "-Dseasons.scenario.clientVersion=$botClientVersion",
-            "-Dseasons.scenario.node=${providers.environmentVariable("NODE").getOrElse("node")}",
-            "-Dseasons.scenario.runner=${botsDir.file("run.mjs").asFile}",
-        )
-        args("--nogui")
-        timeout = Duration.ofMinutes(20)
-        outputs.dir(outDir)
-        outputs.upToDateWhen { false }
+// Each scenario file runs on its own freshly wiped server, because scenarios change persistent
+// state. A file can ask for several sessions with a header line "// @sessions <n>": the server
+// is stopped after each one and started again on the same world for the next.
+data class Scenario(val name: String, val sessions: Int)
 
-        doFirst {
-            val run = runDir.get().asFile
-            // Every run starts from a fresh world; the downloaded jars and libraries are kept.
-            run.listFiles { f -> f.name.startsWith("world") }?.forEach { it.deleteRecursively() }
-            outDir.get().asFile.deleteRecursively()
-            run.mkdirs()
-            run.resolve("server.properties").writeText(
-                """
-                # Written by the scenario task; never ships. Bots join in offline mode.
-                online-mode=false
-                enforce-secure-profile=false
-                white-list=false
-                server-ip=127.0.0.1
-                server-port=25599
-                level-type=minecraft:flat
-                generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
-                generate-structures=false
-                spawn-protection=0
-                view-distance=4
-                simulation-distance=4
-                """.trimIndent() + "\n",
+val sessionsHeader = Regex("""^// @sessions (\d+)$""", RegexOption.MULTILINE)
+val scenarios =
+    botsDir.dir("scenarios").asFile
+        .listFiles { f -> f.name.endsWith(".mjs") }!!
+        .sortedBy { it.name }
+        .map { f ->
+            val sessions = sessionsHeader.find(f.readText())?.groupValues?.get(1)?.toInt() ?: 1
+            Scenario(f.nameWithoutExtension, sessions)
+        }
+
+// Webhook URLs must be https, in tests too. The scenario servers trust a self-signed certificate
+// made here, and the bot runner serves the webhook receiver with it.
+val tlsDir = layout.buildDirectory.dir("scenario-tls")
+val tlsPassword = "changeit"
+val scenarioTls = tasks.register("scenarioTls") {
+    description = "Makes the self-signed webhook certificate and a trust store that includes it."
+    val launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    val execs = serviceOf<ExecOperations>()
+    outputs.dir(tlsDir)
+    doLast {
+        val home = launcher.get().metadata.installationPath.asFile
+        val keytool = home.resolve("bin/keytool").path
+        val dir = tlsDir.get().asFile
+        dir.deleteRecursively()
+        dir.mkdirs()
+        val keyStore = dir.resolve("webhook.p12").path
+        val cert = dir.resolve("webhook.crt").path
+        val trustStore = dir.resolve("truststore.p12")
+        execs.exec {
+            commandLine(
+                keytool, "-genkeypair", "-alias", "webhook", "-keyalg", "RSA", "-keysize", "2048",
+                "-validity", "30", "-dname", "CN=127.0.0.1", "-ext", "SAN=ip:127.0.0.1,dns:localhost",
+                "-keystore", keyStore, "-storetype", "PKCS12", "-storepass", tlsPassword,
             )
         }
-        doLast {
-            val result = outDir.get().file("result.json").asFile
-            check(result.exists()) { "The Paper $version scenario server stopped without a result" }
-            @Suppress("UNCHECKED_CAST")
-            val json = JsonSlurper().parse(result) as Map<String, Any?>
-            check(json["passed"] == true) { "Scenarios failed on Paper $version: $json (see the server log above)" }
+        execs.exec {
+            commandLine(keytool, "-exportcert", "-alias", "webhook", "-keystore", keyStore, "-storepass", tlsPassword, "-file", cert)
+        }
+        // Start from the JDK's own trust store, so the server's other https calls still work.
+        home.resolve("lib/security/cacerts").copyTo(trustStore)
+        execs.exec {
+            commandLine(
+                keytool, "-importcert", "-noprompt", "-alias", "seasons-webhook", "-file", cert,
+                "-keystore", trustStore.path, "-storepass", tlsPassword,
+            )
         }
     }
-    task to outDir
+}
+
+val scenarioServers = minecraftVersions.map { version ->
+    val runDir = layout.buildDirectory.dir("scenario/$version")
+    val resultsDir = layout.buildDirectory.dir("scenario-results/$version")
+    val nbtDir = resultsDir.map { it.dir("nbt") }
+    val tasksForVersion = scenarios.flatMap { scenario ->
+        (1..scenario.sessions).map { session ->
+            val outDir = resultsDir.map { it.dir("${scenario.name}/$session") }
+            val taskName = "scenarioServer_${version.replace('.', '_')}_${scenario.name}_$session"
+            tasks.register<RunServer>(taskName) {
+                group = "verification"
+                description = "Runs session $session of scenario ${scenario.name} on a Paper $version server."
+                dependsOn(installBots, scenarioTls)
+                if (session > 1) {
+                    dependsOn("scenarioServer_${version.replace('.', '_')}_${scenario.name}_${session - 1}")
+                }
+                minecraftVersion(version)
+                runDirectory(runDir.get().asFile)
+                pluginJars.from(
+                    project(":adapters:paper").tasks.named("shadowJar"),
+                    project(":web").tasks.named("shadowJar"),
+                    tasks.jar,
+                )
+                downloadPlugins {
+                    modrinth("viaversion", libs.versions.viaversion.get())
+                    modrinth("viabackwards", libs.versions.viabackwards.get())
+                }
+                val tls = tlsDir.get().asFile
+                jvmArgs(
+                    "-Dcom.mojang.eula.agree=true",
+                    "-Djavax.net.ssl.trustStore=${tls.resolve("truststore.p12")}",
+                    "-Djavax.net.ssl.trustStorePassword=$tlsPassword",
+                    "-Dseasons.scenario.out=${outDir.get().asFile}",
+                    "-Dseasons.scenario.nbt=${nbtDir.get().asFile}",
+                    "-Dseasons.scenario.name=${scenario.name}",
+                    "-Dseasons.scenario.session=$session",
+                    "-Dseasons.scenario.tls=${tls.resolve("webhook.p12")}",
+                    "-Dseasons.scenario.admin=$adminBot",
+                    "-Dseasons.scenario.clientVersion=$botClientVersion",
+                    "-Dseasons.scenario.node=${providers.environmentVariable("NODE").getOrElse("node")}",
+                    "-Dseasons.scenario.runner=${botsDir.file("run.mjs").asFile}",
+                )
+                args("--nogui")
+                timeout = Duration.ofMinutes(10)
+                outputs.dir(outDir)
+                outputs.upToDateWhen { false }
+
+                doFirst {
+                    val run = runDir.get().asFile
+                    outDir.get().asFile.deleteRecursively()
+                    run.mkdirs()
+                    if (session == 1) {
+                        // A fresh world and fresh Seasons files; the downloaded jars and libraries are kept.
+                        run.listFiles { f -> f.name.startsWith("world") }?.forEach { it.deleteRecursively() }
+                        run.resolve("plugins/Seasons").deleteRecursively()
+                    }
+                    run.resolve("server.properties").writeText(
+                        """
+                        # Written by the scenario task; never ships. Bots join in offline mode.
+                        online-mode=false
+                        enforce-secure-profile=false
+                        white-list=false
+                        server-ip=127.0.0.1
+                        server-port=25599
+                        level-type=minecraft:flat
+                        generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
+                        generate-structures=false
+                        spawn-protection=0
+                        view-distance=4
+                        simulation-distance=4
+                        """.trimIndent() + "\n",
+                    )
+                }
+                doLast {
+                    val result = outDir.get().file("result.json").asFile
+                    check(result.exists()) {
+                        "Scenario ${scenario.name} session $session on Paper $version stopped without a result"
+                    }
+                    @Suppress("UNCHECKED_CAST")
+                    val json = JsonSlurper().parse(result) as Map<String, Any?>
+                    check(json["passed"] == true) {
+                        "Scenario ${scenario.name} session $session failed on Paper $version: $json (see the server log above)"
+                    }
+                }
+            }
+        }
+    }
+    // Scenarios share one run directory per version, so they run one after another.
+    tasksForVersion.zipWithNext { earlier, later -> later.configure { mustRunAfter(earlier) } }
+    Triple(version, tasksForVersion, nbtDir)
 }
 
 val nbtNeutralityTest = tasks.register<Test>("nbtNeutralityTest") {
@@ -113,10 +194,10 @@ val nbtNeutralityTest = tasks.register<Test>("nbtNeutralityTest") {
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform { includeTags("scenario") }
-    dependsOn(scenarioOutputs.map { it.first })
+    dependsOn(scenarioServers.flatMap { it.second })
     systemProperty(
         "seasons.nbtSamples",
-        scenarioOutputs.joinToString(File.pathSeparator) { it.second.get().dir("nbt").asFile.path },
+        scenarioServers.joinToString(File.pathSeparator) { it.third.get().asFile.path },
     )
     outputs.upToDateWhen { false }
 }
@@ -124,5 +205,5 @@ val nbtNeutralityTest = tasks.register<Test>("nbtNeutralityTest") {
 tasks.register("scenarioTest") {
     group = "verification"
     description = "Runs the acceptance scenarios on every supported version, then the NBT neutrality test."
-    dependsOn(scenarioOutputs.map { it.first }, nbtNeutralityTest)
+    dependsOn(scenarioServers.flatMap { it.second }, nbtNeutralityTest)
 }

@@ -29,14 +29,15 @@ import org.bukkit.plugin.java.JavaPlugin;
  * Runs the scenario suite once the server has started, then stops the server.
  *
  * <p>It checks Seasons is enabled, writes item samples through the Paper adapter's item codec for
- * the NBT neutrality test, launches the Mineflayer runner, and writes {@code result.json} to the
- * output directory. Gradle reads that file to pass or fail the build. Settings come from system
- * properties set by the Gradle task.
+ * the NBT neutrality test, launches the Mineflayer runner for one session of one scenario, and
+ * writes {@code result.json} to the output directory. Gradle reads that file to pass or fail the
+ * build. Settings come from system properties set by the Gradle task.
  */
 public final class ScenarioPlugin extends JavaPlugin implements Listener {
   private static final Duration RUNNER_TIMEOUT = Duration.ofMinutes(10);
 
   private final Path out = Path.of(property("seasons.scenario.out"));
+  private final Path nbt = Path.of(property("seasons.scenario.nbt"));
   private final String adminName = property("seasons.scenario.admin");
 
   @Override
@@ -93,7 +94,7 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
    */
   private void writeItemSamples(List<String> failures) {
     PaperItemCodec codec = new PaperItemCodec();
-    Path dir = out.resolve("nbt");
+    Path dir = nbt;
     try {
       Files.createDirectories(dir);
       for (Map.Entry<String, ItemStack> sample : itemSamples().entrySet()) {
@@ -143,7 +144,14 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
             "--admin",
             adminName,
             "--out",
-            out.toString());
+            out.toString(),
+            "--server-dir",
+            Path.of("").toAbsolutePath().toString(),
+            "--tls",
+            property("seasons.scenario.tls"),
+            "--session",
+            property("seasons.scenario.session"),
+            property("seasons.scenario.name"));
     try {
       Process process = new ProcessBuilder(command).inheritIO().start();
       if (!process.waitFor(RUNNER_TIMEOUT.toSeconds(), TimeUnit.SECONDS)) {
