@@ -128,7 +128,7 @@ public final class SeasonService {
       }
       reconcilePlannedEnd(config.get());
       if (state.get().phase() instanceof Archiving) {
-        afterSave(this::runEndSequence);
+        endAfterSave();
       }
     }
     ticker = scheduler.runGlobalRepeating(TICK, this::tick);
@@ -195,7 +195,7 @@ public final class SeasonService {
               HumanTime.duration(config.get().messages(), running.length()));
           updateBar(running);
         }
-        case Archiving archiving -> afterSave(this::runEndSequence);
+        case Archiving archiving -> endAfterSave();
         default -> {}
       }
     }
@@ -230,7 +230,7 @@ public final class SeasonService {
       } else {
         hideBar();
         apply(new CountdownElapsed());
-        afterSave(this::runEndSequence);
+        endAfterSave();
       }
       return;
     }
@@ -318,23 +318,35 @@ public final class SeasonService {
 
   private void update(SeasonState next) {
     state = Optional.of(next);
-    lastSave =
-        store
-            .save(next)
-            .exceptionally(e -> {
-              LOG.error("Can't save season.json", e);
-              scheduler.runGlobal(() ->
-                  announcer.admins(
-                      ADMIN_PERMISSION,
-                      "season.save-failed",
-                      "error",
-                      String.valueOf(e.getMessage())));
-              return null;
-            });
+    CompletableFuture<Void> save = store.save(next);
+    lastSave = save;
+    var _ =
+        save.exceptionally(e -> {
+          LOG.error("Can't save season.json", e);
+          scheduler.runGlobal(() ->
+              announcer.admins(
+                  ADMIN_PERMISSION, "season.save-failed", "error", String.valueOf(e.getMessage())));
+          return null;
+        });
   }
 
-  private void afterSave(Runnable task) {
-    var _ = lastSave.thenRunAsync(task, serverThread);
+  /**
+   * Starts the end sequence once the latest state is on disk. If that save failed, nothing is
+   * archived: a crash would otherwise find a phase on disk that doesn't match what was done.
+   */
+  private void endAfterSave() {
+    int season = state.map(SeasonState::season).orElse(0);
+    var _ =
+        lastSave.whenCompleteAsync(
+            (saved, failure) -> {
+              if (failure == null) {
+                runEndSequence();
+              } else {
+                announcer.admins(
+                    ADMIN_PERMISSION, "end.not-saved", "season", Integer.toString(season));
+              }
+            },
+            serverThread);
   }
 
   private void updateBar(Countdown running) {
