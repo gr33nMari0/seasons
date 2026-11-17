@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.testkit;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.paper.PaperItemCodec;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,6 +44,24 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
   @Override
   public void onEnable() {
     getServer().getPluginManager().registerEvents(this, this);
+    ScenarioCommands commands = new ScenarioCommands(this);
+    getLifecycleManager()
+        .registerEventHandler(
+            LifecycleEvents.COMMANDS,
+            event ->
+                event.registrar().register("scenario", "Scenario hooks (docs/adr/0003)", commands));
+    commands
+        .hooks()
+        .ifPresent(hooks ->
+            hooks.beforeHalt(() -> {
+              copyArchives();
+              try {
+                Files.createDirectories(out);
+                Files.writeString(out.resolve("halted.json"), "{\"halted\":true}");
+              } catch (IOException e) {
+                getSLF4JLogger().error("Can't write halted.json", e);
+              }
+            }));
   }
 
   /** The admin bot runs admin commands, so it is made an op as it joins. */
@@ -169,7 +188,34 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
     }
   }
 
+  /**
+   * Copies the archives and vault pages Seasons wrote beside the item samples, for the NBT
+   * neutrality test (A10).
+   */
+  private void copyArchives() {
+    Path data = Path.of("world", "seasons", "data");
+    Path into = nbt.resolve("archives");
+    String prefix =
+        property("seasons.scenario.name") + "-" + property("seasons.scenario.session") + "-";
+    for (String kind : List.of("archives", "vaults")) {
+      Path dir = data.resolve(kind);
+      if (!Files.isDirectory(dir)) {
+        continue;
+      }
+      try (var files = Files.walk(dir)) {
+        Files.createDirectories(into);
+        for (Path file : files.filter(f -> f.toString().endsWith(".dat")).toList()) {
+          String name = prefix + kind + "-" + dir.relativize(file).toString().replace('/', '-');
+          Files.copy(file, into.resolve(name), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+      } catch (IOException e) {
+        getSLF4JLogger().error("Can't copy {} for the NBT neutrality test", dir, e);
+      }
+    }
+  }
+
   private void finish(Map<String, Object> result, boolean passed) {
+    copyArchives();
     result.put("passed", passed);
     try {
       Files.createDirectories(out);
