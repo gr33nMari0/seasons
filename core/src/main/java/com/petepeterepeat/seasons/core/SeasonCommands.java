@@ -5,6 +5,7 @@ import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_CONFIG;
 import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_SEASON;
 import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_INFO;
 
+import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
@@ -15,6 +16,7 @@ import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
+import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -36,19 +38,25 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** The {@code /season} command tree and what each command does. */
 final class SeasonCommands {
   private static final String DRY_RUN = "--dry-run";
   private static final String NOW = "--now";
+  private static final Logger LOG = LoggerFactory.getLogger(SeasonCommands.class);
 
   private final Platform platform;
   private final String version;
   private final Clock clock;
   private final SeasonService seasons;
+  private final Announcer announcer;
   private final ConfigHolder config;
   private final ConfigLoader loader;
   private final SerialWriter writer;
@@ -61,6 +69,7 @@ final class SeasonCommands {
       String version,
       Clock clock,
       SeasonService seasons,
+      Announcer announcer,
       ConfigHolder config,
       ConfigLoader loader,
       SerialWriter writer,
@@ -71,6 +80,7 @@ final class SeasonCommands {
     this.version = version;
     this.clock = clock;
     this.seasons = seasons;
+    this.announcer = announcer;
     this.config = config;
     this.loader = loader;
     this.writer = writer;
@@ -257,10 +267,7 @@ final class SeasonCommands {
                     .scheduler()
                     .runGlobal(() -> {
                       if (failure != null || result.snapshot().isEmpty()) {
-                        source.reply(messages().get("config.reload-failed"));
-                        if (result != null) {
-                          problems(source, result.problems());
-                        }
+                        reloadFailed(source, failure, result);
                         return;
                       }
                       ConfigSnapshot snapshot = result.snapshot().get();
@@ -281,6 +288,9 @@ final class SeasonCommands {
                 platform
                     .scheduler()
                     .runGlobal(() -> {
+                      if (failure != null) {
+                        LOG.error("/season validate failed", failure);
+                      }
                       if (failure == null && result.snapshot().isPresent()) {
                         source.reply(messages().get("config.valid"));
                       } else {
@@ -290,6 +300,38 @@ final class SeasonCommands {
                         }
                       }
                     }));
+  }
+
+  /**
+   * A failed reload goes to whoever ran it, to the other online config admins and to the server
+   * log, each problem with its file, line or path, and message.
+   */
+  private void reloadFailed(
+      CommandSource source, @Nullable Throwable failure, ConfigLoader.@Nullable Result result) {
+    Messages messages = messages();
+    List<Message> details = new ArrayList<>();
+    if (failure != null) {
+      LOG.error("/season reload failed", failure);
+      details.add(
+          messages.get("config.reload-error", "error", String.valueOf(failure.getMessage())));
+    } else if (result != null) {
+      for (ConfigProblem problem : result.problems()) {
+        details.add(messages.get(problemKey(problem), problemPlaceholders(problem)));
+      }
+    }
+    source.reply(messages.get("config.reload-failed"));
+    details.forEach(source::reply);
+
+    String name =
+        source
+            .player()
+            .flatMap(id -> platform.players().find(id))
+            .map(PlayerRef::name)
+            .orElse(messages.text("config.console-name"));
+    List<Message> lines = new ArrayList<>();
+    lines.add(messages.get("config.reload-failed-by", "name", name));
+    lines.addAll(details);
+    announcer.admins(PERMISSION_ADMIN_CONFIG, source.player(), lines);
   }
 
   private void dryRun(CommandSource source, boolean now) {

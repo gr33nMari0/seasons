@@ -2,10 +2,14 @@
 package com.petepeterepeat.seasons.core.announce;
 
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Permissions;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +54,19 @@ public final class Announcer {
     for (PlayerRef player : players.online()) {
       if (permissions.has(player.id(), permission)) {
         players.sendMessage(player.id(), messages().get(key, placeholders));
+      }
+    }
+  }
+
+  /**
+   * Several lines to online players holding {@code permission}, except {@code except} (who has
+   * already been told), and the server log.
+   */
+  public void admins(String permission, Optional<PlayerId> except, List<Message> lines) {
+    lines.forEach(line -> LOG.warn("{}", Messages.plain(line)));
+    for (PlayerRef player : players.online()) {
+      if (!except.equals(Optional.of(player.id())) && permissions.has(player.id(), permission)) {
+        lines.forEach(line -> players.sendMessage(player.id(), line));
       }
     }
   }

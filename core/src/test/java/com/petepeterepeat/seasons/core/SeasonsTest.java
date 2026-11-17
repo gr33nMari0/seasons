@@ -398,6 +398,50 @@ class SeasonsTest {
   }
 
   @Test
+  void aFailedReloadAlsoReachesTheOtherAdminsAndTheLog() throws IOException {
+    PlayerId sam = new PlayerId(UUID.fromString("00000000-0000-0000-0000-000000005a77"));
+    fake.online.add(new PlayerRef(ALEX, "Alex"));
+    fake.online.add(new PlayerRef(sam, "Sam"));
+    start();
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"), "schema-version: 1\nschedule: [7d, 1d\n");
+
+    TestSource alex = new TestSource(Optional.of(ALEX));
+    run(alex, "/season reload");
+
+    assertThat(alex.text().getFirst()).isEqualTo("Reload failed. The previous config stays live.");
+    assertThat(alex.text().get(1)).matches("config\\.yml, line \\d+, column \\d+: \\S.*");
+    List<String> toSam =
+        fake.sent.stream()
+            .filter(s -> s.player().equals(sam))
+            .map(s -> TestSource.plain(s.message()))
+            .toList();
+    assertThat(toSam.getFirst())
+        .isEqualTo("Alex ran /season reload and it failed. The previous config stays live.");
+    assertThat(toSam.get(1)).matches("config\\.yml, line \\d+, column \\d+: \\S.*");
+    assertThat(fake.sent).noneMatch(s -> s.player().equals(ALEX));
+  }
+
+  @Test
+  void nobodyIsArchivedWhenTheEndingPhaseCantBeSaved() throws IOException {
+    fake.online.add(new PlayerRef(ALEX, "Alex"));
+    start();
+    run("/season init 2");
+    // A directory where season.json goes makes every save fail.
+    Path state = worldFile("data/season.json");
+    Files.delete(state);
+    Files.createDirectories(state.resolve("blocked"));
+
+    run("/season end --now");
+
+    assertThat(archived).isEmpty();
+    assertThat(fake.sent)
+        .map(s -> TestSource.plain(s.message()))
+        .anyMatch(line -> line.startsWith("Seasons couldn't save season.json: "))
+        .anyMatch(line -> line.startsWith("Season 2 wasn't ended: season.json couldn't be saved"));
+  }
+
+  @Test
   void aHandEditedPlannedEndTakesEffectOnReload() throws IOException {
     start();
     run("/season init 2");

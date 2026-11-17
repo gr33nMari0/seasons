@@ -117,6 +117,7 @@ public final class Seasons implements SeasonsApi {
             version,
             clock,
             seasons,
+            announcer,
             config,
             loader,
             writer,

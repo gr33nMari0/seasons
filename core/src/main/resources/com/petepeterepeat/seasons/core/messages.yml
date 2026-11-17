@@ -74,6 +74,7 @@ end:
   intermission: "<gold>Season <season> has ended. Welcome to the Intermission.</gold>"
   interrupted: "<yellow>The server restarted during the end countdown of Season <season>, so it was cancelled. Run /season end to start it again.</yellow>"
   archiving-failed: "<red>Archiving for Season <season> stopped: <error>. See the server log.</red>"
+  not-saved: "<red>Season <season> wasn't ended: season.json couldn't be saved, so nobody was archived. Fix the problem in the server log, restart, then run /season end again.</red>"
   already-ending: "<red>Season <season> is already ending. /season cancel stops the countdown.</red>"
   already-ended: "<red>Season <season> has already ended. /season launch starts the next one.</red>"
   not-counting: "<red>No countdown is running.</red>"
@@ -101,6 +102,9 @@ homecoming:
 config:
   reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml and the season files.</green>"
   reload-failed: "<red>Reload failed. The previous config stays live.</red>"
+  reload-failed-by: "<red><name> ran /season reload and it failed. The previous config stays live.</red>"
+  reload-error: "<red>Reload failed: <error>. See the server log.</red>"
+  console-name: "The console"
   valid: "<green>All config files are valid.</green>"
   invalid: "<red>Some config files have problems. Nothing was changed.</red>"
   warning: "<yellow><warning></yellow>"
