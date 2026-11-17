@@ -18,7 +18,7 @@ export default {
 
     // Galleries don't overlap; cells sit inside their gallery; anchors inside their cell.
     await ctx.command(admin, '/hof gallery create other 2', /^Created gallery other for Season 2\.$/)
-    await ctx.command(admin, '/hof gallery bounds other 40 -61 25 60 -50 40', /^Gallery other would overlap season-2\.$/)
+    await ctx.command(admin, '/hof gallery bounds other 30 -61 25 60 -50 40', /^Gallery other would overlap season-2\.$/)
     await ctx.command(admin, '/hof cell bounds season-2:c1 0 -61 0 4 -50 4', /^Cell season-2:c1 must sit inside gallery season-2\.$/)
     await ctx.command(admin, '/hof cell anchor season-2:c1 trophy 100 -60 100', /^That anchor is outside cell season-2:c1\.$/)
     await ctx.command(admin, '/hof cell anchor season-2:c1 trophy 21 -59 27', /^Added a trophy anchor to season-2:c1 at 21, -59, 27\.$/)

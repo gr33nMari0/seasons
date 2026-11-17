@@ -253,7 +253,7 @@ export class ScenarioContext {
 
   /**
    * What Seasons holds for a player and season, through the scenario hooks (docs/adr/0003):
-   * { present, stacks, items, ender, vault, completed, visible, archivedThrough, pending }.
+   * { present, stacks, items, ender, vault, completed, visible, pages, archivedThrough, pending }.
    */
   async archive (admin, name, season) {
     const [summary, record] = await this.command(admin, `/scenario archive ${name} ${season}`, [/^Archive /, /^Record /])
@@ -266,6 +266,7 @@ export class ScenarioContext {
       vault: number('vault', summary),
       completed: number('completed', summary),
       visible: number('visible', summary),
+      pages: number('pages', summary),
       archivedThrough: number('archivedThrough', record),
       pending: number('pending', record)
     }

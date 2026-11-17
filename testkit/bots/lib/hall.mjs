@@ -9,11 +9,12 @@ export const FLOOR = -60
 
 /**
  * Tags a gallery of `cells` cells with /hof commands. Cell i spans 5 blocks along x from
- * `x + 6 * i`; each has a figure, an entry, a plaque and a chest as its archive anchor.
+ * `x + 6 * i`, and the gallery leaves room for one more; each has a figure, an entry, a plaque and
+ * a chest as its archive anchor.
  * Resolves with the cells, each { id, key, x0, x1, z0, z1, figure, entry, plaque, archive }.
  */
 export async function buildGallery (ctx, admin, { id = 'season-2', season = 2, cells = 4, x = 20, z = 20 } = {}) {
-  const width = 6 * cells
+  const width = 6 * (cells + 1)
   await ctx.command(admin, `/hof gallery create ${id} ${season}`, new RegExp(`^Created gallery ${id} for Season ${season}\\.$`))
   await ctx.command(admin, `/hof gallery bounds ${id} ${x} ${FLOOR - 1} ${z} ${x + width} ${FLOOR + 10} ${z + 10}`, new RegExp(`^Gallery ${id} now spans `))
   await ctx.command(admin, `/hof gallery entry ${id} ${x + 1} ${FLOOR} ${z + 1}`, new RegExp(`^Gallery ${id}'s entry is now at `))

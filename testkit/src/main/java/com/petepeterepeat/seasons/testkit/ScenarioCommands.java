@@ -169,7 +169,14 @@ final class ScenarioCommands implements BasicCommand {
     }
     block.setType(Material.AIR);
     sender.sendMessage(
-        "Broke " + was.getKey() + " at " + block.getX() + ", " + block.getY() + ", " + block.getZ());
+        "Broke "
+            + was.getKey()
+            + " at "
+            + block.getX()
+            + ", "
+            + block.getY()
+            + ", "
+            + block.getZ());
   }
 
   private void use(CommandSender sender, String[] args) {
