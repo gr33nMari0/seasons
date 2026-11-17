@@ -1,0 +1,19 @@
+name: SeasonsWeb
+version: '${version}'
+main: com.petepeterepeat.seasons.web.SeasonsWebPlugin
+api-version: '26.3'
+description: A read-only live dashboard for Seasons, for phones, iPads and second screens.
+authors: [Peter Woodhead]
+dependencies:
+  server:
+    Seasons:
+      load: BEFORE
+      required: true
+      join-classpath: true
+permissions:
+  seasons.web:
+    description: /web link, sessions, logout and privacy
+    default: true
+  seasons.web.admin:
+    description: Admin dashboard widgets. Never granted by default
+    default: false

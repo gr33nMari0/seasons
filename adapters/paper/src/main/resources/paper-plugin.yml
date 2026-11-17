@@ -1,0 +1,47 @@
+name: Seasons
+version: '${version}'
+main: com.petepeterepeat.seasons.paper.SeasonsPlugin
+api-version: '26.3'
+description: Seasons on one persistent world, with a Hall of Fame, a locked old world and Homecoming.
+authors: [Peter Woodhead]
+dependencies:
+  server:
+    BlueMap:
+      load: BEFORE
+      required: false
+      join-classpath: true
+# Player nodes: everyone. Admin and curation nodes: ops. Bypass nodes: nobody, ops included.
+permissions:
+  seasons.info:
+    description: /season info
+    default: true
+  seasons.hof.visit:
+    description: Visit the Hall of Fame with /hof and leave with /hof leave
+    default: true
+  seasons.hof.swap:
+    description: Swap cells during the decorating window
+    default: true
+  seasons.hof.claim:
+    description: Claim a free cell in galleries that use claim assignment
+    default: true
+  seasons.vault:
+    description: View, or after Homecoming withdraw from, your ender vault
+    default: true
+  seasons.pet:
+    description: Register tamed pets to travel to the next season's spawn
+    default: true
+  seasons.admin.season:
+    description: Season admin commands
+    default: op
+  seasons.admin.config:
+    description: Zones, config and markers
+    default: op
+  seasons.admin.hof:
+    description: Hall of Fame admin commands
+    default: op
+  seasons.zone.bypass:
+    description: Ignore old-world zones. Never granted by default
+    default: false
+  seasons.hof.bypass:
+    description: Ignore Hall of Fame protection. Never granted by default
+    default: false
