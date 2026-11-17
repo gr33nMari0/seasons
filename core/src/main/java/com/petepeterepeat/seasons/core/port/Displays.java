@@ -14,5 +14,19 @@ public interface Displays {
    */
   UUID spawnText(Position position, Message text, String tag);
 
+  /** Spawns a figure. */
+  UUID spawnFigure(Figure figure);
+
+  /** Spawns an item display, a copy of the item, such as a trophy. */
+  UUID spawnItem(Position position, NeutralItem item, String tag);
+
   void remove(UUID display);
+
+  /**
+   * Removes every display between two corners whose tag starts with a prefix. The chunks must be
+   * loaded.
+   *
+   * @return how many were removed
+   */
+  int removeTagged(Position min, Position max, String tagPrefix);
 }

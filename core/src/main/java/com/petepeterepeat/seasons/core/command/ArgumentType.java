@@ -9,6 +9,11 @@ public sealed interface ArgumentType {
   /** One word with no spaces. */
   record WordArgument() implements ArgumentType {}
 
+  /**
+   * An id that may name its parent, such as {@code season-2:c1}: one word that may hold a colon.
+   */
+  record IdArgument() implements ArgumentType {}
+
   /** Everything to the end of the command, such as a time or a list of flags. */
   record GreedyArgument() implements ArgumentType {}
 
@@ -18,6 +23,10 @@ public sealed interface ArgumentType {
 
   static ArgumentType word() {
     return new WordArgument();
+  }
+
+  static ArgumentType id() {
+    return new IdArgument();
   }
 
   static ArgumentType greedy() {

@@ -7,7 +7,6 @@ import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
-import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
@@ -85,7 +84,6 @@ class SeasonsTest {
             "1.2.3",
             fake.clock,
             webhooks,
-            Hall.none(),
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.empty());
@@ -136,8 +134,8 @@ class SeasonsTest {
   void registersTheSeasonCommandWithPermissions() {
     start();
 
-    assertThat(fake.commands)
-        .singleElement()
+    assertThat(fake.commands).extracting(CommandNode::name).containsExactly("season", "hof");
+    assertThat(fake.commands.getFirst())
         .satisfies(root -> {
           assertThat(root.name()).isEqualTo("season");
           assertThat(root.children())
@@ -168,7 +166,7 @@ class SeasonsTest {
   }
 
   @Test
-  void allowsEverythingForNow() {
+  void allowsBuildingOutsideTheHall() {
     start();
     PlayerId player = new PlayerId(UUID.randomUUID());
 
@@ -361,7 +359,8 @@ class SeasonsTest {
     Path config = dir.resolve("plugins/Seasons/config.yml");
     Files.writeString(config, "schema-version: 1\nschedule:\n  endCountdown: 2m\n");
     assertThat(run("/season reload").text())
-        .containsExactly("Reloaded config.yml, messages.yml, secrets.yml and the season files.");
+        .containsExactly(
+            "Reloaded config.yml, messages.yml, secrets.yml, the season files and the galleries.");
 
     Files.writeString(
         config, "schema-version: 1\nschedule:\n  endCountdown: 3m\n  reminders: [7d, 1d\n");

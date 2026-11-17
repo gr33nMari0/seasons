@@ -17,6 +17,10 @@ import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.hall.HallCommands;
+import com.petepeterepeat.seasons.core.hall.HallImporter;
+import com.petepeterepeat.seasons.core.hall.HallRenderer;
+import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -45,6 +49,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiPredicate;
+import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +71,6 @@ public final class Seasons implements SeasonsApi {
   private final String version;
   private final Clock clock;
   private final Webhooks webhooks;
-  private final Hall hall;
   private final Map<String, String> environment;
   private final SerialWriter writer;
   private final Optional<ScenarioHooks> hooks;
@@ -77,10 +81,10 @@ public final class Seasons implements SeasonsApi {
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
   private @Nullable ScheduledTask flusher;
+  private @Nullable HallService hallService;
   private @Nullable RolloverArchiver archiverForTests;
 
   /**
-   * @param hall the Hall of Fame; {@link Hall#none()} until M1 part 3
    * @param environment environment variables, for the webhook overrides
    * @param writer the file writer thread; Seasons closes it at {@link #stop}
    * @param hooks the scenario hooks, only on a scenario server (docs/adr/0003)
@@ -90,7 +94,6 @@ public final class Seasons implements SeasonsApi {
       String version,
       Clock clock,
       Webhooks webhooks,
-      Hall hall,
       Map<String, String> environment,
       SerialWriter writer,
       Optional<ScenarioHooks> hooks) {
@@ -98,7 +101,6 @@ public final class Seasons implements SeasonsApi {
     this.version = version;
     this.clock = clock;
     this.webhooks = webhooks;
-    this.hall = hall;
     this.environment = Map.copyOf(environment);
     this.writer = writer;
     this.hooks = hooks;
@@ -141,6 +143,22 @@ public final class Seasons implements SeasonsApi {
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
     CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
     SeasonEntry entry = new SeasonEntry(platform, config, players, immunity, clock);
+    HallService halls =
+        new HallService(
+            platform,
+            config,
+            loader::galleryFile,
+            world.resolve("backups"),
+            writer,
+            clock,
+            players,
+            archives,
+            announcer,
+            RandomGenerator.getDefault());
+    hallService = halls;
+    HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
+    Hall hall = halls.hall(renderer);
+    Optional<HallImporter> importer = Optional.empty();
 
     Optional<Archiver> archiver = Optional.empty();
     Optional<Unarchiver> unarchiver = Optional.empty();
@@ -157,6 +175,22 @@ public final class Seasons implements SeasonsApi {
               platform, clock, writer, journal, archives, vaults, players, hall, audit, hold);
       replay.register(Operation.ARCHIVE, archiving.recovery());
       replay.register(Operation.UNARCHIVE, unarchiving.recovery());
+      HallImporter importing =
+          new HallImporter(
+              platform,
+              writer,
+              journal,
+              archives,
+              players,
+              halls,
+              renderer,
+              audit,
+              crash,
+              clock,
+              world.resolve("seasons"));
+      replay.register(Operation.IMPORT, importing.recovery());
+      replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
+      importer = Optional.of(importing);
       var _ = replay.recoverAll();
       archiver = Optional.of(archiving);
       unarchiver = Optional.of(unarchiving);
@@ -188,6 +222,8 @@ public final class Seasons implements SeasonsApi {
             world.resolve("backups"));
     service = seasons;
     seasons.start();
+    halls.bind(seasons::state, seasons::updateDecorating);
+    halls.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -226,12 +262,15 @@ public final class Seasons implements SeasonsApi {
             journalError,
             startupProblems,
             new SeasonCommands.Services(
-                archiver, unarchiver, recovery, players, furthest, login, archives, vaults));
+                archiver, unarchiver, recovery, players, furthest, login, archives, vaults, halls));
     commands = built;
-    platform.events().handle(new IntentRouter(hold, immunity, furthest));
+    platform.events().handle(new IntentRouter(hold, immunity, furthest, halls::decide));
     login.ifPresent(platform.events()::sessions);
     platform.events().tripwire(wire);
     platform.commands().register(built.root());
+    platform
+        .commands()
+        .register(new HallCommands(platform, config, halls, renderer, importer, players).root());
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -259,6 +298,9 @@ public final class Seasons implements SeasonsApi {
   public void stop() {
     if (service != null) {
       service.stop();
+    }
+    if (hallService != null) {
+      hallService.stop();
     }
     if (tripwire != null) {
       tripwire.stop();

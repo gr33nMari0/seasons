@@ -50,6 +50,22 @@ public interface Players {
 
   void setSurvival(PlayerId id);
 
+  GameMode gameMode(PlayerId id);
+
+  void setGameMode(PlayerId id, GameMode mode);
+
+  /** The hotbar slot (0 to 8) in an online player's main hand. */
+  int heldSlot(PlayerId id);
+
+  /** The block an online player is looking at, within {@code range} blocks. */
+  Optional<Position> targetBlock(PlayerId id, int range);
+
+  /**
+   * The name of a player the server has seen, online or not, even before Seasons was installed;
+   * empty for someone who has never played here.
+   */
+  Optional<String> knownName(PlayerId id);
+
   /**
    * Teleports an online player safely: dismounts them, stops elytra flight, resets fall distance
    * and fire, closes menus and loads the destination chunk first, crossing dimensions if needed.

@@ -20,6 +20,7 @@ import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
+import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
@@ -90,7 +91,8 @@ final class SeasonCommands {
       FurthestTracker furthest,
       Optional<LoginService> login,
       ArchiveFiles archives,
-      VaultFiles vaults) {}
+      VaultFiles vaults,
+      HallService hall) {}
 
   SeasonCommands(
       Platform platform,
@@ -177,6 +179,11 @@ final class SeasonCommands {
                 .then(
                     CommandNode.argument("player", ArgumentType.word()).executes(this::reprocess)))
         .then(
+            CommandNode.literal("decorate")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .then(CommandNode.literal("open").executes(this::decorateOpen))
+                .then(CommandNode.literal("close").executes(this::decorateClose)))
+        .then(
             CommandNode.literal("cancel")
                 .permission(PERMISSION_ADMIN_SEASON)
                 .executes(this::cancel))
@@ -250,8 +257,40 @@ final class SeasonCommands {
     source.reply(messages.get("info.phase", "phase", phase(messages, current.phase())));
     plannedEnd(source, "info", current);
     if (source.player().isPresent()) {
-      source.reply(messages.get("info.no-cell"));
+      Optional<HallService.CellRef> cell =
+          services.hall().cellOf(source.player().get(), current.season());
+      source.reply(
+          cell.map(ref ->
+                  messages.get("info.cell", "cell", ref.cell().id(), "gallery", ref.gallery().id()))
+              .orElseGet(() -> messages.get("info.no-cell")));
     }
+  }
+
+  void decorateOpen(CommandSource source, Arguments arguments) {
+    switch (services.hall().open()) {
+      case HallService.OpenResult.Opened opened ->
+          source.reply(
+              opened.owners() == 1
+                  ? messages().get("decorate.opened-one", "season", season())
+                  : messages()
+                      .get(
+                          "decorate.opened",
+                          "season",
+                          season(),
+                          "count",
+                          Integer.toString(opened.owners())));
+      case HallService.OpenResult.Refused refused ->
+          source.reply(messages().get(refused.messageKey(), "season", season()));
+    }
+  }
+
+  void decorateClose(CommandSource source, Arguments arguments) {
+    source.reply(
+        messages()
+            .get(
+                services.hall().close() ? "decorate.closed" : "decorate.not-open",
+                "season",
+                season()));
   }
 
   void init(CommandSource source, Arguments arguments) {
@@ -725,7 +764,38 @@ final class SeasonCommands {
               "names",
               String.join(", ", names)));
     }
+    hallDryRun(source, messages);
     source.reply(messages.get("end.dry-run.next", "season", season()));
+  }
+
+  /** How many cells are left for the players who earned one and have none. */
+  private void hallDryRun(CommandSource source, Messages messages) {
+    int current = seasons.state().map(SeasonState::season).orElse(0);
+    int free = services.hall().freeCells(current).size();
+    int without = services.hall().withoutCell(current).size();
+    if (free >= without) {
+      source.reply(
+          messages.get(
+              "hof.dry-run.cells",
+              "free",
+              Integer.toString(free),
+              "season",
+              season(),
+              "players",
+              Integer.toString(without)));
+    } else {
+      source.reply(
+          messages.get(
+              "hof.dry-run.shortfall",
+              "free",
+              Integer.toString(free),
+              "season",
+              season(),
+              "players",
+              Integer.toString(without),
+              "short",
+              Integer.toString(without - free)));
+    }
   }
 
   private void launchDryRun(CommandSource source) {

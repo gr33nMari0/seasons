@@ -10,7 +10,6 @@ import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
-import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
@@ -68,7 +67,6 @@ class ArchivingTest {
             "1.2.3",
             fake.clock,
             webhooks,
-            Hall.none(),
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.of(hooks));

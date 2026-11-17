@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.DragonFight;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.Menus;
@@ -76,6 +77,7 @@ public final class FakePlatform {
     public Map<String, Map<String, Instant>> advancements = new HashMap<>();
     public Map<String, Long> statistics = new HashMap<>();
     public boolean survival = false;
+    public GameMode gameMode = GameMode.SURVIVAL;
     public int saves;
     public int resets;
     public final List<Message> titles = new ArrayList<>();
@@ -250,6 +252,31 @@ public final class FakePlatform {
           }
 
           @Override
+          public GameMode gameMode(PlayerId id) {
+            return state(id).gameMode;
+          }
+
+          @Override
+          public void setGameMode(PlayerId id, GameMode mode) {
+            state(id).gameMode = mode;
+          }
+
+          @Override
+          public int heldSlot(PlayerId id) {
+            return 0;
+          }
+
+          @Override
+          public Optional<Position> targetBlock(PlayerId id, int range) {
+            return Optional.empty();
+          }
+
+          @Override
+          public Optional<String> knownName(PlayerId id) {
+            return online.stream().filter(p -> p.id().equals(id)).map(PlayerRef::name).findFirst();
+          }
+
+          @Override
           public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
             if (find(id).isEmpty()) {
               return CompletableFuture.completedFuture(false);
@@ -379,7 +406,7 @@ public final class FakePlatform {
               PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {}
 
           @Override
-          public void openPaged(PlayerId viewer, PagedView view) {
+          public void openPaged(PlayerId viewer, PagedView view, int startPage) {
             opened.add(view);
           }
         };
@@ -474,7 +501,8 @@ public final class FakePlatform {
         scheduler,
         dragon,
         statistics,
-        storage);
+        storage,
+        null);
   }
 
   private FakePlayer state(PlayerId id) {
