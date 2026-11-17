@@ -48,6 +48,9 @@ public final class LoginPlan {
       target =
           r.seasons().keySet().stream()
               .filter(season -> season > r.archivedThrough())
+              // What they carry belongs to the latest season they entered: never archive it into
+              // an earlier one, as after unarchiving an old season.
+              .filter(season -> season >= r.seasonEntered())
               .filter(season -> finished(season, state))
               .mapToInt(Integer::intValue)
               .max();

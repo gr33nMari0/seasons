@@ -52,9 +52,17 @@ public final class ArchiveFiles {
     return Files.exists(path(player, season));
   }
 
-  /** Writes a record atomically and fsyncs it. */
+  /**
+   * Writes a record atomically and fsyncs it. An archive already there is never overwritten: it is
+   * moved aside as {@code <uuid>.superseded-<ms>.dat} first, so whatever it holds can still be
+   * recovered.
+   */
   public void write(ArchiveRecord record, int dataVersion) throws IOException {
-    AtomicFiles.write(path(record.player(), record.season()), encode(record, dataVersion));
+    Path file = path(record.player(), record.season());
+    if (Files.exists(file)) {
+      moveAside(record.player(), record.season(), "superseded-" + record.created().toEpochMilli());
+    }
+    AtomicFiles.write(file, encode(record, dataVersion));
   }
 
   /** Writes a record beside the archive under another name, such as displaced items. */

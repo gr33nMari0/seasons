@@ -43,4 +43,11 @@ public final class FakeItems {
     ender.set(0, Optional.of(item("minecraft:emerald", 5)));
     return new InventorySnapshot(storage, armour, Optional.of(item("minecraft:shield", 1)), ender);
   }
+
+  /** Just stone in the first slot, such as what a player gathers in a new season. */
+  public static InventorySnapshot stone(int count) {
+    List<Optional<NeutralItem>> storage = empty(36);
+    storage.set(0, Optional.of(item("minecraft:stone", count)));
+    return new InventorySnapshot(storage, empty(4), Optional.empty(), empty(27));
+  }
 }

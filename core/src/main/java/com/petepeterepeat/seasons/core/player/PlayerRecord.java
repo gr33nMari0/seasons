@@ -106,7 +106,11 @@ public record PlayerRecord(
         OptionalInt.of(season));
   }
 
-  /** After {@code /season unarchive}: no longer archived into {@code season}. */
+  /**
+   * After {@code /season unarchive}: no longer archived into {@code season}. Only unarchiving the
+   * latest archived season lowers {@link #archivedThrough}; unarchiving an older one leaves it, so
+   * later seasons, still archived, are never archived over again.
+   */
   public PlayerRecord withUnarchived(int season) {
     Set<Integer> displays = new HashSet<>(pendingDisplays);
     displays.remove(season);
@@ -118,7 +122,7 @@ public record PlayerRecord(
         id,
         lastName,
         seasons,
-        Math.min(archivedThrough, season - 1),
+        archivedThrough == season ? season - 1 : archivedThrough,
         seasonEntered,
         baselines,
         furthest,
