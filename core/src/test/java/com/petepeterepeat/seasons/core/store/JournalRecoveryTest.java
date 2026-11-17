@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -84,26 +85,27 @@ class JournalRecoveryTest {
     Journal journal = Journal.open(dir.resolve("journal.log"), writer, CLOCK);
     journal.append(ARCHIVE_STARTED, ALEX, 2, "a").join();
     journal.append(ARCHIVE_STARTED, SAM, 2, "s").join();
-    JournalRecovery recovery = new JournalRecovery(journal);
+    JournalRecovery recovery = new JournalRecovery(journal, Runnable::run);
     List<PlayerId> online = new ArrayList<>(List.of(SAM));
     recovery.register(
         Operation.ARCHIVE,
         op -> {
           PlayerId player = op.player().orElseThrow();
           if (!online.contains(player)) {
-            return RecoveryOutcome.waitForPlayer();
+            return CompletableFuture.completedFuture(RecoveryOutcome.waitForPlayer());
           }
-          journal.append(ARCHIVE_DONE, player, op.season(), op.lastStep().payloadHash()).join();
-          return RecoveryOutcome.finished();
+          return journal
+              .append(ARCHIVE_DONE, player, op.season(), op.lastStep().payloadHash())
+              .thenApply(entry -> RecoveryOutcome.finished());
         });
 
-    recovery.recoverAll();
+    recovery.recoverAll().join();
 
     assertThat(recovery.pending())
         .extracting(OpenOperation::player)
         .containsExactly(Optional.of(ALEX));
     online.add(ALEX);
-    recovery.retry(ALEX);
+    assertThat(recovery.retry(ALEX).join()).isEqualTo(1);
     assertThat(recovery.pending()).isEmpty();
     assertThat(JournalRecovery.openOperations(journal.entries())).isEmpty();
   }
@@ -113,14 +115,14 @@ class JournalRecoveryTest {
     Journal journal = Journal.open(dir.resolve("journal.log"), writer, CLOCK);
     journal.append(ARCHIVE_STARTED, ALEX, 2, "a").join();
     journal.append(CURATE_STARTED, SAM, 2, "c").join();
-    JournalRecovery recovery = new JournalRecovery(journal);
+    JournalRecovery recovery = new JournalRecovery(journal, Runnable::run);
     recovery.register(
         Operation.CURATE,
         op -> {
           throw new IllegalStateException("boom");
         });
 
-    recovery.recoverAll();
+    recovery.recoverAll().join();
 
     assertThat(recovery.pending()).hasSize(2);
     assertThat(recovery.failures())

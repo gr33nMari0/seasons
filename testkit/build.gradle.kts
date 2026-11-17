@@ -128,6 +128,8 @@ val scenarioServers = minecraftVersions.map { version ->
                     "-Dcom.mojang.eula.agree=true",
                     "-Djavax.net.ssl.trustStore=${tls.resolve("truststore.p12")}",
                     "-Djavax.net.ssl.trustStorePassword=$tlsPassword",
+                    // Turns on Seasons' scenario hooks; never set on a real server (docs/adr/0003).
+                    "-Dseasons.scenario=true",
                     "-Dseasons.scenario.out=${outDir.get().asFile}",
                     "-Dseasons.scenario.nbt=${nbtDir.get().asFile}",
                     "-Dseasons.scenario.name=${scenario.name}",
@@ -171,6 +173,25 @@ val scenarioServers = minecraftVersions.map { version ->
                 }
                 doLast {
                     val result = outDir.get().file("result.json").asFile
+                    val halted = outDir.get().file("halted.json").asFile
+                    if (!result.exists() && halted.exists()) {
+                        // A crash scenario halted the server on purpose. The bot runner outlives it
+                        // and writes its own results once the session's checks have run.
+                        val results = outDir.get().file("results.json").asFile
+                        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
+                        while (!results.exists() && System.nanoTime() < deadline) {
+                            Thread.sleep(500)
+                        }
+                        check(results.exists()) {
+                            "Scenario ${scenario.name} session $session halted, but the runner wrote no results"
+                        }
+                        @Suppress("UNCHECKED_CAST")
+                        val runs = (JsonSlurper().parse(results) as Map<String, Any?>)["results"] as List<Map<String, Any?>>
+                        check(runs.isNotEmpty() && runs.all { it["passed"] == true }) {
+                            "Scenario ${scenario.name} session $session failed after the halt on Paper $version: $runs"
+                        }
+                        return@doLast
+                    }
                     check(result.exists()) {
                         "Scenario ${scenario.name} session $session on Paper $version stopped without a result"
                     }

@@ -9,6 +9,9 @@ public interface World {
 
   Position spawn(String dimension);
 
+  /** Sets the world spawn, where new players and players with no respawn point appear. */
+  void setSpawn(Position position);
+
   /** Loads (and generates if needed) the chunk holding a position without stalling the tick. */
   CompletableFuture<Void> loadChunk(Position position);
 }

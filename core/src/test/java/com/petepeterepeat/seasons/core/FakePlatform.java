@@ -4,16 +4,32 @@ package com.petepeterepeat.seasons.core;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.message.Message;
+import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
+import com.petepeterepeat.seasons.core.port.Advancements;
 import com.petepeterepeat.seasons.core.port.Capabilities;
+import com.petepeterepeat.seasons.core.port.DragonFight;
+import com.petepeterepeat.seasons.core.port.Events;
+import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.Inventories;
+import com.petepeterepeat.seasons.core.port.InventorySnapshot;
+import com.petepeterepeat.seasons.core.port.Menus;
+import com.petepeterepeat.seasons.core.port.NeutralItem;
+import com.petepeterepeat.seasons.core.port.PagedView;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.ProgressBar;
+import com.petepeterepeat.seasons.core.port.ResetPlan;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
+import com.petepeterepeat.seasons.core.port.Sessions;
+import com.petepeterepeat.seasons.core.port.Skin;
+import com.petepeterepeat.seasons.core.port.Statistics;
 import com.petepeterepeat.seasons.core.port.Storage;
+import com.petepeterepeat.seasons.core.port.TripwireReport;
+import com.petepeterepeat.seasons.core.port.World;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -22,8 +38,13 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A platform for core tests: players who record what they're told, a scheduler that runs global
@@ -38,6 +59,49 @@ public final class FakePlatform {
   public final List<CommandNode> commands = new ArrayList<>();
   public final MutableClock clock = new MutableClock(Instant.parse("2026-11-18T12:00:00Z"));
   public IntentHandler handler = intent -> com.petepeterepeat.seasons.core.event.Decision.allow();
+  public @Nullable Sessions sessions;
+  public @Nullable TripwireReport tripwire;
+  public final Map<PlayerId, FakePlayer> players = new HashMap<>();
+  public final List<PagedView> opened = new ArrayList<>();
+  public final List<String> objectives = new ArrayList<>();
+  public Position worldSpawn = Position.of("minecraft:overworld", 0, 64, 0);
+  public boolean dragonKilled = true;
+
+  /** What one fake player carries and has done. */
+  public static final class FakePlayer {
+    public InventorySnapshot inventory = FakeItems.EMPTY;
+    public List<NeutralItem> cursor = new ArrayList<>();
+    public Position position = Position.of("minecraft:overworld", 10, 64, 10);
+    public Experience experience = new Experience(5, 0.5f, 100);
+    public Map<String, Map<String, Instant>> advancements = new HashMap<>();
+    public Map<String, Long> statistics = new HashMap<>();
+    public boolean survival = false;
+    public int saves;
+    public int resets;
+    public final List<Message> titles = new ArrayList<>();
+  }
+
+  /** Adds an online player, with an empty inventory. */
+  public PlayerRef join(String name) {
+    PlayerRef ref =
+        new PlayerRef(
+            new PlayerId(
+                java.util.UUID.nameUUIDFromBytes(
+                    name.getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+            name);
+    online.add(ref);
+    players.computeIfAbsent(ref.id(), id -> new FakePlayer());
+    return ref;
+  }
+
+  /** Takes a player offline; what they carry is kept, as their player file would. */
+  public void leave(PlayerRef player) {
+    online.remove(player);
+  }
+
+  public FakePlayer player(PlayerRef ref) {
+    return players.get(ref.id());
+  }
 
   /** A message sent to one player. */
   public record Sent(PlayerId player, Message message) {}
@@ -125,6 +189,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public Optional<PlayerRef> findByName(String name) {
+            return online.stream().filter(p -> p.name().equalsIgnoreCase(name)).findFirst();
+          }
+
+          @Override
           public void sendMessage(PlayerId id, Message message) {
             sent.add(new Sent(id, message));
           }
@@ -140,7 +209,210 @@ public final class FakePlatform {
             bars.add(bar);
             return bar;
           }
+
+          @Override
+          public Position position(PlayerId id) {
+            return state(id).position;
+          }
+
+          @Override
+          public Experience experience(PlayerId id) {
+            return state(id).experience;
+          }
+
+          @Override
+          public void setExperience(PlayerId id, Experience experience) {
+            state(id).experience = experience;
+          }
+
+          @Override
+          public Optional<Skin> skin(PlayerId id) {
+            return Optional.of(new Skin("textures", Optional.of("signed")));
+          }
+
+          @Override
+          public void saveData(PlayerId id) {
+            state(id).saves++;
+          }
+
+          @Override
+          public void reset(PlayerId id, ResetPlan plan) {
+            FakePlayer player = state(id);
+            player.resets++;
+            if (plan.xp()) {
+              player.experience = Experience.NONE;
+            }
+          }
+
+          @Override
+          public void setSurvival(PlayerId id) {
+            state(id).survival = true;
+          }
+
+          @Override
+          public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
+            if (find(id).isEmpty()) {
+              return CompletableFuture.completedFuture(false);
+            }
+            state(id).position = destination;
+            return CompletableFuture.completedFuture(true);
+          }
+
+          @Override
+          public void celebrate(PlayerId id, Message title, Message subtitle) {
+            state(id).titles.add(title);
+          }
+
+          @Override
+          public void deathsObjective(String name, Message displayName, String slot) {
+            objectives.add(name);
+          }
         };
+    Inventories inventories =
+        new Inventories() {
+          @Override
+          public InventorySnapshot snapshot(PlayerId player) {
+            return state(player).inventory;
+          }
+
+          @Override
+          public List<NeutralItem> settle(PlayerId player) {
+            // As if the inventory were full: the cursor stays where it is.
+            return List.copyOf(state(player).cursor);
+          }
+
+          @Override
+          public List<NeutralItem> loose(PlayerId player) {
+            return List.copyOf(state(player).cursor);
+          }
+
+          @Override
+          public void clear(PlayerId player, boolean enderChest) {
+            InventorySnapshot was = state(player).inventory;
+            state(player).cursor.clear();
+            state(player).inventory =
+                new InventorySnapshot(
+                    FakeItems.empty(was.storage().size()),
+                    FakeItems.empty(was.armour().size()),
+                    Optional.empty(),
+                    enderChest ? FakeItems.empty(was.enderChest().size()) : was.enderChest());
+          }
+
+          @Override
+          public void restore(PlayerId player, InventorySnapshot snapshot) {
+            state(player).inventory = snapshot;
+          }
+
+          @Override
+          public List<String> purgeArchived(PlayerId player) {
+            return List.of();
+          }
+
+          @Override
+          public int dataVersion() {
+            return FakeItems.DATA_VERSION;
+          }
+        };
+    Advancements advancements =
+        new Advancements() {
+          @Override
+          public List<String> visible() {
+            return List.of("minecraft:story/root", "minecraft:story/mine_stone");
+          }
+
+          @Override
+          public Map<String, Set<String>> awarded(PlayerId player) {
+            Map<String, Set<String>> awarded = new HashMap<>();
+            state(player)
+                .advancements
+                .forEach((id, criteria) -> awarded.put(id, criteria.keySet()));
+            return awarded;
+          }
+
+          @Override
+          public AdvancementSnapshot snapshot(PlayerId player, boolean includeRecipes) {
+            Map<String, Map<String, Instant>> awarded = new HashMap<>(state(player).advancements);
+            int completed =
+                (int) awarded.keySet().stream().filter(id -> visible().contains(id)).count();
+            return new AdvancementSnapshot(awarded, completed, visible().size());
+          }
+
+          @Override
+          public void revokeAll(PlayerId player, boolean includeRecipes) {
+            state(player).advancements.clear();
+          }
+
+          @Override
+          public void award(PlayerId player, Map<String, Map<String, Instant>> criteria) {
+            state(player).advancements.putAll(criteria);
+          }
+
+          @Override
+          public void forgetRecipes(PlayerId player) {}
+        };
+    World world =
+        new World() {
+          @Override
+          public boolean dimensionExists(String dimension) {
+            return dimension.startsWith("minecraft:");
+          }
+
+          @Override
+          public Position spawn(String dimension) {
+            return worldSpawn;
+          }
+
+          @Override
+          public void setSpawn(Position position) {
+            worldSpawn = position;
+          }
+
+          @Override
+          public CompletableFuture<Void> loadChunk(Position position) {
+            return CompletableFuture.completedFuture(null);
+          }
+        };
+    Menus menus =
+        new Menus() {
+          @Override
+          public void openViewOnly(
+              PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {}
+
+          @Override
+          public void openPaged(PlayerId viewer, PagedView view) {
+            opened.add(view);
+          }
+        };
+    Events events =
+        new Events() {
+          @Override
+          public void handle(IntentHandler h) {
+            handler = h;
+          }
+
+          @Override
+          public void sessions(Sessions s) {
+            sessions = s;
+          }
+
+          @Override
+          public void tripwire(TripwireReport report) {
+            tripwire = report;
+          }
+        };
+    DragonFight dragon =
+        new DragonFight() {
+          @Override
+          public void setPreviouslyKilled(boolean previouslyKilled) {
+            dragonKilled = previouslyKilled;
+          }
+
+          @Override
+          public Optional<Position> exitPortal() {
+            return Optional.empty();
+          }
+        };
+    Statistics statistics = player -> Map.copyOf(state(player).statistics);
     Scheduler scheduler =
         new Scheduler() {
           @Override
@@ -190,18 +462,22 @@ public final class FakePlatform {
         "Test",
         capabilities,
         players,
+        inventories,
+        advancements,
+        world,
         null,
         null,
-        null,
-        null,
-        null,
-        null,
+        menus,
         commands::add,
         (player, node) -> true,
-        h -> handler = h,
+        events,
         scheduler,
-        null,
-        null,
+        dragon,
+        statistics,
         storage);
+  }
+
+  private FakePlayer state(PlayerId id) {
+    return players.computeIfAbsent(id, unknown -> new FakePlayer());
   }
 }

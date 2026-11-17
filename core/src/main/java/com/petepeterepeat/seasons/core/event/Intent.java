@@ -17,4 +17,25 @@ public sealed interface Intent {
    * @param blockType a namespaced block id, such as {@code minecraft:hopper}
    */
   record PlaceBlock(PlayerId player, Position block, String blockType) implements Intent {}
+
+  /** Any click or drag in any open menu, including the player's own inventory. */
+  record UseInventory(PlayerId player) implements Intent {}
+
+  /** Dropping an item. */
+  record DropItem(PlayerId player) implements Intent {}
+
+  /** Picking up an item from the ground. */
+  record PickupItem(PlayerId player) implements Intent {}
+
+  /** Swapping the main hand and off hand. */
+  record SwapHands(PlayerId player) implements Intent {}
+
+  /** Eating or drinking. */
+  record Consume(PlayerId player) implements Intent {}
+
+  /** Using an item, or a block or entity, with either hand. */
+  record Interact(PlayerId player) implements Intent {}
+
+  /** Taking damage of any kind. */
+  record TakeDamage(PlayerId player) implements Intent {}
 }

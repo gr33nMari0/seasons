@@ -10,4 +10,13 @@ import com.petepeterepeat.seasons.core.event.IntentHandler;
 public interface Events {
   /** Sets the handler every intent goes to. Until one is set, everything is allowed. */
   void handle(IntentHandler handler);
+
+  /** Sets who hears about joins and leaves. */
+  void sessions(Sessions sessions);
+
+  /**
+   * Sets who hears about tripwire hits. The adapter deletes any item tagged as archived that is
+   * picked up, spawned in the world or left in an inventory when a menu closes, then reports it.
+   */
+  void tripwire(TripwireReport report);
 }

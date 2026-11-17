@@ -42,6 +42,10 @@ status:
   unreadable: "<red>season.json can't be read: <error></red>"
   capabilities-ok: "<green>The <platform> adapter supports everything Seasons uses.</green>"
   capability-gap: "<yellow>Not available on <platform>: <capability></yellow>"
+  players: "<gray>Players: <archived> archived into Season <season>, <waiting> still to archive at login</gray>"
+  furthest: "<gray>Furthest block from 0,0 this season: <distance> blocks, by <name> at <x>, <z></gray>"
+  no-furthest: "<gray>No block placed yet this season.</gray>"
+  recovery-failed: "<red>Recovery of <name>'s Season <season> archive stopped: <reason>. Fix it, then run /season reprocess <name>.</red>"
 
 info:
   season: "<gray>Season</gray> <white><season></white>"
@@ -95,6 +99,58 @@ cancel:
 
 launch:
   refused: "<red>Season <season> can only be launched from the Intermission.</red>"
+  no-spawn: "<red>Set Season <next>'s spawn first: stand there and run /season spawn set.</red>"
+  bad-dimension: "<red>Season <next>'s spawn is in a dimension this server doesn't have. Set it again with /season spawn set.</red>"
+  busy: "<red>Someone is being archived or unarchived right now. Try again in a moment.</red>"
+  not-archived: "<red>Someone online isn't archived into Season <season> yet, or has a crash waiting for recovery. See /season status, then /season archive or /season reprocess them.</red>"
+  unknown-flag: "<red>Unknown option <flag>. /season launch takes --dry-run.</red>"
+  failed: "<red>Launching Season <season> stopped: <error>. See the server log; it is finished at the next restart.</red>"
+  loading: "<gray>Loading the spawn at <x>, <y>, <z>...</gray>"
+  done: "<gold>Season <season> has begun!</gold>"
+  title: "<gold>Season <season></gold>"
+  subtitle: "<yellow>has begun!</yellow>"
+  deaths: "Deaths, Season <season>"
+  dry-run:
+    header: "<gold>Dry run of /season launch for Season <season>. Nothing changes.</gold>"
+    players: "<gray><count> online players would go to <x>, <y>, <z> in <dimension>, in survival.</gray>"
+    refused: "<red>/season launch would be refused:</red> <reason>"
+
+spawn:
+  set: "<green>Season <season>'s spawn is now <x>, <y>, <z> in <dimension>.</green>"
+  player-only: "<red>Stand where the spawn should be and run this in game.</red>"
+  failed: "<red>The spawn wasn't saved: <error>. See the server log.</red>"
+
+archive:
+  done: "<gold>Your Season <season> is archived in the Hall of Fame.</gold>"
+  archived: "<green>Archived <name> into Season <season>.</green>"
+  nothing: "<gray><name> has no finished season waiting to be archived.</gray>"
+  offline: "<red><name> isn't online. Players are archived when they next log in.</red>"
+  busy: "<red><name> is being archived or unarchived right now.</red>"
+  failed: "<red>Archiving <name> into Season <season> stopped: <reason>. Their items stay on them; /season reprocess <name> tries again.</red>"
+  unavailable: "<red>The journal is unavailable, so nobody can be archived. See /season status.</red>"
+  no-cells: "<yellow>Season <season> has no Hall cells yet, so archived players stay where they are.</yellow>"
+  recovery-mismatch: "<red><name>'s inventory neither matches their Season <season> archive nor is empty, so recovery stopped. Nothing was cleared. Check it, then run /season reprocess <name>.</red>"
+
+unarchive:
+  done: "<green>Restored <name>'s Season <season> archive to them.</green>"
+  done-displaced: "<green>Restored <name>'s Season <season> archive to them.</green> <gray><count> items that were in the way are kept in <file>.</gray>"
+  offline: "<red><name> isn't online. Unarchiving needs them in game.</red>"
+  no-archive: "<red><name> has no archive for Season <season>.</red>"
+  not-empty: "<red><name>'s inventory isn't empty. Empty it, or add --force to keep what they carry in a displaced-items file.</red>"
+  unknown-flag: "<red>Unknown option <flag>. /season unarchive takes --force.</red>"
+  failed: "<red>Unarchiving <name>'s Season <season> archive stopped: <reason>. It finishes at their next login.</red>"
+
+reprocess:
+  nothing: "<gray><name> has nothing pending.</gray>"
+  offline: "<yellow><name> has <count> operation(s) pending, which finish when they log in.</yellow>"
+  done: "<green>Finished <count> pending operation(s) for <name>.</green>"
+  failed: "<red><name> still has <count> operation(s) pending: <reason></red>"
+
+view:
+  title: "<name> · Season <season>"
+  page: "<gray>Page <page> of <pages></gray>"
+  previous: "<yellow>Previous page</yellow>"
+  next: "<yellow>Next page</yellow>"
 
 homecoming:
   refused: "<red>Homecoming only happens once, in the Frontier stage.</red>"

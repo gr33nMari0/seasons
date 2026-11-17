@@ -43,7 +43,7 @@ public final class SeasonMachine {
       if (init.season() < 1) {
         return new Refused("init.invalid");
       }
-      return new Changed(SeasonState.start(init.season(), Stage.OPEN, Optional.empty()));
+      return new Changed(SeasonState.init(init.season()));
     }
     if (current.isEmpty()) {
       return new Refused("season.none");
@@ -87,7 +87,7 @@ public final class SeasonMachine {
               : new Refused("end.not-archiving");
       case Launch launch ->
           phase instanceof Intermission
-              ? new Changed(SeasonState.start(state.season() + 1, Stage.FRONTIER, Optional.of(now)))
+              ? new Changed(state.next(now))
               : new Refused("launch.refused");
       case Homecoming homecoming ->
           phase instanceof Active active && active.stage() == Stage.FRONTIER
@@ -105,7 +105,9 @@ public final class SeasonMachine {
                       false,
                       state.launchedAt(),
                       state.homecomingAt(),
-                      Optional.of(now)))
+                      Optional.of(now),
+                      state.initSeason(),
+                      state.launchApplied()))
               : new Changed(state);
     };
   }

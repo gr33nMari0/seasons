@@ -2,23 +2,55 @@
 package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.message.Message;
+import com.petepeterepeat.seasons.core.port.Experience;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.ProgressBar;
+import com.petepeterepeat.seasons.core.port.ResetPlan;
+import com.petepeterepeat.seasons.core.port.Skin;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import net.kyori.adventure.bossbar.BossBar;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.sound.Sound;
+import net.kyori.adventure.title.Title;
+import org.bukkit.Color;
+import org.bukkit.FireworkEffect;
+import org.bukkit.GameMode;
+import org.bukkit.Location;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
+import org.bukkit.World;
+import org.bukkit.attribute.Attribute;
+import org.bukkit.attribute.AttributeInstance;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Firework;
 import org.bukkit.entity.Player;
+import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.meta.FireworkMeta;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.scoreboard.Criteria;
+import org.bukkit.scoreboard.DisplaySlot;
+import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Scoreboard;
 
 final class PaperPlayers implements Players {
   private final Server server;
   private final PaperText text;
+  private final NamespacedKey celebration;
 
-  PaperPlayers(Server server, PaperText text) {
+  /**
+   * @param celebration the tag on launch fireworks, which {@link PaperEvents} keeps from hurting
+   *     anyone
+   */
+  PaperPlayers(Server server, PaperText text, NamespacedKey celebration) {
     this.server = server;
     this.text = text;
+    this.celebration = celebration;
   }
 
   @Override
@@ -29,6 +61,17 @@ final class PaperPlayers implements Players {
   @Override
   public Optional<PlayerRef> find(PlayerId id) {
     return player(id).map(PaperPlayers::ref);
+  }
+
+  @Override
+  public Optional<PlayerRef> findByName(String name) {
+    return Optional.ofNullable(server.getPlayerExact(name))
+        .or(() ->
+            server.getOnlinePlayers().stream()
+                .filter(p -> p.getName().equalsIgnoreCase(name))
+                .map(p -> (Player) p)
+                .findFirst())
+        .map(PaperPlayers::ref);
   }
 
   @Override
@@ -61,6 +104,156 @@ final class PaperPlayers implements Players {
         server.hideBossBar(bar);
       }
     };
+  }
+
+  @Override
+  public Position position(PlayerId id) {
+    return PaperPositions.toPosition(Objects.requireNonNull(online(id).getLocation()));
+  }
+
+  @Override
+  public Experience experience(PlayerId id) {
+    Player player = online(id);
+    return new Experience(player.getLevel(), player.getExp(), player.getTotalExperience());
+  }
+
+  @Override
+  public void setExperience(PlayerId id, Experience experience) {
+    Player player = online(id);
+    player.setLevel(experience.level());
+    player.setExp(Math.clamp(experience.progress(), 0f, 1f));
+    player.setTotalExperience(experience.total());
+  }
+
+  @Override
+  public Optional<Skin> skin(PlayerId id) {
+    return online(id).getPlayerProfile().getProperties().stream()
+        .filter(property -> property.getName().equals("textures"))
+        .findFirst()
+        .map(property ->
+            new Skin(property.getValue(), Optional.ofNullable(property.getSignature())));
+  }
+
+  @Override
+  public void saveData(PlayerId id) {
+    online(id).saveData();
+  }
+
+  @Override
+  public void reset(PlayerId id, ResetPlan plan) {
+    Player player = online(id);
+    player.setFireTicks(0);
+    player.setFreezeTicks(0);
+    player.setFallDistance(0);
+    AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+    player.setHealth(maxHealth == null ? 20 : maxHealth.getValue());
+    player.setFoodLevel(20);
+    player.setSaturation(5f);
+    player.setExhaustion(0f);
+    if (plan.xp()) {
+      player.setLevel(0);
+      player.setExp(0f);
+      player.setTotalExperience(0);
+    }
+    if (plan.effects()) {
+      player.clearActivePotionEffects();
+    }
+    if (plan.respawnPoint()) {
+      player.setRespawnLocation(null);
+    }
+  }
+
+  @Override
+  public void setSurvival(PlayerId id) {
+    online(id).setGameMode(GameMode.SURVIVAL);
+  }
+
+  @Override
+  public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
+    Optional<Player> found = player(id);
+    Optional<World> world = PaperPositions.world(destination.dimension());
+    if (found.isEmpty() || world.isEmpty()) {
+      return CompletableFuture.completedFuture(false);
+    }
+    Player player = found.get();
+    player.leaveVehicle();
+    player.setGliding(false);
+    player.setFallDistance(0);
+    player.setFireTicks(0);
+    player.closeInventory();
+    Location to = PaperPositions.toLocation(destination);
+    return world
+        .get()
+        .getChunkAtAsync(to.getBlockX() >> 4, to.getBlockZ() >> 4, true)
+        .thenCompose(chunk ->
+            player.isOnline()
+                ? player.teleportAsync(to, PlayerTeleportEvent.TeleportCause.PLUGIN)
+                : CompletableFuture.completedFuture(false))
+        .thenApply(moved -> {
+          if (moved) {
+            player.setFallDistance(0);
+          }
+          return moved;
+        });
+  }
+
+  @Override
+  public void celebrate(PlayerId id, Message title, Message subtitle) {
+    player(id)
+        .ifPresent(player -> {
+          player.showTitle(Title.title(text.render(title), text.render(subtitle)));
+          player.playSound(
+              Sound.sound(Key.key("ui.toast.challenge_complete"), Sound.Source.MASTER, 1f, 1f));
+          player
+              .getWorld()
+              .spawn(
+                  player.getLocation(),
+                  Firework.class,
+                  firework -> {
+                    FireworkMeta meta = firework.getFireworkMeta();
+                    meta.addEffect(
+                        FireworkEffect.builder()
+                            .with(FireworkEffect.Type.BALL_LARGE)
+                            .withColor(Color.ORANGE, Color.YELLOW)
+                            .withFade(Color.WHITE)
+                            .withTrail()
+                            .build());
+                    meta.setPower(1);
+                    firework.setFireworkMeta(meta);
+                    firework
+                        .getPersistentDataContainer()
+                        .set(celebration, PersistentDataType.BOOLEAN, true);
+                  });
+        });
+  }
+
+  /** Whether an entity is one of the launch fireworks. */
+  boolean isCelebration(Entity entity) {
+    return entity instanceof Firework && entity.getPersistentDataContainer().has(celebration);
+  }
+
+  @Override
+  public void deathsObjective(String name, Message displayName, String slot) {
+    Scoreboard scoreboard = server.getScoreboardManager().getMainScoreboard();
+    Objective objective = scoreboard.getObjective(name);
+    if (objective == null) {
+      objective =
+          scoreboard.registerNewObjective(name, Criteria.DEATH_COUNT, text.render(displayName));
+    }
+    DisplaySlot display =
+        switch (slot) {
+          case "sidebar" -> DisplaySlot.SIDEBAR;
+          case "below_name" -> DisplaySlot.BELOW_NAME;
+          case "none" -> null;
+          default -> DisplaySlot.PLAYER_LIST;
+        };
+    if (display != null) {
+      objective.setDisplaySlot(display);
+    }
+  }
+
+  private Player online(PlayerId id) {
+    return player(id).orElseThrow(() -> new IllegalStateException(id + " is offline"));
   }
 
   private static float clamp(float progress) {

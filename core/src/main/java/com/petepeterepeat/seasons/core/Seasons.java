@@ -4,17 +4,36 @@ package com.petepeterepeat.seasons.core;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
+import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
+import com.petepeterepeat.seasons.core.archive.Archiver;
+import com.petepeterepeat.seasons.core.archive.Unarchiver;
+import com.petepeterepeat.seasons.core.archive.VaultFiles;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
-import com.petepeterepeat.seasons.core.event.Decision;
+import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.guard.Immunity;
+import com.petepeterepeat.seasons.core.guard.IntentRouter;
+import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.player.FurthestTracker;
+import com.petepeterepeat.seasons.core.player.LoginService;
+import com.petepeterepeat.seasons.core.player.PlayerStore;
+import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.ScheduledTask;
+import com.petepeterepeat.seasons.core.scenario.CrashPoints;
+import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
+import com.petepeterepeat.seasons.core.season.LaunchSequence;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.season.SeasonStore;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
+import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -23,6 +42,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.function.BiPredicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,42 +66,51 @@ public final class Seasons implements SeasonsApi {
   private final String version;
   private final Clock clock;
   private final Webhooks webhooks;
-  private final RolloverArchiver archiver;
+  private final Hall hall;
   private final Map<String, String> environment;
   private final SerialWriter writer;
+  private final Optional<ScenarioHooks> hooks;
   private final ConfigHolder config = new ConfigHolder(ConfigLoader.defaults());
 
   private @Nullable SeasonService service;
   private @Nullable SeasonCommands commands;
+  private @Nullable PlayerStore store;
+  private @Nullable Tripwire tripwire;
+  private @Nullable ScheduledTask flusher;
+  private @Nullable RolloverArchiver archiverForTests;
 
   /**
-   * @param archiver archives players at season end; M1 part 2 replaces the stub
+   * @param hall the Hall of Fame; {@link Hall#none()} until M1 part 3
    * @param environment environment variables, for the webhook overrides
    * @param writer the file writer thread; Seasons closes it at {@link #stop}
+   * @param hooks the scenario hooks, only on a scenario server (docs/adr/0003)
    */
   public Seasons(
       Platform platform,
       String version,
       Clock clock,
       Webhooks webhooks,
-      RolloverArchiver archiver,
+      Hall hall,
       Map<String, String> environment,
-      SerialWriter writer) {
+      SerialWriter writer,
+      Optional<ScenarioHooks> hooks) {
     this.platform = platform;
     this.version = version;
     this.clock = clock;
     this.webhooks = webhooks;
-    this.archiver = archiver;
+    this.hall = hall;
     this.environment = Map.copyOf(environment);
     this.writer = writer;
+    this.hooks = hooks;
   }
 
   /**
-   * Loads config and state, replays the journal, registers commands and starts the season
-   * lifecycle. Runs on the server thread while the plugin enables.
+   * Loads config, state and player records, replays the journal, registers commands and listeners,
+   * and starts the season lifecycle. Runs on the server thread while the plugin enables.
    */
   public void start() {
     Path world = platform.storage().worldDataDirectory();
+    Executor serverThread = platform.scheduler()::runGlobal;
     ConfigLoader loader =
         new ConfigLoader(platform.storage().configDirectory(), world, environment);
     List<ConfigProblem> startupProblems = loadConfig(loader);
@@ -88,14 +119,60 @@ public final class Seasons implements SeasonsApi {
     Optional<String> journalError = Optional.empty();
     try {
       journal = Journal.open(world.resolve("data/journal.log"), writer, clock);
-      new JournalRecovery(journal).recoverAll();
     } catch (IOException | RuntimeException e) {
       journalError = Optional.of(String.valueOf(e.getMessage()));
-      LOG.error("Can't open the journal", e);
+      LOG.error("Can't open the journal; nobody can be archived until it is fixed", e);
     }
 
+    PlayerStore players = new PlayerStore(world.resolve("data/players"), writer);
+    store = players;
+    try {
+      int loaded = players.loadAll().join();
+      LOG.info("Loaded {} player record(s)", loaded);
+    } catch (RuntimeException e) {
+      LOG.error("Can't read the player records", e);
+    }
+    ArchiveFiles archives = new ArchiveFiles(world.resolve("data/archives"));
+    VaultFiles vaults = new VaultFiles(world.resolve("data/vaults"));
+    AuditLog audit = new AuditLog(world.resolve("audit"), writer, clock);
+    ArchiveHold hold = new ArchiveHold();
+    Immunity immunity = new Immunity(clock);
     Announcer announcer =
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
+    CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
+    SeasonEntry entry = new SeasonEntry(platform, config, players, immunity, clock);
+
+    Optional<Archiver> archiver = Optional.empty();
+    Optional<Unarchiver> unarchiver = Optional.empty();
+    Optional<JournalRecovery> recovery = Optional.empty();
+    RolloverArchiver rollover = refusingArchiver();
+    if (journal != null) {
+      JournalRecovery replay = new JournalRecovery(journal, serverThread);
+      Archiver archiving =
+          new Archiver(
+              platform, config, clock, writer, journal, replay, archives, vaults, players, hall,
+              audit, announcer, hold, immunity, crash);
+      Unarchiver unarchiving =
+          new Unarchiver(
+              platform, clock, writer, journal, archives, vaults, players, hall, audit, hold);
+      replay.register(Operation.ARCHIVE, archiving.recovery());
+      replay.register(Operation.UNARCHIVE, unarchiving.recovery());
+      var _ = replay.recoverAll();
+      archiver = Optional.of(archiving);
+      unarchiver = Optional.of(unarchiving);
+      recovery = Optional.of(replay);
+      rollover = archiving;
+    }
+
+    LaunchSequence launch =
+        new LaunchSequence(
+            platform,
+            config,
+            announcer,
+            entry,
+            hold::held,
+            unsettled(players, recovery),
+            Optional.ofNullable(journal));
     SeasonService seasons =
         new SeasonService(
             platform.players(),
@@ -105,11 +182,35 @@ public final class Seasons implements SeasonsApi {
             writer,
             config,
             announcer,
-            archiver,
+            archiverForTests != null ? archiverForTests : rollover,
+            launch,
             world.resolve("seasons"),
             world.resolve("backups"));
     service = seasons;
     seasons.start();
+
+    FurthestTracker furthest =
+        new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
+    Optional<JournalRecovery> replaying = recovery;
+    Optional<LoginService> login =
+        archiver.map(a ->
+            new LoginService(
+                seasons::state,
+                players,
+                replaying.orElseThrow(),
+                a,
+                hold,
+                entry,
+                platform.scheduler(),
+                clock));
+    Tripwire wire =
+        new Tripwire(platform.players(), platform.inventories(), platform.scheduler(), audit);
+    tripwire = wire;
+    wire.start();
+    flusher =
+        platform
+            .scheduler()
+            .runGlobalRepeating(PlayerStore.COALESCE, () -> logFailure(players.flush()));
 
     SeasonCommands built =
         new SeasonCommands(
@@ -123,16 +224,50 @@ public final class Seasons implements SeasonsApi {
             writer,
             Optional.ofNullable(journal),
             journalError,
-            startupProblems);
+            startupProblems,
+            new SeasonCommands.Services(
+                archiver, unarchiver, recovery, players, furthest, login, archives, vaults));
     commands = built;
-    platform.events().handle(intent -> Decision.allow());
+    platform.events().handle(new IntentRouter(hold, immunity, furthest));
+    login.ifPresent(platform.events()::sessions);
+    platform.events().tripwire(wire);
     platform.commands().register(built.root());
+    login.ifPresent(l -> l.markPlaying(platform.players().online()));
+
+    if (hooks.isPresent() && recovery.isPresent()) {
+      hooks
+          .get()
+          .wire(
+              new ScenarioHooks.Wiring(
+                  archives,
+                  vaults,
+                  players,
+                  recovery.get(),
+                  platform.menus(),
+                  writer,
+                  config,
+                  serverThread));
+    }
+  }
+
+  /** Ends seasons with this archiver instead of the real one; for tests, before {@link #start}. */
+  void useArchiver(RolloverArchiver archiver) {
+    this.archiverForTests = archiver;
   }
 
   /** Stops the lifecycle and finishes queued writes and posts. */
   public void stop() {
     if (service != null) {
       service.stop();
+    }
+    if (tripwire != null) {
+      tripwire.stop();
+    }
+    if (flusher != null) {
+      flusher.cancel();
+    }
+    if (store != null) {
+      logFailure(store.flush());
     }
     writer.close();
     webhooks.close();
@@ -152,6 +287,50 @@ public final class Seasons implements SeasonsApi {
   /** The command handlers, once started. */
   Optional<SeasonCommands> commands() {
     return Optional.ofNullable(commands);
+  }
+
+  /** Player records, once started. */
+  Optional<PlayerStore> players() {
+    return Optional.ofNullable(store);
+  }
+
+  /** With no journal, nothing may move: the end sequence stops and admins are told why. */
+  private static RolloverArchiver refusingArchiver() {
+    return new RolloverArchiver() {
+      @Override
+      public CompletableFuture<Void> lockGalleries(int season) {
+        return CompletableFuture.failedFuture(
+            new IllegalStateException("the journal is unavailable, so nobody can be archived"));
+      }
+
+      @Override
+      public CompletableFuture<Void> archive(PlayerId player, int season) {
+        return CompletableFuture.failedFuture(
+            new IllegalStateException("the journal is unavailable, so nobody can be archived"));
+      }
+    };
+  }
+
+  /**
+   * For launch: whether a player who played the season that ended isn't archived into it, or has an
+   * archive or unarchive still open in the journal.
+   */
+  private static BiPredicate<PlayerId, Integer> unsettled(
+      PlayerStore players, Optional<JournalRecovery> recovery) {
+    return (player, ended) ->
+        recovery.map(r -> !r.open(player).isEmpty()).orElse(false)
+            || players
+                .find(player)
+                .map(r -> r.played(ended) && r.archivedThrough() < ended)
+                .orElse(false);
+  }
+
+  private static void logFailure(CompletableFuture<?> future) {
+    var _ =
+        future.exceptionally(e -> {
+          LOG.error("Saving player records failed", e);
+          return null;
+        });
   }
 
   private List<ConfigProblem> loadConfig(ConfigLoader loader) {

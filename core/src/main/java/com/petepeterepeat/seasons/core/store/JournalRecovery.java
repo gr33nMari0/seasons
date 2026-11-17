@@ -8,6 +8,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,12 +27,18 @@ public final class JournalRecovery {
   private static final Logger LOG = LoggerFactory.getLogger(JournalRecovery.class);
 
   private final Journal journal;
+  private final Executor serverThread;
   private final Map<Operation, RecoveryHandler> handlers = new EnumMap<>(Operation.class);
-  private final List<OpenOperation> pending = new ArrayList<>();
-  private final Map<OpenOperation, String> failures = new LinkedHashMap<>();
+  private final List<OpenOperation> pending = new CopyOnWriteArrayList<>();
+  private final Map<OpenOperation, String> failures = new ConcurrentHashMap<>();
+  private final Set<OpenOperation> running = ConcurrentHashMap.newKeySet();
 
-  public JournalRecovery(Journal journal) {
+  /**
+   * @param serverThread where outcomes are handled, so the pending list changes on one thread
+   */
+  public JournalRecovery(Journal journal, Executor serverThread) {
     this.journal = journal;
+    this.serverThread = serverThread;
   }
 
   /** Registers the handler for one kind of operation, before {@link #recoverAll}. */
@@ -61,25 +72,35 @@ public final class JournalRecovery {
   }
 
   /** At startup: tries every open operation once. */
-  public void recoverAll() {
+  public CompletableFuture<Void> recoverAll() {
     pending.clear();
     failures.clear();
     List<OpenOperation> open = openOperations(journal.entries());
     if (!open.isEmpty()) {
       LOG.info("Journal recovery: {} open operation(s)", open.size());
     }
-    for (OpenOperation operation : open) {
-      attempt(operation);
-    }
+    return CompletableFuture.allOf(
+        open.stream().map(this::attempt).toArray(CompletableFuture[]::new));
   }
 
-  /** When a player logs in, or for {@code /season reprocess}: retries their pending operations. */
-  public void retry(PlayerId player) {
+  /**
+   * When a player logs in, or for {@code /season reprocess}: retries their open operations,
+   * including any the journal shows that this session hasn't tried yet.
+   *
+   * @return how many finished
+   */
+  public CompletableFuture<Integer> retry(PlayerId player) {
+    Optional<PlayerId> who = Optional.of(player);
     List<OpenOperation> theirs =
-        pending.stream().filter(op -> op.player().equals(Optional.of(player))).toList();
-    pending.removeAll(theirs);
-    theirs.forEach(failures::remove);
-    theirs.forEach(this::attempt);
+        openOperations(journal.entries()).stream()
+            .filter(op -> op.player().equals(who))
+            .filter(op -> running.stream().noneMatch(r -> sameKey(r, op)))
+            .toList();
+    pending.removeIf(op -> op.player().equals(who));
+    failures.keySet().removeIf(op -> op.player().equals(who));
+    List<CompletableFuture<Boolean>> attempts = theirs.stream().map(this::attempt).toList();
+    return CompletableFuture.allOf(attempts.toArray(CompletableFuture[]::new))
+        .thenApply(done -> (int) attempts.stream().filter(CompletableFuture::join).count());
   }
 
   /** Operations still open after the last attempt. */
@@ -87,35 +108,64 @@ public final class JournalRecovery {
     return List.copyOf(pending);
   }
 
+  /** The operations open in the journal right now for one player. */
+  public List<OpenOperation> open(PlayerId player) {
+    Optional<PlayerId> who = Optional.of(player);
+    return openOperations(journal.entries()).stream()
+        .filter(op -> op.player().equals(who))
+        .toList();
+  }
+
   /** Why each failed operation failed, for admins. */
   public Map<OpenOperation, String> failures() {
     return Map.copyOf(failures);
   }
 
-  private void attempt(OpenOperation operation) {
+  /** Completes with whether the operation finished. */
+  private CompletableFuture<Boolean> attempt(OpenOperation operation) {
     RecoveryHandler handler = handlers.get(operation.operation());
     if (handler == null) {
       LOG.warn("No recovery handler for {}; it stays pending", describe(operation));
       pending.add(operation);
-      return;
+      return CompletableFuture.completedFuture(false);
     }
-    RecoveryOutcome outcome;
+    running.add(operation);
+    CompletableFuture<RecoveryOutcome> outcome;
     try {
       outcome = handler.recover(operation);
     } catch (RuntimeException e) {
-      LOG.error("Recovering {} failed", describe(operation), e);
-      outcome = RecoveryOutcome.failed(e.toString());
+      outcome = CompletableFuture.failedFuture(e);
     }
-    switch (outcome) {
-      case RecoveryOutcome.Finished finished ->
-          LOG.info("Journal recovery finished {}", describe(operation));
-      case RecoveryOutcome.WaitForPlayer waiting -> pending.add(operation);
-      case RecoveryOutcome.Failed failed -> {
-        pending.add(operation);
-        failures.put(operation, failed.reason());
-        LOG.error("Journal recovery couldn't finish {}: {}", describe(operation), failed.reason());
-      }
-    }
+    return outcome.handleAsync(
+        (result, failure) -> {
+          running.remove(operation);
+          RecoveryOutcome settled = result;
+          if (failure != null) {
+            LOG.error("Recovering {} failed", describe(operation), failure);
+            settled = RecoveryOutcome.failed(String.valueOf(failure));
+          }
+          switch (settled) {
+            case RecoveryOutcome.Finished finished -> {
+              LOG.info("Journal recovery finished {}", describe(operation));
+              return true;
+            }
+            case RecoveryOutcome.WaitForPlayer waiting -> pending.add(operation);
+            case RecoveryOutcome.Failed failed -> {
+              pending.add(operation);
+              failures.put(operation, failed.reason());
+              LOG.error(
+                  "Journal recovery couldn't finish {}: {}", describe(operation), failed.reason());
+            }
+          }
+          return false;
+        },
+        serverThread);
+  }
+
+  private static boolean sameKey(OpenOperation a, OpenOperation b) {
+    return a.operation() == b.operation()
+        && a.player().equals(b.player())
+        && a.season() == b.season();
   }
 
   private static String describe(OpenOperation operation) {

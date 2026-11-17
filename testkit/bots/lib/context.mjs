@@ -91,7 +91,8 @@ export class ScenarioContext {
    */
   waitForMessages (bot, expect, timeoutMs = REPLY_TIMEOUT_MS, what = 'messages') {
     const patterns = Array.isArray(expect) ? [...expect] : [expect]
-    const matched = new Array(patterns.length)
+    // Filled, not holes: every() skips holes and would resolve after the first match.
+    const matched = new Array(patterns.length).fill(undefined)
     return new Promise((resolve, reject) => {
       const onMessage = (text) => {
         const i = patterns.findIndex((p, j) => matched[j] === undefined && p.test(text))
@@ -203,6 +204,88 @@ export class ScenarioContext {
         return posts.find((p) => pattern.test(p.content ?? ''))
       }
     }
+  }
+
+  /**
+   * Retries `check` (an async function that throws when not yet true) until it passes, and
+   * resolves with its value. Rejects with the last failure after `timeoutMs`.
+   */
+  async eventually (check, timeoutMs = REPLY_TIMEOUT_MS) {
+    const deadline = Date.now() + timeoutMs
+    let last
+    while (Date.now() < deadline) {
+      try {
+        return await check()
+      } catch (err) {
+        last = err
+        await sleep(500)
+      }
+    }
+    throw new Error(`still failing after ${timeoutMs} ms: ${last?.message ?? last}`)
+  }
+
+  /** How many items a player carries, inventory, armour and off hand, as /clear counts them. */
+  async itemCount (admin, name) {
+    const line = await this.command(admin, `/clear ${name} * 0`, /^(Found \d+ matching item|No items were found on player)/)
+    const match = /^Found (\d+) matching item/.exec(line)
+    return match ? Number(match[1]) : 0
+  }
+
+  /** The text of /data get entity for one path, or null when the entity has no such data. */
+  async entityData (admin, name, path) {
+    const line = await this.command(admin, `/data get entity ${name} ${path}`, /(has the following entity data: |^Found no elements matching )/)
+    const at = line.indexOf('has the following entity data: ')
+    return at < 0 ? null : line.slice(at + 'has the following entity data: '.length)
+  }
+
+  /** Whether an /execute if ... condition holds, as the admin sees it. */
+  async holds (admin, condition) {
+    const line = await this.command(admin, `/execute if ${condition}`, /^Test (passed|failed)/)
+    return line.startsWith('Test passed')
+  }
+
+  /** A player's server-side position, from /data get entity Pos. */
+  async position (admin, name) {
+    const text = await this.entityData(admin, name, 'Pos')
+    const [x, y, z] = text.replace(/[[\]d\s]/g, '').split(',').map(Number)
+    return { x, y, z }
+  }
+
+  /**
+   * What Seasons holds for a player and season, through the scenario hooks (docs/adr/0003):
+   * { present, stacks, items, ender, vault, completed, visible, archivedThrough, pending }.
+   */
+  async archive (admin, name, season) {
+    const [summary, record] = await this.command(admin, `/scenario archive ${name} ${season}`, [/^Archive /, /^Record /])
+    const number = (key, text) => Number(new RegExp(`${key}=(-?\\d+)`).exec(text)?.[1] ?? NaN)
+    return {
+      present: !/ none$/.test(summary),
+      stacks: number('stacks', summary),
+      items: number('items', summary),
+      ender: number('ender', summary),
+      vault: number('vault', summary),
+      completed: number('completed', summary),
+      visible: number('visible', summary),
+      archivedThrough: number('archivedThrough', record),
+      pending: number('pending', record)
+    }
+  }
+
+  /** Resolves once the bot is disconnected, such as when the server stops. */
+  disconnected (bot, timeoutMs = 60_000) {
+    return new Promise((resolve, reject) => {
+      if (bot._client.ended) return resolve()
+      const timer = setTimeout(() => reject(new Error(`${bot.username} still connected after ${timeoutMs} ms`)), timeoutMs)
+      bot.once('end', () => { clearTimeout(timer); resolve() })
+    })
+  }
+
+  /** Disconnects a bot and resolves once it has left. */
+  async leave (bot) {
+    const gone = this.disconnected(bot, 10_000)
+    bot.quit()
+    await gone
+    this.bots = this.bots.filter((b) => b !== bot)
   }
 
   /** Disconnects every bot and stops every receiver this scenario started. */

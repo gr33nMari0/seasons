@@ -17,6 +17,10 @@ import java.util.Set;
  * @param autoEndStarted whether {@code schedule.autoEnd} already started the countdown for this
  *     planned end, so a cancelled automatic countdown doesn't start again
  * @param countdownInterrupted when a restart cancelled a running countdown, until the next end
+ * @param initSeason the season {@code /season init} recorded as already in progress, if any; a
+ *     player with no record who played before then counts as having played it
+ * @param launchApplied whether this season's launch finished its world changes (spawn, dragon flag,
+ *     deaths objective); a launch cut short by a crash finishes them at startup
  */
 public record SeasonState(
     int season,
@@ -27,7 +31,9 @@ public record SeasonState(
     boolean autoEndStarted,
     Optional<Instant> launchedAt,
     Optional<Instant> homecomingAt,
-    Optional<Instant> countdownInterrupted) {
+    Optional<Instant> countdownInterrupted,
+    Optional<Integer> initSeason,
+    boolean launchApplied) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
   }
@@ -43,7 +49,58 @@ public record SeasonState(
         false,
         launchedAt,
         Optional.empty(),
-        Optional.empty());
+        Optional.empty(),
+        Optional.empty(),
+        launchedAt.isEmpty());
+  }
+
+  /** The state {@code /season init} records. */
+  public static SeasonState init(int season) {
+    SeasonState started = start(season, Stage.OPEN, Optional.empty());
+    return new SeasonState(
+        season,
+        started.phase(),
+        Optional.empty(),
+        Optional.empty(),
+        Set.of(),
+        false,
+        Optional.empty(),
+        Optional.empty(),
+        Optional.empty(),
+        Optional.of(season),
+        true);
+  }
+
+  /** A season launched from this one's Intermission, keeping what it needs to remember. */
+  public SeasonState next(Instant launchedAt) {
+    SeasonState started = start(season + 1, Stage.FRONTIER, Optional.of(launchedAt));
+    return new SeasonState(
+        started.season(),
+        started.phase(),
+        Optional.empty(),
+        Optional.empty(),
+        Set.of(),
+        false,
+        Optional.of(launchedAt),
+        Optional.empty(),
+        Optional.empty(),
+        initSeason,
+        false);
+  }
+
+  public SeasonState withLaunchApplied() {
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        true);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -56,7 +113,9 @@ public record SeasonState(
         autoEndStarted,
         launchedAt,
         homecomingAt,
-        countdownInterrupted);
+        countdownInterrupted,
+        initSeason,
+        launchApplied);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -70,7 +129,9 @@ public record SeasonState(
         false,
         launchedAt,
         homecomingAt,
-        countdownInterrupted);
+        countdownInterrupted,
+        initSeason,
+        launchApplied);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -83,7 +144,9 @@ public record SeasonState(
         autoEndStarted,
         launchedAt,
         homecomingAt,
-        countdownInterrupted);
+        countdownInterrupted,
+        initSeason,
+        launchApplied);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -96,7 +159,9 @@ public record SeasonState(
         true,
         launchedAt,
         homecomingAt,
-        countdownInterrupted);
+        countdownInterrupted,
+        initSeason,
+        launchApplied);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -109,7 +174,9 @@ public record SeasonState(
         autoEndStarted,
         launchedAt,
         Optional.of(at),
-        countdownInterrupted);
+        countdownInterrupted,
+        initSeason,
+        launchApplied);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -122,6 +189,8 @@ public record SeasonState(
         autoEndStarted,
         launchedAt,
         homecomingAt,
-        at);
+        at,
+        initSeason,
+        launchApplied);
   }
 }

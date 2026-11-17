@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core.config;
 
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.Position;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -253,7 +254,14 @@ public final class ConfigLoader {
             continue;
           }
         }
-        seasons.put(season, new SeasonFile(season, plannedEnd));
+        Optional<Position> spawn;
+        try {
+          spawn = spawn(node.node("spawn"));
+        } catch (IllegalArgumentException e) {
+          problems.add(ConfigProblem.atPath(name, "spawn", Objects.requireNonNull(e.getMessage())));
+          continue;
+        }
+        seasons.put(season, new SeasonFile(season, plannedEnd, spawn));
       } catch (ParsingException e) {
         problems.add(syntax(name, e));
       } catch (IOException e) {
@@ -261,6 +269,34 @@ public final class ConfigLoader {
       }
     }
     return seasons;
+  }
+
+  /**
+   * A spawn written as {@code { dimension: minecraft:overworld, pos: [x, y, z], yaw: 180 }}, or
+   * none if the key is missing.
+   */
+  static Optional<Position> spawn(ConfigurationNode node) {
+    if (node.virtual() || node.isNull()) {
+      return Optional.empty();
+    }
+    String dimension = node.node("dimension").getString("minecraft:overworld");
+    if (!dimension.matches("[a-z0-9_.-]+:[a-z0-9_./-]+")) {
+      throw new IllegalArgumentException("'" + dimension + "' is not a dimension id");
+    }
+    List<? extends ConfigurationNode> pos = node.node("pos").childrenList();
+    if (pos.size() != 3) {
+      throw new IllegalArgumentException("pos needs three numbers, [x, y, z]");
+    }
+    double[] xyz = new double[3];
+    for (int i = 0; i < 3; i++) {
+      Object raw = pos.get(i).raw();
+      if (!(raw instanceof Number number)) {
+        throw new IllegalArgumentException("pos needs three numbers, [x, y, z]");
+      }
+      xyz[i] = number.doubleValue();
+    }
+    float yaw = (float) node.node("yaw").getDouble(0);
+    return Optional.of(new Position(dimension, xyz[0], xyz[1], xyz[2], yaw, 0f));
   }
 
   /** Rules a parsed config must also meet. */

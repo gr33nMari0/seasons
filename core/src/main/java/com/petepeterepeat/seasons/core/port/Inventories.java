@@ -1,14 +1,41 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.port;
 
+import java.util.List;
+
 /** Reads, clears and restores what a player carries, as neutral item records. */
 public interface Inventories {
   /** Copies everything the player carries. Call on the player's thread. */
   InventorySnapshot snapshot(PlayerId player);
 
-  /** Empties inventory, armour, off hand, cursor, crafting grid and ender chest. */
-  void clear(PlayerId player);
+  /**
+   * Returns the cursor and crafting-grid items to the inventory, then closes any open menu. Items
+   * with no room left stay where they are, on the player, and the menu stays open so closing it
+   * can't drop them; {@link #clear} takes them off later. Nothing leaves the player here.
+   *
+   * @return the items left on the cursor and grid, as {@link #loose} would
+   */
+  List<NeutralItem> settle(PlayerId player);
+
+  /** What is on the player's cursor and crafting grid right now. */
+  List<NeutralItem> loose(PlayerId player);
+
+  /**
+   * Empties inventory, armour, off hand, cursor and crafting grid, and the ender chest if asked,
+   * then closes any open menu.
+   */
+  void clear(PlayerId player, boolean enderChest);
 
   /** Puts a snapshot back into the player's slots, replacing what is there. */
   void restore(PlayerId player, InventorySnapshot snapshot);
+
+  /**
+   * Deletes every item tagged as archived from the player's inventory and ender chest.
+   *
+   * @return what was deleted, such as "3 × minecraft:stone"
+   */
+  List<String> purgeArchived(PlayerId player);
+
+  /** The game's data version, which items written now carry as {@code DataVersion}. */
+  int dataVersion();
 }
