@@ -373,6 +373,11 @@ public final class SeasonService {
     return state.isPresent() && snapshot.season(state.get().season()).isEmpty();
   }
 
+  /** Changes the decorating window, and saves it. Nothing happens before {@code /season init}. */
+  public void updateDecorating(java.util.function.UnaryOperator<Decorating> change) {
+    state.ifPresent(current -> update(current.withDecorating(change.apply(current.decorating()))));
+  }
+
   private Transition apply(SeasonEvent event) {
     Transition transition = SeasonMachine.apply(state, event, clock.instant());
     if (transition instanceof Changed changed) {

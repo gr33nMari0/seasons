@@ -21,6 +21,7 @@ import java.util.Set;
  *     player with no record who played before then counts as having played it
  * @param launchApplied whether this season's launch finished its world changes (spawn, dragon flag,
  *     deaths objective); a launch cut short by a crash finishes them at startup
+ * @param decorating the decorating window and the cells still open after archiving
  */
 public record SeasonState(
     int season,
@@ -33,7 +34,8 @@ public record SeasonState(
     Optional<Instant> homecomingAt,
     Optional<Instant> countdownInterrupted,
     Optional<Integer> initSeason,
-    boolean launchApplied) {
+    boolean launchApplied,
+    Decorating decorating) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
   }
@@ -51,7 +53,8 @@ public record SeasonState(
         Optional.empty(),
         Optional.empty(),
         Optional.empty(),
-        launchedAt.isEmpty());
+        launchedAt.isEmpty(),
+        Decorating.NONE);
   }
 
   /** The state {@code /season init} records. */
@@ -68,7 +71,8 @@ public record SeasonState(
         Optional.empty(),
         Optional.empty(),
         Optional.of(season),
-        true);
+        true,
+        Decorating.NONE);
   }
 
   /** A season launched from this one's Intermission, keeping what it needs to remember. */
@@ -85,7 +89,8 @@ public record SeasonState(
         Optional.empty(),
         Optional.empty(),
         initSeason,
-        false);
+        false,
+        Decorating.NONE);
   }
 
   public SeasonState withLaunchApplied() {
@@ -100,7 +105,8 @@ public record SeasonState(
         homecomingAt,
         countdownInterrupted,
         initSeason,
-        true);
+        true,
+        decorating);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -115,7 +121,8 @@ public record SeasonState(
         homecomingAt,
         countdownInterrupted,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -131,7 +138,8 @@ public record SeasonState(
         homecomingAt,
         countdownInterrupted,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -146,7 +154,8 @@ public record SeasonState(
         homecomingAt,
         countdownInterrupted,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -161,7 +170,8 @@ public record SeasonState(
         homecomingAt,
         countdownInterrupted,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -176,7 +186,8 @@ public record SeasonState(
         Optional.of(at),
         countdownInterrupted,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -191,6 +202,23 @@ public record SeasonState(
         homecomingAt,
         at,
         initSeason,
-        launchApplied);
+        launchApplied,
+        decorating);
+  }
+
+  public SeasonState withDecorating(Decorating next) {
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        launchApplied,
+        next);
   }
 }
