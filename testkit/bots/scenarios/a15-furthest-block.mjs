@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// A15 (M1 part 2's half; blocks placed in the Hall not counting comes with the Hall in part 3).
-// Placing a block 30,000 blocks from spawn updates the player's furthest block, which
-// /season status shows as the season's furthest from 0,0.
+// A15. Placing a block 30,000 blocks from spawn updates the player's furthest block, which
+// /season status shows as the season's furthest from 0,0; placing one in the Hall doesn't.
 //
 // TODO: place the block from the bot itself once Mineflayer speaks the server's version; through
 // ViaBackwards the server ignores its placement (docs/adr/0001).
 import { assert } from '../lib/context.mjs'
+import { buildGallery, cellOf } from '../lib/hall.mjs'
 
 export default {
   name: 'a15-furthest-block',
@@ -17,6 +17,13 @@ export default {
 
     await place(ctx, admin, 5, 0)
     await ctx.eventually(() => ctx.command(admin, '/season status', /^Furthest block from 0,0 this season: 5 blocks, by Builder at 5, 0$/))
+
+    // Building in their own cell in the Hall is allowed during decorating, but doesn't count.
+    const cells = await buildGallery(ctx, admin, { cells: 2, x: 200, z: 0 })
+    await ctx.command(admin, '/season decorate open', /^The decorating window for Season 2 is open: /)
+    const cell = await cellOf(ctx, admin, 'season-2', cells, 'Builder')
+    await place(ctx, admin, cell.x0 + 1, cell.z0 + 3)
+    await ctx.command(admin, '/season status', /^Furthest block from 0,0 this season: 5 blocks, by Builder at 5, 0$/)
 
     await place(ctx, admin, 30000, 0)
     await ctx.eventually(() => ctx.command(admin, '/season status', /^Furthest block from 0,0 this season: 30000 blocks, by Builder at 30000, 0$/))

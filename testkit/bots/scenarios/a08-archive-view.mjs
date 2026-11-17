@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A8. Every click type in the archive view (left, right, shift, number keys, off-hand swap, drop,
 // drag, double-click, creative clone) moves nothing, and the client is resynced. The view pages.
-//
-// TODO(M1 part 3): open the view through an archive anchor the bot clicks, instead of through
-// the scenario hooks (docs/adr/0003-scenario-hooks.md).
+// The view opens from the viewer's archive anchor in their cell.
 import itemLoader from 'prismarine-item'
 import { assert, sleep } from '../lib/context.mjs'
 import { GEAR_ITEMS, GEAR_STACKS } from '../lib/gear.mjs'
+import { buildGallery, cellOf, use } from '../lib/hall.mjs'
 
 const VIEW_SLOTS = 45
 const FIRST_OWN_SLOT = 54
@@ -21,6 +20,9 @@ export default {
     // With the ender chest archived too, the archive has a second page.
     ctx.writeFile('plugins/Seasons/config.yml', 'schema-version: 1\nresets:\n  enderChest: archive\n')
     await ctx.command(admin, '/season reload', /^Reloaded /)
+    const cells = await buildGallery(ctx, admin, { cells: 2 })
+    await ctx.command(admin, '/season decorate open', /^The decorating window for Season 2 is open: 2 players have cells\.$/)
+    const cell = await cellOf(ctx, admin, 'season-2', cells, 'Viewer')
     await ctx.command(admin, '/item replace entity Viewer hotbar.0 with minecraft:diamond_sword', /^Replaced \d+ slot/)
     await ctx.command(admin, '/item replace entity Viewer hotbar.1 with minecraft:dirt 64', /^Replaced \d+ slot/)
     await ctx.command(admin, '/item replace entity Viewer inventory.4 with minecraft:torch 32', /^Replaced \d+ slot/)
@@ -35,7 +37,7 @@ export default {
     // Something of the viewer's own, so clicks in their inventory have something to move.
     await ctx.command(admin, '/item replace entity Viewer hotbar.2 with minecraft:dirt 10', /^Replaced \d+ slot/)
 
-    const window = await openView(ctx, admin, viewer)
+    const window = await openView(ctx, admin, viewer, cell)
     assert(window.slots.length >= 90, `a 54-slot view, saw ${window.slots.length} slots`)
     const before = snapshot(window)
     assert(before.view.filter(Boolean).length === GEAR_STACKS, `page 1 shows the gear: ${JSON.stringify(before.view)}`)
@@ -81,10 +83,12 @@ export default {
   }
 }
 
-async function openView (ctx, admin, viewer) {
+async function openView (ctx, admin, viewer, cell) {
   const opened = new Promise((resolve) => viewer.once('windowOpen', resolve))
-  await ctx.command(admin, '/scenario open-archive Viewer Viewer 2', /^Opened /)
-  return opened
+  await use(ctx, admin, 'Viewer', cell.archive)
+  const window = await opened
+  assert(/Viewer · Season 2/.test(JSON.stringify(window.title)), `the view is titled for the archive: ${JSON.stringify(window.title)}`)
+  return window
 }
 
 /** The item names and counts in the view's item slots and the viewer's own slots. */
