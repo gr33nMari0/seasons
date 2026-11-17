@@ -13,20 +13,23 @@ final class PaperWorld implements World {
 
   @Override
   public Position spawn(String dimension) {
-    return PaperPositions.toPosition(
-        PaperPositions.world(dimension)
-            .orElseThrow(() -> new IllegalArgumentException("No dimension " + dimension))
-            .getSpawnLocation());
+    return PaperPositions.toPosition(world(dimension).getSpawnLocation());
+  }
+
+  @Override
+  public void setSpawn(Position position) {
+    world(position.dimension()).setSpawnLocation(PaperPositions.toLocation(position));
   }
 
   @Override
   public CompletableFuture<Void> loadChunk(Position position) {
-    org.bukkit.World world =
-        PaperPositions.world(position.dimension())
-            .orElseThrow(
-                () -> new IllegalArgumentException("No dimension " + position.dimension()));
-    return world
+    return world(position.dimension())
         .getChunkAtAsync(position.blockX() >> 4, position.blockZ() >> 4, true)
         .thenApply(chunk -> null);
+  }
+
+  private static org.bukkit.World world(String dimension) {
+    return PaperPositions.world(dimension)
+        .orElseThrow(() -> new IllegalArgumentException("No dimension " + dimension));
   }
 }

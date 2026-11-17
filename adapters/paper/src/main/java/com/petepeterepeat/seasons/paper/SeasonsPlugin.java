@@ -3,14 +3,16 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.Seasons;
+import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
-import com.petepeterepeat.seasons.core.season.StubArchiver;
+import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.integrations.discord.DiscordWebhooks;
 import java.time.Clock;
 import java.util.EnumSet;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -42,15 +44,17 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperText text = new PaperText();
     PaperItemCodec codec = new PaperItemCodec();
     PaperPlayers players = new PaperPlayers(server, text);
-    PaperEvents events = new PaperEvents(text);
-    PaperMenus menus = new PaperMenus(server, players, codec, text);
+    NamespacedKey archived = new NamespacedKey(this, "archived");
+    PaperInventories inventories = new PaperInventories(players, codec, archived);
+    PaperEvents events = new PaperEvents(this, text, inventories);
+    PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperStorage storage = new PaperStorage(this, server);
     Platform platform =
         new Platform(
             "Paper",
             CAPABILITIES,
             players,
-            new PaperInventories(players, codec),
+            inventories,
             new PaperAdvancements(server, players),
             new PaperWorld(),
             new PaperEntities(server),
@@ -67,19 +71,34 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(menus, this);
 
+    // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
+    Optional<ScenarioHooks> hooks =
+        Boolean.getBoolean(ScenarioHooks.PROPERTY)
+            ? Optional.of(new ScenarioHooks(() -> Runtime.getRuntime().halt(0)))
+            : Optional.empty();
     Seasons started =
         new Seasons(
             platform,
             getPluginMeta().getVersion(),
             Clock.systemUTC(),
             new DiscordWebhooks(),
-            // M1 part 2 replaces this with real archiving.
-            new StubArchiver(),
+            // M1 part 3 fills in the Hall of Fame.
+            Hall.none(),
             System.getenv(),
-            new SerialWriter());
+            new SerialWriter(),
+            hooks);
     started.start();
     seasons = started;
     server.getServicesManager().register(SeasonsApi.class, started, this, ServicePriority.Normal);
+    hooks.ifPresent(scenario -> {
+      getSLF4JLogger()
+          .warn(
+              "Scenario hooks are on (-D{}=true). Never run a real server like this.",
+              ScenarioHooks.PROPERTY);
+      server
+          .getServicesManager()
+          .register(ScenarioHooks.class, scenario, this, ServicePriority.Normal);
+    });
   }
 
   @Override

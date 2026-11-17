@@ -10,9 +10,11 @@ import com.petepeterepeat.seasons.core.port.ProgressBar;
 import java.util.Map;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +23,8 @@ import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 class PaperPortsTest {
+  private static final NamespacedKey ARCHIVED = new NamespacedKey("seasons", "archived");
+
   private ServerMock server;
   private PaperText text;
   private PaperPlayers players;
@@ -77,10 +81,50 @@ class PaperPortsTest {
     chest.addItem(ItemStack.of(Material.DIAMOND));
     alex.openInventory(chest);
 
-    new PaperInventories(players, new PaperItemCodec()).clear(new PlayerId(alex.getUniqueId()));
+    inventories().clear(new PlayerId(alex.getUniqueId()), true);
 
     assertThat(alex.getInventory().isEmpty()).isTrue();
     assertThat(chest.contains(Material.DIAMOND)).isTrue();
+  }
+
+  @Test
+  void theEnderChestIsClearedOnlyWhenAsked() {
+    PlayerMock alex = server.addPlayer("Alex");
+    alex.getEnderChest().addItem(ItemStack.of(Material.EMERALD, 5));
+    alex.openInventory(server.createInventory(null, InventoryType.CHEST));
+
+    inventories().clear(new PlayerId(alex.getUniqueId()), false);
+    assertThat(alex.getEnderChest().contains(Material.EMERALD)).isTrue();
+    inventories().clear(new PlayerId(alex.getUniqueId()), true);
+    assertThat(alex.getEnderChest().isEmpty()).isTrue();
+  }
+
+  @Test
+  void settlingEmptiesTheCursorIntoOverflow() {
+    PlayerMock alex = server.addPlayer("Alex");
+    alex.setItemOnCursor(ItemStack.of(Material.TORCH, 3));
+
+    assertThat(inventories().settle(new PlayerId(alex.getUniqueId()))).hasSize(1);
+    assertThat(alex.getItemOnCursor().isEmpty()).isTrue();
+  }
+
+  @Test
+  void archivedCopiesArePurgedAndDescribed() {
+    PlayerMock alex = server.addPlayer("Alex");
+    ItemStack tagged = ItemStack.of(Material.STONE, 3);
+    tagged.editMeta(
+        meta -> meta.getPersistentDataContainer().set(ARCHIVED, PersistentDataType.BOOLEAN, true));
+    alex.getInventory().addItem(tagged, ItemStack.of(Material.DIRT, 5));
+    alex.openInventory(server.createInventory(null, InventoryType.CHEST));
+
+    assertThat(inventories().purgeArchived(new PlayerId(alex.getUniqueId())))
+        .containsExactly("3 × minecraft:stone");
+    assertThat(alex.getInventory().contains(Material.STONE)).isFalse();
+    assertThat(alex.getInventory().contains(Material.DIRT)).isTrue();
+  }
+
+  private PaperInventories inventories() {
+    return new PaperInventories(players, new PaperItemCodec(), ARCHIVED);
   }
 
   @Test
