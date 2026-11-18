@@ -72,6 +72,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             new PaperImports(this, server, codec));
 
     server.getPluginManager().registerEvents(events, this);
+    server.getPluginManager().registerEvents(events.hallGuard(), this);
     server.getPluginManager().registerEvents(menus, this);
     server.getPluginManager().registerEvents(advancements, this);
 

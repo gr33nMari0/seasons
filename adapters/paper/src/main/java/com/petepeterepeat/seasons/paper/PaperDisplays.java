@@ -8,6 +8,7 @@ import com.petepeterepeat.seasons.core.port.Figure;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Position;
 import io.papermc.paper.datacomponent.item.ResolvableProfile;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mannequin;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.EntityEquipment;
@@ -151,16 +153,8 @@ final class PaperDisplays implements Displays {
     if (world.isEmpty()) {
       return 0;
     }
-    BoundingBox box =
-        new BoundingBox(
-            min.blockX(),
-            min.blockY(),
-            min.blockZ(),
-            max.blockX() + 1,
-            max.blockY() + 1,
-            max.blockZ() + 1);
     int removed = 0;
-    for (Entity entity : world.get().getNearbyEntities(box)) {
+    for (Entity entity : world.get().getNearbyEntities(box(min, max))) {
       String tag = entity.getPersistentDataContainer().get(tagKey, PersistentDataType.STRING);
       if (tag != null && tag.startsWith(tagPrefix)) {
         entity.remove();
@@ -170,10 +164,59 @@ final class PaperDisplays implements Displays {
     return removed;
   }
 
+  @Override
+  public List<Shown> tagged(Position min, Position max) {
+    Optional<World> world = PaperPositions.world(min.dimension());
+    if (world.isEmpty()) {
+      return List.of();
+    }
+    List<Shown> shown = new ArrayList<>();
+    for (Entity entity : world.get().getNearbyEntities(box(min, max))) {
+      tagOf(entity)
+          .ifPresent(tag ->
+              shown.add(
+                  new Shown(
+                      entity.getUniqueId(), tag, PaperPositions.toPosition(entity.getLocation()))));
+    }
+    return shown;
+  }
+
+  @Override
+  public boolean wears(UUID figure, List<Optional<NeutralItem>> equipment) {
+    if (!(server.getEntity(figure) instanceof LivingEntity living)) {
+      return false;
+    }
+    EntityEquipment worn = living.getEquipment();
+    if (worn == null) {
+      return false;
+    }
+    for (int i = 0; i < FIGURE_SLOTS.size(); i++) {
+      ItemStack expected = copy(i < equipment.size() ? equipment.get(i) : Optional.empty());
+      ItemStack actual = worn.getItem(FIGURE_SLOTS.get(i));
+      if (expected.isEmpty() != actual.isEmpty()
+          || (!expected.isEmpty()
+              && (!expected.isSimilar(actual) || expected.getAmount() != actual.getAmount()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /** The tag a display was spawned with, if it is one of Seasons' own. */
   Optional<String> tagOf(Entity entity) {
     return Optional.ofNullable(
         entity.getPersistentDataContainer().get(tagKey, PersistentDataType.STRING));
+  }
+
+  /** The box of whole blocks between two corners. */
+  private static BoundingBox box(Position min, Position max) {
+    return new BoundingBox(
+        min.blockX(),
+        min.blockY(),
+        min.blockZ(),
+        max.blockX() + 1,
+        max.blockY() + 1,
+        max.blockZ() + 1);
   }
 
   private void tag(Entity entity, String tag) {
