@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.zone;
 
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
@@ -11,6 +12,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.SeasonFiles;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.Transition;
@@ -26,7 +28,8 @@ import org.slf4j.LoggerFactory;
 /**
  * {@code /season zone}, {@code /season unlock} and {@code /season lock}. Zone edits go to the
  * season file zone commands edit (see {@link Zones#editingSeason}), then every file is loaded again
- * so the edit is in force at once, as {@code /season spawn set} does.
+ * so the edit is in force at once, as {@code /season spawn set} does. Every edit that takes is
+ * audited as a config change: the path, the old value, the new one and who.
  */
 public final class ZoneCommands {
   /** Permission for the zone commands, with the other config commands. */
@@ -44,6 +47,7 @@ public final class ZoneCommands {
   private final SerialWriter writer;
   private final SeasonService seasons;
   private final Zones zones;
+  private final AuditLog audit;
   private final Path backups;
 
   /**
@@ -56,6 +60,7 @@ public final class ZoneCommands {
       SerialWriter writer,
       SeasonService seasons,
       Zones zones,
+      AuditLog audit,
       Path backups) {
     this.platform = platform;
     this.config = config;
@@ -63,6 +68,7 @@ public final class ZoneCommands {
     this.writer = writer;
     this.seasons = seasons;
     this.zones = zones;
+    this.audit = audit;
     this.backups = backups;
   }
 
@@ -171,6 +177,7 @@ public final class ZoneCommands {
     edit(
         source,
         number,
+        new Change("zones." + id, NONE, summary(zone)),
         file -> SeasonFiles.writeZone(file, backups, number, zone),
         () ->
             source.reply(
@@ -239,7 +246,13 @@ public final class ZoneCommands {
       return;
     }
     change(
-        source, arguments.string("id"), zone -> zone.withMode(mode.get()), "zone.mode", mode.get());
+        source,
+        arguments.string("id"),
+        "mode",
+        zone -> zone.mode().id(),
+        zone -> zone.withMode(mode.get()),
+        "zone.mode",
+        mode.get());
   }
 
   void after(CommandSource source, Arguments arguments) {
@@ -251,6 +264,8 @@ public final class ZoneCommands {
     change(
         source,
         arguments.string("id"),
+        "afterUnlock",
+        zone -> zone.afterUnlock().id(),
         zone -> zone.withAfterUnlock(mode.get()),
         "zone.after",
         mode.get());
@@ -259,6 +274,8 @@ public final class ZoneCommands {
   private void change(
       CommandSource source,
       String id,
+      String key,
+      java.util.function.Function<Zone, String> value,
       java.util.function.UnaryOperator<Zone> how,
       String doneKey,
       ZoneMode mode) {
@@ -272,13 +289,15 @@ public final class ZoneCommands {
     edit(
         source,
         season,
+        new Change("zones." + id + "." + key, value.apply(zone.get()), value.apply(changed)),
         file -> SeasonFiles.writeZone(file, backups, season, changed),
         () -> source.reply(messages().get(doneKey, "id", id, "mode", mode.id())));
   }
 
   void remove(CommandSource source, Arguments arguments) {
     String id = arguments.string("id");
-    if (zones.editingZone(id).isEmpty()) {
+    Optional<Zone> zone = zones.editingZone(id);
+    if (zone.isEmpty()) {
       source.reply(messages().get("zone.unknown", "id", id));
       return;
     }
@@ -286,6 +305,7 @@ public final class ZoneCommands {
     edit(
         source,
         season,
+        new Change("zones." + id, summary(zone.get()), NONE),
         file -> SeasonFiles.removeZone(file, backups, season, id),
         () -> source.reply(messages().get("zone.removed", "id", id)));
   }
@@ -343,7 +363,7 @@ public final class ZoneCommands {
   void unlock(CommandSource source, Arguments arguments) {
     String target = arguments.string("target");
     if (target.equals(Zone.HOMECOMING)) {
-      Transition transition = zones.homecoming();
+      Transition transition = zones.homecoming(actor(source));
       source.reply(
           transition instanceof Transition.Refused refused
               ? messages().get(refused.messageKey(), "season", season())
@@ -359,7 +379,7 @@ public final class ZoneCommands {
 
   private void toggle(CommandSource source, String id, boolean open) {
     Messages messages = messages();
-    switch (zones.set(id, open)) {
+    switch (zones.set(id, open, actor(source))) {
       case DONE ->
           source.reply(
               messages.get(
@@ -385,8 +405,17 @@ public final class ZoneCommands {
     void apply(Path file) throws java.io.IOException;
   }
 
-  /** Writes a season file on the writer thread, loads every file again and swaps them in. */
-  private void edit(CommandSource source, int season, FileEdit edit, Runnable done) {
+  /** What an edit changes, for the audit log: a key path in the season file, and its values. */
+  private record Change(String path, String before, String after) {}
+
+  /** The value of a key that isn't there, before an add or after a remove. */
+  private static final String NONE = "none";
+
+  /**
+   * Writes a season file on the writer thread, loads every file again and swaps them in, then
+   * audits the change.
+   */
+  private void edit(CommandSource source, int season, Change change, FileEdit edit, Runnable done) {
     Path file = loader.seasonFile(season);
     var _ =
         writer
@@ -412,8 +441,34 @@ public final class ZoneCommands {
                       }
                       config.set(result.snapshot().get());
                       seasons.reloaded(result.snapshot().get());
+                      audit.record(
+                          actor(source),
+                          "config",
+                          "seasons/" + season + ".yml " + change.path(),
+                          "ok",
+                          change.before() + " -> " + change.after());
                       done.run();
                     }));
+  }
+
+  /** Who ran a command, as the audit log names them. */
+  private String actor(CommandSource source) {
+    return source
+        .player()
+        .flatMap(id -> platform.players().find(id))
+        .map(PlayerRef::name)
+        .orElse(messages().text("config.console-name"));
+  }
+
+  /** A zone in one line, for the audit log. */
+  private String summary(Zone zone) {
+    return describe(zone.shape())
+        + " in "
+        + zone.dimension()
+        + ", "
+        + zone.mode().id()
+        + " until unlocked, then "
+        + zone.afterUnlock().id();
   }
 
   private Optional<SeasonFile> file(int season) {

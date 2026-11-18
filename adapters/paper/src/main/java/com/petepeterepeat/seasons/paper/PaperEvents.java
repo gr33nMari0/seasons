@@ -35,6 +35,7 @@ import org.bukkit.block.data.type.NoteBlock;
 import org.bukkit.block.data.type.Repeater;
 import org.bukkit.block.data.type.RespawnAnchor;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.Cushion;
 import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.Entity;
@@ -42,6 +43,7 @@ import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Minecart;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.Vehicle;
@@ -67,6 +69,7 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -77,6 +80,7 @@ import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.vehicle.VehicleDamageEvent;
 import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
@@ -282,7 +286,11 @@ final class PaperEvents implements Events, Listener {
       report(Optional.of(id(player)), ON_THE_GROUND, List.of(found));
       return;
     }
-    apply(event, player, new Intent.PickupItem(id(player)));
+    apply(
+        event,
+        player,
+        new Intent.PickupItem(
+            id(player), PaperPositions.toPosition(event.getItem().getLocation())));
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -388,20 +396,22 @@ final class PaperEvents implements Events, Listener {
       return;
     }
     Position at = PaperPositions.toPosition(entity.getLocation());
+    // A player's hit on an entity, by hand or with a projectile, is the Hall's rules' or the
+    // zones' to decide, wherever it is: from a zone's edge it can knock an item out of a frame or
+    // break an armour stand. Minecarts and boats are decided as vehicles (onVehicleDamage).
+    Player attacker =
+        event instanceof EntityDamageByEntityEvent byEntity
+            ? responsible(byEntity.getDamager())
+            : null;
+    if (attacker != null && !(entity instanceof Player) && !isVehicle(entity)) {
+      apply(
+          event,
+          attacker,
+          new Intent.HurtEntity(id(attacker), at, entity.getType().getKey().asString()));
+      return;
+    }
     if (hallGuard.guard().protects(at)) {
-      // Nothing in the Hall is hurt but by /kill and the void; a player's hit on an entity is
-      // the Hall's rules' to decide.
-      Player attacker =
-          event instanceof EntityDamageByEntityEvent byEntity
-              ? responsible(byEntity.getDamager())
-              : null;
-      if (attacker != null && !(entity instanceof Player)) {
-        apply(
-            event,
-            attacker,
-            new Intent.HurtEntity(id(attacker), at, entity.getType().getKey().asString()));
-        return;
-      }
+      // Nothing in the Hall is hurt but by /kill and the void.
       if (event.getCause() != EntityDamageEvent.DamageCause.KILL
           && event.getCause() != EntityDamageEvent.DamageCause.VOID) {
         event.setCancelled(true);
@@ -411,6 +421,44 @@ final class PaperEvents implements Events, Listener {
     if (entity instanceof Player player) {
       apply(event, player, new Intent.TakeDamage(id(player)));
     }
+  }
+
+  /** A player's hit on a minecart or boat, which can break it and spill what it carries. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onVehicleDamage(VehicleDamageEvent event) {
+    Player attacker = responsible(event.getAttacker());
+    if (attacker != null) {
+      Vehicle vehicle = event.getVehicle();
+      apply(
+          event,
+          attacker,
+          new Intent.HurtEntity(
+              id(attacker),
+              PaperPositions.toPosition(vehicle.getLocation()),
+              vehicle.getType().getKey().asString()));
+    }
+  }
+
+  /** A minecart or boat: damaged through {@link VehicleDamageEvent}, not as a living thing. */
+  static boolean isVehicle(Entity entity) {
+    return entity instanceof Minecart || entity instanceof Boat;
+  }
+
+  /** Reeling in a hooked entity pulls it, or an item, towards the player: using it. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onFish(PlayerFishEvent event) {
+    Entity caught = event.getCaught();
+    if (event.getState() != PlayerFishEvent.State.CAUGHT_ENTITY || caught == null) {
+      return;
+    }
+    Player player = event.getPlayer();
+    apply(
+        event,
+        player,
+        new Intent.UseEntity(
+            id(player),
+            PaperPositions.toPosition(caught.getLocation()),
+            caught.getType().getKey().asString()));
   }
 
   /** Only when the block changes, so the Hall can tell crossing its edge from standing about. */
@@ -438,6 +486,8 @@ final class PaperEvents implements Events, Listener {
             : switch (event.getCause()) {
               case ENDER_PEARL -> Intent.TeleportKind.PEARL;
               case CONSUMABLE_EFFECT -> Intent.TeleportKind.CHORUS;
+              // The game's portal trip, sent to the portal it found at the other end.
+              case NETHER_PORTAL, END_PORTAL, END_GATEWAY -> Intent.TeleportKind.PORTAL;
               default -> Intent.TeleportKind.OTHER;
             };
     apply(

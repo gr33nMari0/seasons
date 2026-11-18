@@ -137,7 +137,11 @@ public final class Seasons implements SeasonsApi {
     Path world = platform.storage().worldDataDirectory();
     Executor serverThread = platform.scheduler()::runGlobal;
     ConfigLoader loader =
-        new ConfigLoader(platform.storage().configDirectory(), world, environment);
+        new ConfigLoader(
+            platform.storage().configDirectory(),
+            world,
+            environment,
+            platform.world()::dimensionExists);
     List<ConfigProblem> startupProblems = loadConfig(loader);
 
     Journal journal = null;
@@ -246,14 +250,7 @@ public final class Seasons implements SeasonsApi {
     service = seasons;
     Zones zoning =
         new Zones(
-            platform,
-            config,
-            announcer,
-            new HallAudit(audit, clock),
-            clock,
-            halls::inHall,
-            entry::spawn,
-            hold::isHeld);
+            platform, config, announcer, audit, clock, halls::inHall, entry::spawn, hold::isHeld);
     zones = zoning;
     zoning.bind(seasons);
     seasons.start();
@@ -347,6 +344,7 @@ public final class Seasons implements SeasonsApi {
                         writer,
                         seasons,
                         zoning,
+                        audit,
                         world.resolve("backups").resolve("seasons"))
                     .nodes()));
     platform

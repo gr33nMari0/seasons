@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -64,18 +65,35 @@ public final class ConfigLoader {
   private final Path seasonsDirectory;
   private final Path galleriesDirectory;
   private final Map<String, String> environment;
+  private final Predicate<String> dimensionExists;
 
   /**
+   * A loader that takes every dimension id as one the server has.
+   *
    * @param configDirectory {@code plugins/Seasons}
    * @param worldDataDirectory {@code <world>/seasons}
    * @param environment environment variables, for the webhook overrides
    */
   public ConfigLoader(
       Path configDirectory, Path worldDataDirectory, Map<String, String> environment) {
+    this(configDirectory, worldDataDirectory, environment, dimension -> true);
+  }
+
+  /**
+   * @param dimensionExists whether the server has a dimension, such as {@code
+   *     minecraft:the_nether}; a zone in one it doesn't have is a problem, since it would lock
+   *     nothing
+   */
+  public ConfigLoader(
+      Path configDirectory,
+      Path worldDataDirectory,
+      Map<String, String> environment,
+      Predicate<String> dimensionExists) {
     this.configDirectory = configDirectory;
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
     this.environment = Map.copyOf(environment);
+    this.dimensionExists = dimensionExists;
   }
 
   /** What one load found. */
@@ -378,6 +396,17 @@ public final class ConfigLoader {
         } catch (ZoneFiles.Invalid e) {
           problems.add(
               ConfigProblem.atPath(name, e.path(), Objects.requireNonNull(e.getMessage())));
+          continue;
+        }
+        Optional<Zone> elsewhere =
+            zones.values().stream().filter(z -> !dimensionExists.test(z.dimension())).findFirst();
+        if (elsewhere.isPresent()) {
+          Zone zone = elsewhere.get();
+          problems.add(
+              ConfigProblem.atPath(
+                  name,
+                  "zones." + zone.id() + ".dimension",
+                  "this server has no dimension " + zone.dimension()));
           continue;
         }
         SeasonFile loaded = new SeasonFile(season, plannedEnd, spawn, zones, homecoming);

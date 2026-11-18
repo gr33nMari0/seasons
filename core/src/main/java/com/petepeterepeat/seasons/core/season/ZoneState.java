@@ -13,7 +13,7 @@ import java.util.Set;
  * wait for.
  *
  * @param unlocked zones switched one at a time, by id: true once unlocked, false once locked again,
- *     whatever their condition or Homecoming says
+ *     whatever their condition says, until Homecoming clears them all
  * @param dragonKilled whether anyone has killed the ender dragon this season
  * @param reachedEnd players who have arrived in the End this season
  */
@@ -32,6 +32,11 @@ public record ZoneState(
     Map<String, Boolean> next = new HashMap<>(unlocked);
     next.put(zone, open);
     return new ZoneState(next, dragonKilled, reachedEnd);
+  }
+
+  /** No zone switched on its own, as at Homecoming, keeping the milestones. */
+  public ZoneState withoutSwitches() {
+    return new ZoneState(Map.of(), dragonKilled, reachedEnd);
   }
 
   public ZoneState withDragonKilled() {

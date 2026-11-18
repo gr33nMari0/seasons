@@ -348,10 +348,10 @@ class HallRulesTest {
   void decoratingOwnersPickUpInTheirCellAndNobodyElseInTheHall() {
     fake.player(alex).position = IN_C1;
     fake.player(kim).position = IN_C1;
-    assertThat(decide(new Intent.PickupItem(alex.id()))).isEqualTo(Decision.allow());
-    assertThat(decide(new Intent.PickupItem(kim.id()))).isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(alex.id(), IN_C1))).isEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(kim.id(), IN_C1))).isNotEqualTo(Decision.allow());
     run("/season decorate close");
-    assertThat(decide(new Intent.PickupItem(alex.id()))).isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(alex.id(), IN_C1))).isNotEqualTo(Decision.allow());
   }
 
   @Test
@@ -366,7 +366,7 @@ class HallRulesTest {
     assertThat(decide(new Intent.BreakBlock(alex.id(), IN_C1)))
         .as("but what they break drops nothing")
         .isEqualTo(Decision.allowWithoutDrops());
-    assertThat(decide(new Intent.PickupItem(alex.id()))).isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(alex.id(), IN_C1))).isNotEqualTo(Decision.allow());
 
     assertThat(text(decide(new Intent.OpenContainer(alex.id(), ALSO_IN_C1))))
         .as("their stash opens as a copy")

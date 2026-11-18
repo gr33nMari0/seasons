@@ -4,6 +4,8 @@ package com.petepeterepeat.seasons.core;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
@@ -131,6 +133,21 @@ class ZonesTest {
 
   private ZoneGuard guard() {
     return java.util.Objects.requireNonNull(fake.zoneGuard);
+  }
+
+  private List<JsonObject> audited(String action) throws IOException {
+    Path file = dir.resolve("world/seasons/audit/2026-11.jsonl");
+    if (!Files.exists(file)) {
+      return List.of();
+    }
+    return Files.readAllLines(file).stream()
+        .map(line -> JsonParser.parseString(line).getAsJsonObject())
+        .filter(entry -> entry.get("action").getAsString().equals(action))
+        .toList();
+  }
+
+  private static String field(JsonObject entry, String name) {
+    return entry.get(name).getAsString();
   }
 
   /** Ten runs of the sweep: every player checked once. */
@@ -425,5 +442,79 @@ class ZonesTest {
         .containsExactly("There's already a zone called tower.");
     assertThat(run("/season zone remove tower").text()).containsExactly("Removed zone tower.");
     assertThat(guard().blocks(Position.of(OVERWORLD, 205, 64, 200))).isFalse();
+  }
+
+  @Test
+  void homecomingOpensZonesLockedAgainOnTheirOwnAndLetsThemBeLockedAfter() {
+    run("/season unlock base");
+    run("/season lock base");
+    assertThat(guard().blocks(INSIDE)).isTrue();
+    run("/season unlock homecoming");
+    assertThat(guard().blocks(INSIDE)).as("Homecoming opens every zone").isFalse();
+    assertThat(run("/season lock base").text())
+        .containsExactly("Zone base is locked again: it is block now.");
+    assertThat(guard().blocks(INSIDE)).isTrue();
+  }
+
+  @Test
+  void anItemLyingInABlockedZoneIsNotPickedUpFromOutsideItsEdge() throws IOException {
+    assertThat(decide(new Intent.PickupItem(pat.id(), INSIDE)))
+        .isEqualTo(new Decision.Deny(Optional.empty()));
+    assertThat(decide(new Intent.PickupItem(pat.id(), OUTSIDE))).isEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(pat.id(), IN_FARM))).isEqualTo(Decision.allow());
+    assertThat(audited("zone-blocked"))
+        .extracting(e -> field(e, "details"))
+        .contains("pick up at 510, 64, 500");
+    run("/season unlock homecoming");
+    assertThat(decide(new Intent.PickupItem(pat.id(), INSIDE))).isEqualTo(Decision.allow());
+  }
+
+  @Test
+  void hittingOrReelingInAnythingInsideFromTheEdgeIsRefused() {
+    for (Intent intent :
+        List.of(
+            new Intent.HurtEntity(pat.id(), INSIDE, "minecraft:item_frame"),
+            new Intent.HurtEntity(pat.id(), INSIDE, "minecraft:armor_stand"),
+            new Intent.HurtEntity(pat.id(), INSIDE, "minecraft:chest_minecart"),
+            new Intent.UseEntity(pat.id(), INSIDE, "minecraft:item"))) {
+      assertThat(decide(intent)).as(intent.toString()).isInstanceOf(Decision.Deny.class);
+    }
+    assertThat(decide(new Intent.HurtEntity(pat.id(), IN_FARM, "minecraft:item_frame")))
+        .isInstanceOf(Decision.Deny.class);
+  }
+
+  @Test
+  void aPlayerArrivingInABlockedZoneThroughAPortalGoesBackAtOnce() {
+    sweepAll();
+    Position nether = Position.of("minecraft:the_nether", 64.5, 70, 62.5);
+    fake.player(pat).position = nether;
+    sweepAll();
+    // The game chose an old portal inside the base as the trip's exit.
+    fake.player(pat).position = INSIDE;
+    java.util.Objects.requireNonNull(fake.milestones).enteredDimension(pat.id(), OVERWORLD);
+    assertThat(fake.player(pat).position).isEqualTo(nether);
+    assertThat(bar(pat)).contains("The base is locked until Homecoming.");
+  }
+
+  @Test
+  void refusedEntriesUnlocksHomecomingAndZoneEditsAreAudited() throws IOException {
+    decide(new Intent.Move(pat.id(), OUTSIDE, INSIDE));
+    decide(new Intent.Teleport(pat.id(), OUTSIDE, INSIDE, Intent.TeleportKind.PEARL));
+    assertThat(audited("zone-blocked"))
+        .extracting(e -> field(e, "target") + ": " + field(e, "details"))
+        .contains("base: walk in at 510, 64, 500", "base: teleport in by pearl at 510, 64, 500");
+
+    run("/season zone mode farm block");
+    run("/season unlock base");
+    run("/season lock base");
+    run("/season unlock homecoming");
+    assertThat(audited("config"))
+        .extracting(e -> field(e, "actor") + " " + field(e, "target") + " " + field(e, "details"))
+        .containsExactly("The console seasons/3.yml zones.farm.mode no-build -> block");
+    assertThat(audited("zone-unlock")).extracting(e -> field(e, "target")).containsExactly("base");
+    assertThat(audited("zone-lock")).extracting(e -> field(e, "target")).containsExactly("base");
+    assertThat(audited("homecoming"))
+        .extracting(e -> field(e, "actor") + " " + field(e, "target"))
+        .containsExactly("The console season 3");
   }
 }

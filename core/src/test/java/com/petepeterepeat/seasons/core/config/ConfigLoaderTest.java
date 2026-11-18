@@ -253,6 +253,36 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void aZoneInADimensionTheServerDoesntHaveIsAProblem() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        zones:
+          old-nether: { dimension: minecraft:the_neter, shape: { cylinder: { center: [0, 0], radius: 1500 } } }
+        """);
+    ConfigLoader server =
+        new ConfigLoader(
+            configDir(),
+            worldDir(),
+            Map.of(),
+            dimension -> !dimension.equals("minecraft:the_neter"));
+
+    ConfigLoader.Result result = server.load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .singleElement()
+        .satisfies(problem -> {
+          assertThat(problem.file()).isEqualTo("seasons/3.yml");
+          assertThat(problem.path()).contains("zones.old-nether.dimension");
+          assertThat(problem.toString()).contains("minecraft:the_neter");
+        });
+  }
+
+  @Test
   void durationsRoundTrip() {
     for (String text : List.of("7d", "1d", "1h30m", "10m", "10s", "0")) {
       assertThat(Durations.format(Durations.parse(text))).isEqualTo(text);

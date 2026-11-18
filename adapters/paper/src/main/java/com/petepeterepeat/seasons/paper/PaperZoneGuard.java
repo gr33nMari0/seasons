@@ -37,6 +37,7 @@ import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryPickupItemEvent;
+import org.bukkit.event.vehicle.VehicleDamageEvent;
 import org.bukkit.event.world.PortalCreateEvent;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.bukkit.inventory.Inventory;
@@ -173,6 +174,15 @@ final class PaperZoneGuard implements Listener {
             || cause == EntityDamageEvent.DamageCause.FIRE_TICK
             || cause == EntityDamageEvent.DamageCause.LAVA;
     if (explosionOrFire && protects(entity.getLocation())) {
+      event.setCancelled(true);
+    }
+  }
+
+  /** Minecarts and boats inside break by nobody's hand; a player's hit is their intent. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onVehicleDamage(VehicleDamageEvent event) {
+    if (PaperEvents.responsible(event.getAttacker()) == null
+        && protects(event.getVehicle().getLocation())) {
       event.setCancelled(true);
     }
   }

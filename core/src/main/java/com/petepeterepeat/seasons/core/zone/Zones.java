@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core.zone;
 
 import com.petepeterepeat.seasons.core.announce.Announcer;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -73,6 +75,7 @@ public final class Zones implements ZoneGuard, Milestones {
   private final ConfigHolder config;
   private final Announcer announcer;
   private final HallAudit audit;
+  private final AuditLog log;
   private final Clock clock;
   private final Predicate<Position> exempt;
   private final IntFunction<Optional<Position>> seasonSpawn;
@@ -107,7 +110,7 @@ public final class Zones implements ZoneGuard, Milestones {
       Platform platform,
       ConfigHolder config,
       Announcer announcer,
-      HallAudit audit,
+      AuditLog log,
       Clock clock,
       Predicate<Position> exempt,
       IntFunction<Optional<Position>> seasonSpawn,
@@ -115,7 +118,8 @@ public final class Zones implements ZoneGuard, Milestones {
     this.platform = platform;
     this.config = config;
     this.announcer = announcer;
-    this.audit = audit;
+    this.audit = new HallAudit(log, clock);
+    this.log = log;
     this.clock = clock;
     this.exempt = exempt;
     this.seasonSpawn = seasonSpawn;
@@ -288,6 +292,7 @@ public final class Zones implements ZoneGuard, Milestones {
       case Intent.PlaceEntity place -> change(player, place.at(), "place", place.type(), true);
       case Intent.HurtEntity hurt ->
           change(player, hurt.at(), "hit", hurt.type(), FIXTURES.contains(path(hurt.type())));
+      case Intent.PickupItem pickup -> pickup(player, pickup.item());
       default -> Optional.empty();
     };
   }
@@ -303,6 +308,7 @@ public final class Zones implements ZoneGuard, Milestones {
     ZoneMap.Live zone = into.get();
     if (zone.now() == ZoneMode.BLOCK) {
       platform.players().stopMoving(player);
+      refusedEntry(player, zone.zone(), "walk in", to);
       keptOut(player, zone.zone());
       return Optional.of(new Decision.Deny(Optional.empty()));
     }
@@ -321,6 +327,8 @@ public final class Zones implements ZoneGuard, Milestones {
     if (into.isEmpty()) {
       return Optional.empty();
     }
+    String how = "teleport in by " + teleport.kind().name().toLowerCase(Locale.ROOT);
+    refusedEntry(player, into.get().zone(), how, teleport.to());
     keptOut(player, into.get().zone());
     return Optional.of(new Decision.Deny(Optional.empty()));
   }
@@ -331,8 +339,27 @@ public final class Zones implements ZoneGuard, Milestones {
       return Optional.empty();
     }
     Zone zone = into.get().zone();
+    refusedEntry(player, zone, "make a portal", at);
     return Optional.of(
         Decision.deny(message("zone.portal", "name", zone.displayName(), "when", until(zone))));
+  }
+
+  /**
+   * Picking up an item lying in a blocked zone, as from just outside its edge, is refused quietly:
+   * the game asks every tick while the player stands there.
+   */
+  private Optional<Decision> pickup(PlayerId player, Position item) {
+    Optional<ZoneMap.Live> into = map().blocking(item);
+    if (into.isEmpty() || bypasses(player)) {
+      return Optional.empty();
+    }
+    audit.record(name(player), BLOCKED, into.get().zone().id(), "pick up", where(item));
+    return Optional.of(new Decision.Deny(Optional.empty()));
+  }
+
+  /** A route into a blocked zone refused, in the audit log; repeats are counted. */
+  private void refusedEntry(PlayerId player, Zone zone, String how, Position at) {
+    audit.record(name(player), BLOCKED, zone.id(), how, where(at));
   }
 
   /**
@@ -396,6 +423,7 @@ public final class Zones implements ZoneGuard, Milestones {
       Position at = platform.players().position(player);
       Optional<ZoneMap.Live> here = zones.at(at);
       if (here.isPresent() && here.get().now() == ZoneMode.BLOCK && !bypasses(player)) {
+        refusedEntry(player, here.get().zone(), "found inside", at);
         sendOut(player, here.get().zone());
         continue;
       }
@@ -444,6 +472,24 @@ public final class Zones implements ZoneGuard, Milestones {
                 platform.scheduler()::runGlobal);
   }
 
+  /**
+   * A player who has just arrived in another dimension, as through a portal, is checked at once
+   * rather than at the next sweep: the game picks a portal's exit only after asking whether the
+   * trip may go, and may pick an old portal inside a blocked zone. They go back where they last
+   * stood outside, which is on the other side of the portal.
+   */
+  private void arrived(PlayerId player) {
+    if (sending.contains(player) || held.test(player) || bypasses(player)) {
+      return;
+    }
+    Position at = platform.players().position(player);
+    Optional<ZoneMap.Live> here = map().blocking(at);
+    if (here.isPresent()) {
+      refusedEntry(player, here.get().zone(), "arrive by portal", at);
+      sendOut(player, here.get().zone());
+    }
+  }
+
   private Optional<Position> spawn() {
     return state().flatMap(s -> seasonSpawn.apply(s.season()));
   }
@@ -483,12 +529,13 @@ public final class Zones implements ZoneGuard, Milestones {
     }
     UnlockCondition.Facts facts = facts(s);
     if (file.get().homecoming().met(facts)) {
-      homecoming();
+      homecoming(AuditLog.SEASONS);
       return;
     }
     for (Zone zone : file.get().zones().values()) {
       if (!s.zones().unlocked().containsKey(zone.id()) && zone.lockedUntil().met(facts)) {
         setUnlocked(zone, true);
+        log.record(AuditLog.SEASONS, "zone-unlock", zone.id(), "ok", "its condition came true");
         announceOpened(zone);
       }
     }
@@ -508,10 +555,16 @@ public final class Zones implements ZoneGuard, Milestones {
    * the state that decides them changes; once that state is on disk, a title and a sound for
    * everyone online, a broadcast, a Discord post and fireworks at the spawn.
    */
-  public Transition homecoming() {
+  public Transition homecoming(String actor) {
     SeasonService service = Objects.requireNonNull(seasons, "not bound");
     Transition transition = service.homecoming();
     if (transition instanceof Transition.Changed) {
+      log.record(
+          actor,
+          "homecoming",
+          "season " + state().map(SeasonState::season).orElse(0),
+          "ok",
+          "every zone to its after-unlock mode");
       service.afterSave(this::celebrate);
     }
     return transition;
@@ -537,7 +590,7 @@ public final class Zones implements ZoneGuard, Milestones {
   }
 
   /** Unlocks or locks one zone of the live season on its own, whatever its condition says. */
-  public Switch set(String id, boolean open) {
+  public Switch set(String id, boolean open, String actor) {
     Optional<ZoneMap.Live> live = map().find(id);
     if (live.isEmpty()) {
       return editingZone(id).isPresent() ? Switch.NOT_LIVE : Switch.UNKNOWN;
@@ -546,6 +599,7 @@ public final class Zones implements ZoneGuard, Milestones {
       return Switch.ALREADY;
     }
     setUnlocked(live.get().zone(), open);
+    log.record(actor, open ? "zone-unlock" : "zone-lock", id, "ok", "by command");
     if (open) {
       announceOpened(live.get().zone());
     }
@@ -580,6 +634,7 @@ public final class Zones implements ZoneGuard, Milestones {
 
   @Override
   public void enteredDimension(PlayerId player, String dimension) {
+    arrived(player);
     if (!dimension.equals(THE_END) || seasons == null) {
       return;
     }

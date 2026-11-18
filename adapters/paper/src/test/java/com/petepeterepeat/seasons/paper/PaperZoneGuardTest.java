@@ -3,34 +3,55 @@ package com.petepeterepeat.seasons.paper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.petepeterepeat.seasons.core.event.Decision;
+import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.ZoneGuard;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.ExplosionResult;
+import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.damage.DamageSource;
+import org.bukkit.damage.DamageType;
+import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
+import org.bukkit.entity.Player;
 import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFromToEvent;
 import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.inventory.ItemStack;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
+import org.mockbukkit.mockbukkit.entity.PlayerMock;
 
 /**
- * The zones' guard against changes nobody in particular makes, from Paper's events. Hoppers,
- * containers and portals need a real server, so A30 and A35 cover them there.
+ * The zones' guard against changes nobody in particular makes, from Paper's events, and the player
+ * intents that reach the zones outside the Hall. Hoppers, containers and portals need a real
+ * server, so A30 and A35 cover them there.
  */
 class PaperZoneGuardTest {
   private ServerMock server;
   private World world;
   private PaperZoneGuard guard;
+  private PaperEvents events;
+
+  /** What the core was asked, and refused, in place of the core. */
+  private final List<Intent> asked = new ArrayList<>();
 
   /** One blocked zone: every block with x below 10. */
   private static final ZoneGuard BELOW_TEN =
@@ -60,7 +81,7 @@ class PaperZoneGuardTest {
     PaperText text = new PaperText();
     PaperPlayers players = new PaperPlayers(server, text, new NamespacedKey("seasons", "c"));
     PaperItemCodec codec = new PaperItemCodec();
-    PaperEvents events =
+    events =
         new PaperEvents(
             MockBukkit.createMockPlugin(),
             text,
@@ -70,6 +91,10 @@ class PaperZoneGuardTest {
             new PaperAdvancements(server, players));
     guard = events.zoneGuard();
     events.zones(BELOW_TEN);
+    events.handle(intent -> {
+      asked.add(intent);
+      return new Decision.Deny(java.util.Optional.empty());
+    });
   }
 
   @AfterEach
@@ -134,5 +159,49 @@ class PaperZoneGuardTest {
     guard.onBlockExplode(explosion);
 
     assertThat(explosion.blockList()).containsExactly(at(10), at(11));
+  }
+
+  @Test
+  void aPlayersHitPickupOrCatchOutsideTheHallIsAskedAboutWhereTheThingIs() {
+    PlayerMock pat = server.addPlayer("Pat");
+    pat.teleport(new Location(world, 12.5, 64, 0.5));
+    ArmorStand stand = world.spawn(new Location(world, 9.5, 64, 0.5), ArmorStand.class);
+    Item item = world.dropItem(new Location(world, 9.5, 64, 1.5), new ItemStack(Material.DIAMOND));
+
+    EntityDamageByEntityEvent blow = hit(pat, stand);
+    events.onDamage(blow);
+    events.onPickup(new EntityPickupItemEvent(pat, item, 0));
+    PlayerFishEvent reel =
+        new PlayerFishEvent(pat, item, null, PlayerFishEvent.State.CAUGHT_ENTITY);
+    events.onFish(reel);
+
+    assertThat(asked)
+        .containsExactly(
+            new Intent.HurtEntity(
+                PaperEvents.id(pat),
+                PaperPositions.toPosition(stand.getLocation()),
+                "minecraft:armor_stand"),
+            new Intent.PickupItem(
+                PaperEvents.id(pat), PaperPositions.toPosition(item.getLocation())),
+            new Intent.UseEntity(
+                PaperEvents.id(pat),
+                PaperPositions.toPosition(item.getLocation()),
+                "minecraft:item"));
+    assertThat(blow.isCancelled()).isTrue();
+    assertThat(reel.isCancelled()).isTrue();
+  }
+
+  /** A player's hit, as the server raises it; the event's constructors are internal to Paper. */
+  @SuppressWarnings("removal")
+  private static EntityDamageByEntityEvent hit(Player attacker, Entity target) {
+    return new EntityDamageByEntityEvent(
+        attacker,
+        target,
+        EntityDamageEvent.DamageCause.ENTITY_ATTACK,
+        DamageSource.builder(DamageType.PLAYER_ATTACK)
+            .withCausingEntity(attacker)
+            .withDirectEntity(attacker)
+            .build(),
+        1);
   }
 }

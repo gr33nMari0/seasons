@@ -91,7 +91,13 @@ public final class SeasonMachine {
               : new Refused("launch.refused");
       case Homecoming homecoming ->
           phase instanceof Active active && active.stage() == Stage.FRONTIER
-              ? new Changed(state.withPhase(new Active(Stage.OPEN)).withHomecoming(now))
+              // Every zone switches to its after-unlock mode, those unlocked or locked again on
+              // their own before it too; a zone can still be locked again after it.
+              ? new Changed(
+                  state
+                      .withPhase(new Active(Stage.OPEN))
+                      .withHomecoming(now)
+                      .withZones(state.zones().withoutSwitches()))
               : new Refused("homecoming.refused");
       case Restarted restarted ->
           phase instanceof Countdown countdown

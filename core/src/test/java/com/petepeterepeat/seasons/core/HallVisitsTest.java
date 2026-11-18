@@ -421,7 +421,8 @@ class HallVisitsTest {
   void insideNothingIsDroppedPickedUpPearledOrRiddenButCushionsAreSeats() {
     visit();
     assertThat(decide(new Intent.DropItem(alex.id()))).isNotEqualTo(Decision.allow());
-    assertThat(decide(new Intent.PickupItem(alex.id()))).isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.PickupItem(alex.id(), fake.player(alex).position)))
+        .isNotEqualTo(Decision.allow());
     assertThat(decide(new Intent.UseItem(alex.id(), "minecraft:ender_pearl")))
         .isNotEqualTo(Decision.allow());
     assertThat(decide(new Intent.Consume(alex.id(), "minecraft:chorus_fruit")))
