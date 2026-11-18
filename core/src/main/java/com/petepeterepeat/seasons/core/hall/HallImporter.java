@@ -42,10 +42,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -145,6 +147,15 @@ public final class HallImporter {
     private static final long serialVersionUID = 1L;
 
     Stop(String reason) {
+      super(reason, null, false, false);
+    }
+  }
+
+  /** The cell changed between the scan and the import, which then changed nothing. */
+  static final class Unchanged extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    Unchanged(String reason) {
       super(reason, null, false, false);
     }
   }
@@ -343,6 +354,17 @@ public final class HallImporter {
     ArchiveRecord record = record(owner, season, plan.imported());
     int dataVersion = platform.inventories().dataVersion();
     String hash = record.contentHash();
+    Optional<HallService.CellRef> ref = cellRef(plan.imported());
+    if (ref.isEmpty()) {
+      return CompletableFuture.failedFuture(new Stop("the cell no longer exists"));
+    }
+    // The gallery the import will save must keep the rules, or it wouldn't load again.
+    List<GalleryRules.Problem> problems =
+        GalleryRules.check(tagged(ref.get(), owner.id(), season, plan.imported()));
+    if (!problems.isEmpty()) {
+      return CompletableFuture.failedFuture(
+          new Stop("the gallery would break its rules: " + problems.getFirst().message()));
+    }
     return writer
         .submit(() -> {
           if (archives.exists(owner.id(), season)) {
@@ -390,7 +412,29 @@ public final class HallImporter {
                               + ")");
                     });
               }
-              return finish(read.orElseThrow());
+              return finish(read.orElseThrow(), false)
+                  .exceptionallyCompose(failure -> {
+                    if (!(unwrap(failure) instanceof Unchanged changed)) {
+                      return CompletableFuture.failedFuture(failure);
+                    }
+                    // Nothing in the cell was touched, so the record goes aside and the cell
+                    // keeps every item.
+                    audit.record(
+                        actor,
+                        "import",
+                        owner.name(),
+                        "stopped",
+                        "cell "
+                            + gallery.id()
+                            + ":"
+                            + plan.cell().id()
+                            + "; "
+                            + changed.getMessage());
+                    return setAside(owner.id(), season, "import-changed", hash)
+                        .thenApply(done -> {
+                          throw changed;
+                        });
+                  });
             },
             serverThread);
   }
@@ -435,10 +479,13 @@ public final class HallImporter {
 
   /**
    * Empties what the record took from the cell, tags the cell's anchors and owner, closes the
-   * journal entry and draws the figure. Harmless to run again: sources already empty are skipped.
-   * On the server thread.
+   * journal entry and draws the figure. On the server thread.
+   *
+   * @param recovering whether a crash left this import open: then sources already empty or gone
+   *     were emptied before the crash and are skipped. A fresh import instead stops with {@link
+   *     Unchanged}, changing nothing, if any source no longer holds exactly what the record does.
    */
-  private CompletableFuture<Void> finish(ArchiveRecord record) {
+  private CompletableFuture<Void> finish(ArchiveRecord record, boolean recovering) {
     ImportedCell imported = record.imported().orElseThrow();
     Optional<HallService.CellRef> ref = cellRef(imported);
     if (ref.isEmpty()) {
@@ -453,7 +500,7 @@ public final class HallImporter {
         .scan(bounds.min(), bounds.max())
         .thenComposeAsync(
             live -> {
-              clear(imported, live);
+              clear(imported, live, recovering);
               crash.reached(CrashPoint.IMPORT_CLEARED, owner);
               platform.imports().saveWorld(bounds.dimension());
               tag(ref.get(), owner, season, imported);
@@ -473,62 +520,92 @@ public final class HallImporter {
   }
 
   /**
-   * Checks every source against the record, then empties those that still hold exactly what the
-   * record says. Changes nothing if any source holds something else.
+   * Checks every source against the record, then empties them. Changes nothing if a source holds
+   * something else or is gone, or, on a fresh import, if it was emptied since the scan: its items
+   * may be in someone's hands by now, so the record mustn't hold them too.
    */
-  private void clear(ImportedCell imported, Imports.Scan live) {
-    List<Runnable> steps = new ArrayList<>();
+  private void clear(ImportedCell imported, Imports.Scan live, boolean recovering) {
+    List<Step> steps = new ArrayList<>();
     for (ImportedCell.Container container : imported.containers()) {
+      String what = "the " + type(container.type()) + " at " + place(container.block());
       Optional<Imports.Container> found =
           live.containers().stream()
               .filter(c -> sameBlock(c.block(), container.block()))
               .findFirst();
       if (found.isEmpty()) {
-        throw new Stop(
-            "the " + type(container.type()) + " at " + place(container.block()) + " is gone");
+        throw changed(what + " is gone", recovering);
       }
       if (same(found.get().slots(), container.slots())) {
-        steps.add(() -> platform.imports().emptyContainer(container.block()));
-      } else if (!isEmpty(found.get().slots())) {
-        throw new Stop(
-            "the "
-                + type(container.type())
-                + " at "
-                + place(container.block())
-                + " no longer holds what the record does");
+        if (!isEmpty(container.slots())) {
+          steps.add(new Step(what, () -> platform.imports().emptyContainer(container.block())));
+        }
+      } else if (recovering && isEmpty(found.get().slots())) {
+        // Emptied before the crash.
+      } else if (!recovering && isEmpty(found.get().slots())) {
+        throw new Unchanged(what + " was emptied after the scan");
+      } else {
+        throw changed(what + " no longer holds what the record does", recovering);
       }
     }
-    imported
-        .stand()
-        .ifPresent(stand -> {
-          Optional<Imports.Stand> found =
-              live.stands().stream().filter(s -> sameBlock(s.at(), stand.at())).findFirst();
-          if (found.isPresent()) {
-            if (!same(found.get().equipment(), stand.equipment())) {
-              throw new Stop(
-                  "the armour stand at "
-                      + place(stand.at())
-                      + " no longer wears what the record does");
-            }
-            steps.add(() -> platform.imports().remove(found.get().id()));
-          }
-        });
+    if (imported.stand().isPresent()) {
+      ImportedCell.Stand stand = imported.stand().get();
+      String what = "the armour stand at " + place(stand.at());
+      Optional<Imports.Stand> found =
+          live.stands().stream().filter(s -> sameBlock(s.at(), stand.at())).findFirst();
+      if (found.isEmpty()) {
+        if (!recovering) {
+          throw new Unchanged(what + " was removed after the scan");
+        }
+      } else if (!same(found.get().equipment(), stand.equipment())) {
+        throw changed(what + " no longer wears what the record does", recovering);
+      } else {
+        UUID id = found.get().id();
+        steps.add(new Step(what, () -> platform.imports().remove(id)));
+      }
+    }
     for (ImportedCell.Frame frame : imported.frames()) {
+      String what = "the item frame at " + place(frame.at());
       Optional<Imports.Frame> found =
           live.frames().stream().filter(f -> sameBlock(f.at(), frame.at())).findFirst();
-      if (found.isPresent()) {
-        if (!same(List.of(found.get().item()), List.of(frame.item()))) {
-          throw new Stop(
-              "the item frame at " + place(frame.at()) + " no longer holds what the record does");
+      if (found.isEmpty()) {
+        if (!recovering) {
+          throw new Unchanged(what + " was removed after the scan");
         }
-        steps.add(() -> platform.imports().remove(found.get().id()));
+      } else if (!same(List.of(found.get().item()), List.of(frame.item()))) {
+        throw changed(what + " no longer holds what the record does", recovering);
+      } else {
+        UUID id = found.get().id();
+        steps.add(new Step(what, () -> platform.imports().remove(id)));
       }
     }
-    steps.forEach(Runnable::run);
+    for (Step step : steps) {
+      if (!step.run().getAsBoolean()) {
+        // The journal entry stays open, so the next start finishes the cell.
+        throw new Stop(
+            step.what() + " couldn't be emptied; the import finishes at the next restart");
+      }
+    }
   }
+
+  /**
+   * A source that doesn't match the record. A fresh import has changed nothing yet, so it sets the
+   * record aside; recovery stops and leaves the cell to an admin.
+   */
+  private static RuntimeException changed(String reason, boolean recovering) {
+    return recovering ? new Stop(reason) : new Unchanged(reason);
+  }
+
+  /** One change {@link #clear} makes, and whether it worked. */
+  private record Step(String what, BooleanSupplier run) {}
 
   /** Gives the cell its owner and the anchors the import found, and saves the gallery. */
   private void tag(HallService.CellRef ref, PlayerId owner, int season, ImportedCell imported) {
+    var _ = hall.save(tagged(ref, owner, season, imported));
+  }
+
+  /** The gallery with the cell tagged as imported: its owner and the anchors the import found. */
+  private Gallery tagged(
+      HallService.CellRef ref, PlayerId owner, int season, ImportedCell imported) {
     Gallery gallery = hall.gallery(ref.gallery().id()).orElse(ref.gallery());
     Cell cell = gallery.cell(ref.cell().id()).orElse(ref.cell());
     for (AnchorType type : List.of(AnchorType.FIGURE, AnchorType.ARCHIVE, AnchorType.TROPHY)) {
@@ -550,7 +627,7 @@ public final class HallImporter {
       cell = cell.withAnchor(Anchor.of(AnchorType.TROPHY, block(frame.at())));
     }
     cell = cell.withOwner(season, Optional.of(owner)).withImported(true);
-    var _ = hall.save(gallery.withCell(cell));
+    return gallery.withCell(cell);
   }
 
   private Optional<HallService.CellRef> cellRef(ImportedCell imported) {
@@ -583,7 +660,7 @@ public final class HallImporter {
                 return CompletableFuture.completedFuture(
                     RecoveryOutcome.failed("the import's record isn't there"));
               }
-              return finish(read.get()).thenApply(done -> RecoveryOutcome.finished());
+              return finish(read.get(), true).thenApply(done -> RecoveryOutcome.finished());
             },
             serverThread)
         .exceptionally(e -> {
@@ -929,11 +1006,18 @@ public final class HallImporter {
     }
   }
 
-  private static String reason(Throwable failure) {
+  private static Throwable unwrap(Throwable failure) {
     Throwable cause = failure;
     while (cause instanceof CompletionException && cause.getCause() != null) {
       cause = cause.getCause();
     }
-    return cause instanceof Stop ? String.valueOf(cause.getMessage()) : String.valueOf(cause);
+    return cause;
+  }
+
+  private static String reason(Throwable failure) {
+    Throwable cause = unwrap(failure);
+    return cause instanceof Stop || cause instanceof Unchanged
+        ? String.valueOf(cause.getMessage())
+        : String.valueOf(cause);
   }
 }

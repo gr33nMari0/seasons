@@ -150,10 +150,24 @@ final class PaperImports implements Imports {
         }
         switch (state) {
           case Chest chest when chest.getInventory() instanceof DoubleChestInventory both -> {
-            // A double chest is one container, at the half its slots start in.
+            // A double chest is one container, at the half its slots start in if that half is in
+            // the cell, else at the half that is, so its archive anchor always sits inside.
             Location left = both.getLeftSide().getLocation();
-            if (left != null && seen.add(left.toBlockLocation())) {
-              containers.add(container(left.getBlock(), both));
+            Location right = both.getRightSide().getLocation();
+            Location here = at.toBlockLocation();
+            boolean leftInside =
+                left != null
+                    && box.contains(left.getX() + 0.5, left.getY() + 0.5, left.getZ() + 0.5);
+            Location anchor = leftInside ? left.toBlockLocation() : here;
+            boolean first = seen.add(here);
+            if (left != null) {
+              seen.add(left.toBlockLocation());
+            }
+            if (right != null) {
+              seen.add(right.toBlockLocation());
+            }
+            if (first) {
+              containers.add(container(anchor.getBlock(), both));
             }
           }
           case Chest chest -> containers.add(container(state.getBlock(), chest.getInventory()));

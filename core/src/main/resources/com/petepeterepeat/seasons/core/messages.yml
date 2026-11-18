@@ -229,7 +229,7 @@ hof:
     dry-run-many: "<green>Dry run of the <gallery> import: <ready> cells ready, <flagged> flagged. See <file>.</green>"
     done: "<green>Imported <count> cell from <gallery>; <skipped> skipped.</green>"
     done-many: "<green>Imported <count> cells from <gallery>; <skipped> skipped.</green>"
-    stopped: "<red>The <gallery> import stopped at cell <cell>: <reason>. Nothing in that cell changed; the cells before it are imported.</red>"
+    stopped: "<red>The <gallery> import stopped at cell <cell>: <reason>. The cells before it are imported.</red>"
     busy: "<red>An import or undo is already running.</red>"
     unknown-flag: "<red>Unknown option <flag>. /hof import takes a cell and --dry-run.</red>"
     undone: "<green>Put back <count> cell of <gallery>.</green>"

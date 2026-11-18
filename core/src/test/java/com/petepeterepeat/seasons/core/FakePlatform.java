@@ -177,6 +177,9 @@ public final class FakePlatform {
     }
   }
 
+  /** The Season 1 import's view of the world; null unless a test sets it. */
+  public com.petepeterepeat.seasons.core.port.@org.jspecify.annotations.Nullable Imports imports;
+
   public Platform platform(Capabilities capabilities, Path dir) {
     Players players =
         new Players() {
@@ -496,13 +499,14 @@ public final class FakePlatform {
         null,
         menus,
         commands::add,
-        (player, node) -> true,
+        // Everyone holds every node except the bypass nodes, which nobody gets by default.
+        (player, node) -> !node.endsWith(".bypass"),
         events,
         scheduler,
         dragon,
         statistics,
         storage,
-        null);
+        imports);
   }
 
   private FakePlayer state(PlayerId id) {
