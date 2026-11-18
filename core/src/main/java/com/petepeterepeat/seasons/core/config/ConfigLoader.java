@@ -6,6 +6,9 @@ import com.petepeterepeat.seasons.core.hall.GalleryFiles;
 import com.petepeterepeat.seasons.core.hall.GalleryRules;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.zone.UnlockCondition;
+import com.petepeterepeat.seasons.core.zone.Zone;
+import com.petepeterepeat.seasons.core.zone.ZoneFiles;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -136,7 +139,7 @@ public final class ConfigLoader {
     SeasonsConfig config = loadConfig(problems, warnings);
     Messages messages = loadMessages(problems);
     Secrets secrets = loadSecrets(problems);
-    Map<Integer, SeasonFile> seasons = loadSeasons(problems);
+    Map<Integer, SeasonFile> seasons = loadSeasons(problems, warnings);
     Map<String, List<ConfigProblem>> leftOut = new HashMap<>();
     Map<String, Gallery> galleries = loadGalleries(leftOut);
     if (!leaveOutBrokenGalleries) {
@@ -311,7 +314,12 @@ public final class ConfigLoader {
     }
   }
 
-  private Map<Integer, SeasonFile> loadSeasons(List<ConfigProblem> problems) {
+  /**
+   * Every season file. A spawn inside one of its season's zones is a warning, not a problem: the
+   * file still loads, and {@code /season launch} is refused until one of them moves.
+   */
+  private Map<Integer, SeasonFile> loadSeasons(
+      List<ConfigProblem> problems, List<String> warnings) {
     Map<Integer, SeasonFile> seasons = new HashMap<>();
     if (!Files.isDirectory(seasonsDirectory)) {
       return seasons;
@@ -362,7 +370,19 @@ public final class ConfigLoader {
           problems.add(ConfigProblem.atPath(name, "spawn", Objects.requireNonNull(e.getMessage())));
           continue;
         }
-        seasons.put(season, new SeasonFile(season, plannedEnd, spawn));
+        Map<String, Zone> zones;
+        UnlockCondition homecoming;
+        try {
+          zones = ZoneFiles.zones(node.node("zones"));
+          homecoming = ZoneFiles.homecoming(node.node("homecoming"));
+        } catch (ZoneFiles.Invalid e) {
+          problems.add(
+              ConfigProblem.atPath(name, e.path(), Objects.requireNonNull(e.getMessage())));
+          continue;
+        }
+        SeasonFile loaded = new SeasonFile(season, plannedEnd, spawn, zones, homecoming);
+        loaded.zoneHoldingSpawn().ifPresent(zone -> warnings.add(spawnInZone(name, loaded, zone)));
+        seasons.put(season, loaded);
       } catch (ParsingException e) {
         problems.add(syntax(name, e));
       } catch (IOException e) {
@@ -370,6 +390,23 @@ public final class ConfigLoader {
       }
     }
     return seasons;
+  }
+
+  /** The warning for a spawn inside a zone, as reload and validate report it. */
+  public static String spawnInZone(String file, SeasonFile season, Zone zone) {
+    Position at = season.spawn().orElseThrow();
+    return file
+        + ": Season "
+        + season.season()
+        + "'s spawn at "
+        + at.blockX()
+        + ", "
+        + at.blockY()
+        + ", "
+        + at.blockZ()
+        + " is inside zone "
+        + zone.id()
+        + "; /season launch is refused until one of them moves";
   }
 
   /**

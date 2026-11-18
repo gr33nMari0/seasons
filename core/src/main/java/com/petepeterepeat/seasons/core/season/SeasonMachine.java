@@ -109,7 +109,8 @@ public final class SeasonMachine {
                       state.initSeason(),
                       state.launchApplied(),
                       state.decorating(),
-                      state.firsts()))
+                      state.firsts(),
+                      state.zones()))
               : new Changed(state);
     };
   }

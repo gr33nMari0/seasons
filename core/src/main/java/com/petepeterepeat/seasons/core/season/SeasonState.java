@@ -26,6 +26,8 @@ import java.util.Set;
  * @param decorating the decorating window and the cells still open after archiving
  * @param firsts every season first recorded, this season's and earlier ones', oldest first; season
  *     cards read earlier seasons' from here after launch
+ * @param zones this season's zones unlocked or locked one at a time, and the milestones their
+ *     conditions wait for
  */
 public record SeasonState(
     int season,
@@ -40,7 +42,8 @@ public record SeasonState(
     Optional<Integer> initSeason,
     boolean launchApplied,
     Decorating decorating,
-    List<SeasonFirst> firsts) {
+    List<SeasonFirst> firsts,
+    ZoneState zones) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
     firsts = List.copyOf(firsts);
@@ -61,7 +64,8 @@ public record SeasonState(
         Optional.empty(),
         launchedAt.isEmpty(),
         Decorating.NONE,
-        List.of());
+        List.of(),
+        ZoneState.NONE);
   }
 
   /** The state {@code /season init} records. */
@@ -80,7 +84,8 @@ public record SeasonState(
         Optional.of(season),
         true,
         Decorating.NONE,
-        List.of());
+        List.of(),
+        ZoneState.NONE);
   }
 
   /** A season launched from this one's Intermission, keeping what it needs to remember. */
@@ -99,7 +104,8 @@ public record SeasonState(
         initSeason,
         false,
         Decorating.NONE,
-        firsts);
+        firsts,
+        ZoneState.NONE);
   }
 
   public SeasonState withLaunchApplied() {
@@ -116,7 +122,8 @@ public record SeasonState(
         initSeason,
         true,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -133,7 +140,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -151,7 +159,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -168,7 +177,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -185,7 +195,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -202,7 +213,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -219,7 +231,8 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        firsts);
+        firsts,
+        zones);
   }
 
   public SeasonState withDecorating(Decorating next) {
@@ -236,7 +249,26 @@ public record SeasonState(
         initSeason,
         launchApplied,
         next,
-        firsts);
+        firsts,
+        zones);
+  }
+
+  public SeasonState withZones(ZoneState next) {
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        launchApplied,
+        decorating,
+        firsts,
+        next);
   }
 
   /** The first recorded for a key in this season, if any. */
@@ -266,6 +298,7 @@ public record SeasonState(
         initSeason,
         launchApplied,
         decorating,
-        next);
+        next,
+        zones);
   }
 }

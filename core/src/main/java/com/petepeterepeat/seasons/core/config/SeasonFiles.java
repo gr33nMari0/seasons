@@ -5,6 +5,8 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.AtomicFiles;
+import com.petepeterepeat.seasons.core.zone.Zone;
+import com.petepeterepeat.seasons.core.zone.ZoneFiles;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StringWriter;
@@ -61,6 +63,18 @@ public final class SeasonFiles {
               .setList(Integer.class, List.of(spawn.blockX(), spawn.blockY(), spawn.blockZ()));
           at.node("yaw").set(Math.round(spawn.yaw()));
         });
+  }
+
+  /** Adds a zone to the file, or replaces the one with its id. */
+  public static void writeZone(Path file, Path backupDir, int season, Zone zone)
+      throws IOException {
+    edit(file, backupDir, season, node -> ZoneFiles.write(node.node("zones"), zone));
+  }
+
+  /** Removes the zone with an id from the file. */
+  public static void removeZone(Path file, Path backupDir, int season, String id)
+      throws IOException {
+    edit(file, backupDir, season, node -> node.node("zones").removeChild(id));
   }
 
   private interface Edit {
