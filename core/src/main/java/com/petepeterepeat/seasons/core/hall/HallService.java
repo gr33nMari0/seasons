@@ -74,7 +74,10 @@ public final class HallService {
   private final Announcer announcer;
   private final RandomGenerator random;
   private final Map<PlayerId, SwapRequest> swaps = new HashMap<>();
-  private final Set<PlayerId> managedModes = new HashSet<>();
+
+  /** Players without a record yet (before /season init) whom Seasons switched to adventure. */
+  private final Set<PlayerId> switchedWithoutRecord = new HashSet<>();
+
   private Supplier<Optional<SeasonState>> state = Optional::empty;
   private Consumer<UnaryOperator<Decorating>> decorating = change -> {};
   private Instant lastTick;
@@ -571,7 +574,7 @@ public final class HallService {
         && platform.players().gameMode(player) == GameMode.SURVIVAL
         && !platform.permissions().has(player, BYPASS)) {
       platform.players().setGameMode(player, GameMode.ADVENTURE);
-      managedModes.add(player);
+      markSwitched(player, true);
     }
   }
 
@@ -629,8 +632,9 @@ public final class HallService {
 
   /**
    * Twice a second: inside the Hall, owners decorating their own cell are in survival and everyone
-   * else in adventure; leaving the Hall puts back survival. Creative and spectator players, and
-   * holders of the bypass permission, are left alone.
+   * else in adventure; leaving the Hall puts back survival for players Seasons switched from it,
+   * and only for them. Creative and spectator players, and holders of the bypass permission, are
+   * left alone.
    */
   void sweep() {
     Optional<SeasonState> current = state.get();
@@ -647,19 +651,49 @@ public final class HallService {
       }
       Position at = platform.players().position(player);
       if (!inHall(at)) {
-        if (managedModes.remove(player) && mode == GameMode.ADVENTURE) {
-          platform.players().setGameMode(player, GameMode.SURVIVAL);
+        if (switched(player)) {
+          markSwitched(player, false);
+          if (mode == GameMode.ADVENTURE) {
+            platform.players().setGameMode(player, GameMode.SURVIVAL);
+          }
         }
         continue;
       }
       boolean decorating = cellAt(at).map(ref -> canDecorate(player, ref)).orElse(false);
-      GameMode wanted = decorating ? GameMode.SURVIVAL : GameMode.ADVENTURE;
-      if (mode != wanted) {
-        platform.players().setGameMode(player, wanted);
+      if (decorating) {
+        // Only an owner Seasons put in adventure goes back to survival: anyone in adventure for
+        // another reason stays in it.
+        if (mode == GameMode.ADVENTURE && switched(player)) {
+          platform.players().setGameMode(player, GameMode.SURVIVAL);
+        }
+      } else if (mode == GameMode.SURVIVAL) {
+        platform.players().setGameMode(player, GameMode.ADVENTURE);
+        markSwitched(player, true);
       }
-      managedModes.add(player);
     }
-    managedModes.removeIf(player -> platform.players().find(player).isEmpty());
+    switchedWithoutRecord.removeIf(player -> platform.players().find(player).isEmpty());
+  }
+
+  /** Whether Seasons switched a player from survival to adventure in the Hall. */
+  private boolean switched(PlayerId player) {
+    return players
+        .find(player)
+        .map(PlayerRecord::hallAdventure)
+        .orElseGet(() -> switchedWithoutRecord.contains(player));
+  }
+
+  /** Remembers, in the player record so it survives a restart, whether Seasons switched them. */
+  private void markSwitched(PlayerId player, boolean switched) {
+    Optional<PlayerRecord> record = players.find(player);
+    if (record.isPresent()) {
+      if (record.get().hallAdventure() != switched) {
+        players.put(record.get().withHallAdventure(switched));
+      }
+    } else if (switched) {
+      switchedWithoutRecord.add(player);
+    } else {
+      switchedWithoutRecord.remove(player);
+    }
   }
 
   /** A player who first plays while the window is open gets a cell straight away. */

@@ -167,6 +167,9 @@ public final class PlayerStore {
       if (record.pendingDestination().isPresent()) {
         node.node("pendingDestination").set(record.pendingDestination().getAsInt());
       }
+      if (record.hallAdventure()) {
+        node.node("hallAdventure").set(true);
+      }
       StringWriter out = new StringWriter();
       GsonConfigurationLoader.builder()
           .indent(2)
@@ -235,7 +238,8 @@ public final class PlayerStore {
         baselines,
         furthest,
         pendingDisplays,
-        destination.virtual() ? OptionalInt.empty() : OptionalInt.of(destination.getInt()));
+        destination.virtual() ? OptionalInt.empty() : OptionalInt.of(destination.getInt()),
+        node.node("hallAdventure").getBoolean(false));
   }
 
   private static void best(ConfigurationNode node, FurthestBlock.Best best) {
