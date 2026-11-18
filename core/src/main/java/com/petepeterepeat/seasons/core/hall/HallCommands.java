@@ -22,6 +22,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The {@code /hof} command tree: tagging galleries and cells (the wand comes in M5), assigning and
@@ -49,11 +51,14 @@ public final class HallCommands {
   /** How far away a looked-at block can be to take an anchor. */
   private static final int REACH = 6;
 
+  private static final Logger LOG = LoggerFactory.getLogger(HallCommands.class);
+
   private final Platform platform;
   private final ConfigHolder config;
   private final HallService hall;
   private final HallVisits visits;
   private final HallRenderer renderer;
+  private final Reconciler reconciler;
   private final Optional<HallImporter> importer;
   private final PlayerStore players;
 
@@ -66,6 +71,7 @@ public final class HallCommands {
       HallService hall,
       HallVisits visits,
       HallRenderer renderer,
+      Reconciler reconciler,
       Optional<HallImporter> importer,
       PlayerStore players) {
     this.platform = platform;
@@ -73,6 +79,7 @@ public final class HallCommands {
     this.hall = hall;
     this.visits = visits;
     this.renderer = renderer;
+    this.reconciler = reconciler;
     this.importer = importer;
     this.players = players;
   }
@@ -646,17 +653,36 @@ public final class HallCommands {
       return;
     }
     Gallery gallery = found.get();
-    int count = 0;
-    for (Cell cell : gallery.cells()) {
-      Optional<PlayerId> owner = cell.owner(gallery.season());
-      if (owner.isPresent()) {
-        var _ = renderer.render(owner.get(), gallery.season());
-        count++;
-      }
-    }
-    source.reply(
-        messages()
-            .get("hof.reconciled", "count", Integer.toString(count), "gallery", gallery.id()));
+    var _ =
+        reconciler
+            .reconcile(gallery)
+            .whenComplete((repairs, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      if (failure != null) {
+                        LOG.error("Reconciling gallery {} failed", gallery.id(), failure);
+                        source.reply(
+                            messages()
+                                .get(
+                                    "hof.reconcile-failed",
+                                    "gallery",
+                                    gallery.id(),
+                                    "error",
+                                    String.valueOf(failure.getMessage())));
+                      } else if (repairs == 1) {
+                        source.reply(messages().get("hof.reconciled-one", "gallery", gallery.id()));
+                      } else {
+                        source.reply(
+                            messages()
+                                .get(
+                                    "hof.reconciled",
+                                    "count",
+                                    Integer.toString(repairs),
+                                    "gallery",
+                                    gallery.id()));
+                      }
+                    }));
   }
 
   void restore(CommandSource source, Arguments arguments) {

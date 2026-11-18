@@ -497,6 +497,15 @@ public final class HallService {
                     HumanTime.duration(messages(), settings.afterArchive())));
   }
 
+  /**
+   * Whether a player may take things out of a cell now: open its containers for real, pick up and
+   * keep what they break. Only while decorating before the season ends; in the time after their
+   * archive an owner arranges their cell but takes nothing into the next season.
+   */
+  public boolean canTakeOut(PlayerId player, CellRef ref) {
+    return canDecorate(player, ref) && state.get().map(HallService::playing).orElse(false);
+  }
+
   /** Whether a player may build in a cell now. */
   public boolean canDecorate(PlayerId player, CellRef ref) {
     Optional<SeasonState> found = state.get();
@@ -708,28 +717,15 @@ public final class HallService {
   }
 
   /**
-   * The Hall's say on an intent, if it has one: building inside the Hall only in your own cell
-   * while you may decorate it, and archive anchors and figures opening the archive view.
+   * The Hall's say on an intent, if it has one: archive anchors and figures open the archive view,
+   * plaques the season card. Everything else in the Hall is {@link HallRules}'.
    */
   public Optional<Decision> decide(Intent intent) {
     return switch (intent) {
-      case Intent.PlaceBlock place -> build(place.player(), place.block());
-      case Intent.BreakBlock broken -> build(broken.player(), broken.block());
       case Intent.UseBlock use -> useBlock(use);
       case Intent.UseDisplay display -> useDisplay(display);
       default -> Optional.empty();
     };
-  }
-
-  private Optional<Decision> build(PlayerId player, Position block) {
-    if (!inHall(block) || platform.permissions().has(player, BYPASS)) {
-      return Optional.empty();
-    }
-    Optional<CellRef> cell = cellAt(block);
-    if (cell.isPresent() && canDecorate(player, cell.get())) {
-      return Optional.of(Decision.allow());
-    }
-    return Optional.of(Decision.deny(messages().get("hof.no-build")));
   }
 
   private Optional<Decision> useBlock(Intent.UseBlock use) {

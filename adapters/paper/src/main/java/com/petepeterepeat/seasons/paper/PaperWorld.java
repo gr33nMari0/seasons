@@ -45,6 +45,16 @@ final class PaperWorld implements World {
   }
 
   @Override
+  public boolean isLoaded(Position position) {
+    Optional<org.bukkit.World> world = PaperPositions.world(position.dimension());
+    int x = position.blockX() >> 4;
+    int z = position.blockZ() >> 4;
+    return world.isPresent()
+        && world.get().isChunkLoaded(x, z)
+        && world.get().getChunkAt(x, z).isEntitiesLoaded();
+  }
+
+  @Override
   public CompletableFuture<Void> loadChunk(Position position) {
     return world(position.dimension())
         .getChunkAtAsync(position.blockX() >> 4, position.blockZ() >> 4, true)

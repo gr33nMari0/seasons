@@ -84,6 +84,18 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void accessModesNotBuiltYetAreRefused() throws IOException {
+    write("config.yml", "schema-version: 1\ncells:\n  access: bounds\n");
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .singleElement()
+        .satisfies(problem -> assertThat(problem.message()).startsWith("only open is built yet"));
+  }
+
+  @Test
   void aSyntaxErrorReportsFileLineAndColumn() throws IOException {
     write("config.yml", "schema-version: 1\nschedule:\n  endCountdown: 3m\n  reminders: [7d, 1d\n");
 

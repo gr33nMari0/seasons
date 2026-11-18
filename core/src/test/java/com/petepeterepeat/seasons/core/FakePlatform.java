@@ -8,11 +8,14 @@ import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Advancements;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Capabilities;
+import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.DragonFight;
 import com.petepeterepeat.seasons.core.port.Entities;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.Figure;
 import com.petepeterepeat.seasons.core.port.GameMode;
+import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.Menus;
@@ -76,6 +79,34 @@ public final class FakePlatform {
 
   /** Where the monsters are. */
   public final List<Position> monsters = new ArrayList<>();
+
+  /** What container blocks hold, slot by slot, by block. */
+  public final Map<List<Integer>, List<Optional<NeutralItem>>> containers = new HashMap<>();
+
+  /** View-only copies opened: who, the title, and what they showed. */
+  public final List<Copy> copies = new ArrayList<>();
+
+  public record Copy(PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {}
+
+  /** Seasons' displays in the world, by id. */
+  public final Map<java.util.UUID, Drawn> displays = new java.util.LinkedHashMap<>();
+
+  /**
+   * One display.
+   *
+   * @param equipment a figure's; empty for others
+   */
+  public record Drawn(
+      String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {}
+
+  public @Nullable HallGuard guard;
+
+  /** Who holds the bypass nodes. */
+  public final Set<PlayerId> bypassing = new java.util.HashSet<>();
+
+  public static List<Integer> key(Position at) {
+    return List.of(at.blockX(), at.blockY(), at.blockZ());
+  }
 
   public static final BlockInfo STONE = new BlockInfo("minecraft:stone", true, false, false);
   public static final BlockInfo LAVA = new BlockInfo("minecraft:lava", false, true, false);
@@ -404,6 +435,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public Optional<List<Optional<NeutralItem>>> container(Position block) {
+            return Optional.ofNullable(containers.get(key(block)));
+          }
+
+          @Override
           public int dataVersion() {
             return FakeItems.DATA_VERSION;
           }
@@ -468,6 +504,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean isLoaded(Position position) {
+            return true;
+          }
+
+          @Override
           public CompletableFuture<Void> loadChunk(Position position) {
             return CompletableFuture.completedFuture(null);
           }
@@ -503,7 +544,9 @@ public final class FakePlatform {
         new Menus() {
           @Override
           public void openViewOnly(
-              PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {}
+              PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {
+            copies.add(new Copy(viewer, title, items));
+          }
 
           @Override
           public void openPaged(PlayerId viewer, PagedView view, int startPage) {
@@ -530,6 +573,66 @@ public final class FakePlatform {
           @Override
           public void milestones(com.petepeterepeat.seasons.core.port.Milestones m) {
             milestones = m;
+          }
+
+          @Override
+          public void hall(HallGuard g) {
+            guard = g;
+          }
+        };
+    Displays shownDisplays =
+        new Displays() {
+          @Override
+          public java.util.UUID spawnText(Position position, Message text, String tag) {
+            return add(new Drawn(tag, position, List.of(), "text"));
+          }
+
+          @Override
+          public java.util.UUID spawnFigure(Figure figure) {
+            return add(new Drawn(figure.tag(), figure.at(), figure.equipment(), "figure"));
+          }
+
+          @Override
+          public java.util.UUID spawnItem(Position position, NeutralItem item, String tag) {
+            return add(new Drawn(tag, position, List.of(), "item"));
+          }
+
+          private java.util.UUID add(Drawn shown) {
+            java.util.UUID id = java.util.UUID.randomUUID();
+            displays.put(id, shown);
+            return id;
+          }
+
+          @Override
+          public void remove(java.util.UUID display) {
+            displays.remove(display);
+          }
+
+          @Override
+          public List<Displays.Shown> tagged(Position min, Position max) {
+            return displays.entrySet().stream()
+                .filter(e -> within(e.getValue().at(), min, max))
+                .map(e -> new Displays.Shown(e.getKey(), e.getValue().tag(), e.getValue().at()))
+                .toList();
+          }
+
+          @Override
+          public boolean wears(java.util.UUID figure, List<Optional<NeutralItem>> equipment) {
+            Drawn shown = displays.get(figure);
+            return shown != null && shown.equipment().equals(equipment);
+          }
+
+          @Override
+          public int removeTagged(Position min, Position max, String tagPrefix) {
+            List<java.util.UUID> gone =
+                displays.entrySet().stream()
+                    .filter(e ->
+                        within(e.getValue().at(), min, max)
+                            && e.getValue().tag().startsWith(tagPrefix))
+                    .map(Map.Entry::getKey)
+                    .toList();
+            gone.forEach(displays::remove);
+            return gone.size();
           }
         };
     DragonFight dragon =
@@ -609,17 +712,26 @@ public final class FakePlatform {
         advancements,
         world,
         entities,
-        null,
+        shownDisplays,
         menus,
         (root, aliases) -> commands.add(root),
-        // Everyone holds every node except the bypass nodes, which nobody gets by default.
-        (player, node) -> !node.endsWith(".bypass"),
+        // Everyone holds every node except the bypass nodes, which only those a test names get.
+        (player, node) -> !node.endsWith(".bypass") || bypassing.contains(player),
         events,
         scheduler,
         dragon,
         statistics,
         storage,
         imports);
+  }
+
+  private static boolean within(Position at, Position min, Position max) {
+    return at.blockX() >= min.blockX()
+        && at.blockX() <= max.blockX()
+        && at.blockY() >= min.blockY()
+        && at.blockY() <= max.blockY()
+        && at.blockZ() >= min.blockZ()
+        && at.blockZ() <= max.blockZ();
   }
 
   private FakePlayer state(PlayerId id) {

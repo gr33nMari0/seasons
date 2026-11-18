@@ -6,6 +6,13 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ### Added
 
+- Hall protection (M2 part 2). Inside a gallery nothing changes unless an owner is decorating their own cell, or a player holds `seasons.hof.bypass`. Visitors walk into any cell in adventure mode, open containers as view-only copies, sit on cushions and open wooden doors, trapdoors and fence gates, and change nothing else: no blocks, item frames, armour stands, cushions, buckets, signs, lecterns or levers. During the window an owner opens their own containers for real and picks up what they break in their cell; after the lock their containers open as copies for them too. Hoppers, droppers, dispensers, crafters, ender chests, hopper minecarts and lava never go in the Hall, nor any container not on `cells.containers`, and a container must be empty to break. Explosions, fire, pistons, flowing water, dispensers, hoppers, growth, mob spawning and projectiles can't change the Hall, and nothing in it takes damage but from `/kill` and the void.
+- Refused Hall interactions and bypass edits are written to the audit log (`hall-blocked`, `hall-bypass`), a repeat within 10 seconds counted rather than written again.
+- After their archive, in `decorating.afterArchive`, an owner still arranges their cell but takes nothing out of it: their containers open as view-only copies, broken blocks drop nothing, nothing is picked up, and armour stands and item frames keep what they hold.
+- A chest can't join another into a double chest across a cell's edge or the Hall's; a double chest already across one opens as a view-only copy and no hopper moves items through it.
+- Reconciliation: when a Hall chunk's entities load, every 5 minutes while loaded, and on `/hof reconcile`, each cell's figure, plaque and trophies are compared with its record; missing ones are drawn, stray ones removed (one of the cell's own moved out of it too) and changed gear put back, within about 1 ms a tick, each repair audited.
+- The tripwire also finds archived copies in item frames, on armour stands and other entities, on the ground and in Hall containers as their chunks load, and in hoppers anywhere.
+
 - Season firsts (M1 part 4): the first player each season to complete each advancement, reach the Nether or the End, or carry a diamond, an elytra or an item on `firsts.rareItems` is announced in chat and on Discord, once, and kept in `season.json`. `/season firsts` lists them.
 - The season card: right-clicking a cell's plaque anchor opens a book with the player's highlights (play time, deaths, kills, distance travelled, diamonds and ancient debris mined, blocks placed and mined, advancements, furthest block, where they ended), their season firsts and every General-tab statistic as the season's difference. No item is involved.
 - A gallery file that can't be loaded at startup is left out on its own instead of sending every file back to the defaults. `/season status` shows it, admins are told as they join, and `/season end` and `/season launch` are refused until it is fixed and `/season reload` succeeds.
@@ -40,3 +47,7 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - `paper-plugin.yml` for Seasons and Seasons Web, with every permission node and its default.
 - Scenario harness: `./gradlew scenarioTest` starts Paper with run-paper and drives it with Mineflayer bots; the NBT neutrality test opens item data written by the adapter with a plain NBT reader.
 - Build and release workflows, Dependabot.
+
+### Changed
+
+- `cells.access` values `bounds` and `gate` are refused on load until they are built, rather than running as `open`.

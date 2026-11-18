@@ -22,4 +22,7 @@ public interface Events {
 
   /** Sets who hears about completed advancements and changes of dimension, for season firsts. */
   void milestones(Milestones milestones);
+
+  /** Sets the Hall's say on changes nobody in particular makes. Until set, nothing is guarded. */
+  void hall(HallGuard guard);
 }

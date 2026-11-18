@@ -2,6 +2,8 @@
 package com.petepeterepeat.seasons.core.port;
 
 import com.petepeterepeat.seasons.core.message.Message;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Figures, text and item displays, and books. Every display carries the tag it was made with. */
@@ -21,6 +23,20 @@ public interface Displays {
   UUID spawnItem(Position position, NeutralItem item, String tag);
 
   void remove(UUID display);
+
+  /**
+   * Every display between two corners, with the tag it was made with. The chunks must be loaded.
+   */
+  List<Shown> tagged(Position min, Position max);
+
+  /** A display as it stands in the world. */
+  record Shown(UUID id, String tag, Position at) {}
+
+  /**
+   * Whether a figure wears exactly this equipment: head, chest, legs, feet, main hand, off hand, as
+   * {@link Figure#equipment()}.
+   */
+  boolean wears(UUID figure, List<Optional<NeutralItem>> equipment);
 
   /**
    * Removes every display between two corners whose tag starts with a prefix. The chunks must be

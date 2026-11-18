@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.nbt.Nbt;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -14,7 +15,10 @@ import java.util.Map;
 import java.util.Optional;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.World;
+import org.bukkit.block.BlockState;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -146,6 +150,32 @@ final class PaperInventories implements Inventories {
         && !(top.getHolder(false) instanceof PaperMenus.ViewOnlyHolder)) {
       purge(top, removed);
     }
+    return removed;
+  }
+
+  @Override
+  public Optional<List<Optional<NeutralItem>>> container(Position block) {
+    Optional<World> world = PaperPositions.world(block.dimension());
+    if (world.isEmpty() || !world.get().isChunkLoaded(block.blockX() >> 4, block.blockZ() >> 4)) {
+      return Optional.empty();
+    }
+    BlockState state =
+        world.get().getBlockAt(block.blockX(), block.blockY(), block.blockZ()).getState(false);
+    if (!(state instanceof BlockInventoryHolder holder)) {
+      return Optional.empty();
+    }
+    // A chest's inventory is both halves of a double chest.
+    return Optional.of(encode(holder.getInventory().getContents()));
+  }
+
+  /**
+   * Deletes every archived copy from an inventory, such as a container's in the Hall.
+   *
+   * @return what was deleted, such as "3 × minecraft:stone"
+   */
+  List<String> purge(Inventory inventory) {
+    List<String> removed = new ArrayList<>();
+    purge(inventory, removed);
     return removed;
   }
 

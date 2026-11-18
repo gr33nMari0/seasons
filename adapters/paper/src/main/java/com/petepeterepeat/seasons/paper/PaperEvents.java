@@ -5,17 +5,42 @@ import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.port.Events;
+import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
+import org.bukkit.Material;
+import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.TileState;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Levelled;
+import org.bukkit.block.data.Lightable;
+import org.bukkit.block.data.Openable;
+import org.bukkit.block.data.Powerable;
+import org.bukkit.block.data.type.Bed;
+import org.bukkit.block.data.type.Cake;
+import org.bukkit.block.data.type.Comparator;
+import org.bukkit.block.data.type.NoteBlock;
+import org.bukkit.block.data.type.Repeater;
+import org.bukkit.block.data.type.RespawnAnchor;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Cushion;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemFrame;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -32,8 +57,12 @@ import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryOpenEvent;
+import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
@@ -42,7 +71,13 @@ import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.event.world.EntitiesLoadEvent;
+import org.bukkit.inventory.BlockInventoryHolder;
+import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.Nullable;
@@ -54,6 +89,12 @@ import org.jspecify.annotations.Nullable;
 final class PaperEvents implements Events, Listener {
   private static final String ON_THE_GROUND = "on the ground";
   private static final String IN_AN_INVENTORY = "in an inventory";
+  private static final String IN_A_CONTAINER = "in a container";
+  private static final String IN_A_HALL_CONTAINER = "in a Hall container";
+  private static final String IN_AN_ITEM_FRAME = "in an item frame";
+  private static final String ON_AN_ARMOUR_STAND = "on an armour stand";
+  private static final String ON_AN_ENTITY = "on an entity";
+  private static final String IN_AN_ENTITY = "in an entity's inventory";
 
   private final Plugin plugin;
   private final PaperText text;
@@ -61,6 +102,7 @@ final class PaperEvents implements Events, Listener {
   private final PaperPlayers players;
   private final PaperDisplays displays;
   private final PaperAdvancements advancements;
+  private final PaperHallGuard hallGuard;
   private @Nullable Milestones milestones;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
@@ -79,6 +121,12 @@ final class PaperEvents implements Events, Listener {
     this.inventories = inventories;
     this.players = players;
     this.displays = displays;
+    this.hallGuard = new PaperHallGuard(this);
+  }
+
+  /** The Hall's protection, a listener of its own. */
+  PaperHallGuard hallGuard() {
+    return hallGuard;
   }
 
   @Override
@@ -94,6 +142,11 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void tripwire(TripwireReport report) {
     this.tripwire = report;
+  }
+
+  @Override
+  public void hall(HallGuard guard) {
+    hallGuard.guard(guard);
   }
 
   @Override
@@ -163,6 +216,11 @@ final class PaperEvents implements Events, Listener {
             id(player),
             PaperPositions.toPosition(event.getBlockPlaced().getLocation()),
             event.getBlockPlaced().getType().getKey().asString()));
+    // A chest that joined another: the double chest it makes must stay on one side of every edge.
+    List<Block> halves = PaperChests.halves(event.getBlockPlaced());
+    if (!event.isCancelled() && halves.size() > 1) {
+      apply(event, player, new Intent.JoinContainers(id(player), PaperChests.positions(halves)));
+    }
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -235,7 +293,8 @@ final class PaperEvents implements Events, Listener {
                 event.getHand() == EquipmentSlot.HAND,
                 player.isSneaking(),
                 player.getInventory().getItemInMainHand().isEmpty(),
-                PaperWorld.isBed(clicked.getType()))
+                PaperWorld.isBed(clicked.getType()),
+                isInteractable(clicked))
             : new Intent.Interact(id(player));
     if (handler.decide(intent) instanceof Decision.Deny deny) {
       event.setUseInteractedBlock(Event.Result.DENY);
@@ -259,17 +318,69 @@ final class PaperEvents implements Events, Listener {
       return;
     }
     if (!event.isCancelled()) {
-      apply(event, player, new Intent.Interact(id(player)));
+      Entity entity = event.getRightClicked();
+      apply(
+          event,
+          player,
+          new Intent.UseEntity(
+              id(player),
+              PaperPositions.toPosition(entity.getLocation()),
+              entity.getType().getKey().asString()));
+    }
+  }
+
+  /** Right-clicking a point on an entity, as armour stands are used: the same as any click. */
+  @EventHandler(priority = EventPriority.LOW)
+  void onInteractAtEntity(PlayerInteractAtEntityEvent event) {
+    onInteractEntity(event);
+  }
+
+  @EventHandler(priority = EventPriority.LOW)
+  void onArmorStand(PlayerArmorStandManipulateEvent event) {
+    onInteractEntity(event);
+  }
+
+  /**
+   * Opening a block's inventory, both halves of a double chest: in the Hall, often swapped for a
+   * view-only copy.
+   */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onOpen(InventoryOpenEvent event) {
+    List<Block> blocks = PaperChests.blocks(event.getInventory());
+    if (event.getPlayer() instanceof Player player && !blocks.isEmpty()) {
+      apply(event, player, new Intent.OpenContainer(id(player), PaperChests.positions(blocks)));
     }
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onDamage(EntityDamageEvent event) {
-    if (displays.tagOf(event.getEntity()).isPresent()) {
+    Entity entity = event.getEntity();
+    if (displays.tagOf(entity).isPresent()) {
       event.setCancelled(true);
       return;
     }
-    if (event.getEntity() instanceof Player player) {
+    Position at = PaperPositions.toPosition(entity.getLocation());
+    if (hallGuard.guard().protects(at)) {
+      // Nothing in the Hall is hurt but by /kill and the void; a player's hit on an entity is
+      // the Hall's rules' to decide.
+      Player attacker =
+          event instanceof EntityDamageByEntityEvent byEntity
+              ? responsible(byEntity.getDamager())
+              : null;
+      if (attacker != null && !(entity instanceof Player)) {
+        apply(
+            event,
+            attacker,
+            new Intent.HurtEntity(id(attacker), at, entity.getType().getKey().asString()));
+        return;
+      }
+      if (event.getCause() != EntityDamageEvent.DamageCause.KILL
+          && event.getCause() != EntityDamageEvent.DamageCause.VOID) {
+        event.setCancelled(true);
+        return;
+      }
+    }
+    if (entity instanceof Player player) {
       apply(event, player, new Intent.TakeDamage(id(player)));
     }
   }
@@ -358,6 +469,96 @@ final class PaperEvents implements Events, Listener {
     }
   }
 
+  /**
+   * An archived copy moving through a hopper anywhere is stopped and deleted where it came from.
+   */
+  @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+  void onMoveItem(InventoryMoveItemEvent event) {
+    if (inventories.isArchived(event.getItem())) {
+      event.setCancelled(true);
+      Inventory source = event.getSource();
+      Bukkit.getGlobalRegionScheduler()
+          .execute(
+              plugin,
+              () -> {
+                List<String> removed = inventories.purge(source);
+                if (!removed.isEmpty()) {
+                  report(Optional.empty(), IN_A_CONTAINER, removed);
+                }
+              });
+    }
+  }
+
+  /**
+   * Entities just loaded: archived copies in item frames, on armour stands or other entities, or
+   * lying about, are deleted; and the Hall reconciles its cells there.
+   */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onEntitiesLoad(EntitiesLoadEvent event) {
+    for (Entity entity : event.getEntities()) {
+      if (displays.tagOf(entity).isEmpty()) {
+        purge(entity);
+      }
+    }
+    Chunk chunk = event.getChunk();
+    hallGuard
+        .guard()
+        .entitiesLoaded(chunk.getWorld().getKey().asString(), chunk.getX(), chunk.getZ());
+  }
+
+  private void purge(Entity entity) {
+    switch (entity) {
+      case Item item when inventories.isArchived(item.getItemStack()) -> {
+        String found = PaperInventories.describe(item.getItemStack());
+        item.remove();
+        report(Optional.empty(), ON_THE_GROUND, List.of(found));
+      }
+      case ItemFrame frame when inventories.isArchived(frame.getItem()) -> {
+        String found = PaperInventories.describe(frame.getItem());
+        frame.setItem(null, false);
+        report(Optional.empty(), IN_AN_ITEM_FRAME, List.of(found));
+      }
+      case LivingEntity living when living.getEquipment() != null -> {
+        EntityEquipment equipment = living.getEquipment();
+        List<String> removed = new ArrayList<>();
+        for (EquipmentSlot slot : EquipmentSlot.values()) {
+          if (living.canUseEquipmentSlot(slot) && inventories.isArchived(equipment.getItem(slot))) {
+            removed.add(PaperInventories.describe(equipment.getItem(slot)));
+            equipment.setItem(slot, null);
+          }
+        }
+        if (!removed.isEmpty()) {
+          report(
+              Optional.empty(),
+              entity instanceof ArmorStand ? ON_AN_ARMOUR_STAND : ON_AN_ENTITY,
+              removed);
+        }
+      }
+      default -> {}
+    }
+    if (entity instanceof InventoryHolder holder && !(entity instanceof Player)) {
+      List<String> removed = inventories.purge(holder.getInventory());
+      if (!removed.isEmpty()) {
+        report(Optional.empty(), IN_AN_ENTITY, removed);
+      }
+    }
+  }
+
+  /** A chunk in the Hall just loaded: archived copies in its containers are deleted. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onChunkLoad(ChunkLoadEvent event) {
+    HallGuard guard = hallGuard.guard();
+    for (BlockState state : event.getChunk().getTileEntities(false)) {
+      if (state instanceof BlockInventoryHolder holder
+          && guard.protects(PaperPositions.toPosition(state.getLocation()))) {
+        List<String> removed = inventories.purge(holder.getInventory());
+        if (!removed.isEmpty()) {
+          report(Optional.empty(), IN_A_HALL_CONTAINER, removed);
+        }
+      }
+    }
+  }
+
   private void report(Optional<PlayerId> player, String where, List<String> items) {
     TripwireReport listening = tripwire;
     if (listening != null) {
@@ -365,9 +566,66 @@ final class PaperEvents implements Events, Listener {
     }
   }
 
+  /** Blocks with a screen or an action that have no block entity or state to tell them by. */
+  private static final java.util.Set<Material> WORKSTATIONS =
+      java.util.EnumSet.of(
+          Material.CRAFTING_TABLE,
+          Material.STONECUTTER,
+          Material.LOOM,
+          Material.GRINDSTONE,
+          Material.SMITHING_TABLE,
+          Material.CARTOGRAPHY_TABLE,
+          Material.ANVIL,
+          Material.CHIPPED_ANVIL,
+          Material.DAMAGED_ANVIL,
+          Material.DRAGON_EGG);
+
+  /**
+   * Whether right-clicking a block does something, as a door, a lever or a chest does. Paper's own
+   * {@code isInteractable} is deprecated as unreliable, so this reads the block's kind instead.
+   */
+  private static boolean isInteractable(Block block) {
+    BlockData data = block.getBlockData();
+    return block.getState(false) instanceof TileState
+        || data instanceof Openable
+        || data instanceof Powerable
+        || data instanceof Bed
+        || data instanceof NoteBlock
+        || data instanceof Repeater
+        || data instanceof Comparator
+        || data instanceof Cake
+        || data instanceof Lightable
+        || data instanceof Levelled
+        || data instanceof RespawnAnchor
+        || Tag.FLOWER_POTS.isTagged(block.getType())
+        || WORKSTATIONS.contains(block.getType());
+  }
+
+  /** Applies the core's decision on a player's intent to the event that raised it. */
+  void decide(Cancellable event, Player player, Intent intent) {
+    apply(event, player, intent);
+  }
+
+  /** The player behind a hit or a break: themselves, or whoever shot the projectile. */
+  static @Nullable Player responsible(@Nullable Entity entity) {
+    if (entity instanceof Player player) {
+      return player;
+    }
+    return entity instanceof Projectile projectile
+            && projectile.getShooter() instanceof Player shooter
+        ? shooter
+        : null;
+  }
+
   private void apply(Cancellable event, Player player, Intent intent) {
     switch (handler.decide(intent)) {
       case Decision.Allow allow -> {}
+      case Decision.AllowWithoutDrops withoutDrops -> {
+        if (event instanceof BlockBreakEvent broken) {
+          broken.setDropItems(false);
+          broken.setExpToDrop(0);
+        }
+      }
       case Decision.Deny deny -> {
         event.setCancelled(true);
         deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
@@ -380,7 +638,7 @@ final class PaperEvents implements Events, Listener {
     }
   }
 
-  private static PlayerId id(Player player) {
+  static PlayerId id(Player player) {
     return new PlayerId(player.getUniqueId());
   }
 }

@@ -6,7 +6,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
 | M1 Core rollover | Done (#8, #9, #10) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
-| M2 Hall protection | Part 1 (visits) in review (#11, branch `m2-hof-visits`) | A26, A27, A28, A29; A44 (sitting) |
+| M2 Hall protection | Part 1 (visits) done (#11); part 2 (protection) in review (#12) | Passing locally, not yet in CI, so M2 isn't done: A22, A23, A24, A25, A26, A27, A28, A29, and A44 except refusing cushions in a no-build zone, which waits for zones in M3 (as A6's zone lock does). A9 widened |
 | M3 to M7 | Not started | — |
 
 ## M1
@@ -90,7 +90,7 @@ Built: season firsts for advancements, the Nether, the End, diamonds, elytras an
 
 ## M2
 
-**Part 1: visiting the Hall** (#11, branch `m2-hof-visits`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+**Part 1: visiting the Hall** (#11). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
 
 | Scenario | Test |
 | --- | --- |
@@ -104,4 +104,22 @@ Built: season firsts for advancements, the Nether, the End, diamonds, elytras an
 
 Built: `/hof` (alias `/halloffame`), `/hof <season>`, `/hof <player>`, `/hof leave`, sneak-clicking a bed; the entry checks (`EntryChecks`) with the new `hof.entry` keys `onGround`, `noHazards`, `cooldown` and `rateLimit`; the saved return (position, dimension, yaw, pitch and game mode) in the player record, written before the teleport; return safety (`ReturnSafety`) with the bed, nearby and spawn fallbacks; arrival immunity; sealing (`HallVisits`): leaving the bounds by a move, a teleport or anything the 500 ms sweep notices returns the player, exit anchors, no drops, pickups, pearls, chorus fruit or riding, cushions as seats, and `seasons.hof.bypass`. Decisions: `docs/questions.md` 62 to 75 (73 to 75 from the review: `/hof` refuses a spot return safety would turn down, `/hof leave` only inside the Hall, stale saved spots dropped).
 
-Not yet (M2 part 2): cell containers and the lock (A22 to A24), walk-in cells and deny-by-default rules (A25), placing and breaking cushions (A44's other half; no-build zones with M3), reconciliation, the audit of blocked Hall interactions.
+**Part 2: protecting the Hall** (#12). Passing end to end on Paper 26.3 with `./gradlew build scenarioTest` run locally; they count once CI on #12 passes, and A44 is whole only with M3's no-build zones:
+
+| Scenario | Test |
+| --- | --- |
+| A22 during decorating the owner places a chest in their cell and opens the real one (and puts diamonds in by shift-click); another player sees a view-only copy and every click takes nothing; a chest with something in it doesn't break, an emptied one does | `a22-cell-container.mjs`; unit: `HallRulesTest#onlyTheDecoratingOwnerOpensTheRealContainerAndEveryoneElseACopy`, `#onlyListedContainersGoInACellAndOnlyEmptyOnesBreak` |
+| A23 no hopper, dropper, dispenser, crafter or hopper minecart can be placed in the Hall, by an owner decorating either; a hopper and a hopper minecart under Hall chests pull nothing, while a hopper outside the Hall does | `a23-no-hoppers.mjs`; unit: `HallRulesTest#noHopperDropperDispenserCrafterOrEnderChestGoesInTheHall` |
+| A24 after the lock the owner's chest opens as a copy for the owner and everyone else, and still does after a restart | `a24-lock-view-only.mjs` (two sessions); unit: `HallRulesTest#onlyTheDecoratingOwnerOpensTheRealContainer…` |
+| A25 a visitor walks into another's cell in adventure mode and can't break, place, take from a chest, pot, item frame or armour stand, pull a lever, open a lectern or edit a sign; a fence gate opens; in creative mode too; each refusal is audited | `a25-walk-in.mjs` (walking by the `/scenario move` stand-in, ADR 0003; frames and stands clicked and hit by the bot itself); unit: `HallRulesTest#visitorsOpenDoorsAndUseNothingElse`, `#entitiesAreDecorationOnlyForTheirDecoratingOwner`, `#refusalsAreAuditedOnceARunWithTheCountAfter` |
+| A44 (building half) a visitor can't place or break a cushion in someone else's cell but can sit on one; the owner places and breaks them while decorating, and not once locked | `a44-cushion-build.mjs`; `a44-cushion-sit.mjs` stays; unit: `HallRulesTest#entitiesAreDecorationOnlyForTheirDecoratingOwner` |
+| A9 (widened) archived copies in an item frame, on an armour stand and in a Hall chest are deleted and audited when their chunk loads | `a09-tripwire.mjs` |
+| The world's side: TNT outside and inside the Hall breaks no Hall block, frame or stand and hurts nobody; fire, a piston, flowing water and a dispenser can't cross the edge, each with a control outside that does change | `m2-hall-world-rules.mjs`; unit: `HallRulesTest#nothingCrossesIntoTheHallByItself`, `#noLavaAnywhereAndWaterOnlyForTheOwner`; MockBukkit: `PaperHallGuardTest` |
+| Reconciliation: when a cell's chunk loads again, a figure moved out of its cell is drawn again and the moved one removed, and a stray display removed; `/hof reconcile` puts back changed gear and then finds nothing to do; each repair is audited | `m2-reconcile.mjs`; unit: `HallRulesTest#reconciliationOnChunkLoad…`, `#reconciliationFixesAFiguresGear`, `#reconciliationStaysWithinItsBudgetEachTick`, `#aDisplayFarFromItsCellIsRemovedWhenItsChunkLoads` |
+| After their archive (`decorating.afterArchive` at its default 15 minutes) an owner still builds, but their stash opens as a copy, a broken block drops nothing and they carry nothing (questions 87) | `m2-after-archive-keeps.mjs`; unit: `HallRulesTest#afterTheirArchiveAnOwnerArrangesTheirCellButTakesNothingOut` |
+| A double chest can't be made across the Hall's edge or a cell's; one already across the Hall's edge opens as a copy from outside and feeds no hopper, while the same pair outside the Hall does (questions 88) | `m2-double-chest.mjs`; unit: `HallRulesTest#aDoubleChestNeverReachesAcrossACellOrTheHallsEdge` |
+| `cells.access: bounds` or `gate` is refused on load | unit: `ConfigLoaderTest#accessModesNotBuiltYetAreRefused` |
+
+Built: `HallRules` (deny by default for every player intent in the Hall, and `HallGuard` for changes nobody makes), `HallAudit` (`hall-blocked` and `hall-bypass` entries, repeats within 10 s counted), the `Reconciler` (on entities loading, every 5 minutes for loaded cells, and `/hof reconcile`; about 1 ms a tick), and on Paper `PaperHallGuard` plus the new intents in `PaperEvents`: buckets, fire, bone meal, entity placing, using and breaking, container opens swapped for view-only copies, no damage in the Hall but from `/kill` and the void, and the tripwire over entities and Hall containers as chunks load and over hoppers. Decorating owners pick up in their own cell before the season ends; after their archive they take nothing out of it. Double chests stay on one side of every cell's edge and the Hall's (`PaperChests`). The test plugin gains `/scenario open`, `place-entity` and `hit`, a block state for `place` and `drops` for `break` (ADR 0003). Decisions: `docs/questions.md` 76 to 86, and 87 to 89 from the review.
+
+Not yet: access modes `bounds` and `gate` (refused on load until built), the admin webhook for tripwire hits (M4), cushions in no-build zones (M3).
