@@ -12,6 +12,9 @@ public interface World {
   /** Sets the world spawn, where new players and players with no respawn point appear. */
   void setSpawn(Position position);
 
+  /** The block at a position, in a loaded chunk; air if its chunk isn't loaded. */
+  BlockInfo block(Position position);
+
   /** Loads (and generates if needed) the chunk holding a position without stalling the tick. */
   CompletableFuture<Void> loadChunk(Position position);
 }

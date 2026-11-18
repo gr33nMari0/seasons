@@ -31,7 +31,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Registers core command trees with Brigadier through Paper's Commands API. */
 final class PaperCommands implements Commands {
-  private final List<CommandNode> roots = new ArrayList<>();
+  private final List<Root> roots = new ArrayList<>();
+
+  private record Root(CommandNode node, List<String> aliases) {}
+
   private final PaperText text;
 
   PaperCommands(JavaPlugin plugin, PaperText text) {
@@ -41,18 +44,18 @@ final class PaperCommands implements Commands {
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
-              for (CommandNode root : roots) {
-                if (toBrigadier(root, List.of()).build()
+              for (Root root : roots) {
+                if (toBrigadier(root.node(), List.of()).build()
                     instanceof LiteralCommandNode<CommandSourceStack> literal) {
-                  event.registrar().register(literal);
+                  event.registrar().register(literal, null, root.aliases());
                 }
               }
             });
   }
 
   @Override
-  public void register(CommandNode root) {
-    roots.add(root);
+  public void register(CommandNode root, List<String> aliases) {
+    roots.add(new Root(root, List.copyOf(aliases)));
   }
 
   ArgumentBuilder<CommandSourceStack, ?> toBrigadier(CommandNode node, List<CommandNode> scope) {

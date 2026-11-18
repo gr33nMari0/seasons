@@ -59,8 +59,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code move <player> <x> <y> <z> <walk|push|fall>} moves a player as their client would,
  *       firing {@code PlayerMoveEvent} and then putting them there unless it was cancelled: bots
  *       send no movement through the translation
- *   <li>{@code pearl <player> <x> <y> <z>} throws a real ender pearl from the player's eyes
- *       towards a block
+ *   <li>{@code pearl <player> <x> <y> <z>} throws a real ender pearl from the player's eyes towards
+ *       a block
  *   <li>{@code use-item <player>} right-clicks the air with the held item, firing {@code
  *       PlayerInteractEvent}
  *   <li>{@code consume <player>} eats the held item, firing {@code PlayerItemConsumeEvent}

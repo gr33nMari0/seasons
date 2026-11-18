@@ -52,6 +52,7 @@ public final class HallCommands {
   private final Platform platform;
   private final ConfigHolder config;
   private final HallService hall;
+  private final HallVisits visits;
   private final HallRenderer renderer;
   private final Optional<HallImporter> importer;
   private final PlayerStore players;
@@ -63,12 +64,14 @@ public final class HallCommands {
       Platform platform,
       ConfigHolder config,
       HallService hall,
+      HallVisits visits,
       HallRenderer renderer,
       Optional<HallImporter> importer,
       PlayerStore players) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
+    this.visits = visits;
     this.renderer = renderer;
     this.importer = importer;
     this.players = players;
@@ -76,6 +79,9 @@ public final class HallCommands {
 
   public CommandNode root() {
     return CommandNode.literal("hof")
+        .executes(this::visit)
+        .then(CommandNode.literal("leave").executes(this::leave))
+        .then(CommandNode.argument("target", ArgumentType.word()).executes(this::visit))
         .then(
             CommandNode.literal("gallery")
                 .permission(PERMISSION_ADMIN)
@@ -564,6 +570,33 @@ public final class HallCommands {
   }
 
   // Swaps and displays
+
+  /**
+   * {@code /hof}, {@code /hof <season>} and {@code /hof <player>}. The node has no permission of
+   * its own, since the admin commands hang off it, so the visit permission is checked here.
+   */
+  void visit(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = visitor(source);
+    if (player.isPresent()) {
+      visits.visit(player.get(), arguments.optionalString("target"));
+    }
+  }
+
+  void leave(CommandSource source, Arguments arguments) {
+    visitor(source).ifPresent(visits::leave);
+  }
+
+  private Optional<PlayerId> visitor(CommandSource source) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return Optional.empty();
+    }
+    if (!platform.permissions().has(source.player().get(), HallVisits.PERMISSION_VISIT)) {
+      source.reply(messages().get("hof.no-permission"));
+      return Optional.empty();
+    }
+    return source.player();
+  }
 
   void swap(CommandSource source, Arguments arguments) {
     if (source.player().isEmpty()) {

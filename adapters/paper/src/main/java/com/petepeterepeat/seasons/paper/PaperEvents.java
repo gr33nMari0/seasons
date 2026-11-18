@@ -12,6 +12,7 @@ import com.petepeterepeat.seasons.core.port.TripwireReport;
 import java.util.List;
 import java.util.Optional;
 import org.bukkit.block.Block;
+import org.bukkit.entity.Cushion;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
@@ -25,6 +26,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
@@ -36,9 +38,12 @@ import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.Nullable;
 
@@ -201,19 +206,36 @@ final class PaperEvents implements Events, Listener {
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onConsume(PlayerItemConsumeEvent event) {
-    apply(event, event.getPlayer(), new Intent.Consume(id(event.getPlayer())));
+    apply(
+        event,
+        event.getPlayer(),
+        new Intent.Consume(id(event.getPlayer()), event.getItem().getType().getKey().asString()));
   }
 
   @EventHandler(priority = EventPriority.LOW)
   void onInteract(PlayerInteractEvent event) {
     Player player = event.getPlayer();
     Block clicked = event.getClickedBlock();
+    ItemStack item = event.getItem();
+    if (event.getAction().isRightClick() && item != null && !item.isEmpty()) {
+      // Using the item itself, such as throwing an ender pearl.
+      if (handler.decide(new Intent.UseItem(id(player), item.getType().getKey().asString()))
+          instanceof Decision.Deny deny) {
+        event.setUseInteractedBlock(Event.Result.DENY);
+        event.setUseItemInHand(Event.Result.DENY);
+        deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
+        return;
+      }
+    }
     Intent intent =
         event.getAction() == Action.RIGHT_CLICK_BLOCK && clicked != null
             ? new Intent.UseBlock(
                 id(player),
                 PaperPositions.toPosition(clicked.getLocation()),
-                event.getHand() == EquipmentSlot.HAND)
+                event.getHand() == EquipmentSlot.HAND,
+                player.isSneaking(),
+                player.getInventory().getItemInMainHand().isEmpty(),
+                PaperWorld.isBed(clicked.getType()))
             : new Intent.Interact(id(player));
     if (handler.decide(intent) instanceof Decision.Deny deny) {
       event.setUseInteractedBlock(Event.Result.DENY);
@@ -249,6 +271,51 @@ final class PaperEvents implements Events, Listener {
     }
     if (event.getEntity() instanceof Player player) {
       apply(event, player, new Intent.TakeDamage(id(player)));
+    }
+  }
+
+  /** Only when the block changes, so the Hall can tell crossing its edge from standing about. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onMove(PlayerMoveEvent event) {
+    if (!event.hasChangedBlock()) {
+      return;
+    }
+    Player player = event.getPlayer();
+    apply(
+        event,
+        player,
+        new Intent.Move(
+            id(player),
+            PaperPositions.toPosition(event.getFrom()),
+            PaperPositions.toPosition(event.getTo())));
+  }
+
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onTeleport(PlayerTeleportEvent event) {
+    Player player = event.getPlayer();
+    Intent.TeleportKind kind =
+        players.isSeasonsTeleport(player)
+            ? Intent.TeleportKind.SEASONS
+            : switch (event.getCause()) {
+              case ENDER_PEARL -> Intent.TeleportKind.PEARL;
+              case CONSUMABLE_EFFECT -> Intent.TeleportKind.CHORUS;
+              default -> Intent.TeleportKind.OTHER;
+            };
+    apply(
+        event,
+        player,
+        new Intent.Teleport(
+            id(player),
+            PaperPositions.toPosition(event.getFrom()),
+            PaperPositions.toPosition(event.getTo()),
+            kind));
+  }
+
+  /** Riding or sitting: in the Hall, only a cushion is a seat. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onMount(EntityMountEvent event) {
+    if (event.getEntity() instanceof Player player) {
+      apply(event, player, new Intent.Mount(id(player), event.getMount() instanceof Cushion));
     }
   }
 

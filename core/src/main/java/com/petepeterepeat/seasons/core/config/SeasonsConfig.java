@@ -71,9 +71,28 @@ public record SeasonsConfig(
 
   @ConfigSerializable
   public record Hof(Entry entry, ReturnSafety returnSafety, Duration arrivalImmunity) {
+    /**
+     * Where and when /hof works.
+     *
+     * @param bedDistance how near a bed a player must stand
+     * @param anyBed any bed of any kind, or only their own respawn bed
+     * @param noHostiles refused with monsters near, as vanilla refuses sleep
+     * @param noDamageFor refused for this long after taking damage
+     * @param onGround refused while riding, gliding, falling or swimming
+     * @param noHazards refused in lava, fire or powder snow, or while burning
+     * @param cooldown between visits
+     * @param rateLimit between attempts
+     */
     @ConfigSerializable
     public record Entry(
-        int bedDistance, boolean anyBed, boolean noHostiles, Duration noDamageFor) {}
+        int bedDistance,
+        boolean anyBed,
+        boolean noHostiles,
+        Duration noDamageFor,
+        boolean onGround,
+        boolean noHazards,
+        Duration cooldown,
+        Duration rateLimit) {}
 
     @ConfigSerializable
     public record ReturnSafety(int hostileRadius, List<ReturnFallback> fallbacks) {

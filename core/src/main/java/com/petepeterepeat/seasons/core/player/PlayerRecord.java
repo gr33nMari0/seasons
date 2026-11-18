@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.player;
 
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.Position;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
@@ -25,6 +27,8 @@ import java.util.Set;
  * @param pendingDestination a season archived whose cell they haven't been sent to yet
  * @param hallAdventure Seasons switched them from survival to adventure in the Hall, so leaving it
  *     puts survival back; kept here so a restart doesn't strand them in adventure
+ * @param hallReturn where a visitor to the Hall goes back to, and in which game mode; kept here so
+ *     it survives logging out and restarts
  */
 public record PlayerRecord(
     PlayerId id,
@@ -36,7 +40,8 @@ public record PlayerRecord(
     Map<Integer, FurthestBlock> furthest,
     Set<Integer> pendingDisplays,
     OptionalInt pendingDestination,
-    boolean hallAdventure) {
+    boolean hallAdventure,
+    Optional<HallReturn> hallReturn) {
   public PlayerRecord {
     seasons = Map.copyOf(seasons);
     baselines = Map.copyOf(baselines);
@@ -51,9 +56,26 @@ public record PlayerRecord(
    */
   public record SeasonPlay(Instant firstSeen, Instant lastSeen, Duration playTime) {}
 
+  /**
+   * Where a Hall visitor returns to.
+   *
+   * @param mode the game mode they had when they set off
+   */
+  public record HallReturn(Position at, GameMode mode) {}
+
   public static PlayerRecord create(PlayerId id, String name) {
     return new PlayerRecord(
-        id, name, Map.of(), 0, 0, Map.of(), Map.of(), Set.of(), OptionalInt.empty(), false);
+        id,
+        name,
+        Map.of(),
+        0,
+        0,
+        Map.of(),
+        Map.of(),
+        Set.of(),
+        OptionalInt.empty(),
+        false,
+        Optional.empty());
   }
 
   public boolean played(int season) {
@@ -71,7 +93,8 @@ public record PlayerRecord(
         furthest,
         pendingDisplays,
         pendingDestination,
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
   /** Marks the season played and adds online time to it. */
@@ -93,9 +116,11 @@ public record PlayerRecord(
         furthest,
         pendingDisplays,
         pendingDestination,
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
+  /** Archived into a season; a saved Hall return is dropped, since it belongs to that season. */
   public PlayerRecord withArchived(int season) {
     Set<Integer> displays = new HashSet<>(pendingDisplays);
     displays.add(season);
@@ -109,7 +134,8 @@ public record PlayerRecord(
         furthest,
         displays,
         OptionalInt.of(season),
-        hallAdventure);
+        hallAdventure,
+        Optional.empty());
   }
 
   /**
@@ -134,7 +160,8 @@ public record PlayerRecord(
         furthest,
         displays,
         destination,
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
   public PlayerRecord withDisplaysRendered(int season) {
@@ -150,7 +177,8 @@ public record PlayerRecord(
         furthest,
         displays,
         pendingDestination,
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
   public PlayerRecord withDestinationReached() {
@@ -164,10 +192,11 @@ public record PlayerRecord(
         furthest,
         pendingDisplays,
         OptionalInt.empty(),
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
-  /** Brought into a season, with the statistics it starts from. */
+  /** Brought into a season, with the statistics it starts from; a saved Hall return is dropped. */
   public PlayerRecord withEntered(int season, Map<String, Long> baseline) {
     Map<Integer, Map<String, Long>> next = new HashMap<>(baselines);
     next.put(season, Map.copyOf(baseline));
@@ -181,7 +210,8 @@ public record PlayerRecord(
         furthest,
         pendingDisplays,
         pendingDestination,
-        hallAdventure);
+        hallAdventure,
+        Optional.empty());
   }
 
   public FurthestBlock furthest(int season) {
@@ -201,7 +231,8 @@ public record PlayerRecord(
         next,
         pendingDisplays,
         pendingDestination,
-        hallAdventure);
+        hallAdventure,
+        hallReturn);
   }
 
   public PlayerRecord withHallAdventure(boolean switched) {
@@ -215,7 +246,23 @@ public record PlayerRecord(
         furthest,
         pendingDisplays,
         pendingDestination,
-        switched);
+        switched,
+        hallReturn);
+  }
+
+  public PlayerRecord withHallReturn(Optional<HallReturn> next) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        hallAdventure,
+        next);
   }
 
   public Optional<Map<String, Long>> baseline(int season) {

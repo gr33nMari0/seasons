@@ -6,14 +6,17 @@ import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Advancements;
+import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.DragonFight;
+import com.petepeterepeat.seasons.core.port.Entities;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.Experience;
 import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.Menus;
+import com.petepeterepeat.seasons.core.port.Movement;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PagedView;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -67,6 +70,29 @@ public final class FakePlatform {
   public final List<PagedView> opened = new ArrayList<>();
   public final List<String> objectives = new ArrayList<>();
   public Position worldSpawn = Position.of("minecraft:overworld", 0, 64, 0);
+
+  /** Blocks set by a test; elsewhere stone below y 64 and air from it up. */
+  public final Map<List<Integer>, BlockInfo> blocks = new HashMap<>();
+
+  /** Where the monsters are. */
+  public final List<Position> monsters = new ArrayList<>();
+
+  public static final BlockInfo STONE = new BlockInfo("minecraft:stone", true, false, false);
+  public static final BlockInfo LAVA = new BlockInfo("minecraft:lava", false, true, false);
+  public static final BlockInfo BED = new BlockInfo("minecraft:straw_bed", true, false, true);
+
+  public void setBlock(int x, int y, int z, BlockInfo block) {
+    blocks.put(List.of(x, y, z), block);
+  }
+
+  public BlockInfo blockAt(Position at) {
+    BlockInfo set = blocks.get(List.of(at.blockX(), at.blockY(), at.blockZ()));
+    if (set != null) {
+      return set;
+    }
+    return at.blockY() < 64 ? STONE : BlockInfo.AIR;
+  }
+
   public boolean dragonKilled = true;
 
   /** What one fake player carries and has done. */
@@ -84,6 +110,8 @@ public final class FakePlatform {
     public final List<Message> titles = new ArrayList<>();
     public java.util.Set<String> carried = new java.util.HashSet<>();
     public Map<String, Long> counts = new HashMap<>();
+    public Movement movement = Movement.STILL;
+    public @Nullable Position respawn;
 
     /** The books opened for them: each book's pages of lines. */
     public final List<List<List<Message>>> books = new ArrayList<>();
@@ -301,6 +329,21 @@ public final class FakePlatform {
           }
 
           @Override
+          public Movement movement(PlayerId id) {
+            return state(id).movement;
+          }
+
+          @Override
+          public Optional<Position> respawnPoint(PlayerId id) {
+            return Optional.ofNullable(state(id).respawn);
+          }
+
+          @Override
+          public Optional<Position> bed(PlayerId id) {
+            return Optional.ofNullable(state(id).respawn);
+          }
+
+          @Override
           public void celebrate(PlayerId id, Message title, Message subtitle) {
             state(id).titles.add(title);
           }
@@ -415,8 +458,40 @@ public final class FakePlatform {
           }
 
           @Override
+          public BlockInfo block(Position position) {
+            return blockAt(position);
+          }
+
+          @Override
           public CompletableFuture<Void> loadChunk(Position position) {
             return CompletableFuture.completedFuture(null);
+          }
+        };
+    Entities entities =
+        new Entities() {
+          @Override
+          public Optional<Position> position(java.util.UUID entity) {
+            return Optional.empty();
+          }
+
+          @Override
+          public CompletableFuture<Boolean> teleport(java.util.UUID entity, Position destination) {
+            return CompletableFuture.completedFuture(false);
+          }
+
+          @Override
+          public Optional<PlayerId> owner(java.util.UUID entity) {
+            return Optional.empty();
+          }
+
+          @Override
+          public List<Position> hostiles(Position centre, double dx, double dy, double dz) {
+            return monsters.stream()
+                .filter(m ->
+                    Math.abs(m.x() - centre.x()) <= dx
+                        && Math.abs(m.y() - centre.y()) <= dy
+                        && Math.abs(m.z() - centre.z()) <= dz)
+                .toList();
           }
         };
     Menus menus =
@@ -528,10 +603,10 @@ public final class FakePlatform {
         inventories,
         advancements,
         world,
-        null,
+        entities,
         null,
         menus,
-        commands::add,
+        (root, aliases) -> commands.add(root),
         // Everyone holds every node except the bypass nodes, which nobody gets by default.
         (player, node) -> !node.endsWith(".bypass"),
         events,
