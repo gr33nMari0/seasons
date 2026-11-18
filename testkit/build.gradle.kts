@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
-import java.time.Duration
+import java.lang.management.ManagementFactory
+import kotlin.random.Random
+import org.gradle.internal.logging.progress.ProgressLoggerFactory
 import org.gradle.kotlin.dsl.support.serviceOf
+import org.gradle.workers.WorkerExecutor
+import seasons.scenarios.ScenarioShard
 import xyz.jpenilla.runpaper.task.RunServer
+import xyz.jpenilla.runtask.service.DownloadsAPIService
 
 description = "Seasons testkit: the scenario suite (Mineflayer bots plus admin commands) and the test plugin that drives it"
 
@@ -43,20 +49,94 @@ val installBots = tasks.register<Exec>("installBots") {
     outputs.dir(botsDir.dir("node_modules"))
 }
 
-// Each scenario file runs on its own freshly wiped server, because scenarios change persistent
-// state. A file can ask for several sessions with a header line "// @sessions <n>": the server
-// is stopped after each one and started again on the same world for the next.
-data class Scenario(val name: String, val sessions: Int)
+// The scenarios, from their files. Header lines: "// @sessions <n>" restarts the server between
+// sessions on the same world; "// @isolated <reason>" gives the scenario a fresh server of its own
+// instead of sharing one (docs/adr/0003).
+data class Scenario(val name: String, val sessions: Int, val isolated: Boolean)
 
 val sessionsHeader = Regex("""^// @sessions (\d+)$""", RegexOption.MULTILINE)
-val scenarios =
+val isolatedHeader = Regex("""^// @isolated \S.*$""", RegexOption.MULTILINE)
+val allScenarios =
     botsDir.dir("scenarios").asFile
         .listFiles { f -> f.name.endsWith(".mjs") }!!
         .sortedBy { it.name }
         .map { f ->
-            val sessions = sessionsHeader.find(f.readText())?.groupValues?.get(1)?.toInt() ?: 1
-            Scenario(f.nameWithoutExtension, sessions)
+            val text = f.readText()
+            val sessions = sessionsHeader.find(text)?.groupValues?.get(1)?.toInt() ?: 1
+            Scenario(f.nameWithoutExtension, sessions, isolatedHeader.containsMatchIn(text))
         }
+
+// -Pscenarios=a33-homecoming,m3-* runs just those; * matches anything.
+val scenarioFilter = providers.gradleProperty("scenarios").orNull
+val selectedScenarios =
+    if (scenarioFilter == null) {
+        allScenarios
+    } else {
+        val patterns = scenarioFilter.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            .map { Regex(it.split("*").joinToString(".*") { part -> Regex.escape(part) }) }
+        allScenarios.filter { s -> patterns.any { it.matches(s.name) } }
+    }
+
+// -PscenarioIsolation=fresh runs every scenario on a freshly wiped server of its own, as before
+// shared servers; the nightly workflow runs it. The default shares one server per shard.
+val isolation = providers.gradleProperty("scenarioIsolation").getOrElse("shared")
+check(isolation == "shared" || isolation == "fresh") { "-PscenarioIsolation is shared or fresh, not $isolation" }
+
+// The order within each shard is shuffled; -PscenarioSeed=<n> repeats a run's order.
+val scenarioSeed = providers.gradleProperty("scenarioSeed").map { it.toLong() }.getOrElse(Random.nextLong(1, 1_000_000))
+
+// How many servers run side by side: -PscenarioShards=<n>, or as many as this machine's cores and
+// memory allow (two cores and 2 GB each, leaving 4 GB for everything else). -PscenarioShard=<k>
+// runs only shard k of n, as each CI shard job does.
+val shardHeap = "1536m"
+val autoShards = run {
+    val cores = Runtime.getRuntime().availableProcessors()
+    val memoryGb = (ManagementFactory.getOperatingSystemMXBean() as com.sun.management.OperatingSystemMXBean)
+        .totalMemorySize / (1L shl 30)
+    maxOf(1, minOf(cores / 2, ((memoryGb - 4) / 2).toInt()))
+}
+val shardCount = providers.gradleProperty("scenarioShards").map { it.toInt() }.getOrElse(autoShards)
+    .coerceAtMost(maxOf(1, selectedScenarios.size))
+val onlyShard = providers.gradleProperty("scenarioShard").map { it.toInt() }.orNull
+check(onlyShard == null || onlyShard in 1..shardCount) { "-PscenarioShard must be between 1 and $shardCount" }
+
+// Seconds each scenario took in a full run, all its sessions and resets included; refresh it with
+// ./gradlew :testkit:updateScenarioTimings after a full run. Shards are filled longest first.
+val timingsFile = layout.projectDirectory.file("scenario-timings.json")
+val bootSeconds = 8.0
+
+@Suppress("UNCHECKED_CAST")
+val recordedSeconds: Map<String, Double> =
+    timingsFile.asFile.takeIf { it.exists() }
+        ?.let { (JsonSlurper().parse(it) as Map<String, Number>).mapValues { e -> e.value.toDouble() } }
+        ?: emptyMap()
+
+/** The scenarios of each shard, in the order it runs them. */
+fun plan(scenarios: List<Scenario>, shards: Int, seed: Long): List<List<Scenario>> {
+    val known = recordedSeconds.values.sorted()
+    val median = if (known.isEmpty()) 10.0 else known[known.size / 2]
+    fun cost(s: Scenario) =
+        (recordedSeconds[s.name] ?: median) + if (s.isolated) bootSeconds else 0.0
+    val bins = List(shards) { mutableListOf<Scenario>() }
+    val loads = DoubleArray(shards)
+    for (s in scenarios.sortedWith(compareByDescending<Scenario> { cost(it) }.thenBy { it.name })) {
+        val i = loads.indices.minByOrNull { loads[it] }!!
+        bins[i].add(s)
+        loads[i] += cost(s)
+    }
+    return bins.mapIndexed { i, bin -> bin.shuffled(Random(seed + i)) }
+}
+
+val scenarioPaper = tasks.register<RunServer>("scenarioPaper") {
+    group = "verification"
+    description = "Runs a plain Paper server with the scenario suite's ViaVersion and ViaBackwards; the shards use its jars."
+    minecraftVersion(minecraftVersions.last())
+    runDirectory(layout.buildDirectory.dir("scenario/paper").get().asFile)
+    downloadPlugins {
+        modrinth("viaversion", libs.versions.viaversion.get())
+        modrinth("viabackwards", libs.versions.viabackwards.get())
+    }
+}
 
 // Webhook URLs must be https, in tests too. The scenario servers trust a self-signed certificate
 // made here, and the bot runner serves the webhook receiver with it.
@@ -97,94 +177,151 @@ val scenarioTls = tasks.register("scenarioTls") {
     }
 }
 
-// Boot, scenario and shutdown time for each session that ran, slowest first. Boot runs from the
-// task starting to the server having loaded (split at the JVM starting, the test plugin loading
-// before the worlds and enabling after them); scenario from then until the bot runner finished;
-// shutdown from then until the task ended. A session that halted on purpose has its runner
-// outlive the server, so its shutdown counts only what is left after the runner.
-data class TimingRow(
-    val version: String, val name: String, val session: Int, val start: Long, val end: Long,
-    val jvm: Long?, val load: Long?, val enable: Long?, val booted: Long?, val ran: Long?,
-    val passed: String,
-) {
-    val total get() = end - start
-    val boot get() = booted?.let { it - start }
-    val scenario get() = if (booted != null && ran != null) ran - booted else null
-    val shutdown get() = ran?.let { maxOf(0, end - it) }
+val resultsRoot = layout.buildDirectory.dir("scenario-results")
+val javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+val workers = serviceOf<WorkerExecutor>()
+
+val scenarioRuns = minecraftVersions.map { version ->
+    val v = version.replace('.', '_')
+    val bundlerDir = layout.buildDirectory.dir("scenario/$version/bundler")
+    tasks.register("scenarioRun_$v") {
+        group = "verification"
+        description = "Runs the acceptance scenarios on Paper $version, in shards side by side."
+        dependsOn(installBots, scenarioTls)
+        val pluginJars = files(
+            project(":adapters:paper").tasks.named("shadowJar"),
+            project(":web").tasks.named("shadowJar"),
+            tasks.jar,
+        )
+        inputs.files(pluginJars)
+        outputs.upToDateWhen { false }
+        doLast {
+            val progress = serviceOf<ProgressLoggerFactory>()
+            val paperJar = DownloadsAPIService.paper(project).get()
+                .resolveBuild(progress, version, DownloadsAPIService.Build.Latest)
+            val template = scenarioPaper.get()
+            val via = template.downloadPlugins.downloads.map { template.pluginDownloadService.get().resolvePlugin(progress, it) }
+            val java = javaLauncher.get().executablePath.asFile.path
+            // Paperclip unpacks Paper and its libraries once, into a folder every shard shares.
+            val bundler = bundlerDir.get().asFile
+            bundler.mkdirs()
+            providers.exec {
+                workingDir = bundler
+                commandLine(java, "-DbundlerRepoDir=${bundler.path}", "-Dpaperclip.patchonly=true", "-jar", paperJar.toString())
+            }.result.get().assertNormalExitValue()
+
+            val shards = plan(selectedScenarios, shardCount, scenarioSeed)
+            val running = shards.indices.map { it + 1 }.filter { onlyShard == null || it == onlyShard }
+            logger.lifecycle(
+                "Scenarios on Paper $version: ${selectedScenarios.size} in ${shards.size} shard(s), " +
+                    "$isolation servers, seed $scenarioSeed (repeat with -PscenarioSeed=$scenarioSeed)",
+            )
+            val tls = tlsDir.get().asFile
+            val out = resultsRoot.get().dir(version).asFile
+            if (onlyShard == null) {
+                out.deleteRecursively() // no shard of an earlier run is read as this one's
+            }
+            for (k in running) {
+                logger.lifecycle("  shard $k: ${shards[k - 1].joinToString(" ") { it.name }}")
+                workers.noIsolation().submit(ScenarioShard::class.java) {
+                    shard.set(k)
+                    this.java.set(java)
+                    this.paperJar.set(paperJar.toFile())
+                    this.pluginJars.from(pluginJars, via.map { it.toFile() })
+                    runDirectory.set(layout.buildDirectory.dir("scenario/$version/shard-$k"))
+                    outputDirectory.set(File(out, "shard-$k"))
+                    serverPort.set(25700 + 10 * k)
+                    webhookPort.set(25701 + 10 * k)
+                    shared.set(isolation == "shared")
+                    jvmArgs.set(
+                        listOf(
+                            "-Xmx$shardHeap",
+                            "-Dcom.mojang.eula.agree=true",
+                            "-Ddisable.watchdog=true",
+                            "-Dfile.encoding=UTF-8",
+                            "-DbundlerRepoDir=${bundler.path}",
+                            "-Djavax.net.ssl.trustStore=${tls.resolve("truststore.p12")}",
+                            "-Djavax.net.ssl.trustStorePassword=$tlsPassword",
+                            // Turns on Seasons' scenario hooks; never set on a real server (docs/adr/0003).
+                            "-Dseasons.scenario=true",
+                            "-Dseasons.scenario.tls=${tls.resolve("webhook.p12")}",
+                            "-Dseasons.scenario.admin=$adminBot",
+                            "-Dseasons.scenario.clientVersion=$botClientVersion",
+                            "-Dseasons.scenario.node=${providers.environmentVariable("NODE").getOrElse("node")}",
+                            "-Dseasons.scenario.runner=${botsDir.file("run.mjs").asFile}",
+                        ),
+                    )
+                    steps.set(
+                        shards[k - 1].flatMap { s ->
+                            (1..s.sessions).map { "${s.name}:$it:${s.sessions}:${if (s.isolated) 1 else 0}" }
+                        },
+                    )
+                }
+            }
+            workers.await()
+            @Suppress("UNCHECKED_CAST")
+            val failed = running.flatMap { k ->
+                val json = File(out, "shard-$k/shard.json")
+                if (!json.exists()) return@flatMap listOf("shard $k wrote no results")
+                ((JsonSlurper().parse(json) as Map<String, Any?>)["results"] as List<Map<String, Any?>>)
+                    .filter { it["passed"] != true }
+                    .map { "${it["name"]} session ${it["session"]} (shard $k): ${it["error"].toString().lineSequence().first()}" }
+            }
+            check(failed.isEmpty()) {
+                "${failed.size} scenario session(s) failed on Paper $version (seed $scenarioSeed):\n" +
+                    failed.joinToString("\n") { "  $it" } +
+                    "\nServer logs: ${out}/shard-<k>/server.log"
+            }
+        }
+        finalizedBy(scenarioTimings)
+    }
 }
 
-val scenarioTimings = tasks.register("scenarioTimings") {
+// Boot, scenario, reset and shutdown time for the run, slowest scenario first, written to
+// build/reports/scenario-timings.md. Boot runs from starting the JVM to the server having loaded;
+// scenario is the bot runner's time for each session; reset the time to put the server back after
+// it; shutdown from the runner finishing to the JVM having stopped.
+val scenarioTimings: TaskProvider<Task> = tasks.register("scenarioTimings") {
     group = "verification"
-    description = "Writes build/reports/scenario-timings.md from the scenario sessions that ran."
-    val resultsRoot = layout.buildDirectory.dir("scenario-results")
+    description = "Writes build/reports/scenario-timings.md from the last scenario run."
     val report = rootProject.layout.buildDirectory.file("reports/scenario-timings.md")
     outputs.file(report)
     outputs.upToDateWhen { false }
     doLast {
-        fun num(map: Map<*, *>?, key: String) = (map?.get(key) as Number?)?.toLong()
-        fun json(f: File) = if (f.exists()) JsonSlurper().parse(f) as Map<*, *> else null
-        val rows = resultsRoot.get().asFile.listFiles().orEmpty().filter { it.isDirectory }.flatMap { versionDir ->
-            versionDir.listFiles().orEmpty().filter { it.isDirectory && it.name != "nbt" }.flatMap { scenarioDir ->
-                scenarioDir.listFiles().orEmpty().mapNotNull { dir ->
-                    val start = dir.resolve("task-start").takeIf { it.exists() }?.readText()?.toLong() ?: return@mapNotNull null
-                    val end = dir.resolve("task-end").takeIf { it.exists() }?.readText()?.toLong() ?: return@mapNotNull null
-                    val boot = json(dir.resolve("boot-timing.json"))
-                    val runner = json(dir.resolve("results.json"))
-                    val result = json(dir.resolve("result.json"))
-                    val halted = dir.resolve("halted.json").exists()
-                    val passed = when {
-                        result != null -> if (result["passed"] == true) "pass" else "FAIL"
-                        halted -> "halt"
-                        else -> "?"
-                    }
-                    TimingRow(
-                        versionDir.name, scenarioDir.name, dir.name.toInt(), start, end,
-                        num(boot, "jvmStart"), num(boot, "pluginLoad"), num(boot, "pluginEnable"),
-                        num(boot, "serverLoaded"), num(runner, "finishedAt"), passed,
-                    )
-                }
-            }
-        }.sortedByDescending { it.total }
-        fun s(ms: Long?) = ms?.let { "%.1f".format(it / 1000.0) } ?: "–"
-        fun sum(f: (TimingRow) -> Long?) = rows.sumOf { f(it) ?: 0L }
-        val wall = if (rows.isEmpty()) 0L else rows.maxOf { it.end } - rows.minOf { it.start }
-        val firstSessions = rows.filter { it.session == 1 }
-        val laterSessions = rows.filter { it.session > 1 }
-        fun avg(list: List<TimingRow>, f: (TimingRow) -> Long?) =
-            list.mapNotNull(f).takeIf { it.isNotEmpty() }?.average()?.toLong()
+        val shards = shardFiles()
+        fun n(v: Any?) = (v as Number?)?.toLong()
+        fun sec(ms: Long?) = ms?.let { "%.1f".format(it / 1000.0) } ?: "–"
+        val boots = shards.flatMap { (_, json) -> json.list("boots") }
+        val results = shards.flatMap { (_, json) -> json.list("results") }
+        val bootMs = boots.sumOf { b -> n(b["serverLoaded"])?.let { it - n(b["start"])!! } ?: 0 }
+        val scenarioMs = results.sumOf { n(it["ms"]) ?: 0 }
+        val resetMs = results.sumOf { n(it["resetMs"]) ?: 0 }
+        val shutdownMs = boots.sumOf { b -> n(b["runnerEnd"])?.let { maxOf(0, n(b["end"])!! - it) } ?: 0 }
+        val wall = if (boots.isEmpty()) 0 else boots.maxOf { n(it["end"])!! } - boots.minOf { n(it["start"])!! }
+        val byScenario = results.groupBy { it["name"].toString() }
+            .mapValues { (_, rs) -> rs.sumOf { (n(it["ms"]) ?: 0) + (n(it["resetMs"]) ?: 0) } }
+            .entries.sortedByDescending { it.value }
         val text = buildString {
             appendLine("# Scenario timings")
             appendLine()
-            appendLine("Written by `./gradlew scenarioTest` (task `scenarioTimings`). Seconds; slowest session first.")
+            appendLine("Written by `./gradlew scenarioTest` (task `scenarioTimings`). Seconds.")
             appendLine()
-            appendLine("| | Sessions | Wall clock | Boot | Scenario | Shutdown | Between tasks |")
-            appendLine("| --- | --- | --- | --- | --- | --- | --- |")
-            appendLine(
-                "| Total | ${rows.size} | ${s(wall)} | ${s(sum { it.boot })} | ${s(sum { it.scenario })} | " +
-                    "${s(sum { it.shutdown })} | ${s(wall - sum { it.total })} |",
-            )
+            appendLine("| Wall clock | Shards | Boots | Sessions | Boot | Scenario | Reset | Shutdown |")
+            appendLine("| --- | --- | --- | --- | --- | --- | --- | --- |")
+            appendLine("| ${sec(wall)} | ${shards.size} | ${boots.size} | ${results.size} | ${sec(bootMs)} | ${sec(scenarioMs)} | ${sec(resetMs)} | ${sec(shutdownMs)} |")
             appendLine()
-            appendLine("Boot, averaged: Gradle to JVM start, JVM start to the test plugin loading (Paper's own start), loading to enabling (the worlds, then Seasons and Seasons Web enabling), enabling to the server having loaded.")
-            appendLine()
-            appendLine("| Sessions | Count | Gradle → JVM | JVM → load | Worlds, plugins | → loaded | Boot |")
-            appendLine("| --- | --- | --- | --- | --- | --- | --- |")
-            for ((label, list) in listOf("First (new world)" to firstSessions, "Later (same world)" to laterSessions)) {
-                appendLine(
-                    "| $label | ${list.size} | ${s(avg(list) { r -> r.jvm?.let { it - r.start } })} | " +
-                        "${s(avg(list) { r -> r.load?.let { l -> r.jvm?.let { l - it } } })} | " +
-                        "${s(avg(list) { r -> r.enable?.let { e -> r.load?.let { e - it } } })} | " +
-                        "${s(avg(list) { r -> r.booted?.let { b -> r.enable?.let { b - it } } })} | " +
-                        "${s(avg(list) { it.boot })} |",
-                )
+            appendLine("| Shard | Wall clock | Boots | Sessions |")
+            appendLine("| --- | --- | --- | --- |")
+            for ((name, json) in shards) {
+                val bs = json.list("boots")
+                val w = if (bs.isEmpty()) 0 else bs.maxOf { n(it["end"])!! } - bs.minOf { n(it["start"])!! }
+                appendLine("| $name | ${sec(w)} | ${bs.size} | ${json.list("results").size} |")
             }
             appendLine()
-            appendLine("| Version | Scenario | Session | Result | Total | Boot | Scenario | Shutdown |")
-            appendLine("| --- | --- | --- | --- | --- | --- | --- | --- |")
-            for (r in rows) {
-                appendLine(
-                    "| ${r.version} | ${r.name} | ${r.session} | ${r.passed} | ${s(r.total)} | ${s(r.boot)} | " +
-                        "${s(r.scenario)} | ${s(r.shutdown)} |",
-                )
+            appendLine("| Scenario | Sessions | Scenario and reset |")
+            appendLine("| --- | --- | --- |")
+            for ((name, ms) in byScenario) {
+                appendLine("| $name | ${results.count { it["name"] == name }} | ${sec(ms)} |")
             }
         }
         report.get().asFile.apply { parentFile.mkdirs() }.writeText(text)
@@ -192,138 +329,60 @@ val scenarioTimings = tasks.register("scenarioTimings") {
     }
 }
 
-val scenarioServers = minecraftVersions.map { version ->
-    val runDir = layout.buildDirectory.dir("scenario/$version")
-    val resultsDir = layout.buildDirectory.dir("scenario-results/$version")
-    val nbtDir = resultsDir.map { it.dir("nbt") }
-    val tasksForVersion = scenarios.flatMap { scenario ->
-        (1..scenario.sessions).map { session ->
-            val outDir = resultsDir.map { it.dir("${scenario.name}/$session") }
-            val taskName = "scenarioServer_${version.replace('.', '_')}_${scenario.name}_$session"
-            tasks.register<RunServer>(taskName) {
-                group = "verification"
-                description = "Runs session $session of scenario ${scenario.name} on a Paper $version server."
-                dependsOn(installBots, scenarioTls)
-                if (session > 1) {
-                    dependsOn("scenarioServer_${version.replace('.', '_')}_${scenario.name}_${session - 1}")
-                }
-                minecraftVersion(version)
-                runDirectory(runDir.get().asFile)
-                pluginJars.from(
-                    project(":adapters:paper").tasks.named("shadowJar"),
-                    project(":web").tasks.named("shadowJar"),
-                    tasks.jar,
-                )
-                downloadPlugins {
-                    modrinth("viaversion", libs.versions.viaversion.get())
-                    modrinth("viabackwards", libs.versions.viabackwards.get())
-                }
-                val tls = tlsDir.get().asFile
-                jvmArgs(
-                    "-Dcom.mojang.eula.agree=true",
-                    "-Djavax.net.ssl.trustStore=${tls.resolve("truststore.p12")}",
-                    "-Djavax.net.ssl.trustStorePassword=$tlsPassword",
-                    // Turns on Seasons' scenario hooks; never set on a real server (docs/adr/0003).
-                    "-Dseasons.scenario=true",
-                    "-Dseasons.scenario.out=${outDir.get().asFile}",
-                    "-Dseasons.scenario.nbt=${nbtDir.get().asFile}",
-                    "-Dseasons.scenario.name=${scenario.name}",
-                    "-Dseasons.scenario.session=$session",
-                    "-Dseasons.scenario.tls=${tls.resolve("webhook.p12")}",
-                    "-Dseasons.scenario.admin=$adminBot",
-                    "-Dseasons.scenario.clientVersion=$botClientVersion",
-                    "-Dseasons.scenario.node=${providers.environmentVariable("NODE").getOrElse("node")}",
-                    "-Dseasons.scenario.runner=${botsDir.file("run.mjs").asFile}",
-                )
-                args("--nogui")
-                timeout = Duration.ofMinutes(10)
-                outputs.dir(outDir)
-                outputs.upToDateWhen { false }
+@Suppress("UNCHECKED_CAST")
+fun Map<String, Any?>.list(key: String) = (this[key] as List<Map<String, Any?>>?) ?: emptyList()
 
-                doFirst {
-                    val run = runDir.get().asFile
-                    outDir.get().asFile.deleteRecursively()
-                    outDir.get().asFile.mkdirs()
-                    outDir.get().file("task-start").asFile.writeText(System.currentTimeMillis().toString())
-                    run.mkdirs()
-                    if (session == 1) {
-                        // A fresh world and fresh Seasons files; the downloaded jars and libraries are kept.
-                        run.listFiles { f -> f.name.startsWith("world") }?.forEach { it.deleteRecursively() }
-                        run.resolve("plugins/Seasons").deleteRecursively()
-                    }
-                    run.resolve("server.properties").writeText(
-                        """
-                        # Written by the scenario task; never ships. Bots join in offline mode.
-                        online-mode=false
-                        enforce-secure-profile=false
-                        white-list=false
-                        server-ip=127.0.0.1
-                        server-port=25599
-                        level-type=minecraft:flat
-                        generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
-                        generate-structures=false
-                        spawn-protection=0
-                        view-distance=4
-                        simulation-distance=4
-                        """.trimIndent() + "\n",
-                    )
-                }
-                doLast {
-                    outDir.get().file("task-end").asFile.writeText(System.currentTimeMillis().toString())
-                    val result = outDir.get().file("result.json").asFile
-                    val halted = outDir.get().file("halted.json").asFile
-                    if (!result.exists() && halted.exists()) {
-                        // A crash scenario halted the server on purpose. The bot runner outlives it
-                        // and writes its own results once the session's checks have run.
-                        val results = outDir.get().file("results.json").asFile
-                        val deadline = System.nanoTime() + Duration.ofSeconds(60).toNanos()
-                        while (!results.exists() && System.nanoTime() < deadline) {
-                            Thread.sleep(500)
-                        }
-                        check(results.exists()) {
-                            "Scenario ${scenario.name} session $session halted, but the runner wrote no results"
-                        }
-                        @Suppress("UNCHECKED_CAST")
-                        val runs = (JsonSlurper().parse(results) as Map<String, Any?>)["results"] as List<Map<String, Any?>>
-                        check(runs.isNotEmpty() && runs.all { it["passed"] == true }) {
-                            "Scenario ${scenario.name} session $session failed after the halt on Paper $version: $runs"
-                        }
-                        return@doLast
-                    }
-                    check(result.exists()) {
-                        "Scenario ${scenario.name} session $session on Paper $version stopped without a result"
-                    }
-                    @Suppress("UNCHECKED_CAST")
-                    val json = JsonSlurper().parse(result) as Map<String, Any?>
-                    check(json["passed"] == true) {
-                        "Scenario ${scenario.name} session $session failed on Paper $version: $json (see the server log above)"
-                    }
-                }
+/** Every shard.json under build/scenario-results, by shard folder. */
+@Suppress("UNCHECKED_CAST")
+fun shardFiles(): List<Pair<String, Map<String, Any?>>> =
+    resultsRoot.get().asFile.walkTopDown()
+        .filter { it.name == "shard.json" }
+        .sortedBy { it.path }
+        .map { "${it.parentFile.parentFile.name}/${it.parentFile.name}" to (JsonSlurper().parse(it) as Map<String, Any?>) }
+        .toList()
+
+tasks.register("updateScenarioTimings") {
+    group = "verification"
+    description = "Rewrites scenario-timings.json from the last full scenario run, for balancing shards."
+    doLast {
+        fun n(v: Any?) = (v as Number?)?.toLong() ?: 0
+        val seconds = sortedMapOf<String, Double>()
+        for ((_, json) in shardFiles()) {
+            for (r in json.list("results")) {
+                val name = r["name"].toString()
+                val restart = if (n(r["session"]) > 1) bootSeconds * 1000 else 0.0
+                seconds[name] = (seconds[name] ?: 0.0) + (n(r["ms"]) + n(r["resetMs"]) + restart) / 1000.0
             }
         }
+        check(seconds.isNotEmpty()) { "No scenario run to take timings from" }
+        timingsFile.asFile.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(seconds.mapValues { "%.1f".format(it.value).toDouble() })) + "\n")
+        logger.lifecycle("Wrote ${timingsFile.asFile} for ${seconds.size} scenarios")
     }
-    // Scenarios share one run directory per version, so they run one after another.
-    tasksForVersion.zipWithNext { earlier, later -> later.configure { mustRunAfter(earlier) } }
-    tasksForVersion.forEach { it.configure { finalizedBy(scenarioTimings) } }
-    Triple(version, tasksForVersion, nbtDir)
 }
 
 val nbtNeutralityTest = tasks.register<Test>("nbtNeutralityTest") {
     group = "verification"
-    description = "Opens the item samples the scenario servers wrote with a plain NBT reader."
+    description = "Opens the item samples and archives the scenario servers wrote with a plain NBT reader."
     testClassesDirs = sourceSets.test.get().output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform { includeTags("scenario") }
-    dependsOn(scenarioServers.flatMap { it.second })
-    systemProperty(
-        "seasons.nbtSamples",
-        scenarioServers.joinToString(File.pathSeparator) { it.third.get().asFile.path },
-    )
+    mustRunAfter(scenarioRuns)
+    // Every shard's samples, including those downloaded from CI shard jobs into the same folders.
+    inputs.files(resultsRoot).withPropertyName("samples").optional()
+    doFirst {
+        val dirs = resultsRoot.get().asFile.walkTopDown().filter { it.isDirectory && it.name == "nbt" }.toList()
+        systemProperty("seasons.nbtSamples", dirs.joinToString(File.pathSeparator) { it.path })
+    }
     outputs.upToDateWhen { false }
 }
 
 tasks.register("scenarioTest") {
     group = "verification"
     description = "Runs the acceptance scenarios on every supported version, then the NBT neutrality test."
-    dependsOn(scenarioServers.flatMap { it.second }, nbtNeutralityTest)
+    dependsOn(scenarioRuns)
+    // The neutrality test needs the archives of the whole suite: a run of some scenarios or of one
+    // shard skips it, and CI runs it once every shard has finished.
+    if (scenarioFilter == null && onlyShard == null) {
+        dependsOn(nbtNeutralityTest)
+    }
 }
