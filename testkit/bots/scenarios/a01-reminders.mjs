@@ -4,7 +4,7 @@
 //
 // Waiting days is impossible, so each step sets the planned end a few seconds beyond one
 // threshold: only that reminder is still ahead, and it falls due a few seconds later.
-import { DAY, HOUR, MINUTE, SECOND, assert, isoIn, sleep } from '../lib/context.mjs'
+import { DAY, HOUR, MINUTE, SECOND, assert, sleep } from '../lib/context.mjs'
 
 const REMINDERS = [[7 * DAY, '7 days'], [DAY, '1 day'], [HOUR, '1 hour'], [10 * MINUTE, '10 minutes']]
 
@@ -19,7 +19,7 @@ export default {
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
 
     for (const [threshold, label] of REMINDERS) {
-      await ctx.command(admin, `/season schedule end ${isoIn(threshold + 4 * SECOND)}`, /^Season 2 now ends at /)
+      await ctx.command(admin, `/season schedule end ${ctx.isoIn(threshold + 4 * SECOND)}`, /^Season 2 now ends at /)
       const reminder = new RegExp(`^Season 2 ends in ${label}\\b`)
       await ctx.waitForMessages(player, reminder, 15 * SECOND, `the ${label} reminder in chat`)
       const post = await discord.waitFor(reminder, 15 * SECOND)
@@ -29,7 +29,7 @@ export default {
     assert(posted.length === REMINDERS.length, `one post per reminder, got ${JSON.stringify(posted)}`)
 
     // The planned time passes with autoEnd false: no countdown, no archiving, still Active.
-    await ctx.command(admin, `/season schedule end ${isoIn(3 * SECOND)}`, /^Season 2 now ends at /)
+    await ctx.command(admin, `/season schedule end ${ctx.isoIn(3 * SECOND)}`, /^Season 2 now ends at /)
     await sleep(8 * SECOND)
     assert(ctx.bossBars(player).length === 0, `no countdown boss bar, saw ${ctx.bossBars(player)}`)
     await ctx.command(player, '/season info', /^Phase: Active, Open stage$/)

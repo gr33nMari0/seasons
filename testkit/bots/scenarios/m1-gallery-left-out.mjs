@@ -3,7 +3,7 @@
 // A broken gallery file at startup is left out, and nothing else is: the other galleries and the
 // planned end load. /season status shows it, admins hear about it as they join, and /season end and
 // /season launch are refused until it is fixed and /season reload succeeds.
-import { DAY, isoIn } from '../lib/context.mjs'
+import { DAY } from '../lib/context.mjs'
 import { buildGallery } from '../lib/hall.mjs'
 
 const BROKEN = 'world/dimensions/minecraft/overworld/seasons/galleries/broken.yml'
@@ -15,7 +15,7 @@ export default {
       const admin = await ctx.admin()
       await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
       await buildGallery(ctx, admin, { cells: 2 })
-      await ctx.command(admin, `/season schedule end ${isoIn(30 * DAY)}`, /^Season 2 now ends at /)
+      await ctx.command(admin, `/season schedule end ${ctx.isoIn(30 * DAY)}`, /^Season 2 now ends at /)
       // A hand edit gone wrong, found at the next start.
       ctx.writeFile(BROKEN, 'schema-version: 1\nid: broken\nkind: season\nseason: 1\nbounds: { min: [0, -61\n')
     },

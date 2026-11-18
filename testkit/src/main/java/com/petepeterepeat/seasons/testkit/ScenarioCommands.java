@@ -8,13 +8,18 @@ import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.entity.TeleportFlag;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -120,16 +125,26 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code reset} resets a shared scenario server to a fresh boot and reports any leak; the
+ *       runner asks for this itself between scenarios, so this is for trying it by hand
+ *   <li>{@code clock [+<duration>]} prints Seasons' time, after moving it forward by a duration
+ *       such as {@code +30s}, {@code +10m}, {@code +2h}, {@code +7d} or {@code +1500ms}: whatever
+ *       came due in the time skipped runs at once
+ *   <li>{@code sync <id> [ticks] [player...]} answers {@code Synced <id>} once the current tick (or
+ *       that many more) has finished, to the sender and to each player named, so anything sent to
+ *       them before has arrived when they read it
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand, Listener {
   private final Plugin plugin;
+  private final Supplier<CompletableFuture<List<String>>> reset;
 
   /** Players {@code /scenario move} is putting where their client would have gone. */
   private final Set<UUID> clientMoving = new HashSet<>();
 
-  ScenarioCommands(Plugin plugin) {
+  ScenarioCommands(Plugin plugin, Supplier<CompletableFuture<List<String>>> reset) {
     this.plugin = plugin;
+    this.reset = reset;
   }
 
   Optional<ScenarioHooks> hooks() {
@@ -229,11 +244,29 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "reset" -> {
+          var _ =
+              reset
+                  .get()
+                  .whenComplete((leaks, failure) ->
+                      sender.sendMessage(
+                          failure != null
+                              ? "Reset failed: " + failure
+                              : leaks.isEmpty()
+                                  ? "Reset: as a fresh boot"
+                                  : "Reset leaked: " + leaks));
+        }
+        case "clock" -> {
+          Instant now = args.length > 1 ? hooks.advance(duration(args[1])) : hooks.now();
+          sender.sendMessage(
+              "Clock " + now + " offset " + Duration.between(Instant.now(), now).toMillis());
+        }
+        case "sync" -> sync(sender, args);
         default ->
             sender.sendMessage(
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
-                    + "|portal-pair|bucket|ignite|permit ...");
+                    + "|portal-pair|bucket|ignite|permit|reset|clock|sync ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
@@ -814,6 +847,45 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     player.addAttachment(plugin, args[2], true);
     sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  /** {@code +30s}, {@code +10m}, {@code +2h}, {@code +7d} or {@code +1500ms}. */
+  private static Duration duration(String text) {
+    var match = java.util.regex.Pattern.compile("\\+?(\\d+)(ms|s|m|h|d)").matcher(text);
+    if (!match.matches()) {
+      throw new IllegalArgumentException("Not a duration: " + text);
+    }
+    long amount = Long.parseLong(match.group(1));
+    return switch (match.group(2)) {
+      case "ms" -> Duration.ofMillis(amount);
+      case "s" -> Duration.ofSeconds(amount);
+      case "m" -> Duration.ofMinutes(amount);
+      case "h" -> Duration.ofHours(amount);
+      default -> Duration.ofDays(amount);
+    };
+  }
+
+  private void sync(CommandSender sender, String[] args) {
+    String id = args[1];
+    int ticks = args.length > 2 && args[2].matches("\\d+") ? Integer.parseInt(args[2]) : 1;
+    List<String> names =
+        Arrays.asList(args)
+            .subList(args.length > 2 && args[2].matches("\\d+") ? 3 : 2, args.length);
+    plugin
+        .getServer()
+        .getGlobalRegionScheduler()
+        .runDelayed(
+            plugin,
+            task -> {
+              sender.sendMessage("Synced " + id);
+              for (String name : names) {
+                Player player = plugin.getServer().getPlayerExact(name);
+                if (player != null && !player.equals(sender)) {
+                  player.sendMessage("Synced " + id);
+                }
+              }
+            },
+            Math.max(1, ticks));
   }
 
   /** The position at three arguments from {@code from}, as given. */

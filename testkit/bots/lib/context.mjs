@@ -2,7 +2,7 @@
 // What a scenario gets: bots that play the player side, an op'd admin bot for admin commands,
 // the server's files, and an https webhook receiver standing in for Discord.
 // Scenarios drive the server only through these, so the same suite runs against every adapter.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import https from 'node:https'
 import { dirname, join } from 'node:path'
 import mineflayer from 'mineflayer'
@@ -12,8 +12,7 @@ const JOIN_TIMEOUT_MS = 60_000
 const REPLY_TIMEOUT_MS = 10_000
 const POLL_MS = 200
 const MOVEMENT_PACKETS = new Set(['position', 'look', 'position_look', 'flying'])
-/** Fixed, so a webhook URL written in one session still works in the next. */
-const WEBHOOK_PORT = 25601
+let syncs = 0
 
 export const SECOND = 1_000
 export const MINUTE = 60 * SECOND
@@ -22,8 +21,8 @@ export const DAY = 24 * HOUR
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
-/** An ISO-8601 time `ms` from now, in UTC, as /season schedule end takes it. */
-export const isoIn = (ms) => new Date(Date.now() + ms).toISOString()
+/** "+30s"-style text for /scenario clock, from milliseconds. */
+const clockText = (ms) => `+${Math.round(ms)}ms`
 
 /** Resolves once `check()` is true; rejects with `what` after `timeoutMs`. */
 export async function waitUntil (check, timeoutMs, what) {
@@ -36,10 +35,66 @@ export async function waitUntil (check, timeoutMs, what) {
 }
 
 export class ScenarioContext {
-  constructor ({ host, port, version, adminName, serverDir = '.', tls, log }) {
-    Object.assign(this, { host, port, version, adminName, serverDir, tls, log })
+  /**
+   * @param webhookPort fixed for a shard, so a webhook URL written in one session still works in
+   *   the next
+   */
+  constructor ({ host, port, version, adminName, serverDir = '.', tls, webhookPort = 25601, log }) {
+    Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, log })
     this.bots = []
     this.servers = []
+    /** How far Seasons' clock runs ahead of this machine's, as /scenario clock last said. */
+    this.clockOffset = 0
+    const latest = join(serverDir, 'logs/latest.log')
+    /** Where the server log stood when the scenario started, so it reads only its own lines. */
+    this.logStart = existsSync(latest) ? statSync(latest).size : 0
+  }
+
+  /** An ISO-8601 time `ms` from now by Seasons' clock, in UTC, as /season schedule end takes it. */
+  isoIn (ms) {
+    return new Date(Date.now() + this.clockOffset + ms).toISOString()
+  }
+
+  /**
+   * Moves Seasons' clock forward by `ms` through the scenario hooks (docs/adr/0003): whatever came
+   * due in the time skipped (reminders, countdowns, windows, rate limits, sweeps) runs at once,
+   * before the reply. Resolves with Seasons' new time.
+   */
+  async advance (admin, ms) {
+    const line = await this.command(admin, `/scenario clock ${clockText(ms)}`, /^Clock \S+ offset -?\d+$/)
+    const [, at, offset] = /^Clock (\S+) offset (-?\d+)$/.exec(line)
+    this.clockOffset = Number(offset)
+    return new Date(at)
+  }
+
+  /**
+   * Resolves once the server has finished the current tick (or `ticks` more), and every bot given
+   * has read everything the server sent it before then. Use it instead of a fixed sleep, and to
+   * end a window in which a line must not come (see quiet).
+   */
+  async sync (admin, bots = [], ticks = 1) {
+    const id = `${++syncs}`
+    const others = bots.filter((bot) => bot !== admin)
+    const marker = new RegExp(`^Synced ${id}$`)
+    const heard = others.map((bot) => this.waitForMessages(bot, marker, REPLY_TIMEOUT_MS, `sync ${id}`))
+    await this.command(admin, `/scenario sync ${id} ${ticks} ${others.map((b) => b.username).join(' ')}`.trim(), marker)
+    await Promise.all(heard)
+  }
+
+  /**
+   * Starts watching a bot for a line that must not come. Call verify() after a sync: it rejects if
+   * one came in between.
+   */
+  quiet (bot, pattern) {
+    const seen = []
+    const onMessage = (text) => { if (pattern.test(text)) seen.push(text) }
+    bot.on('messagestr', onMessage)
+    return {
+      verify () {
+        bot.off('messagestr', onMessage)
+        if (seen.length) throw new Error(`unexpected line matching ${pattern}: ${seen[0]}`)
+      }
+    }
   }
 
   /**
@@ -184,6 +239,12 @@ export class ScenarioContext {
     return readFileSync(join(this.serverDir, path), 'utf8')
   }
 
+  /** The server log since this scenario started: a shared server's log holds earlier ones too. */
+  serverLog () {
+    const text = readFileSync(join(this.serverDir, 'logs/latest.log'))
+    return text.subarray(Math.min(this.logStart, text.length)).toString('utf8')
+  }
+
   /**
    * Starts an https webhook receiver standing in for Discord. Every JSON body posted to it lands
    * in `posts`, in order.
@@ -208,11 +269,11 @@ export class ScenarioContext {
     })
     await new Promise((resolve, reject) => {
       server.once('error', reject)
-      server.listen(WEBHOOK_PORT, '127.0.0.1', resolve)
+      server.listen(this.webhookPort, '127.0.0.1', resolve)
     })
     this.servers.push(server)
     return {
-      url: `https://127.0.0.1:${WEBHOOK_PORT}/webhook`,
+      url: `https://127.0.0.1:${this.webhookPort}/webhook`,
       posts,
       /** Resolves with the first post whose content matches `pattern`. */
       waitFor: async (pattern, timeoutMs = REPLY_TIMEOUT_MS) => {
