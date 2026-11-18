@@ -139,6 +139,7 @@ unarchive:
   no-archive: "<red><name> has no archive for Season <season>.</red>"
   not-empty: "<red><name>'s inventory isn't empty. Empty it, or add --force to keep what they carry in a displaced-items file.</red>"
   unknown-flag: "<red>Unknown option <flag>. /season unarchive takes --force.</red>"
+  imported: "<red><name>'s Season <season> archive was imported from a hand-built cell, so it can't be unarchived. /hof import undo puts its items back in the cell.</red>"
   failed: "<red>Unarchiving <name>'s Season <season> archive stopped: <reason>. It finishes at their next login.</red>"
 
 reprocess:

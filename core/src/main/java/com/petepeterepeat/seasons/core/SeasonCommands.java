@@ -562,6 +562,9 @@ final class SeasonCommands {
                                     number);
                             case Unarchiver.Outcome.NotEmpty n ->
                                 now.get("unarchive.not-empty", "name", online.name());
+                            case Unarchiver.Outcome.Imported i ->
+                                now.get(
+                                    "unarchive.imported", "name", online.name(), "season", number);
                             case Unarchiver.Outcome.Busy b ->
                                 now.get("archive.busy", "name", online.name());
                             case Unarchiver.Outcome.Failed f ->
