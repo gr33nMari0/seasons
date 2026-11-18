@@ -19,4 +19,7 @@ public interface Events {
    * picked up, spawned in the world or left in an inventory when a menu closes, then reports it.
    */
   void tripwire(TripwireReport report);
+
+  /** Sets who hears about completed advancements and changes of dimension, for season firsts. */
+  void milestones(Milestones milestones);
 }

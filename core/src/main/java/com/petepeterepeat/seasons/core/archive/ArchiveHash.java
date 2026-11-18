@@ -44,6 +44,26 @@ public final class ArchiveHash {
     return HexFormat.of().formatHex(digest.digest());
   }
 
+  /**
+   * The hash of what {@code /hof import} took from a cell: the stand's equipment, each container's
+   * slots and each frame's item, each with where it was. The import compares it before and after.
+   */
+  public static String ofImported(ImportedCell imported) {
+    MessageDigest digest = sha256();
+    imported.stand().ifPresent(stand -> section(digest, "stand", stand.equipment()));
+    for (ImportedCell.Container container : imported.containers()) {
+      section(digest, "container " + place(container.block()), container.slots());
+    }
+    for (ImportedCell.Frame frame : imported.frames()) {
+      section(digest, "frame " + place(frame.at()), List.of(frame.item()));
+    }
+    return HexFormat.of().formatHex(digest.digest());
+  }
+
+  private static String place(com.petepeterepeat.seasons.core.port.Position at) {
+    return at.blockX() + " " + at.blockY() + " " + at.blockZ();
+  }
+
   /** Whether every slot the hash covers is empty: what a cleared player looks like. */
   public static boolean isEmpty(InventorySnapshot inventory, boolean includeEnderChest) {
     return inventory.storage().stream().allMatch(Optional::isEmpty)

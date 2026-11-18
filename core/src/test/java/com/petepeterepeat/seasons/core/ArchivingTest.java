@@ -7,13 +7,18 @@ import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchiveHash;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
+import com.petepeterepeat.seasons.core.archive.ImportedCell;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
+import com.petepeterepeat.seasons.core.config.SeasonsConfig.EnderChestPolicy;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
-import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
+import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
+import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.GameMode;
+import com.petepeterepeat.seasons.core.port.Imports;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -26,10 +31,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -68,7 +77,6 @@ class ArchivingTest {
             "1.2.3",
             fake.clock,
             webhooks,
-            Hall.none(),
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.of(hooks));
@@ -345,6 +353,222 @@ class ArchivingTest {
     fake.player(undo).inventory = FakeItems.gear();
     assertThat(run("/season archive Undo")).containsExactly("Archived Undo into Season 2.");
     assertThat(isEmpty(undo)).isTrue();
+  }
+
+  @Test
+  void leavingTheHallPutsBackSurvivalOnlyForPlayersSeasonsSwitched() throws IOException {
+    Path galleries = dir.resolve("world/seasons/galleries");
+    Files.createDirectories(galleries);
+    Files.writeString(
+        galleries.resolve("hall.yml"),
+        """
+        schema-version: 1
+        id: hall
+        kind: season
+        season: 2
+        dimension: minecraft:overworld
+        bounds: { min: [0, -64, 0], max: [10, -50, 10] }
+        """);
+    start();
+    run("/season init 2");
+    PlayerRef walker = join("Walker");
+    PlayerRef jailed = join("Jailed");
+    fake.player(jailed).gameMode = GameMode.ADVENTURE;
+    Position inside = Position.of("minecraft:overworld", 5, -60, 5);
+    Position outside = Position.of("minecraft:overworld", 50, -60, 50);
+
+    fake.player(walker).position = inside;
+    fake.player(jailed).position = inside;
+    fake.tick();
+    assertThat(fake.player(walker).gameMode).isEqualTo(GameMode.ADVENTURE);
+    assertThat(fake.player(jailed).gameMode).isEqualTo(GameMode.ADVENTURE);
+
+    // A restart in between doesn't strand the player Seasons switched.
+    restart();
+    join("Walker");
+    join("Jailed");
+    fake.player(walker).position = outside;
+    fake.player(jailed).position = outside;
+    fake.tick();
+    assertThat(fake.player(walker).gameMode).isEqualTo(GameMode.SURVIVAL);
+    assertThat(fake.player(jailed).gameMode).isEqualTo(GameMode.ADVENTURE);
+  }
+
+  /** One Season 1 chest, which a player may empty between the import's scan and its clear. */
+  private static final class OneChest implements Imports {
+    Position at = Position.of("minecraft:overworld", 3, -60, 3);
+    List<Optional<NeutralItem>> slots =
+        new ArrayList<>(List.of(Optional.of(FakeItems.item("minecraft:diamond", 3))));
+    int scans;
+    boolean takenAfterFirstScan;
+
+    @Override
+    public CompletableFuture<Scan> scan(Position min, Position max) {
+      Scan scan =
+          new Scan(
+              List.of(new Container(at, "minecraft:chest", slots)),
+              List.of(),
+              List.of(),
+              List.of(),
+              List.of());
+      if (++scans == 1 && takenAfterFirstScan) {
+        slots = new ArrayList<>(List.of(Optional.empty()));
+      }
+      return CompletableFuture.completedFuture(scan);
+    }
+
+    @Override
+    public boolean emptyContainer(Position block) {
+      slots = new ArrayList<>(List.of(Optional.empty()));
+      return true;
+    }
+
+    @Override
+    public boolean fillContainer(Position block, List<Optional<NeutralItem>> slots) {
+      this.slots = new ArrayList<>(slots);
+      return true;
+    }
+
+    @Override
+    public boolean remove(UUID entity) {
+      return true;
+    }
+
+    @Override
+    public UUID spawnStand(
+        Position at, Map<String, Object> properties, List<Optional<NeutralItem>> worn) {
+      return UUID.randomUUID();
+    }
+
+    @Override
+    public UUID spawnFrame(
+        Position at, Map<String, Object> properties, Optional<NeutralItem> item) {
+      return UUID.randomUUID();
+    }
+
+    @Override
+    public void saveWorld(String dimension) {}
+  }
+
+  /** A Season 1 gallery with one cell, owned by Veteran, holding {@link OneChest}. */
+  private OneChest seasonOneCell(boolean takenAfterScan) throws IOException {
+    OneChest chest = new OneChest();
+    chest.takenAfterFirstScan = takenAfterScan;
+    fake.imports = chest;
+    Path galleries = dir.resolve("world/seasons/galleries");
+    Files.createDirectories(galleries);
+    String veteran =
+        UUID.nameUUIDFromBytes("Veteran".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString();
+    Files.writeString(
+        galleries.resolve("season-1.yml"),
+        """
+        schema-version: 1
+        id: season-1
+        kind: season
+        season: 1
+        dimension: minecraft:overworld
+        bounds: { min: [0, -64, 0], max: [10, -50, 10] }
+        cells:
+          veteran:
+            bounds: { min: [1, -64, 1], max: [9, -50, 9] }
+            owners: { "1": %s }
+        """
+            .formatted(veteran));
+    start();
+    run("/season init 2");
+    join("Veteran");
+    return chest;
+  }
+
+  private List<String> hof(String command) {
+    TestSource source = TestSource.console();
+    TestCommands.run(fake.commands.get(1), source, command);
+    return source.text();
+  }
+
+  @Test
+  void anImportTakesTheCellsItemsIntoOneRecord() throws IOException {
+    OneChest chest = seasonOneCell(false);
+
+    assertThat(hof("/hof import season-1"))
+        .containsExactly("Imported 1 cell from season-1; 0 skipped.");
+
+    assertThat(chest.slots).containsOnly(Optional.empty());
+    assertThat(archive(fake.join("Veteran"), 1)).isPresent();
+  }
+
+  @Test
+  void aChestEmptiedAfterTheScanStopsTheImportAndNoRecordHoldsItsItems() throws IOException {
+    seasonOneCell(true);
+
+    assertThat(hof("/hof import season-1").getFirst())
+        .startsWith(
+            "The season-1 import stopped at cell veteran: the chest at 3, -60, 3 was emptied");
+
+    // Whoever emptied it has the diamonds; the Hall mustn't show them too.
+    assertThat(archive(fake.join("Veteran"), 1)).isEmpty();
+    assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
+  }
+
+  @Test
+  void anImportThatWouldWriteABrokenGalleryChangesNothing() throws IOException {
+    OneChest chest = seasonOneCell(false);
+    // Say the scan placed the chest's anchor outside the cell, as a double chest across its edge
+    // once could.
+    chest.at = Position.of("minecraft:overworld", 20, -60, 3);
+
+    assertThat(hof("/hof import season-1").getFirst())
+        .startsWith(
+            "The season-1 import stopped at cell veteran: the gallery would break its rules");
+
+    assertThat(chest.slots).doesNotContain(Optional.empty());
+    assertThat(archive(fake.join("Veteran"), 1)).isEmpty();
+  }
+
+  @Test
+  void anImportedRecordIsNeverUnarchived() throws IOException {
+    start();
+    PlayerRef veteran = join("Veteran");
+    run("/season init 2");
+    Position at = Position.of("minecraft:overworld", 5, -60, 4);
+    ImportedCell imported =
+        new ImportedCell(
+            "season-1",
+            "veteran",
+            Optional.empty(),
+            List.of(
+                new ImportedCell.Container(
+                    at,
+                    "minecraft:chest",
+                    List.of(Optional.of(FakeItems.item("minecraft:diamond", 3))))),
+            List.of(),
+            List.of());
+    ArchiveRecord record =
+        new ArchiveRecord(
+            veteran.id(),
+            "Veteran",
+            1,
+            Instant.EPOCH,
+            FakeItems.EMPTY,
+            List.of(),
+            EnderChestPolicy.KEEP,
+            new AdvancementSnapshot(Map.of(), 0, 0),
+            Experience.NONE,
+            Map.of(),
+            Optional.empty(),
+            at,
+            Optional.empty(),
+            ArchiveHash.ofImported(imported),
+            OptionalInt.empty(),
+            Optional.of(imported));
+    new ArchiveFiles(dir.resolve("world/seasons/data/archives")).write(record, 1);
+    int level = fake.player(veteran).experience.level();
+
+    assertThat(run("/season unarchive Veteran 1").getFirst())
+        .startsWith("Veteran's Season 1 archive was imported from a hand-built cell");
+    assertThat(archive(veteran, 1)).isPresent();
+    assertThat(fake.player(veteran).experience.level()).isEqualTo(level);
   }
 
   @Test

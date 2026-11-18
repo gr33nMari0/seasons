@@ -18,6 +18,14 @@ public interface Players {
   /** Sends a message. Placeholders are always inserted as literal text. */
   void sendMessage(PlayerId id, Message message);
 
+  /**
+   * Opens a written book for a player to read, without any item: nothing is given or left behind.
+   *
+   * @param pages each page's lines
+   */
+  void openBook(
+      PlayerId id, Message title, Message author, java.util.List<java.util.List<Message>> pages);
+
   /** Sends a message to every online player and the console. */
   void broadcast(Message message);
 
@@ -49,6 +57,22 @@ public interface Players {
   void reset(PlayerId id, ResetPlan plan);
 
   void setSurvival(PlayerId id);
+
+  GameMode gameMode(PlayerId id);
+
+  void setGameMode(PlayerId id, GameMode mode);
+
+  /** The hotbar slot (0 to 8) in an online player's main hand. */
+  int heldSlot(PlayerId id);
+
+  /** The block an online player is looking at, within {@code range} blocks. */
+  Optional<Position> targetBlock(PlayerId id, int range);
+
+  /**
+   * The name of a player the server has seen, online or not, even before Seasons was installed;
+   * empty for someone who has never played here.
+   */
+  Optional<String> knownName(PlayerId id);
 
   /**
    * Teleports an online player safely: dismounts them, stops elytra flight, resets fall distance

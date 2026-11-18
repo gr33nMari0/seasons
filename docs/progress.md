@@ -5,7 +5,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Milestone | State | Scenarios passing |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Part 1 done (#8); part 2 in review (#9, branch `m1-archiving`); part 3 next | Whole: A1, A2, A7, A8, A9, A10, A40. Part 2's half only: A4 and A5 (no cells yet), A6 (no zone lock until M3), A11 (no displays yet), A12 (no plaque yet), A15 (no Hall yet), A47. A13 and A14 moved to M4 (pending confirmation) |
+| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; parts 3 and 4 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
 | M2 to M7 | Not started | — |
 
 ## M1
@@ -22,7 +22,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 
 Built: the state machine (Active with Frontier and Open, Ending as countdown then archiving, Intermission, the Launch and Homecoming transitions), `season.json`, the journal and recovery framework, config records with validation and atomic reload, `messages.yml`, `/season init`, `schedule end`, `end`, `cancel`, `status`, `info`, `reload`, `validate`, the Discord reminder sender. `/season end` reaches the Intermission through `RolloverArchiver`, wired to `StubArchiver`, which moves nothing.
 
-**Part 2: archiving** (#9, branch `m1-archiving`). Passing end to end on Paper 26.3:
+**Part 2: archiving** (#9). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
@@ -40,7 +40,7 @@ Built: the state machine (Active with Frontier and Open, Ending as countdown the
 | `/season archive`, `spawn set`, `reprocess` | `m1-archive-commands.mjs` (two sessions) |
 | Review fixes: nothing leaves the player before the clear (cursor and grid), archive files never overwritten, unarchive never re-archived into an older season, launch waits for unarchived players, players held at login | unit: `ArchivingTest#aCrashAtAnyStep…` (with a cursor item), `#aFailedWriteLeavesEverything…`, `#aJoiningPlayerIsHeld…`, `#unarchivingDuringALaterSeason…`, `#unarchivingAnOlderSeason…`, `#anArchiveFileIsMovedAside…`, `PaperPortsTest#settling…` |
 
-A13 (firsts) and A14 (season card): moved to M4 (pending confirmation), see `docs/questions.md` 27. Not failing; not part of M1.
+A13 (firsts) and A14 (season card): built in part 4, below (questions 27).
 
 Built: `Archiver` and `Unarchiver` with journal recovery at every step, archive and vault files, `/season launch`, `spawn set`, `archive`, `unarchive`, `reprocess`, login catch-up, season entry (safe teleport, immunity, celebration, statistics baseline), the furthest-block tracker, the paged archive view, a minimal tripwire (pickup and inventory-close checks, a 30-second sweep; delete, audit, warn; the Discord webhook waits for M4), and the scenario hooks (ADR 0003). `StubArchiver` is gone.
 
@@ -48,6 +48,41 @@ Movement spike (folded into A5, A6, A15): server-side teleports of bots work thr
 
 Part 3 seams, empty until then: `Galleries.lockAll`, `CellDirectory` (returns no cells, which is why archived players "stay"), `DisplayRenderer`, `HallBounds`.
 
-**Part 3: the Hall** (next). Cells (random assignment, swaps, tagging by command), figure displays, the plaque, archive anchors, legacy import. Scenarios A3, A20, A21, A46, A50, A51, and the Hall halves of A4, A5, A11, A12, A15 and A47. A6's zone lock comes with zones in M3. A8 switches from the scenario hook to clicking an archive anchor (the TODO in `a08-archive-view.mjs`).
+**Part 3: the Hall** (#10, branch `m1-hall-cells`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+
+| Scenario | Test |
+| --- | --- |
+| A3 cells lock at the end of the countdown, before anyone is archived: owners in their cell switch to adventure first | `a03-lock-before-archive.mjs` |
+| A4 (Hall half) everyone ends in their own cell | `a04-end-state.mjs` |
+| A5 (Hall half) a player archived at login in the Intermission lands in their cell, figure drawn | `a05-catch-up.mjs` |
+| A8 the archive view opens from the archive anchor | `a08-archive-view.mjs` (`/scenario use`; the hook is gone from it) |
+| A11 (Hall half) unarchive removes the figure and plaque; archiving again draws them | `a11-unarchive.mjs` |
+| A12 (Hall half) the plaque shows "completed / visible" | `a12-advancements.mjs` |
+| A15 (Hall half) blocks placed in the Hall don't count | `a15-furthest-block.mjs` |
+| A20 random assignment when the window opens (by itself 7 days before the planned end), and at login for late players | `a20-assignment.mjs` |
+| A21 `/hof swap` by both within 60 s; refused outside the window and with yourself | `a21-swap.mjs` |
+| A46 `decorating.afterArchive`: owners build in their own cell only, until it locks; launch locks at once; building outside the Hall is untouched | `a46-after-archive.mjs`, `a46-launch-locks.mjs`; the window survives a restart and `/season decorate close` ends it: `m1-decorating-restart.mjs` (two sessions); unit: `SeasonStoreTest#theDecoratingWindowRoundTrips` |
+| A47 (Hall half) Season 1 imported, then Season 2's gallery filled by the first rollover | `a47-init.mjs` |
+| A50 `/hof import`: dry run report, one record with every stack, a gear page then one page per chest, a mannequin in the head's skin, archive anchors opening their chest's page, trophies; undo puts every item back exactly | `a50-import.mjs`; unit: `ImportPagesTest` |
+| A51 a cell with no head or a stranger's head is flagged and skipped until `/hof cell assign` | `a51-import-owner.mjs` |
+| An import crash after the record is written, and after the cell is emptied, is finished at startup with every item once | `m1-import-crash-started.mjs`, `m1-import-crash-cleared.mjs` (two sessions each) |
+| Galleries and cells by command, their rules, a hand edit picked up by reload, a broken one refused | `m1-hall-commands.mjs`; unit: `GalleryFilesTest` |
+
+Built: gallery files (`galleries/<id>.yml`, validated on load and reload), `/hof gallery create|bounds|entry|exit|info`, `/hof cell new|bounds|anchor|unanchor|assign|unassign|info`, `/hof swap`, `/hof reconcile`, `/hof restore`, `/hof import [cell] [--dry-run]` and `/hof import undo`, `/season decorate open|close`, the decorating window in `season.json`, random assignment, game modes and building rules in the Hall, mannequin figures in the archived skin and gear, plaques, imported trophies, archive anchors and figures opening the archive view at a page, and journalled imports (`IMPORT_*` kinds, crash points `IMPORT_STARTED` and `IMPORT_CLEARED`). Decisions: `docs/questions.md` 36 to 48, and 49 to 54 from the review.
+
+Review fixes: a cell changed between the import's scan and its clear stops that cell and changes nothing; `/season unarchive` refuses imported records; leaving the Hall puts back survival only for players Seasons switched, remembered across restarts; the import never writes a gallery that breaks the rules, and anchors a double chest at a half inside the cell. Unit: `ArchivingTest#aChestEmptiedAfterTheScan…`, `#anImportTakesTheCellsItems…`, `#anImportThatWouldWriteABrokenGallery…`, `#anImportedRecordIsNeverUnarchived`, `#leavingTheHallPutsBackSurvival…`.
+
+Not yet: the wand and `/hof stamp` (M5), access modes `bounds` and `gate`, view-only copies of decorative containers, visiting the Hall (`/hof`, beds), `/hof claim`.
 
 Known limits: test bots stand still and send no movement packets, and can't place blocks themselves (ADR 0001); M2/M3's walking, flying and pearl scenarios need a Mineflayer that speaks the server's version.
+
+**Part 4: season firsts and the season card** (#10, branch `m1-hall-cells`). Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A13 the first to an advancement is broadcast and posted to Discord, the second isn't; the Nether and a rare item are firsts too; `/season firsts` lists them | `a13-firsts.mjs`; unit: `FirstsAndCardTest#theFirstToEachMilestone…`, `#nothingIsAFirstOnceTheSeasonHasEnded`, `SeasonStoreTest#seasonFirstsRoundTrip…` |
+| A14 the season card: highlights, firsts, furthest block and every General-tab statistic as the season's difference; it opens as a book from the plaque anchor | `a14-season-card.mjs` (card lines through the scenario hooks, ADR 0003); unit: `FirstsAndCardTest#theSeasonCardHas…`, `#theCardOpensFromThePlaqueAnchorAsABook` |
+| A broken gallery file at startup is left out alone; status and joining admins are told; end and launch wait for a reload that fixes it | `m1-gallery-left-out.mjs` (two sessions); unit: `FirstsAndCardTest#aBrokenGalleryIsLeftOut…`, `#aGalleryBrokenDuringTheIntermission…` |
+
+Built: season firsts for advancements, the Nether, the End, diamonds, elytras and `firsts.rareItems`, kept in `season.json`, broadcast and posted to Discord once each; `/season firsts`; the season card as a book from the plaque anchor; block counts with the statistics baseline; galleries left out at startup. Decisions: `docs/questions.md` 55 to 61. The dragon slayer first, awards and the egg wall wait for M4.
+

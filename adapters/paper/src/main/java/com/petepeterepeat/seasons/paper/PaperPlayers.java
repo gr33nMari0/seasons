@@ -80,6 +80,24 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public void openBook(
+      PlayerId id, Message title, Message author, java.util.List<java.util.List<Message>> pages) {
+    player(id)
+        .ifPresent(player -> {
+          java.util.List<net.kyori.adventure.text.Component> rendered = new java.util.ArrayList<>();
+          for (java.util.List<Message> page : pages) {
+            rendered.add(
+                net.kyori.adventure.text.Component.join(
+                    net.kyori.adventure.text.JoinConfiguration.newlines(),
+                    page.stream().map(text::render).toList()));
+          }
+          player.openBook(
+              net.kyori.adventure.inventory.Book.book(
+                  text.render(title), text.render(author), rendered));
+        });
+  }
+
+  @Override
   public void broadcast(Message message) {
     server.broadcast(text.render(message));
   }
@@ -166,6 +184,36 @@ final class PaperPlayers implements Players {
   @Override
   public void setSurvival(PlayerId id) {
     online(id).setGameMode(GameMode.SURVIVAL);
+  }
+
+  @Override
+  public com.petepeterepeat.seasons.core.port.GameMode gameMode(PlayerId id) {
+    return com.petepeterepeat.seasons.core.port.GameMode.valueOf(online(id).getGameMode().name());
+  }
+
+  @Override
+  public void setGameMode(PlayerId id, com.petepeterepeat.seasons.core.port.GameMode mode) {
+    online(id).setGameMode(GameMode.valueOf(mode.name()));
+  }
+
+  @Override
+  public int heldSlot(PlayerId id) {
+    return online(id).getInventory().getHeldItemSlot();
+  }
+
+  @Override
+  public Optional<Position> targetBlock(PlayerId id, int range) {
+    return player(id)
+        .map(p -> p.getTargetBlockExact(range))
+        .map(block -> PaperPositions.toPosition(block.getLocation()));
+  }
+
+  @Override
+  public Optional<String> knownName(PlayerId id) {
+    var offline = server.getOfflinePlayer(id.uuid());
+    return offline.hasPlayedBefore() || offline.isOnline()
+        ? Optional.ofNullable(offline.getName())
+        : Optional.empty();
   }
 
   @Override

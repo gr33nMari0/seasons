@@ -36,6 +36,22 @@ public sealed interface Intent {
   /** Using an item, or a block or entity, with either hand. */
   record Interact(PlayerId player) implements Intent {}
 
+  /**
+   * Right-clicking a block, such as an archive anchor.
+   *
+   * @param mainHand whether this is the main hand's click; the game also raises one for the off
+   *     hand
+   */
+  record UseBlock(PlayerId player, Position block, boolean mainHand) implements Intent {}
+
+  /**
+   * Interacting with one of Seasons' own displays, such as a figure. The adapter always cancels the
+   * interaction itself.
+   *
+   * @param tag the tag the display was spawned with
+   */
+  record UseDisplay(PlayerId player, String tag) implements Intent {}
+
   /** Taking damage of any kind. */
   record TakeDamage(PlayerId player) implements Intent {}
 }

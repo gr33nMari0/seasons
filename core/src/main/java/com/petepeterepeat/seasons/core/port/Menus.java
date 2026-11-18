@@ -14,5 +14,10 @@ public interface Menus {
   void openViewOnly(PlayerId viewer, Message title, List<Optional<NeutralItem>> items);
 
   /** Opens a view-only menu with pages, starting on the first. */
-  void openPaged(PlayerId viewer, PagedView view);
+  default void openPaged(PlayerId viewer, PagedView view) {
+    openPaged(viewer, view, 0);
+  }
+
+  /** Opens a view-only menu with pages, starting on one of them (0-based). */
+  void openPaged(PlayerId viewer, PagedView view, int startPage);
 }

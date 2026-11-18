@@ -107,7 +107,9 @@ public final class SeasonMachine {
                       state.homecomingAt(),
                       Optional.of(now),
                       state.initSeason(),
-                      state.launchApplied()))
+                      state.launchApplied(),
+                      state.decorating(),
+                      state.firsts()))
               : new Changed(state);
     };
   }

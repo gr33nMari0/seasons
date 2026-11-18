@@ -72,13 +72,13 @@ final class PaperMenus implements Menus, Listener {
   }
 
   @Override
-  public void openPaged(PlayerId viewer, PagedView view) {
+  public void openPaged(PlayerId viewer, PagedView view, int startPage) {
     Player player =
         players.player(viewer).orElseThrow(() -> new IllegalStateException(viewer + " is offline"));
     PagedHolder holder = new PagedHolder(view);
     Inventory inventory = server.createInventory(holder, MAX_SLOTS, text.render(view.title()));
     holder.inventory = inventory;
-    show(holder, 0);
+    show(holder, Math.max(0, Math.min(startPage, view.pages().size() - 1)));
     player.openInventory(inventory);
   }
 

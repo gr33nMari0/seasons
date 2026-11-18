@@ -53,6 +53,9 @@ public final class Unarchiver {
 
     record NotEmpty() implements Outcome {}
 
+    /** The archive came from {@code /hof import}; {@code /hof import undo} puts it back. */
+    record Imported() implements Outcome {}
+
     record Busy() implements Outcome {}
 
     record Failed(String reason) implements Outcome {}
@@ -112,8 +115,13 @@ public final class Unarchiver {
               if (platform.players().find(id).isEmpty()) {
                 return done(new Outcome.Offline());
               }
-              InventorySnapshot live = platform.inventories().snapshot(id);
               ArchiveRecord archive = read.get();
+              if (archive.imported().isPresent()) {
+                // Its items came from a cell, not a player: restoring would give back nothing and
+                // set the record aside, out of reach of /hof import undo.
+                return done(new Outcome.Imported());
+              }
+              InventorySnapshot live = platform.inventories().snapshot(id);
               Plan plan = plan(archive, live);
               if (!plan.displaced().isEmpty() && plan.displacedFromPlayer() && !force) {
                 return done(new Outcome.NotEmpty());

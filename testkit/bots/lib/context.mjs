@@ -81,8 +81,15 @@ export class ScenarioContext {
   }
 
   /** Joins the admin bot. The test plugin makes it an op as it joins. */
-  admin () {
-    return this.join(this.adminName)
+  /**
+   * Joins the admin bot. The flat scenario world spawns slimes, which can kill a bot standing still
+   * for a timed wait, so natural monster spawning is turned off; a scenario that needs monsters
+   * summons them.
+   */
+  async admin () {
+    const admin = await this.join(this.adminName)
+    await this.command(admin, '/gamerule spawn_monsters false', /spawn_monsters/)
+    return admin
   }
 
   /**
@@ -253,7 +260,7 @@ export class ScenarioContext {
 
   /**
    * What Seasons holds for a player and season, through the scenario hooks (docs/adr/0003):
-   * { present, stacks, items, ender, vault, completed, visible, archivedThrough, pending }.
+   * { present, stacks, items, ender, vault, completed, visible, pages, archivedThrough, pending }.
    */
   async archive (admin, name, season) {
     const [summary, record] = await this.command(admin, `/scenario archive ${name} ${season}`, [/^Archive /, /^Record /])
@@ -266,6 +273,7 @@ export class ScenarioContext {
       vault: number('vault', summary),
       completed: number('completed', summary),
       visible: number('visible', summary),
+      pages: number('pages', summary),
       archivedThrough: number('archivedThrough', record),
       pending: number('pending', record)
     }

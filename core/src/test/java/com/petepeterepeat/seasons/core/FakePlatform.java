@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.DragonFight;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.Menus;
@@ -61,6 +62,7 @@ public final class FakePlatform {
   public IntentHandler handler = intent -> com.petepeterepeat.seasons.core.event.Decision.allow();
   public @Nullable Sessions sessions;
   public @Nullable TripwireReport tripwire;
+  public com.petepeterepeat.seasons.core.port.@Nullable Milestones milestones;
   public final Map<PlayerId, FakePlayer> players = new HashMap<>();
   public final List<PagedView> opened = new ArrayList<>();
   public final List<String> objectives = new ArrayList<>();
@@ -76,9 +78,15 @@ public final class FakePlatform {
     public Map<String, Map<String, Instant>> advancements = new HashMap<>();
     public Map<String, Long> statistics = new HashMap<>();
     public boolean survival = false;
+    public GameMode gameMode = GameMode.SURVIVAL;
     public int saves;
     public int resets;
     public final List<Message> titles = new ArrayList<>();
+    public java.util.Set<String> carried = new java.util.HashSet<>();
+    public Map<String, Long> counts = new HashMap<>();
+
+    /** The books opened for them: each book's pages of lines. */
+    public final List<List<List<Message>>> books = new ArrayList<>();
   }
 
   /** Adds an online player, with an empty inventory. */
@@ -175,9 +183,18 @@ public final class FakePlatform {
     }
   }
 
+  /** The Season 1 import's view of the world; null unless a test sets it. */
+  public com.petepeterepeat.seasons.core.port.@org.jspecify.annotations.Nullable Imports imports;
+
   public Platform platform(Capabilities capabilities, Path dir) {
     Players players =
         new Players() {
+          @Override
+          public void openBook(
+              PlayerId id, Message title, Message author, List<List<Message>> pages) {
+            state(id).books.add(pages);
+          }
+
           @Override
           public Collection<PlayerRef> online() {
             return List.copyOf(online);
@@ -250,6 +267,31 @@ public final class FakePlatform {
           }
 
           @Override
+          public GameMode gameMode(PlayerId id) {
+            return state(id).gameMode;
+          }
+
+          @Override
+          public void setGameMode(PlayerId id, GameMode mode) {
+            state(id).gameMode = mode;
+          }
+
+          @Override
+          public int heldSlot(PlayerId id) {
+            return 0;
+          }
+
+          @Override
+          public Optional<Position> targetBlock(PlayerId id, int range) {
+            return Optional.empty();
+          }
+
+          @Override
+          public Optional<String> knownName(PlayerId id) {
+            return online.stream().filter(p -> p.id().equals(id)).map(PlayerRef::name).findFirst();
+          }
+
+          @Override
           public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
             if (find(id).isEmpty()) {
               return CompletableFuture.completedFuture(false);
@@ -270,6 +312,11 @@ public final class FakePlatform {
         };
     Inventories inventories =
         new Inventories() {
+          @Override
+          public java.util.Set<String> carriedItemIds(PlayerId player) {
+            return java.util.Set.copyOf(state(player).carried);
+          }
+
           @Override
           public InventorySnapshot snapshot(PlayerId player) {
             return state(player).inventory;
@@ -379,7 +426,7 @@ public final class FakePlatform {
               PlayerId viewer, Message title, List<Optional<NeutralItem>> items) {}
 
           @Override
-          public void openPaged(PlayerId viewer, PagedView view) {
+          public void openPaged(PlayerId viewer, PagedView view, int startPage) {
             opened.add(view);
           }
         };
@@ -399,6 +446,11 @@ public final class FakePlatform {
           public void tripwire(TripwireReport report) {
             tripwire = report;
           }
+
+          @Override
+          public void milestones(com.petepeterepeat.seasons.core.port.Milestones m) {
+            milestones = m;
+          }
         };
     DragonFight dragon =
         new DragonFight() {
@@ -412,7 +464,18 @@ public final class FakePlatform {
             return Optional.empty();
           }
         };
-    Statistics statistics = player -> Map.copyOf(state(player).statistics);
+    Statistics statistics =
+        new Statistics() {
+          @Override
+          public Map<String, Long> general(PlayerId player) {
+            return Map.copyOf(state(player).statistics);
+          }
+
+          @Override
+          public Map<String, Long> counts(PlayerId player) {
+            return Map.copyOf(state(player).counts);
+          }
+        };
     Scheduler scheduler =
         new Scheduler() {
           @Override
@@ -469,12 +532,14 @@ public final class FakePlatform {
         null,
         menus,
         commands::add,
-        (player, node) -> true,
+        // Everyone holds every node except the bypass nodes, which nobody gets by default.
+        (player, node) -> !node.endsWith(".bypass"),
         events,
         scheduler,
         dragon,
         statistics,
-        storage);
+        storage,
+        imports);
   }
 
   private FakePlayer state(PlayerId id) {

@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Advancements;
+import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import io.papermc.paper.advancement.AdvancementDisplay;
 import java.time.Instant;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.advancement.Advancement;
@@ -27,6 +29,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Advancements, including the hidden ones without a display. Recipe unlocks ({@code
@@ -38,6 +41,7 @@ final class PaperAdvancements implements Advancements, Listener {
   private final Server server;
   private final PaperPlayers players;
   private final Set<UUID> restoring = new HashSet<>();
+  private @Nullable Milestones milestones;
 
   PaperAdvancements(Server server, PaperPlayers players) {
     this.server = server;
@@ -135,6 +139,32 @@ final class PaperAdvancements implements Advancements, Listener {
     } finally {
       restoring.remove(player.getUniqueId());
     }
+  }
+
+  /** Who hears about completed advancements, for season firsts. */
+  void milestones(Milestones listener) {
+    this.milestones = listener;
+  }
+
+  /**
+   * A completed advancement with a display goes to the season firsts, unless unarchive is giving it
+   * back.
+   */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onCompleted(PlayerAdvancementDoneEvent event) {
+    Milestones listening = milestones;
+    Advancement advancement = event.getAdvancement();
+    AdvancementDisplay display = advancement.getDisplay();
+    if (listening == null
+        || display == null
+        || isRecipe(advancement)
+        || restoring.contains(event.getPlayer().getUniqueId())) {
+      return;
+    }
+    listening.advancementDone(
+        new PlayerId(event.getPlayer().getUniqueId()),
+        advancement.getKey().asString(),
+        PlainTextComponentSerializer.plainText().serialize(display.title()));
   }
 
   /** Advancements given back by unarchive aren't announced in chat. */

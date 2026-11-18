@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// A4 (M1 part 2's half; ending in their own cell comes with the Hall in part 3). After /season end,
-// every online player has an empty inventory and ender chest, zero XP, no advancements except
-// recipe unlocks, no respawn point and full health, and their gear is in their archive.
+// A4. After /season end, every online player ends in their own cell with an empty inventory and
+// ender chest, zero XP, no advancements except recipe unlocks, no respawn point and full health,
+// and their gear is in their archive.
 import { assert } from '../lib/context.mjs'
 import { ENDER_ITEMS, GEAR_ITEMS, expectEmpty, giveGear, giveProgress } from '../lib/gear.mjs'
+import { buildGallery, cellOf, inside } from '../lib/hall.mjs'
 
 export default {
   name: 'a04-end-state',
@@ -12,6 +13,8 @@ export default {
     await ctx.join('Alex')
     await ctx.join('Sam')
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
+    const cells = await buildGallery(ctx, admin, { cells: 3 })
+    await ctx.command(admin, '/season decorate open', /^The decorating window for Season 2 is open: 3 players have cells\.$/)
     for (const name of ['Alex', 'Sam']) {
       await giveGear(ctx, admin, name)
       await giveProgress(ctx, admin, name)
@@ -23,6 +26,8 @@ export default {
     await ctx.waitForMessages(admin, /^Season 2 has ended\. Welcome to the Intermission\.$/, 20_000)
 
     for (const name of ['Alex', 'Sam']) {
+      const cell = await cellOf(ctx, admin, 'season-2', cells, name)
+      await ctx.eventually(async () => assert(inside(cell, await ctx.position(admin, name)), `${name} is in their own cell ${cell.key}`))
       await expectEmpty(ctx, admin, name, assert)
       assert(/^0 experience levels|has 0 experience levels$/.test(await ctx.command(admin, `/xp query ${name} levels`, /experience levels$/)), `${name} has no XP levels`)
       assert(/has 0 experience points$/.test(await ctx.command(admin, `/xp query ${name} points`, /experience points$/)), `${name} has no XP points`)

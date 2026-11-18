@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.config;
 
+import com.petepeterepeat.seasons.core.hall.Gallery;
+import com.petepeterepeat.seasons.core.hall.GalleryFiles;
+import com.petepeterepeat.seasons.core.hall.GalleryRules;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Position;
 import java.io.BufferedReader;
@@ -56,6 +59,7 @@ public final class ConfigLoader {
 
   private final Path configDirectory;
   private final Path seasonsDirectory;
+  private final Path galleriesDirectory;
   private final Map<String, String> environment;
 
   /**
@@ -67,6 +71,7 @@ public final class ConfigLoader {
       Path configDirectory, Path worldDataDirectory, Map<String, String> environment) {
     this.configDirectory = configDirectory;
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
+    this.galleriesDirectory = worldDataDirectory.resolve("galleries");
     this.environment = Map.copyOf(environment);
   }
 
@@ -110,8 +115,21 @@ public final class ConfigLoader {
     Messages.load(configDirectory);
   }
 
-  /** Reads and validates every file. */
+  /** Reads and validates every file, for a reload: any problem at all and nothing loads. */
   public Result load() {
+    return load(false);
+  }
+
+  /**
+   * Reads and validates every file at startup, when there is no previous config to keep. A gallery
+   * file with problems is left out, with its problems in {@link ConfigSnapshot#galleriesLeftOut},
+   * so it can't take every other file down with it. Any other problem and nothing loads.
+   */
+  public Result loadAtStartup() {
+    return load(true);
+  }
+
+  private Result load(boolean leaveOutBrokenGalleries) {
     List<ConfigProblem> problems = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
@@ -119,12 +137,95 @@ public final class ConfigLoader {
     Messages messages = loadMessages(problems);
     Secrets secrets = loadSecrets(problems);
     Map<Integer, SeasonFile> seasons = loadSeasons(problems);
+    Map<String, List<ConfigProblem>> leftOut = new HashMap<>();
+    Map<String, Gallery> galleries = loadGalleries(leftOut);
+    if (!leaveOutBrokenGalleries) {
+      leftOut.values().forEach(problems::addAll);
+      leftOut.clear();
+    }
 
     if (!problems.isEmpty() || config == null || messages == null || secrets == null) {
       return new Result(Optional.empty(), problems, warnings);
     }
     return new Result(
-        Optional.of(new ConfigSnapshot(config, messages, secrets, seasons)), problems, warnings);
+        Optional.of(new ConfigSnapshot(config, messages, secrets, seasons, galleries, leftOut)),
+        problems,
+        warnings);
+  }
+
+  /** {@code <world>/seasons/galleries/<id>.yml}. */
+  public Path galleryFile(String id) {
+    return galleriesDirectory.resolve(id + ".yml");
+  }
+
+  /**
+   * Every gallery file that loads and keeps the rules. One that doesn't is left out, with its
+   * problems in {@code leftOut} under its id; so is a gallery that breaks a rule with another.
+   */
+  private Map<String, Gallery> loadGalleries(Map<String, List<ConfigProblem>> leftOut) {
+    Map<String, Gallery> galleries = new HashMap<>();
+    if (!Files.isDirectory(galleriesDirectory)) {
+      return galleries;
+    }
+    List<Path> files;
+    try (Stream<Path> listed = Files.list(galleriesDirectory)) {
+      files = listed.filter(p -> p.getFileName().toString().endsWith(".yml")).sorted().toList();
+    } catch (IOException e) {
+      leftOut
+          .computeIfAbsent("", _ -> new ArrayList<>())
+          .add(ConfigProblem.inFile("galleries/", "can't be listed: " + e.getMessage()));
+      return galleries;
+    }
+    for (Path file : files) {
+      String fileName = file.getFileName().toString();
+      String name = "galleries/" + fileName;
+      String id = fileName.substring(0, fileName.length() - ".yml".length());
+      List<ConfigProblem> problems = new ArrayList<>();
+      if (!GalleryFiles.ID.matcher(id).matches()) {
+        problems.add(
+            ConfigProblem.inFile(
+                name, "gallery files are named by id: lower-case letters, digits, - and _"));
+      } else {
+        try {
+          ConfigurationNode node = yaml(file).load();
+          if (checkSchema(name, node, problems)) {
+            galleries.put(id, GalleryFiles.read(id, node));
+          }
+        } catch (GalleryFiles.Invalid e) {
+          problems.add(
+              ConfigProblem.atPath(name, e.path(), Objects.requireNonNull(e.getMessage())));
+        } catch (ParsingException e) {
+          problems.add(syntax(name, e));
+        } catch (IOException e) {
+          problems.add(ConfigProblem.inFile(name, String.valueOf(e.getMessage())));
+        }
+      }
+      if (!problems.isEmpty()) {
+        leftOut.computeIfAbsent(id, _ -> new ArrayList<>()).addAll(problems);
+      }
+    }
+    // A gallery that breaks a rule is left out too, until the rest keep them all.
+    while (true) {
+      List<GalleryRules.Problem> broken =
+          GalleryRules.check(
+              galleries.values().stream()
+                  .sorted(java.util.Comparator.comparing(Gallery::id))
+                  .toList());
+      if (broken.isEmpty()) {
+        return galleries;
+      }
+      String id = broken.getFirst().gallery();
+      for (GalleryRules.Problem problem : broken) {
+        if (problem.gallery().equals(id)) {
+          leftOut
+              .computeIfAbsent(id, _ -> new ArrayList<>())
+              .add(
+                  ConfigProblem.atPath(
+                      "galleries/" + id + ".yml", problem.path(), problem.message()));
+        }
+      }
+      galleries.remove(id);
+    }
   }
 
   private @Nullable SeasonsConfig loadConfig(List<ConfigProblem> problems, List<String> warnings) {

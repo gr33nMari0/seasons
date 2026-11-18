@@ -469,7 +469,8 @@ public final class Archiver implements RolloverArchiver {
     InventorySnapshot inventory = platform.inventories().snapshot(id);
     boolean recipesReset = resets.recipes() == KeepMode.RESET;
     AdvancementSnapshot advancements = platform.advancements().snapshot(id, recipesReset);
-    Map<String, Long> end = platform.statistics().general(id);
+    Map<String, Long> end = new HashMap<>(platform.statistics().general(id));
+    end.putAll(platform.statistics().counts(id));
     Map<String, Long> baseline = record.baseline(season).orElse(Map.of());
     Map<String, Long> difference = new HashMap<>();
     end.forEach((stat, value) -> difference.put(stat, value - baseline.getOrDefault(stat, 0L)));

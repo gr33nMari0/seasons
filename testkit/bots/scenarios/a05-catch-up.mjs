@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// A5 (M1 part 2's half; "into their cell" comes with the Hall in part 3). A player offline at
-// season end is archived at their next login: during the Intermission they stay where they are
-// (no cells yet), and after launch they go straight to the new spawn in survival.
+// A5. A player offline at season end is archived at their next login: into their cell during the
+// Intermission, and straight to the new spawn in survival after launch.
 import { assert } from '../lib/context.mjs'
 import { GEAR_ITEMS, expectEmpty, giveGear } from '../lib/gear.mjs'
+import { buildGallery, cellOf, inside } from '../lib/hall.mjs'
 
 export default {
   name: 'a05-catch-up',
@@ -14,6 +14,8 @@ export default {
     const late = await ctx.join('Late')
     await giveGear(ctx, admin, 'Early')
     await giveGear(ctx, admin, 'Late')
+    const cells = await buildGallery(ctx, admin, { cells: 3 })
+    await ctx.command(admin, '/season decorate open', /^The decorating window for Season 2 is open: 3 players have cells\.$/)
     await ctx.leave(early)
     await ctx.leave(late)
     // The bots are gone at once; wait until the server has seen them leave too.
@@ -28,6 +30,9 @@ export default {
     await ctx.eventually(async () => assert((await ctx.archive(admin, 'Early', 2)).archivedThrough === 2, 'Early is archived'))
     await expectEmpty(ctx, admin, 'Early', assert)
     assert((await ctx.archive(admin, 'Early', 2)).items === GEAR_ITEMS, 'Early\'s gear is in the archive')
+    const cell = await cellOf(ctx, admin, 'season-2', cells, 'Early')
+    await ctx.eventually(async () => assert(inside(cell, await ctx.position(admin, 'Early')), `Early is in their cell ${cell.key}`))
+    assert(await ctx.holds(admin, `entity @e[type=minecraft:mannequin,x=${cell.figure.x},y=${cell.figure.y},z=${cell.figure.z},dx=0,dy=1,dz=0]`), 'Early\'s figure stands in their cell')
 
     // After launch: a late joiner goes straight to the new spawn.
     await ctx.command(admin, '/tp SeasonsAdmin 500 -60 300', /^Teleported /)

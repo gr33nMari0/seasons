@@ -5,11 +5,13 @@ import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.port.Events;
+import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
 import java.util.List;
 import java.util.Optional;
+import org.bukkit.block.Block;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
@@ -18,6 +20,7 @@ import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -27,6 +30,7 @@ import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -34,6 +38,7 @@ import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.Nullable;
 
@@ -49,15 +54,26 @@ final class PaperEvents implements Events, Listener {
   private final PaperText text;
   private final PaperInventories inventories;
   private final PaperPlayers players;
+  private final PaperDisplays displays;
+  private final PaperAdvancements advancements;
+  private @Nullable Milestones milestones;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
   private @Nullable TripwireReport tripwire;
 
-  PaperEvents(Plugin plugin, PaperText text, PaperInventories inventories, PaperPlayers players) {
+  PaperEvents(
+      Plugin plugin,
+      PaperText text,
+      PaperInventories inventories,
+      PaperPlayers players,
+      PaperDisplays displays,
+      PaperAdvancements advancements) {
     this.plugin = plugin;
+    this.advancements = advancements;
     this.text = text;
     this.inventories = inventories;
     this.players = players;
+    this.displays = displays;
   }
 
   @Override
@@ -73,6 +89,22 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void tripwire(TripwireReport report) {
     this.tripwire = report;
+  }
+
+  @Override
+  public void milestones(Milestones listener) {
+    this.milestones = listener;
+    advancements.milestones(listener);
+  }
+
+  /** Arriving in the Nether or the End can be a season first. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onChangedWorld(PlayerChangedWorldEvent event) {
+    Milestones listening = milestones;
+    if (listening != null) {
+      Player player = event.getPlayer();
+      listening.enteredDimension(id(player), player.getWorld().getKey().asString());
+    }
   }
 
   @EventHandler(priority = EventPriority.MONITOR)
@@ -175,20 +207,46 @@ final class PaperEvents implements Events, Listener {
   @EventHandler(priority = EventPriority.LOW)
   void onInteract(PlayerInteractEvent event) {
     Player player = event.getPlayer();
-    if (handler.decide(new Intent.Interact(id(player))) instanceof Decision.Deny deny) {
+    Block clicked = event.getClickedBlock();
+    Intent intent =
+        event.getAction() == Action.RIGHT_CLICK_BLOCK && clicked != null
+            ? new Intent.UseBlock(
+                id(player),
+                PaperPositions.toPosition(clicked.getLocation()),
+                event.getHand() == EquipmentSlot.HAND)
+            : new Intent.Interact(id(player));
+    if (handler.decide(intent) instanceof Decision.Deny deny) {
       event.setUseInteractedBlock(Event.Result.DENY);
       event.setUseItemInHand(Event.Result.DENY);
       deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
     }
   }
 
-  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  /** Every interaction with one of Seasons' displays is cancelled; a figure opens its archive. */
+  @EventHandler(priority = EventPriority.LOW)
   void onInteractEntity(PlayerInteractEntityEvent event) {
-    apply(event, event.getPlayer(), new Intent.Interact(id(event.getPlayer())));
+    Player player = event.getPlayer();
+    Optional<String> tag = displays.tagOf(event.getRightClicked());
+    if (tag.isPresent()) {
+      event.setCancelled(true);
+      if (event.getHand() == EquipmentSlot.HAND
+          && handler.decide(new Intent.UseDisplay(id(player), tag.get()))
+              instanceof Decision.Deny deny) {
+        deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
+      }
+      return;
+    }
+    if (!event.isCancelled()) {
+      apply(event, player, new Intent.Interact(id(player)));
+    }
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onDamage(EntityDamageEvent event) {
+    if (displays.tagOf(event.getEntity()).isPresent()) {
+      event.setCancelled(true);
+      return;
+    }
     if (event.getEntity() instanceof Player player) {
       apply(event, player, new Intent.TakeDamage(id(player)));
     }

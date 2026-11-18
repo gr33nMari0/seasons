@@ -18,4 +18,5 @@ public record Platform(
     Scheduler scheduler,
     DragonFight dragonFight,
     Statistics statistics,
-    Storage storage) {}
+    Storage storage,
+    Imports imports) {}

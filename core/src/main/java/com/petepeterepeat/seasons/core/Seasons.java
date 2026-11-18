@@ -12,20 +12,29 @@ import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
+import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.hall.HallCommands;
+import com.petepeterepeat.seasons.core.hall.HallImporter;
+import com.petepeterepeat.seasons.core.hall.HallRenderer;
+import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
+import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
+import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.LaunchSequence;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
 import com.petepeterepeat.seasons.core.season.SeasonService;
@@ -45,6 +54,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiPredicate;
+import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +76,6 @@ public final class Seasons implements SeasonsApi {
   private final String version;
   private final Clock clock;
   private final Webhooks webhooks;
-  private final Hall hall;
   private final Map<String, String> environment;
   private final SerialWriter writer;
   private final Optional<ScenarioHooks> hooks;
@@ -76,11 +85,16 @@ public final class Seasons implements SeasonsApi {
   private @Nullable SeasonCommands commands;
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
+  private @Nullable FirstsTracker firsts;
+
+  /** How long after an admin joins they hear about galleries left out at startup. */
+  private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
+
   private @Nullable ScheduledTask flusher;
+  private @Nullable HallService hallService;
   private @Nullable RolloverArchiver archiverForTests;
 
   /**
-   * @param hall the Hall of Fame; {@link Hall#none()} until M1 part 3
    * @param environment environment variables, for the webhook overrides
    * @param writer the file writer thread; Seasons closes it at {@link #stop}
    * @param hooks the scenario hooks, only on a scenario server (docs/adr/0003)
@@ -90,7 +104,6 @@ public final class Seasons implements SeasonsApi {
       String version,
       Clock clock,
       Webhooks webhooks,
-      Hall hall,
       Map<String, String> environment,
       SerialWriter writer,
       Optional<ScenarioHooks> hooks) {
@@ -98,7 +111,6 @@ public final class Seasons implements SeasonsApi {
     this.version = version;
     this.clock = clock;
     this.webhooks = webhooks;
-    this.hall = hall;
     this.environment = Map.copyOf(environment);
     this.writer = writer;
     this.hooks = hooks;
@@ -141,6 +153,22 @@ public final class Seasons implements SeasonsApi {
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
     CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
     SeasonEntry entry = new SeasonEntry(platform, config, players, immunity, clock);
+    HallService halls =
+        new HallService(
+            platform,
+            config,
+            loader::galleryFile,
+            world.resolve("backups"),
+            writer,
+            clock,
+            players,
+            archives,
+            announcer,
+            RandomGenerator.getDefault());
+    hallService = halls;
+    HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
+    Hall hall = halls.hall(renderer);
+    Optional<HallImporter> importer = Optional.empty();
 
     Optional<Archiver> archiver = Optional.empty();
     Optional<Unarchiver> unarchiver = Optional.empty();
@@ -157,6 +185,13 @@ public final class Seasons implements SeasonsApi {
               platform, clock, writer, journal, archives, vaults, players, hall, audit, hold);
       replay.register(Operation.ARCHIVE, archiving.recovery());
       replay.register(Operation.UNARCHIVE, unarchiving.recovery());
+      HallImporter importing =
+          new HallImporter(
+              platform, writer, journal, archives, players, halls, renderer, audit, crash, clock,
+              world);
+      replay.register(Operation.IMPORT, importing.recovery());
+      replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
+      importer = Optional.of(importing);
       var _ = replay.recoverAll();
       archiver = Optional.of(archiving);
       unarchiver = Optional.of(unarchiving);
@@ -188,6 +223,8 @@ public final class Seasons implements SeasonsApi {
             world.resolve("backups"));
     service = seasons;
     seasons.start();
+    halls.bind(seasons::state, seasons::updateDecorating);
+    halls.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -207,6 +244,20 @@ public final class Seasons implements SeasonsApi {
         new Tripwire(platform.players(), platform.inventories(), platform.scheduler(), audit);
     tripwire = wire;
     wire.start();
+    FirstsTracker firstsTracker =
+        new FirstsTracker(
+            platform.players(),
+            platform.inventories(),
+            platform.scheduler(),
+            seasons::state,
+            seasons::addFirst,
+            hold::isHeld,
+            config,
+            announcer,
+            clock);
+    firsts = firstsTracker;
+    firstsTracker.start();
+    platform.events().milestones(firstsTracker);
     flusher =
         platform
             .scheduler()
@@ -226,12 +277,15 @@ public final class Seasons implements SeasonsApi {
             journalError,
             startupProblems,
             new SeasonCommands.Services(
-                archiver, unarchiver, recovery, players, furthest, login, archives, vaults));
+                archiver, unarchiver, recovery, players, furthest, login, archives, vaults, halls));
     commands = built;
-    platform.events().handle(new IntentRouter(hold, immunity, furthest));
-    login.ifPresent(platform.events()::sessions);
+    platform.events().handle(new IntentRouter(hold, immunity, furthest, halls::decide));
+    platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
     platform.commands().register(built.root());
+    platform
+        .commands()
+        .register(new HallCommands(platform, config, halls, renderer, importer, players).root());
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -246,8 +300,57 @@ public final class Seasons implements SeasonsApi {
                   platform.menus(),
                   writer,
                   config,
-                  serverThread));
+                  serverThread,
+                  (player, season) ->
+                      halls
+                          .card(player, season)
+                          .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of()))));
     }
+  }
+
+  /**
+   * Joins and leaves go to login catch-up, if the journal could be opened; admins who join are also
+   * told about any gallery left out at startup.
+   */
+  private Sessions sessions(Optional<LoginService> login) {
+    return new Sessions() {
+      @Override
+      public void arriving(PlayerId player) {
+        login.ifPresent(l -> l.arriving(player));
+      }
+
+      @Override
+      public void joined(PlayerRef player, boolean playedBefore) {
+        login.ifPresent(l -> l.joined(player, playedBefore));
+        // A moment after the join messages, so it isn't lost among them.
+        platform
+            .scheduler()
+            .runGlobalLater(LEFT_OUT_NOTICE_DELAY, () -> tellAboutLeftOutGalleries(player));
+      }
+
+      private void tellAboutLeftOutGalleries(PlayerRef player) {
+        ConfigSnapshot snapshot = config.get();
+        if (platform.players().find(player.id()).isPresent()
+            && snapshot.anyGalleryLeftOut()
+            && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
+          snapshot
+              .galleriesLeftOut()
+              .forEach((gallery, problems) ->
+                  problems.forEach(problem ->
+                      platform
+                          .players()
+                          .sendMessage(
+                              player.id(),
+                              SeasonCommands.galleryLeftOut(
+                                  snapshot.messages(), gallery, problem))));
+        }
+      }
+
+      @Override
+      public void left(PlayerId player) {
+        login.ifPresent(l -> l.left(player));
+      }
+    };
   }
 
   /** Ends seasons with this archiver instead of the real one; for tests, before {@link #start}. */
@@ -260,8 +363,14 @@ public final class Seasons implements SeasonsApi {
     if (service != null) {
       service.stop();
     }
+    if (hallService != null) {
+      hallService.stop();
+    }
     if (tripwire != null) {
       tripwire.stop();
+    }
+    if (firsts != null) {
+      firsts.stop();
     }
     if (flusher != null) {
       flusher.cancel();
@@ -339,10 +448,21 @@ public final class Seasons implements SeasonsApi {
     } catch (IOException e) {
       LOG.error("Can't write the default config files", e);
     }
-    ConfigLoader.Result result = loader.load();
+    ConfigLoader.Result result = loader.loadAtStartup();
     result.warnings().forEach(warning -> LOG.warn("{}", warning));
     if (result.snapshot().isPresent()) {
       config.set(result.snapshot().get());
+      result
+          .snapshot()
+          .get()
+          .galleriesLeftOut()
+          .forEach((gallery, problems) ->
+              problems.forEach(problem ->
+                  LOG.error(
+                      "Gallery {} is left out until it is fixed and /season reload succeeds;"
+                          + " /season end and /season launch are refused until then: {}",
+                      gallery,
+                      problem)));
       return List.of();
     }
     for (ConfigProblem problem : result.problems()) {

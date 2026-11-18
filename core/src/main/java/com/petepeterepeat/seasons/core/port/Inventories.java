@@ -38,4 +38,10 @@ public interface Inventories {
 
   /** The game's data version, which items written now carry as {@code DataVersion}. */
   int dataVersion();
+
+  /**
+   * The item ids an online player carries: inventory, armour, off hand and cursor, such as {@code
+   * minecraft:diamond}. For season firsts.
+   */
+  java.util.Set<String> carriedItemIds(PlayerId player);
 }

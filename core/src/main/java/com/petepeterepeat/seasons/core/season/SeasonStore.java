@@ -5,6 +5,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.petepeterepeat.seasons.core.config.Durations;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.season.Phase.Active;
 import com.petepeterepeat.seasons.core.season.Phase.Archiving;
 import com.petepeterepeat.seasons.core.season.Phase.Countdown;
@@ -20,11 +21,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -102,6 +106,21 @@ public final class SeasonStore {
         node.node("initSeason").set(state.initSeason().get());
       }
       node.node("launchApplied").set(state.launchApplied());
+      Decorating decorating = state.decorating();
+      setInstant(node.node("decorating"), "openedAt", decorating.openedAt());
+      node.node("decorating", "open").set(decorating.open());
+      for (Map.Entry<PlayerId, Instant> lock : decorating.lockAt().entrySet()) {
+        node.node("decorating", "lockAt", lock.getKey().toString()).set(lock.getValue().toString());
+      }
+      for (SeasonFirst first : state.firsts()) {
+        ConfigurationNode entry = node.node("firsts").appendListNode();
+        entry.node("season").set(first.season());
+        entry.node("key").set(first.key());
+        entry.node("label").set(first.label());
+        entry.node("player").set(first.player().toString());
+        entry.node("name").set(first.name());
+        entry.node("at").set(first.at().toString());
+      }
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -157,7 +176,45 @@ public final class SeasonStore {
         node.node("initSeason").virtual()
             ? Optional.empty()
             : Optional.of(node.node("initSeason").getInt()),
-        node.node("launchApplied").getBoolean(true));
+        node.node("launchApplied").getBoolean(true),
+        decorating(node.node("decorating")),
+        firsts(node.node("firsts")));
+  }
+
+  private static List<SeasonFirst> firsts(ConfigurationNode node) throws IOException {
+    List<SeasonFirst> firsts = new java.util.ArrayList<>();
+    for (ConfigurationNode entry : node.childrenList()) {
+      try {
+        firsts.add(
+            new SeasonFirst(
+                entry.node("season").getInt(),
+                entry.node("key").getString(""),
+                entry.node("label").getString(""),
+                new PlayerId(UUID.fromString(entry.node("player").getString(""))),
+                entry.node("name").getString(""),
+                instant(entry.node("at"))));
+      } catch (IllegalArgumentException e) {
+        throw new IOException("season.json has a damaged firsts entry", e);
+      }
+    }
+    return firsts;
+  }
+
+  private static Decorating decorating(ConfigurationNode node) throws IOException {
+    Map<PlayerId, Instant> lockAt = new HashMap<>();
+    for (Map.Entry<Object, ? extends ConfigurationNode> lock :
+        node.node("lockAt").childrenMap().entrySet()) {
+      try {
+        lockAt.put(
+            new PlayerId(UUID.fromString(String.valueOf(lock.getKey()))), instant(lock.getValue()));
+      } catch (IllegalArgumentException e) {
+        throw new IOException("season.json has a damaged decorating.lockAt", e);
+      }
+    }
+    return new Decorating(
+        optional(node.node("openedAt"), Instant::parse),
+        node.node("open").getBoolean(false),
+        lockAt);
   }
 
   private static GsonConfigurationLoader loader(@Nullable StringWriter out) {

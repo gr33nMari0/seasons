@@ -23,6 +23,8 @@ import java.util.Set;
  * @param furthest furthest block placed, by season
  * @param pendingDisplays seasons whose displays still need rendering
  * @param pendingDestination a season archived whose cell they haven't been sent to yet
+ * @param hallAdventure Seasons switched them from survival to adventure in the Hall, so leaving it
+ *     puts survival back; kept here so a restart doesn't strand them in adventure
  */
 public record PlayerRecord(
     PlayerId id,
@@ -33,7 +35,8 @@ public record PlayerRecord(
     Map<Integer, Map<String, Long>> baselines,
     Map<Integer, FurthestBlock> furthest,
     Set<Integer> pendingDisplays,
-    OptionalInt pendingDestination) {
+    OptionalInt pendingDestination,
+    boolean hallAdventure) {
   public PlayerRecord {
     seasons = Map.copyOf(seasons);
     baselines = Map.copyOf(baselines);
@@ -50,7 +53,7 @@ public record PlayerRecord(
 
   public static PlayerRecord create(PlayerId id, String name) {
     return new PlayerRecord(
-        id, name, Map.of(), 0, 0, Map.of(), Map.of(), Set.of(), OptionalInt.empty());
+        id, name, Map.of(), 0, 0, Map.of(), Map.of(), Set.of(), OptionalInt.empty(), false);
   }
 
   public boolean played(int season) {
@@ -67,7 +70,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         pendingDisplays,
-        pendingDestination);
+        pendingDestination,
+        hallAdventure);
   }
 
   /** Marks the season played and adds online time to it. */
@@ -88,7 +92,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         pendingDisplays,
-        pendingDestination);
+        pendingDestination,
+        hallAdventure);
   }
 
   public PlayerRecord withArchived(int season) {
@@ -103,7 +108,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         displays,
-        OptionalInt.of(season));
+        OptionalInt.of(season),
+        hallAdventure);
   }
 
   /**
@@ -127,7 +133,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         displays,
-        destination);
+        destination,
+        hallAdventure);
   }
 
   public PlayerRecord withDisplaysRendered(int season) {
@@ -142,7 +149,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         displays,
-        pendingDestination);
+        pendingDestination,
+        hallAdventure);
   }
 
   public PlayerRecord withDestinationReached() {
@@ -155,7 +163,8 @@ public record PlayerRecord(
         baselines,
         furthest,
         pendingDisplays,
-        OptionalInt.empty());
+        OptionalInt.empty(),
+        hallAdventure);
   }
 
   /** Brought into a season, with the statistics it starts from. */
@@ -171,7 +180,8 @@ public record PlayerRecord(
         next,
         furthest,
         pendingDisplays,
-        pendingDestination);
+        pendingDestination,
+        hallAdventure);
   }
 
   public FurthestBlock furthest(int season) {
@@ -190,7 +200,22 @@ public record PlayerRecord(
         baselines,
         next,
         pendingDisplays,
-        pendingDestination);
+        pendingDestination,
+        hallAdventure);
+  }
+
+  public PlayerRecord withHallAdventure(boolean switched) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        switched);
   }
 
   public Optional<Map<String, Long>> baseline(int season) {

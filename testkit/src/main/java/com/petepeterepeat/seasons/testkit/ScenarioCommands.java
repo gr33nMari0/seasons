@@ -18,7 +18,10 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
@@ -31,10 +34,16 @@ import org.bukkit.plugin.RegisteredServiceProvider;
  * <ul>
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
+ *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
  *   <li>{@code place <player> <x> <y> <z> <block>} places a block as that player would, firing the
  *       same {@code BlockPlaceEvent}, because bots can't place blocks through the protocol
  *       translation (docs/adr/0001)
+ *   <li>{@code break <player> <x> <y> <z>} breaks a block as that player would, firing {@code
+ *       BlockBreakEvent}, for the same reason
+ *   <li>{@code use <player> <x> <y> <z>} right-clicks a block as that player would, firing {@code
+ *       PlayerInteractEvent}: the translation drops a bot's clicks on blocks too, though not on
+ *       entities
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand {
@@ -84,6 +93,27 @@ final class ScenarioCommands implements BasicCommand {
                                 }
                               }));
         }
+        case "card" -> {
+          var _ =
+              hooks
+                  .card(id(args[1]), Integer.parseInt(args[2]))
+                  .whenComplete((lines, failure) ->
+                      plugin
+                          .getServer()
+                          .getGlobalRegionScheduler()
+                          .execute(
+                              plugin,
+                              () ->
+                                  sender.sendMessage(
+                                      failure != null
+                                          ? "Scenario card failed: " + failure
+                                          : "Card of "
+                                              + args[1]
+                                              + " for Season "
+                                              + args[2]
+                                              + ": "
+                                              + String.join(" | ", lines))));
+        }
         case "open-archive" -> {
           Player viewer = plugin.getServer().getPlayerExact(args[1]);
           if (viewer == null) {
@@ -101,7 +131,11 @@ final class ScenarioCommands implements BasicCommand {
                               : "No archive to open: " + failure));
         }
         case "place" -> place(sender, args);
-        default -> sender.sendMessage("Usage: /scenario crash-at|archive|open-archive|place ...");
+        case "break" -> breakBlock(sender, args);
+        case "use" -> use(sender, args);
+        default ->
+            sender.sendMessage(
+                "Usage: /scenario crash-at|archive|card|open-archive|place|break|use ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
@@ -138,6 +172,72 @@ final class ScenarioCommands implements BasicCommand {
     }
     block.setType(material);
     sender.sendMessage("Placed " + material.getKey() + " at " + x + ", " + y + ", " + z);
+  }
+
+  private void breakBlock(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't break as " + args[1]);
+      return;
+    }
+    Block block = loaded(player.getWorld(), args);
+    Material was = block.getType();
+    BlockBreakEvent event = new BlockBreakEvent(block, player);
+    event.setDropItems(false);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      sender.sendMessage("Breaking " + was.getKey() + " was refused");
+      return;
+    }
+    block.setType(Material.AIR);
+    sender.sendMessage(
+        "Broke "
+            + was.getKey()
+            + " at "
+            + block.getX()
+            + ", "
+            + block.getY()
+            + ", "
+            + block.getZ());
+  }
+
+  private void use(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't use a block as " + args[1]);
+      return;
+    }
+    Block block = loaded(player.getWorld(), args);
+    PlayerInteractEvent event =
+        new PlayerInteractEvent(
+            player,
+            Action.RIGHT_CLICK_BLOCK,
+            player.getInventory().getItemInMainHand(),
+            block,
+            BlockFace.UP,
+            EquipmentSlot.HAND);
+    plugin.getServer().getPluginManager().callEvent(event);
+    sender.sendMessage(
+        "Used "
+            + block.getType().getKey()
+            + " at "
+            + block.getX()
+            + ", "
+            + block.getY()
+            + ", "
+            + block.getZ()
+            + (event.useInteractedBlock() == org.bukkit.event.Event.Result.DENY
+                ? " (the click was taken over)"
+                : ""));
+  }
+
+  /** The block at args 2 to 4, with its chunk kept loaded for the scenario. */
+  private Block loaded(World world, String[] args) {
+    int x = Integer.parseInt(args[2]);
+    int y = Integer.parseInt(args[3]);
+    int z = Integer.parseInt(args[4]);
+    world.getChunkAt(x >> 4, z >> 4).addPluginChunkTicket(plugin);
+    return world.getBlockAt(x, y, z);
   }
 
   @Override
