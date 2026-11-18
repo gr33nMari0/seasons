@@ -68,7 +68,7 @@ class ArchivingTest {
 
   private void start() {
     hooks =
-        new ScenarioHooks(() -> {
+        TestHooks.of(() -> {
           throw new Halted();
         });
     seasons =

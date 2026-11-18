@@ -21,6 +21,7 @@ import io.papermc.paper.command.brigadier.argument.CustomArgumentType;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,7 +32,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Registers core command trees with Brigadier through Paper's Commands API. */
 final class PaperCommands implements Commands {
-  private final List<Root> roots = new ArrayList<>();
+  /**
+   * The command trees by root name. Commands run whatever tree is registered under their path when
+   * they run, so a Seasons started again by the scenario reset (docs/adr/0003) answers the commands
+   * Brigadier already knows.
+   */
+  private final Map<String, Root> roots = new LinkedHashMap<>();
 
   private record Root(CommandNode node, List<String> aliases) {}
 
@@ -44,8 +50,8 @@ final class PaperCommands implements Commands {
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event -> {
-              for (Root root : roots) {
-                if (toBrigadier(root.node(), List.of()).build()
+              for (Root root : roots.values()) {
+                if (toBrigadier(root.node(), List.of(), List.of()).build()
                     instanceof LiteralCommandNode<CommandSourceStack> literal) {
                   event.registrar().register(literal, null, root.aliases());
                 }
@@ -55,10 +61,31 @@ final class PaperCommands implements Commands {
 
   @Override
   public void register(CommandNode root, List<String> aliases) {
-    roots.add(new Root(root, List.copyOf(aliases)));
+    roots.put(root.name(), new Root(root, List.copyOf(aliases)));
   }
 
-  ArgumentBuilder<CommandSourceStack, ?> toBrigadier(CommandNode node, List<CommandNode> scope) {
+  /** The node now registered at {@code path}, root name first. */
+  private Optional<CommandNode> current(List<String> path) {
+    Root root = roots.get(path.getFirst());
+    if (root == null) {
+      return Optional.empty();
+    }
+    CommandNode node = root.node();
+    for (String name : path.subList(1, path.size())) {
+      Optional<CommandNode> child =
+          node.children().stream().filter(c -> c.name().equals(name)).findFirst();
+      if (child.isEmpty()) {
+        return Optional.empty();
+      }
+      node = child.get();
+    }
+    return Optional.of(node);
+  }
+
+  ArgumentBuilder<CommandSourceStack, ?> toBrigadier(
+      CommandNode node, List<CommandNode> scope, List<String> parents) {
+    List<String> path = new ArrayList<>(parents);
+    path.add(node.name());
     ArgumentBuilder<CommandSourceStack, ?> builder =
         switch (node.argument().orElse(null)) {
           case null -> io.papermc.paper.command.brigadier.Commands.literal(node.name());
@@ -81,14 +108,17 @@ final class PaperCommands implements Commands {
     node.permission()
         .ifPresent(
             permission -> builder.requires(source -> source.getSender().hasPermission(permission)));
-    node.action()
-        .ifPresent(action ->
-            builder.executes(context -> {
-              action.run(source(context.getSource().getSender()), arguments(context, inScope));
-              return Command.SINGLE_SUCCESS;
-            }));
+    if (node.action().isPresent()) {
+      builder.executes(context -> {
+        current(path)
+            .flatMap(CommandNode::action)
+            .ifPresent(action ->
+                action.run(source(context.getSource().getSender()), arguments(context, inScope)));
+        return Command.SINGLE_SUCCESS;
+      });
+    }
     for (CommandNode child : node.children()) {
-      builder.then(toBrigadier(child, inScope));
+      builder.then(toBrigadier(child, inScope, path));
     }
     return builder;
   }

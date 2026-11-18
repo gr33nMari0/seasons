@@ -6,10 +6,18 @@ import com.petepeterepeat.seasons.core.Seasons;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.Scheduler;
+import com.petepeterepeat.seasons.core.scenario.ScenarioClock;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
+import com.petepeterepeat.seasons.core.scenario.ScenarioScheduler;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.integrations.discord.DiscordWebhooks;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
@@ -51,6 +59,18 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperEvents events = new PaperEvents(this, text, inventories, players, displays, advancements);
     PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperStorage storage = new PaperStorage(this, server);
+    Clock clock = Clock.systemUTC();
+    Scheduler scheduler = new PaperScheduler(this, server, players, executor);
+    // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
+    Optional<ScenarioHooks> hooks = Optional.empty();
+    if (Boolean.getBoolean(ScenarioHooks.PROPERTY)) {
+      ScenarioClock movable = new ScenarioClock(clock);
+      ScenarioScheduler catchingUp = new ScenarioScheduler(scheduler, movable);
+      hooks =
+          Optional.of(new ScenarioHooks(() -> Runtime.getRuntime().halt(0), movable, catchingUp));
+      clock = movable;
+      scheduler = catchingUp;
+    }
     Platform platform =
         new Platform(
             "Paper",
@@ -65,7 +85,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             new PaperCommands(this, text),
             new PaperPermissions(players),
             events,
-            new PaperScheduler(this, server, players, executor),
+            scheduler,
             new PaperDragonFight(),
             new PaperStatistics(players),
             storage,
@@ -77,32 +97,66 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(menus, this);
     server.getPluginManager().registerEvents(advancements, this);
 
-    // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
-    Optional<ScenarioHooks> hooks =
-        Boolean.getBoolean(ScenarioHooks.PROPERTY)
-            ? Optional.of(new ScenarioHooks(() -> Runtime.getRuntime().halt(0)))
-            : Optional.empty();
+    start(platform, clock, hooks);
+    Clock seasonsClock = clock;
+    Optional<ScenarioHooks> scenarioHooks = hooks;
+    hooks.ifPresent(scenario -> {
+      getSLF4JLogger()
+          .warn(
+              "Scenario hooks are on (-D{}=true). Never run a real server like this.",
+              ScenarioHooks.PROPERTY);
+      scenario.onReset(() -> restartFresh(platform, storage, seasonsClock, scenarioHooks));
+      server
+          .getServicesManager()
+          .register(ScenarioHooks.class, scenario, this, ServicePriority.Normal);
+    });
+  }
+
+  private void start(Platform platform, Clock clock, Optional<ScenarioHooks> hooks) {
     Seasons started =
         new Seasons(
             platform,
             getPluginMeta().getVersion(),
-            Clock.systemUTC(),
+            clock,
             new DiscordWebhooks(),
             System.getenv(),
             new SerialWriter(),
             hooks);
     started.start();
     seasons = started;
-    server.getServicesManager().register(SeasonsApi.class, started, this, ServicePriority.Normal);
-    hooks.ifPresent(scenario -> {
-      getSLF4JLogger()
-          .warn(
-              "Scenario hooks are on (-D{}=true). Never run a real server like this.",
-              ScenarioHooks.PROPERTY);
-      server
-          .getServicesManager()
-          .register(ScenarioHooks.class, scenario, this, ServicePriority.Normal);
-    });
+    getServer()
+        .getServicesManager()
+        .register(SeasonsApi.class, started, this, ServicePriority.Normal);
+  }
+
+  /**
+   * The scenario reset (docs/adr/0003): stops Seasons, deletes its config and data folders, and
+   * starts it again as on a fresh install. Only the scenario hooks call this.
+   */
+  private void restartFresh(
+      Platform platform, PaperStorage storage, Clock clock, Optional<ScenarioHooks> hooks) {
+    Seasons running = seasons;
+    if (running != null) {
+      getServer().getServicesManager().unregister(SeasonsApi.class, running);
+      running.stop();
+      seasons = null;
+    }
+    deleteTree(storage.configDirectory());
+    deleteTree(storage.worldDataDirectory());
+    start(platform, clock, hooks);
+  }
+
+  private static void deleteTree(Path root) {
+    if (!Files.exists(root)) {
+      return;
+    }
+    try (var paths = Files.walk(root)) {
+      for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+        Files.delete(path);
+      }
+    } catch (IOException e) {
+      throw new UncheckedIOException("Can't delete " + root, e);
+    }
   }
 
   @Override
