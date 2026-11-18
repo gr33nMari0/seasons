@@ -188,11 +188,19 @@ val scenarioRuns = minecraftVersions.map { version ->
         group = "verification"
         description = "Runs the acceptance scenarios on Paper $version, in shards side by side."
         dependsOn(installBots, scenarioTls)
-        val pluginJars = files(
-            project(":adapters:paper").tasks.named("shadowJar"),
-            project(":web").tasks.named("shadowJar"),
-            tasks.jar,
-        )
+        // -PscenarioJars=<dir> runs the jars a CI build job made (Seasons, Seasons Web and this
+        // test plugin) instead of building them.
+        val prebuilt = providers.gradleProperty("scenarioJars").orNull
+        val pluginJars =
+            if (prebuilt != null) {
+                fileTree(rootProject.file(prebuilt)) { include("**/*.jar") }
+            } else {
+                files(
+                    project(":adapters:paper").tasks.named("shadowJar"),
+                    project(":web").tasks.named("shadowJar"),
+                    tasks.jar,
+                )
+            }
         inputs.files(pluginJars)
         outputs.upToDateWhen { false }
         doLast {
