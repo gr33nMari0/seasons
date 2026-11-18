@@ -100,6 +100,10 @@ public final class FakePlatform {
       String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {}
 
   public @Nullable HallGuard guard;
+  public com.petepeterepeat.seasons.core.port.@Nullable ZoneGuard zoneGuard;
+
+  /** Fireworks set off at positions, such as Homecoming's at the spawn. */
+  public final List<Position> fireworks = new ArrayList<>();
 
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
@@ -144,6 +148,8 @@ public final class FakePlatform {
     public int saves;
     public int resets;
     public final List<Message> titles = new ArrayList<>();
+    public final List<Message> actionBars = new ArrayList<>();
+    public int stopped;
     public java.util.Set<String> carried = new java.util.HashSet<>();
     public Map<String, Long> counts = new HashMap<>();
     public Movement movement = Movement.STILL;
@@ -380,6 +386,23 @@ public final class FakePlatform {
           }
 
           @Override
+          public void alert(PlayerId id, Message title, Message actionBar) {
+            state(id).titles.add(title);
+            state(id).actionBars.add(actionBar);
+          }
+
+          @Override
+          public void stopMoving(PlayerId id) {
+            state(id).stopped++;
+            state(id).movement = Movement.STILL;
+          }
+
+          @Override
+          public void fireworks(Position at) {
+            FakePlatform.this.fireworks.add(at);
+          }
+
+          @Override
           public void celebrate(PlayerId id, Message title, Message subtitle) {
             state(id).titles.add(title);
           }
@@ -578,6 +601,11 @@ public final class FakePlatform {
           @Override
           public void hall(HallGuard g) {
             guard = g;
+          }
+
+          @Override
+          public void zones(com.petepeterepeat.seasons.core.port.ZoneGuard g) {
+            zoneGuard = g;
           }
         };
     Displays shownDisplays =

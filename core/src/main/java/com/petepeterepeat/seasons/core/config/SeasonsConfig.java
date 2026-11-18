@@ -19,6 +19,7 @@ public record SeasonsConfig(
     Pets pets,
     Firsts firsts,
     Hof hof,
+    Zones zones,
     Dragon dragon,
     Deaths deaths) {
 
@@ -101,6 +102,14 @@ public record SeasonsConfig(
       }
     }
   }
+
+  /**
+   * Zones over the old world; the zones themselves live in each season's file.
+   *
+   * @param announceToDiscord whether announce-mode entries are posted to Discord too
+   */
+  @ConfigSerializable
+  public record Zones(boolean announceToDiscord) {}
 
   @ConfigSerializable
   public record Dragon(boolean newEggEachSeason, EggTo eggTo) {}

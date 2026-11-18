@@ -25,8 +25,12 @@ public sealed interface Intent {
   /** Dropping an item. */
   record DropItem(PlayerId player) implements Intent {}
 
-  /** Picking up an item from the ground. */
-  record PickupItem(PlayerId player) implements Intent {}
+  /**
+   * Picking up an item from the ground.
+   *
+   * @param item where the item lies, which may be just across a zone's edge
+   */
+  record PickupItem(PlayerId player, Position item) implements Intent {}
 
   /** Swapping the main hand and off hand. */
   record SwapHands(PlayerId player) implements Intent {}
@@ -163,11 +167,16 @@ public sealed interface Intent {
     PEARL,
     /** Chorus fruit. */
     CHORUS,
+    /** A portal. */
+    PORTAL,
     /** Seasons itself, such as /hof or launch. */
     SEASONS,
-    /** Anything else: commands, other plugins, portals. */
+    /** Anything else: commands and other plugins. */
     OTHER
   }
+
+  /** A trip through a portal that would make a new portal at a position, for its other end. */
+  record CreatePortal(PlayerId player, Position at) implements Intent {}
 
   /**
    * Getting on an entity: riding or sitting.

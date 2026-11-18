@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import https from 'node:https'
 import { dirname, join } from 'node:path'
 import mineflayer from 'mineflayer'
+import prismarineChat from 'prismarine-chat'
 
 const JOIN_TIMEOUT_MS = 60_000
 const REPLY_TIMEOUT_MS = 10_000
@@ -66,6 +67,14 @@ export class ScenarioContext {
       }
     }
     bot.seasonsBars = new Map()
+    // Paper sends the action bar as its own packet, which this Mineflayer doesn't read; it is
+    // passed on as a chat line at the game_info position, as older servers sent it.
+    bot._client.on('action_bar', (packet) => {
+      const ChatMessage = prismarineChat(bot.registry)
+      const message = ChatMessage.fromNotch(packet.text)
+      bot.emit('actionBar', message, null)
+      bot.emit('messagestr', message.toString(), 'game_info', message, null)
+    })
     bot.on('messagestr', (text) => this.log(`[${username}] <- ${text}`))
     bot.on('bossBarCreated', (bar) => bot.seasonsBars.set(bar.entityUUID, bar))
     bot.on('bossBarDeleted', (bar) => bot.seasonsBars.delete(bar.entityUUID))

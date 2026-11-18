@@ -60,6 +60,10 @@ hof:
   # Damage immunity after every Seasons teleport.
   arrivalImmunity: 5s
 
+zones:
+  # Also post announce-mode entries ("Peter entered the market") to the Discord webhook.
+  announceToDiscord: false
+
 dragon:
   newEggEachSeason: true
   eggTo: slayer                  # slayer, portal

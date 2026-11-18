@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.Color;
 import org.bukkit.FireworkEffect;
@@ -41,6 +42,7 @@ import org.bukkit.scoreboard.Criteria;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.util.Vector;
 
 final class PaperPlayers implements Players {
   private final Server server;
@@ -231,6 +233,7 @@ final class PaperPlayers implements Players {
     Player player = found.get();
     player.leaveVehicle();
     player.setGliding(false);
+    player.setVelocity(new Vector());
     player.setFallDistance(0);
     player.setFireTicks(0);
     player.closeInventory();
@@ -301,32 +304,58 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public void alert(PlayerId id, Message title, Message actionBar) {
+    player(id)
+        .ifPresent(player -> {
+          player.showTitle(Title.title(text.render(title), Component.empty()));
+          player.sendActionBar(text.render(actionBar));
+        });
+  }
+
+  @Override
+  public void stopMoving(PlayerId id) {
+    player(id)
+        .ifPresent(player -> {
+          player.leaveVehicle();
+          player.setGliding(false);
+          player.setVelocity(new Vector());
+        });
+  }
+
+  @Override
+  public void fireworks(Position at) {
+    PaperPositions.world(at.dimension())
+        .ifPresent(world -> launchFirework(world, PaperPositions.toLocation(at)));
+  }
+
+  @Override
   public void celebrate(PlayerId id, Message title, Message subtitle) {
     player(id)
         .ifPresent(player -> {
           player.showTitle(Title.title(text.render(title), text.render(subtitle)));
           player.playSound(
               Sound.sound(Key.key("ui.toast.challenge_complete"), Sound.Source.MASTER, 1f, 1f));
-          player
-              .getWorld()
-              .spawn(
-                  player.getLocation(),
-                  Firework.class,
-                  firework -> {
-                    FireworkMeta meta = firework.getFireworkMeta();
-                    meta.addEffect(
-                        FireworkEffect.builder()
-                            .with(FireworkEffect.Type.BALL_LARGE)
-                            .withColor(Color.ORANGE, Color.YELLOW)
-                            .withFade(Color.WHITE)
-                            .withTrail()
-                            .build());
-                    meta.setPower(1);
-                    firework.setFireworkMeta(meta);
-                    firework
-                        .getPersistentDataContainer()
-                        .set(celebration, PersistentDataType.BOOLEAN, true);
-                  });
+          launchFirework(player.getWorld(), Objects.requireNonNull(player.getLocation()));
+        });
+  }
+
+  /** A celebration firework, tagged so it hurts nobody. */
+  private void launchFirework(World world, Location at) {
+    world.spawn(
+        at,
+        Firework.class,
+        firework -> {
+          FireworkMeta meta = firework.getFireworkMeta();
+          meta.addEffect(
+              FireworkEffect.builder()
+                  .with(FireworkEffect.Type.BALL_LARGE)
+                  .withColor(Color.ORANGE, Color.YELLOW)
+                  .withFade(Color.WHITE)
+                  .withTrail()
+                  .build());
+          meta.setPower(1);
+          firework.setFireworkMeta(meta);
+          firework.getPersistentDataContainer().set(celebration, PersistentDataType.BOOLEAN, true);
         });
   }
 

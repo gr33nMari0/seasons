@@ -10,10 +10,10 @@ import java.util.Iterator;
 import java.util.Map;
 
 /**
- * Hall interactions in the audit log: those refused, and those bypass holders made. The same player
- * doing the same thing in the same cell within {@link #WINDOW} is counted, not written again: one
- * entry when it starts, and one with the count once it stops, so a held mouse button can't flood
- * the log. Server thread only.
+ * Hall and zone interactions in the audit log: those refused, and those bypass holders made. The
+ * same player doing the same thing in the same cell within {@link #WINDOW} is counted, not written
+ * again: one entry when it starts, and one with the count once it stops, so a held mouse button
+ * can't flood the log. Server thread only.
  */
 public final class HallAudit {
   /** How long a repeat is counted into the entry before it. */
@@ -100,7 +100,8 @@ public final class HallAudit {
     }
   }
 
+  /** Allowed for a bypass action, such as {@code zone-bypass}; denied for any other. */
   private static String result(String action) {
-    return action.equals(BYPASS) ? "allowed" : "denied";
+    return action.endsWith("-bypass") ? "allowed" : "denied";
   }
 }

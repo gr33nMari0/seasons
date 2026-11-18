@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A6. /season launch teleports everyone online to the new spawn in survival with 5 s of immunity,
 // a title, a sound and fireworks, sets the world spawn and creates the new deaths objective. The
-// dragon flag is reset too (unit test: the bots can't reach the End); locking old-world zones
-// arrives with zones in M3.
+// dragon flag is reset too (unit test: the bots can't reach the End). An old-world zone drawn in
+// the Intermission doesn't stop anyone until launch locks it. Walking is the test plugin's client
+// move (docs/adr/0001).
 import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
+import { LOCKED, cylinder } from '../lib/zones.mjs'
+
+const OLD_WORLD = { x: 2100, y: -60, z: -1500 }
+const EDGE = { x: 2125, y: -60, z: -1500 }
+const IN = middle({ x: 2110, y: -60, z: -1500 })
 
 export default {
   name: 'a06-launch',
   async run (ctx) {
     const admin = await ctx.admin()
-    await ctx.join('Pat')
+    const pat = await ctx.join('Pat')
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
     await ctx.command(admin, '/season launch', /^Season 2 can only be launched from the Intermission\.$/)
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
@@ -19,6 +26,12 @@ export default {
     await ctx.command(admin, '/tp SeasonsAdmin 2000 -60 -1500', /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 2000, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 2000, -60, -1500 in minecraft:overworld\.$/)
+    // Season 3's old-world zone, drawn now, isn't locked yet.
+    await cylinder(ctx, admin, 'old-world', OLD_WORLD, 20)
+    await standAt(ctx, admin, 'Pat', EDGE)
+    await move(ctx, admin, 'Pat', IN, 'walk')
+    await sleep(SECOND)
+    await waitNear(ctx, admin, 'Pat', IN)
     await ctx.command(admin, '/tp SeasonsAdmin 0 -60 0', /^Teleported /)
     await ctx.command(admin, '/gamemode adventure Pat', /^Set Pat's game mode/)
     await ctx.command(admin, '/season launch --dry-run', [/^Dry run of \/season launch for Season 3\./, /^2 online players would go to 2000, -60, -1500/])
@@ -51,5 +64,12 @@ export default {
       const at = await ctx.position(admin, 'Pat')
       assert(Math.abs(at.x - 2000) <= 12 && Math.abs(at.z + 1500) <= 12, `Pat respawned at the world spawn, not ${JSON.stringify(at)}`)
     }, 20 * SECOND)
+
+    // Launch locked the old world.
+    await standAt(ctx, admin, 'Pat', EDGE)
+    const refused = ctx.waitForMessages(pat, LOCKED('old world'), 10 * SECOND)
+    await move(ctx, admin, 'Pat', IN, 'walk')
+    await refused
+    await waitNear(ctx, admin, 'Pat', middle(EDGE))
   }
 }

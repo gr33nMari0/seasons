@@ -19,6 +19,7 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -47,6 +48,7 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalHealth;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.core.zone.Zone;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.ZoneId;
@@ -123,9 +125,13 @@ final class SeasonCommands {
     this.services = services;
   }
 
-  CommandNode root() {
-    return CommandNode.literal("season")
-        .then(
+  /**
+   * @param more further nodes under {@code /season}, such as the zone commands
+   */
+  CommandNode root(List<CommandNode> more) {
+    CommandNode.Builder root = CommandNode.literal("season");
+    more.forEach(root::then);
+    return root.then(
             CommandNode.literal("status")
                 .permission(PERMISSION_ADMIN_SEASON)
                 .executes(this::status))
@@ -430,6 +436,18 @@ final class SeasonCommands {
       return;
     }
     Position at = platform.players().position(source.player().get());
+    int nextSeason = seasons.state().get().season() + 1;
+    Optional<Zone> holding = config.get().season(nextSeason).flatMap(file -> file.zoneHolding(at));
+    if (holding.isPresent()) {
+      source.reply(
+          messages.get(
+              "zone.spawn-inside",
+              "season",
+              Integer.toString(nextSeason),
+              "zone",
+              holding.get().id()));
+      return;
+    }
     var _ =
         seasons
             .setNextSpawn(at)
@@ -820,6 +838,7 @@ final class SeasonCommands {
               String.join(", ", names)));
     }
     hallDryRun(source, messages);
+    spawnDryRun(source, messages);
     source.reply(messages.get("end.dry-run.next", "season", season()));
   }
 
@@ -851,6 +870,30 @@ final class SeasonCommands {
               "short",
               Integer.toString(without - free)));
     }
+  }
+
+  /** A next spawn inside one of the next season's zones, which launch would refuse. */
+  private void spawnDryRun(CommandSource source, Messages messages) {
+    int next = seasons.state().map(SeasonState::season).orElse(0) + 1;
+    Optional<SeasonFile> file = config.get().season(next);
+    Optional<Zone> holding = file.flatMap(SeasonFile::zoneHoldingSpawn);
+    if (holding.isEmpty()) {
+      return;
+    }
+    Position spawn = file.get().spawn().orElseThrow();
+    source.reply(
+        messages.get(
+            "end.dry-run.spawn-in-zone",
+            "next",
+            Integer.toString(next),
+            "x",
+            Integer.toString(spawn.blockX()),
+            "y",
+            Integer.toString(spawn.blockY()),
+            "z",
+            Integer.toString(spawn.blockZ()),
+            "zone",
+            holding.get().id()));
   }
 
   private void launchDryRun(CommandSource source) {

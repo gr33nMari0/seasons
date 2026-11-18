@@ -121,6 +121,14 @@ public final class SeasonStore {
         entry.node("name").set(first.name());
         entry.node("at").set(first.at().toString());
       }
+      ZoneState zones = state.zones();
+      for (Map.Entry<String, Boolean> zone : zones.unlocked().entrySet()) {
+        node.node("zones", "unlocked", zone.getKey()).set(zone.getValue());
+      }
+      node.node("zones", "dragonKilled").set(zones.dragonKilled());
+      node.node("zones", "reachedEnd")
+          .setList(
+              String.class, zones.reachedEnd().stream().map(PlayerId::toString).sorted().toList());
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -178,7 +186,25 @@ public final class SeasonStore {
             : Optional.of(node.node("initSeason").getInt()),
         node.node("launchApplied").getBoolean(true),
         decorating(node.node("decorating")),
-        firsts(node.node("firsts")));
+        firsts(node.node("firsts")),
+        zones(node.node("zones")));
+  }
+
+  private static ZoneState zones(ConfigurationNode node) throws IOException {
+    Map<String, Boolean> unlocked = new HashMap<>();
+    for (Map.Entry<Object, ? extends ConfigurationNode> zone :
+        node.node("unlocked").childrenMap().entrySet()) {
+      unlocked.put(String.valueOf(zone.getKey()), zone.getValue().getBoolean(false));
+    }
+    Set<PlayerId> reached = new HashSet<>();
+    try {
+      for (String id : node.node("reachedEnd").getList(String.class, List.of())) {
+        reached.add(new PlayerId(UUID.fromString(id)));
+      }
+    } catch (IllegalArgumentException e) {
+      throw new IOException("season.json has a damaged zones.reachedEnd", e);
+    }
+    return new ZoneState(unlocked, node.node("dragonKilled").getBoolean(false), reached);
   }
 
   private static List<SeasonFirst> firsts(ConfigurationNode node) throws IOException {

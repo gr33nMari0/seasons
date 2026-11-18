@@ -72,6 +72,9 @@ public final class LaunchSequence implements SeasonService.Launcher {
     if (!platform.world().dimensionExists(spawn.get().dimension())) {
       return Optional.of("launch.bad-dimension");
     }
+    if (config.get().season(nextSeason).flatMap(file -> file.zoneHoldingSpawn()).isPresent()) {
+      return Optional.of("launch.spawn-in-zone");
+    }
     if (!busy.get().isEmpty()) {
       return Optional.of("launch.busy");
     }
