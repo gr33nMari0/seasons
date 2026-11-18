@@ -290,15 +290,28 @@ public final class ZoneCommands {
         () -> source.reply(messages().get("zone.removed", "id", id)));
   }
 
+  /**
+   * The zones of the season being played, if they are in force, and of the season zone commands
+   * edit, if that is another.
+   */
   void list(CommandSource source, Arguments arguments) {
     Messages messages = messages();
-    OptionalInt season = zones.editingSeason();
-    if (season.isEmpty()) {
+    OptionalInt editing = zones.editingSeason();
+    if (editing.isEmpty()) {
       source.reply(messages.get("zone.no-season"));
       return;
     }
-    String number = Integer.toString(season.getAsInt());
-    Map<String, Zone> all = file(season.getAsInt()).map(SeasonFile::zones).orElse(Map.of());
+    int played = seasons.state().map(s -> s.season()).orElse(editing.getAsInt());
+    if (played != editing.getAsInt() && zones.live(played)) {
+      list(source, played);
+    }
+    list(source, editing.getAsInt());
+  }
+
+  private void list(CommandSource source, int season) {
+    Messages messages = messages();
+    String number = Integer.toString(season);
+    Map<String, Zone> all = file(season).map(SeasonFile::zones).orElse(Map.of());
     if (all.isEmpty()) {
       source.reply(messages.get("zone.none", "season", number));
       return;
@@ -321,7 +334,7 @@ public final class ZoneCommands {
               "after",
               zone.afterUnlock().id(),
               "now",
-              zones.now(zone.id()).id()));
+              zones.live(season) ? zones.now(zone.id()).id() : ZoneMode.OFF.id()));
     }
   }
 
