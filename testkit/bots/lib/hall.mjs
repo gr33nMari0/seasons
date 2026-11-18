@@ -19,10 +19,28 @@ export async function buildGallery (ctx, admin, { id = 'season-2', season = 2, c
   await ctx.command(admin, `/hof gallery create ${id} ${season}`, new RegExp(`^Created gallery ${id} for Season ${season}\\.$`))
   await ctx.command(admin, `/hof gallery bounds ${id} ${x} ${FLOOR - 1} ${z} ${x + width} ${FLOOR + 10} ${z + 10}`, new RegExp(`^Gallery ${id} now spans `))
   await ctx.command(admin, `/hof gallery entry ${id} ${x + 1} ${FLOOR} ${z + 1}`, new RegExp(`^Gallery ${id}'s entry is now at `))
+  const built = layout({ id, cells, x, z })
+  for (const cell of built) {
+    await ctx.command(admin, `/hof cell new ${id} ${cell.id}`, new RegExp(`^Created cell ${cell.id} in gallery ${id}\\.$`))
+    await ctx.command(admin, `/hof cell bounds ${cell.key} ${cell.x0} ${FLOOR - 1} ${cell.z0} ${cell.x1} ${FLOOR + 6} ${cell.z1}`, new RegExp(`^Cell ${cell.key} now spans `))
+    await anchor(ctx, admin, cell, 'figure', cell.figure, 180)
+    await anchor(ctx, admin, cell, 'entry', cell.entry, 0)
+    await anchor(ctx, admin, cell, 'plaque', cell.plaque, 180)
+    await ctx.command(admin, `/setblock ${cell.archive.x} ${cell.archive.y} ${cell.archive.z} minecraft:chest[facing=north]`, /^Changed the block/)
+    await anchor(ctx, admin, cell, 'archive', cell.archive)
+  }
+  return built
+}
+
+/**
+ * The cells buildGallery makes, without building anything: for a later session of a scenario,
+ * which finds the gallery already there.
+ */
+export function layout ({ id = 'season-2', cells = 4, x = 20, z = 20 } = {}) {
   const built = []
   for (let i = 0; i < cells; i++) {
     const x0 = x + 6 * i
-    const cell = {
+    built.push({
       id: `c${i + 1}`,
       key: `${id}:c${i + 1}`,
       x0,
@@ -33,15 +51,7 @@ export async function buildGallery (ctx, admin, { id = 'season-2', season = 2, c
       entry: { x: x0 + 2, y: FLOOR, z: z + 3 },
       plaque: { x: x0 + 1, y: FLOOR, z: z + 7 },
       archive: { x: x0 + 3, y: FLOOR, z: z + 8 }
-    }
-    await ctx.command(admin, `/hof cell new ${id} ${cell.id}`, new RegExp(`^Created cell ${cell.id} in gallery ${id}\\.$`))
-    await ctx.command(admin, `/hof cell bounds ${cell.key} ${cell.x0} ${FLOOR - 1} ${cell.z0} ${cell.x1} ${FLOOR + 6} ${cell.z1}`, new RegExp(`^Cell ${cell.key} now spans `))
-    await anchor(ctx, admin, cell, 'figure', cell.figure, 180)
-    await anchor(ctx, admin, cell, 'entry', cell.entry, 0)
-    await anchor(ctx, admin, cell, 'plaque', cell.plaque, 180)
-    await ctx.command(admin, `/setblock ${cell.archive.x} ${cell.archive.y} ${cell.archive.z} minecraft:chest[facing=north]`, /^Changed the block/)
-    await anchor(ctx, admin, cell, 'archive', cell.archive)
-    built.push(cell)
+    })
   }
   return built
 }

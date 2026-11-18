@@ -23,6 +23,9 @@ import org.bukkit.Registry;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
@@ -34,11 +37,15 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -75,6 +82,14 @@ import org.bukkit.util.Vector;
  *       firing {@code EntityMountEvent}
  *   <li>{@code glide <player> <command...>} puts an elytra on the player, sets them gliding and
  *       runs a command as them in the same tick
+ *   <li>{@code open <player> <x> <y> <z>} right-clicks a block as {@code use} does and, if the
+ *       click goes through, opens a container's inventory as the game would, firing {@code
+ *       InventoryOpenEvent}; it reports whether the player has the real inventory open, a copy or
+ *       nothing
+ *   <li>{@code place-entity <player> <type> <x> <y> <z>} places an entity such as a cushion as the
+ *       player would, firing {@code EntityPlaceEvent}
+ *   <li>{@code hit <player> <type> <x> <y> <z>} has the player attack the nearest entity of a type,
+ *       a real attack with all its events
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand, Listener {
@@ -174,10 +189,13 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "drop" -> drop(sender, args);
         case "sit" -> sit(sender, args);
         case "glide" -> glide(sender, args);
+        case "open" -> open(sender, args);
+        case "place-entity" -> placeEntity(sender, args);
+        case "hit" -> hit(sender, args);
         default ->
             sender.sendMessage(
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
-                    + "|use-item|consume|drop|sit|glide ...");
+                    + "|use-item|consume|drop|sit|glide|open|place-entity|hit ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
@@ -198,10 +216,13 @@ final class ScenarioCommands implements BasicCommand, Listener {
     Chunk chunk = world.getChunkAt(x >> 4, z >> 4);
     chunk.addPluginChunkTicket(plugin);
     Block block = world.getBlockAt(x, y, z);
+    // As the game does: the block is there while the event runs, and taken back if refused.
+    BlockState replaced = block.getState();
+    block.setType(material, false);
     BlockPlaceEvent event =
         new BlockPlaceEvent(
             block,
-            block.getState(),
+            replaced,
             block.getRelative(BlockFace.DOWN),
             ItemStack.of(material),
             player,
@@ -209,10 +230,10 @@ final class ScenarioCommands implements BasicCommand, Listener {
             EquipmentSlot.HAND);
     plugin.getServer().getPluginManager().callEvent(event);
     if (event.isCancelled()) {
+      replaced.update(true, false);
       sender.sendMessage("Placing " + material.getKey() + " was refused");
       return;
     }
-    block.setType(material);
     sender.sendMessage("Placed " + material.getKey() + " at " + x + ", " + y + ", " + z);
   }
 
@@ -454,6 +475,97 @@ final class ScenarioCommands implements BasicCommand, Listener {
     String command = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
     player.performCommand(command);
     sender.sendMessage("Gliding " + args[1] + " (" + gliding + ") ran /" + command);
+  }
+
+  private void open(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't open as " + args[1]);
+      return;
+    }
+    Block block = loaded(player.getWorld(), args);
+    PlayerInteractEvent event =
+        new PlayerInteractEvent(
+            player,
+            Action.RIGHT_CLICK_BLOCK,
+            player.getInventory().getItemInMainHand(),
+            block,
+            BlockFace.UP,
+            EquipmentSlot.HAND);
+    plugin.getServer().getPluginManager().callEvent(event);
+    // What the game does next when the click goes through: a container opens its inventory.
+    if (event.useInteractedBlock() != org.bukkit.event.Event.Result.DENY
+        && block.getState() instanceof Container container
+        && player.getOpenInventory().getType() == InventoryType.CRAFTING) {
+      player.openInventory(container.getInventory());
+    }
+    InventoryView view = player.getOpenInventory();
+    String opened;
+    if (view.getType() == InventoryType.CRAFTING) {
+      opened = "nothing";
+    } else if (view.getTopInventory().getHolder(false) instanceof BlockInventoryHolder
+        || view.getTopInventory().getHolder(false) instanceof DoubleChest) {
+      opened = "the real one";
+    } else {
+      opened = "a copy";
+    }
+    sender.sendMessage("Opened " + block.getType().getKey() + " as " + args[1] + ": " + opened);
+  }
+
+  private void placeEntity(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    NamespacedKey key = NamespacedKey.fromString(args[2]);
+    EntityType type = key == null ? null : Registry.ENTITY_TYPE.get(key);
+    Class<? extends Entity> kind = type == null ? null : type.getEntityClass();
+    if (player == null || type == null || kind == null) {
+      sender.sendMessage("Placing " + args[2] + " as " + args[1] + " is impossible");
+      return;
+    }
+    Block block = loaded(player.getWorld(), shifted(args));
+    Location at = block.getLocation().add(0.5, 0, 0.5);
+    Entity entity = player.getWorld().createEntity(at, kind);
+    EntityPlaceEvent event =
+        new EntityPlaceEvent(
+            entity, player, block.getRelative(BlockFace.DOWN), BlockFace.UP, EquipmentSlot.HAND);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      sender.sendMessage("Placing " + type.getKey() + " was refused");
+      return;
+    }
+    player.getWorld().addEntity(entity);
+    sender.sendMessage("Placed " + type.getKey() + " at " + describe(at));
+  }
+
+  private void hit(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    NamespacedKey key = NamespacedKey.fromString(args[2]);
+    EntityType type = key == null ? null : Registry.ENTITY_TYPE.get(key);
+    if (player == null || type == null) {
+      sender.sendMessage("Hit nothing: " + args[1] + " or " + args[2] + " is unknown");
+      return;
+    }
+    Block block = loaded(player.getWorld(), shifted(args));
+    Location at = block.getLocation().add(0.5, 0, 0.5);
+    Optional<Entity> target =
+        player.getWorld().getNearbyEntities(at, 2, 2, 2, e -> e.getType() == type).stream()
+            .min(Comparator.comparingDouble(e -> e.getLocation().distanceSquared(at)));
+    if (target.isEmpty()) {
+      sender.sendMessage("Hit nothing: there is no " + type.getKey() + " near");
+      return;
+    }
+    // A real attack, at full strength, as the game handles a player's hit.
+    player.resetCooldown();
+    player.attack(target.get());
+    sender.sendMessage("Hit " + type.getKey() + " as " + args[1]);
+  }
+
+  /** The arguments with the type at index 2 dropped, so x y z are at 2 to 4 again. */
+  private static String[] shifted(String[] args) {
+    String[] rest = new String[args.length - 1];
+    rest[0] = args[0];
+    rest[1] = args[1];
+    System.arraycopy(args, 3, rest, 2, args.length - 3);
+    return rest;
   }
 
   private static String describe(Location at) {
