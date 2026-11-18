@@ -6,7 +6,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
 | M1 Core rollover | Done (#8, #9, #10) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
-| M2 Hall protection | Part 1 (visits) done (#11); part 2 (protection) in review (branch `m2-protection`) | A22, A23, A24, A25, A26, A27, A28, A29, A44 except refusing cushions in a no-build zone, which waits for zones in M3 (as A6's zone lock does). A9 widened |
+| M2 Hall protection | Part 1 (visits) done (#11); part 2 (protection) in review (#12) | A22, A23, A24, A25, A26, A27, A28, A29, A44 except refusing cushions in a no-build zone, which waits for zones in M3 (as A6's zone lock does). A9 widened |
 | M3 to M7 | Not started | — |
 
 ## M1
@@ -104,7 +104,7 @@ Built: season firsts for advancements, the Nether, the End, diamonds, elytras an
 
 Built: `/hof` (alias `/halloffame`), `/hof <season>`, `/hof <player>`, `/hof leave`, sneak-clicking a bed; the entry checks (`EntryChecks`) with the new `hof.entry` keys `onGround`, `noHazards`, `cooldown` and `rateLimit`; the saved return (position, dimension, yaw, pitch and game mode) in the player record, written before the teleport; return safety (`ReturnSafety`) with the bed, nearby and spawn fallbacks; arrival immunity; sealing (`HallVisits`): leaving the bounds by a move, a teleport or anything the 500 ms sweep notices returns the player, exit anchors, no drops, pickups, pearls, chorus fruit or riding, cushions as seats, and `seasons.hof.bypass`. Decisions: `docs/questions.md` 62 to 75 (73 to 75 from the review: `/hof` refuses a spot return safety would turn down, `/hof leave` only inside the Hall, stale saved spots dropped).
 
-**Part 2: protecting the Hall** (branch `m2-protection`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+**Part 2: protecting the Hall** (#12). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
 
 | Scenario | Test |
 | --- | --- |
