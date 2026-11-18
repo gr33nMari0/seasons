@@ -10,6 +10,8 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M3 Old world | Part 1 (zones and Homecoming) in review (#13) | Passing locally, not yet in CI: A30, A31, A32, A33, A34, A35, A45; A6 now in full (the zone lock); A41's spawn half; A44's no-build half. Part 2 (ender vault, pets, BlueMap areas, spawn candidates, the other shapes) brings A16 to A19, A36 and the rest of A41 |
 | M4 to M7 | Not started | — |
 
+Test infrastructure: the faster scenario suite (branch `test-speed`) runs every scenario on every pull request in four CI shards, on shared servers reset and checked for leaks between scenarios, with the scenario clock and sync barrier in place of waits; the old one-server-per-scenario mode runs nightly (ADR 0003, questions 114 to 119).
+
 ## M1
 
 **Part 1: season state** (#8). Passing end to end on Paper 26.3:

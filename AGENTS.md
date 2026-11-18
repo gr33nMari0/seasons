@@ -3,6 +3,7 @@
 - Build milestone by milestone, M0 to M7. A milestone is done when its acceptance scenarios pass in CI.
 - Branch per milestone or feature, small commits with conventional messages, a pull request into main. Never push to main directly.
 - Commands: ./gradlew build, ./gradlew scenarioTest, ./gradlew :adapters:paper:runServer.
+- While working, run the unit tests and only the scenarios you touch (./gradlew scenarioTest -Pscenarios=<name>,<prefix>-*). Run the full suite once in the background before pushing. Don't wait for CI after pushing.
 - Public Paper API only: no server internals, reflection or paperweight-userdev. List every Paper API you call in docs/paper-api.md.
 - Only the server thread changes the world. Journal before every world change. No real archived item ever exists in the world.
 - Player-facing text goes in messages.yml; settings in config files through Configurate records.

@@ -10,7 +10,8 @@ Seasons is source-available under the PolyForm Noncommercial License 1.0.0, and 
 
 - `docs/spec.md` is the source of truth. If something is ambiguous, note it in `docs/questions.md`.
 - Branch from `main`, keep commits small with [conventional messages](https://www.conventionalcommits.org/), and open a pull request. The `build` check must pass.
-- Run `./gradlew build scenarioTest` before pushing. `./gradlew spotlessApply` fixes formatting and adds the licence header.
+- While working, run the unit tests and the scenarios you touch: `./gradlew build` and `./gradlew scenarioTest -Pscenarios=a33-homecoming,m3-*` (one scenario takes well under a minute). Run the full suite, `./gradlew build scenarioTest`, once before pushing; it runs in shards side by side and takes a few minutes. `./gradlew spotlessApply` fixes formatting and adds the licence header.
+- Scenarios share a server, reset between them; a reset that leaves something behind fails the scenario before it. Don't sleep in a scenario: move Seasons' clock with `ctx.advance`, end quiet windows with `ctx.quiet` and `ctx.sync`, and wait game ticks with `ctx.sync(admin, bots, ticks)` (ADR 0003). A scenario the reset truly can't serve gets `// @isolated <reason>`. The order is shuffled; a failure prints the seed to repeat it with `-PscenarioSeed=<n>`, and `-PscenarioIsolation=fresh` runs every scenario on a server of its own. After adding scenarios, refresh `testkit/scenario-timings.json` with `./gradlew :testkit:updateScenarioTimings` after a full run.
 - Every source file starts with `// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0`.
 - Public Paper API only, and list every Paper API you call in `docs/paper-api.md`.
 - Player-facing text goes in `messages.yml`.
