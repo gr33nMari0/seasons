@@ -9,8 +9,10 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -26,6 +28,9 @@ import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
@@ -56,9 +61,10 @@ import org.bukkit.util.Vector;
  *   <li>{@code use <player> <x> <y> <z>} right-clicks a block as that player would, firing {@code
  *       PlayerInteractEvent}: the translation drops a bot's clicks on blocks too, though not on
  *       entities; a last word {@code sneak} clicks while sneaking
- *   <li>{@code move <player> <x> <y> <z> <walk|push|fall>} moves a player as their client would,
- *       firing {@code PlayerMoveEvent} and then putting them there unless it was cancelled: bots
- *       send no movement through the translation
+ *   <li>{@code move <player> <x> <y> <z> <walk|push|fall> [back]} moves a player as their client
+ *       would, firing {@code PlayerMoveEvent} and then putting them there unless it was cancelled,
+ *       with a teleport no other plugin sees: bots send no movement through the translation. With
+ *       {@code back}, a second move returns them in the same tick, too quickly for any sweep
  *   <li>{@code pearl <player> <x> <y> <z>} throws a real ender pearl from the player's eyes towards
  *       a block
  *   <li>{@code use-item <player>} right-clicks the air with the held item, firing {@code
@@ -71,8 +77,11 @@ import org.bukkit.util.Vector;
  *       runs a command as them in the same tick
  * </ul>
  */
-final class ScenarioCommands implements BasicCommand {
+final class ScenarioCommands implements BasicCommand, Listener {
   private final Plugin plugin;
+
+  /** Players {@code /scenario move} is putting where their client would have gone. */
+  private final Set<UUID> clientMoving = new HashSet<>();
 
   ScenarioCommands(Plugin plugin) {
     this.plugin = plugin;
@@ -288,15 +297,60 @@ final class ScenarioCommands implements BasicCommand {
             from.getYaw(),
             from.getPitch());
     to.getChunk().addPluginChunkTicket(plugin);
-    PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
-    plugin.getServer().getPluginManager().callEvent(event);
     String how = args.length > 5 ? args[5] : "walk";
-    if (event.isCancelled()) {
+    boolean back = args.length > 6 && args[6].equals("back");
+    if (!clientMove(player, from, to)) {
       sender.sendMessage("Moving " + args[1] + " (" + how + ") was refused");
       return;
     }
-    player.teleport(event.getTo(), PlayerTeleportEvent.TeleportCause.UNKNOWN);
-    sender.sendMessage("Moved " + args[1] + " (" + how + ") to " + describe(event.getTo()));
+    if (back && !clientMove(player, to, from)) {
+      sender.sendMessage("Moving " + args[1] + " back (" + how + ") was refused");
+      return;
+    }
+    sender.sendMessage(
+        "Moved "
+            + args[1]
+            + " ("
+            + how
+            + ") to "
+            + describe(to)
+            + (back ? " and straight back to " + describe(from) : ""));
+  }
+
+  /**
+   * One move as the server sees a client's: {@code PlayerMoveEvent}, then the player is there.
+   * Putting them there takes a teleport, which other plugins never see (see {@link
+   * #hideClientMove}), since a real client's movement fires no teleport event.
+   */
+  private boolean clientMove(Player player, Location from, Location to) {
+    PlayerMoveEvent event = new PlayerMoveEvent(player, from, to);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      return false;
+    }
+    clientMoving.add(player.getUniqueId());
+    try {
+      player.teleport(event.getTo(), PlayerTeleportEvent.TeleportCause.UNKNOWN);
+    } finally {
+      clientMoving.remove(player.getUniqueId());
+    }
+    return true;
+  }
+
+  /** Cancels a client move's teleport before any other plugin sees it... */
+  @EventHandler(priority = EventPriority.LOWEST)
+  void hideClientMove(PlayerTeleportEvent event) {
+    if (clientMoving.contains(event.getPlayer().getUniqueId())) {
+      event.setCancelled(true);
+    }
+  }
+
+  /** ...and lets it go ahead once they all have, so the player still ends up there. */
+  @EventHandler(priority = EventPriority.HIGHEST)
+  void applyClientMove(PlayerTeleportEvent event) {
+    if (clientMoving.contains(event.getPlayer().getUniqueId())) {
+      event.setCancelled(false);
+    }
   }
 
   private void pearl(CommandSender sender, String[] args) {

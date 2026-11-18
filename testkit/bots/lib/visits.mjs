@@ -77,10 +77,12 @@ export async function sneakUse (ctx, admin, name, at) {
 
 /**
  * Moves a player as the client would (walking, being pushed or falling): fires PlayerMoveEvent
- * from where they stand to `to` and, unless it is cancelled, puts them there.
+ * from where they stand to `to` and, unless it is cancelled, puts them there, with no teleport
+ * event any other plugin sees. With `back`, a second move returns them in the same tick, so only
+ * the move events, not a sweep, can notice they were ever away.
  */
-export async function move (ctx, admin, name, to, how = 'walk') {
-  await ctx.command(admin, `/scenario move ${name} ${to.x} ${to.y} ${to.z} ${how}`, /^(Moved|Moving) /)
+export async function move (ctx, admin, name, to, how = 'walk', { back = false } = {}) {
+  await ctx.command(admin, `/scenario move ${name} ${to.x} ${to.y} ${to.z} ${how}${back ? ' back' : ''}`, /^(Moved|Moving) /)
 }
 
 /** Throws a real ender pearl from a player's eyes towards a block, with them as its thrower. */
