@@ -173,6 +173,13 @@ export async function breakBlock (ctx, admin, name, at) {
   return line.startsWith('Broke')
 }
 
+/** How many of one item a player carries, as /clear counts them. */
+export async function carried (ctx, admin, name, item) {
+  const line = await ctx.command(admin, `/clear ${name} ${item} 0`, /^(Found \d+ matching item|No items were found on player)/)
+  const match = /^Found (\d+) matching item/.exec(line)
+  return match ? Number(match[1]) : 0
+}
+
 /** Gives a player a permission, such as seasons.zone.bypass, until they leave. */
 export async function permit (ctx, admin, name, node) {
   await ctx.command(admin, `/scenario permit ${name} ${node}`, /^Permitted /)

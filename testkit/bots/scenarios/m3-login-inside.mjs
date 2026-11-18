@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A player who logs in inside a blocked zone, as after an admin draws one around where they logged
 // out, is sent to the season spawn and told why. One online when a zone is drawn around them is
-// found by the sweep and sent there too, with no event to give them away.
+// found by the sweep, with no event to give them away, and put back where it last saw them outside
+// every blocked zone.
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { standAt } from '../lib/visits.mjs'
@@ -22,10 +23,13 @@ export default {
     const camp = { x: 400, y: FLOOR, z: -400 }
     await forceload(ctx, admin, camp, 30)
     await standAt(ctx, admin, 'Pat', camp)
-    const toldPat = ctx.waitForMessages(pat, SENT, 10 * SECOND)
+    const toldPat = ctx.waitForMessages(pat, /^The camp is locked until Homecoming\.$/, 10 * SECOND)
     await cylinder(ctx, admin, 'camp', { x: camp.x + 3, y: FLOOR, z: camp.z }, 10)
     await toldPat
-    await ctx.eventually(async () => assert(atSpawn(await ctx.position(admin, 'Pat')), 'Pat is at the spawn'))
+    await ctx.eventually(async () => {
+      const at = await ctx.position(admin, 'Pat')
+      assert(Math.hypot(at.x - (camp.x + 3), at.z - camp.z) > 10, `Pat is out of the camp, at ${JSON.stringify(at)}`)
+    })
 
     // Logged out, when a zone is drawn around where they stood.
     const den = { x: -400, y: FLOOR, z: 400 }

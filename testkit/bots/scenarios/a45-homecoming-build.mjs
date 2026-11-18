@@ -7,7 +7,7 @@ import { SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { openContainer } from '../lib/protection.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
-import { BASE, OUTSIDE, breakBlock, cylinder, expectEveryRouteRefused, inBase, launchFrontier, place, placeCarried } from '../lib/zones.mjs'
+import { BASE, OUTSIDE, breakBlock, carried, cylinder, expectEveryRouteRefused, inBase, launchFrontier, place, placeCarried } from '../lib/zones.mjs'
 
 const CHEST = { x: BASE.x, y: FLOOR, z: BASE.z + 2 }
 const WALL = { x: BASE.x + 3, y: FLOOR, z: BASE.z }
@@ -37,11 +37,11 @@ export default {
     assert(await openContainer(ctx, admin, 'Pat', CHEST) === 'real', 'the old chest opens for real')
     await ctx.eventually(async () => assert(pat.currentWindow, 'the chest window is open'))
     await pat.clickWindow(0, 0, 1)
-    await ctx.eventually(async () => assert(await ctx.itemCount(admin, 'Pat') === 64, 'Pat took the stack'))
+    await ctx.eventually(async () => assert(await carried(ctx, admin, 'Pat', 'minecraft:stone_bricks') === 64, 'Pat took the stack'))
     pat.closeWindow(pat.currentWindow)
     assert(await placeCarried(ctx, admin, 'Pat', BUILD, 'minecraft:stone_bricks'), 'Pat builds with a Season 1 block')
     assert(await ctx.holds(admin, `block ${BUILD.x} ${BUILD.y} ${BUILD.z} minecraft:stone_bricks`), 'the block is there')
-    assert(await ctx.itemCount(admin, 'Pat') === 63, 'one brick came out of the stack')
+    assert(await carried(ctx, admin, 'Pat', 'minecraft:stone_bricks') === 63, 'one brick came out of the stack')
 
     // Part of the old base, broken and built again.
     assert(await breakBlock(ctx, admin, 'Pat', { x: WALL.x, y: FLOOR + 1, z: WALL.z }), 'Pat breaks part of the old wall')
