@@ -346,11 +346,15 @@ tasks.register("updateScenarioTimings") {
     description = "Rewrites scenario-timings.json from the last full scenario run, for balancing shards."
     doLast {
         fun n(v: Any?) = (v as Number?)?.toLong() ?: 0
+        val shards = shardFiles()
+        // A later session costs a restart: the run's own average boot.
+        val boots = shards.flatMap { (_, json) -> json.list("boots") }.filter { it["serverLoaded"] != null }
+        val bootMs = if (boots.isEmpty()) bootSeconds * 1000 else boots.map { n(it["serverLoaded"]) - n(it["start"]) }.average()
         val seconds = sortedMapOf<String, Double>()
-        for ((_, json) in shardFiles()) {
+        for ((_, json) in shards) {
             for (r in json.list("results")) {
                 val name = r["name"].toString()
-                val restart = if (n(r["session"]) > 1) bootSeconds * 1000 else 0.0
+                val restart = if (n(r["session"]) > 1) bootMs else 0.0
                 seconds[name] = (seconds[name] ?: 0.0) + (n(r["ms"]) + n(r["resetMs"]) + restart) / 1000.0
             }
         }
