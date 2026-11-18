@@ -6,7 +6,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
 | M1 Core rollover | Done (#8, #9, #10) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
-| M2 Hall protection | Part 1 (visits) in review (branch `m2-hof-visits`) | A26, A27, A28, A29; A44 (sitting) |
+| M2 Hall protection | Part 1 (visits) in review (#11, branch `m2-hof-visits`) | A26, A27, A28, A29; A44 (sitting) |
 | M3 to M7 | Not started | — |
 
 ## M1
@@ -90,7 +90,7 @@ Built: season firsts for advancements, the Nether, the End, diamonds, elytras an
 
 ## M2
 
-**Part 1: visiting the Hall** (branch `m2-hof-visits`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+**Part 1: visiting the Hall** (#11, branch `m2-hof-visits`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
 
 | Scenario | Test |
 | --- | --- |
