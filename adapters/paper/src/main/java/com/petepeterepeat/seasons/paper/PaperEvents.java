@@ -11,11 +11,13 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
+import com.petepeterepeat.seasons.core.port.ZoneGuard;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
@@ -34,6 +36,7 @@ import org.bukkit.block.data.type.Repeater;
 import org.bukkit.block.data.type.RespawnAnchor;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Cushion;
+import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Item;
@@ -41,6 +44,7 @@ import org.bukkit.entity.ItemFrame;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.Vehicle;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
@@ -51,6 +55,7 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityMountEvent;
 import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.ItemSpawnEvent;
@@ -68,9 +73,11 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
@@ -103,6 +110,7 @@ final class PaperEvents implements Events, Listener {
   private final PaperDisplays displays;
   private final PaperAdvancements advancements;
   private final PaperHallGuard hallGuard;
+  private final PaperZoneGuard zoneGuard;
   private @Nullable Milestones milestones;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
@@ -122,6 +130,7 @@ final class PaperEvents implements Events, Listener {
     this.players = players;
     this.displays = displays;
     this.hallGuard = new PaperHallGuard(this);
+    this.zoneGuard = new PaperZoneGuard(this);
   }
 
   /** The Hall's protection, a listener of its own. */
@@ -147,6 +156,25 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void hall(HallGuard guard) {
     hallGuard.guard(guard);
+  }
+
+  /** The zones' protection, a listener of its own. */
+  PaperZoneGuard zoneGuard() {
+    return zoneGuard;
+  }
+
+  @Override
+  public void zones(ZoneGuard guard) {
+    zoneGuard.guard(guard);
+  }
+
+  /** An ender dragon's death can unlock zones or bring Homecoming. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onDeath(EntityDeathEvent event) {
+    Milestones listening = milestones;
+    if (listening != null && event.getEntity() instanceof EnderDragon) {
+      listening.dragonKilled();
+    }
   }
 
   @Override
@@ -420,6 +448,49 @@ final class PaperEvents implements Events, Listener {
             PaperPositions.toPosition(event.getFrom()),
             PaperPositions.toPosition(event.getTo()),
             kind));
+  }
+
+  /** A trip through a portal: its destination may be somewhere nobody may go. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onPortal(PlayerPortalEvent event) {
+    Player player = event.getPlayer();
+    apply(
+        event,
+        player,
+        new Intent.Teleport(
+            id(player),
+            PaperPositions.toPosition(event.getFrom()),
+            PaperPositions.toPosition(event.getTo()),
+            Intent.TeleportKind.PORTAL));
+  }
+
+  /**
+   * A vehicle moving to another block with players in it: each player is moving too. A move refused
+   * leaves the vehicle and its players where they came from, the players dismounted.
+   */
+  @EventHandler(priority = EventPriority.LOW)
+  void onVehicleMove(VehicleMoveEvent event) {
+    Location from = event.getFrom();
+    Location to = event.getTo();
+    if (from.getBlockX() == to.getBlockX()
+        && from.getBlockY() == to.getBlockY()
+        && from.getBlockZ() == to.getBlockZ()) {
+      return;
+    }
+    Vehicle vehicle = event.getVehicle();
+    for (Entity passenger : vehicle.getPassengers()) {
+      if (passenger instanceof Player player
+          && handler.decide(
+                  new Intent.Move(
+                      id(player), PaperPositions.toPosition(from), PaperPositions.toPosition(to)))
+              instanceof Decision.Deny deny) {
+        vehicle.eject();
+        vehicle.teleport(from);
+        player.teleport(from);
+        deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
+        return;
+      }
+    }
   }
 
   /** Riding or sitting: in the Hall, only a cushion is a seat. */
