@@ -81,8 +81,15 @@ export class ScenarioContext {
   }
 
   /** Joins the admin bot. The test plugin makes it an op as it joins. */
-  admin () {
-    return this.join(this.adminName)
+  /**
+   * Joins the admin bot. The flat scenario world spawns slimes, which can kill a bot standing still
+   * for a timed wait, so natural monster spawning is turned off; a scenario that needs monsters
+   * summons them.
+   */
+  async admin () {
+    const admin = await this.join(this.adminName)
+    await this.command(admin, '/gamerule spawn_monsters false', /spawn_monsters/)
+    return admin
   }
 
   /**
