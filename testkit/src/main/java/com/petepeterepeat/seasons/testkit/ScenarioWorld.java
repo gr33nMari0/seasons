@@ -523,6 +523,12 @@ final class ScenarioWorld implements Listener {
               .sorted()
               .collect(Collectors.joining(",")));
       print.put(w + ".forced", Integer.toString(world.getForceLoadedChunks().size()));
+      var battle = world.getEnderDragonBattle();
+      if (battle != null) {
+        print.put(
+            w + ".dragonBattle",
+            "killed=" + battle.hasBeenPreviouslyKilled() + " phase=" + battle.getRespawnPhase());
+      }
       print.put(
           w + ".tickets",
           world.getPluginChunkTickets().entrySet().stream()

@@ -19,7 +19,7 @@ export default {
     await box(ctx, admin, 'keep', { x: 340, y: FLOOR - 1, z: -300 }, { x: 350, y: FLOOR + 10, z: -290 })
 
     // The tower opens 15 seconds from now; Homecoming waits for the dragon.
-    const at = new Date(Date.now() + 15 * SECOND).toISOString().replace(/\.\d+Z$/, 'Z')
+    const at = ctx.isoIn(15 * SECOND).replace(/\.\d+Z$/, 'Z')
     let file = ctx.readFile(SEASON_FILE)
     const tower = file.indexOf('tower:')
     file = file.slice(0, tower) + file.slice(tower).replace(/lockedUntil: homecoming/, `lockedUntil: { date: "${at}" }`)
@@ -34,7 +34,9 @@ export default {
     await move(ctx, admin, 'Pat', middle({ x: 303, y: FLOOR, z: -295 }), 'walk')
     await refused
 
-    await ctx.waitForMessages(pat, /^The tower is open!$/, 30 * SECOND)
+    const open = ctx.waitForMessages(pat, /^The tower is open!$/, 10 * SECOND)
+    await ctx.advance(admin, 16 * SECOND)
+    await open
     await move(ctx, admin, 'Pat', middle({ x: 303, y: FLOOR, z: -295 }), 'walk')
     await waitNear(ctx, admin, 'Pat', middle({ x: 303, y: FLOOR, z: -295 }))
     assert(/now block\.$/.test((await zoneList(ctx, admin, ['keep'])).keep), 'the keep waits for Homecoming')

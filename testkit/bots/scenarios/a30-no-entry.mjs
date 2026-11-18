@@ -5,7 +5,7 @@
 // moves, riding moves a boat with the player in it, chorus fruit and portals are teleports with
 // the causes the game gives them, and a new nether portal is the game's pairing event (ADR 0003);
 // the pearl is a real one. A holder of seasons.zone.bypass walks in.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { middle, move, waitNear } from '../lib/visits.mjs'
 import { INSIDE, OUTSIDE, drawBase, expectEveryRouteRefused, inBase, launchFrontier, permit, portalPair } from '../lib/zones.mjs'
 
@@ -28,7 +28,7 @@ export default {
     // Holders of seasons.zone.bypass are exempt.
     await permit(ctx, admin, 'Pat', 'seasons.zone.bypass')
     await move(ctx, admin, 'Pat', middle(INSIDE), 'walk')
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [pat], 20)
     await waitNear(ctx, admin, 'Pat', middle(INSIDE))
   }
 }

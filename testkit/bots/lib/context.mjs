@@ -152,6 +152,8 @@ export class ScenarioContext {
    */
   async admin () {
     const admin = await this.join(this.adminName)
+    /** The admin bot, for helpers that need one to run /scenario commands. */
+    this.adminBot = admin
     await this.command(admin, '/gamerule spawn_monsters false', /spawn_monsters/)
     return admin
   }

@@ -2,7 +2,7 @@
 // Visiting the Hall of Fame in scenarios: a gallery to visit, a spot to leave from with a bed
 // beside it, and the test plugin's stand-ins for what bots can't do through the protocol
 // translation (docs/adr/0001): sneak-clicking a bed, walking, using items and sitting down.
-import { SECOND, assert, sleep } from './context.mjs'
+import { SECOND, assert } from './context.mjs'
 import { FLOOR, buildGallery, gameMode } from './hall.mjs'
 
 /** How long /hof makes a player wait between attempts (hof.entry.rateLimit). */
@@ -63,10 +63,10 @@ export async function waitNear (ctx, admin, name, at, distance = 0.6) {
   })
 }
 
-/** Runs /hof as a bot and waits for the reply; then waits out the rate limit for the next try. */
+/** Runs /hof as a bot and waits for the reply; then moves Seasons' clock past the rate limit. */
 export async function hof (ctx, bot, command, expect) {
   const reply = await ctx.command(bot, command, expect)
-  await sleep(RATE_LIMIT + 200)
+  await ctx.advance(ctx.adminBot, RATE_LIMIT)
   return reply
 }
 

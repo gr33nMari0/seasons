@@ -2,7 +2,7 @@
 // A26. /hof works within 3 blocks of any bed (straw beds included), and is refused with the
 // reason when a monster is near, after damage in the last 10 s, while falling or gliding, or in
 // lava. Sneak-clicking a bed with an empty hand works like /hof, and /hof is rate limited.
-import { assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { HOME, RATE_LIMIT, bed, hallToVisit, hof, inGallery, middle, sneakUse, standAt, waitInHall, waitNear, whileGliding } from '../lib/visits.mjs'
 
@@ -20,7 +20,7 @@ export default {
     // No bed near: refused, and the rate limit counts that attempt.
     await ctx.command(visitor, '/hof', /^You need to be within 3 blocks of a bed\.$/)
     await ctx.command(visitor, '/hof', /^Wait a few seconds before trying \/hof again\.$/)
-    await sleep(RATE_LIMIT + 200)
+    await ctx.advance(admin, RATE_LIMIT)
 
     // A straw bed two blocks away is a bed.
     const straw = { x: HOME.x + 2, y: FLOOR, z: HOME.z }
@@ -34,7 +34,7 @@ export default {
     // Sneak-clicking a bed with an empty hand.
     await sneakUse(ctx, admin, 'Visitor', straw)
     await waitInHall(ctx, admin, 'Visitor')
-    await sleep(RATE_LIMIT + 200)
+    await ctx.advance(admin, RATE_LIMIT)
     await hof(ctx, visitor, '/hof leave', /^Back where you left\.$/)
     await waitNear(ctx, admin, 'Visitor', middle(HOME))
 
@@ -59,7 +59,8 @@ export default {
     await glided
     // Without the elytra the server stops them gliding, which a still bot never would.
     await ctx.command(admin, '/item replace entity Visitor armor.chest with minecraft:air', /^Replaced /)
-    await sleep(RATE_LIMIT + 200)
+    await ctx.sync(admin, [visitor], 20) // game ticks, in which the server stops them gliding
+    await ctx.advance(admin, RATE_LIMIT)
 
     // Fire resistance from here on, so magma and lava do no harm.
     await ctx.command(admin, '/effect give Visitor minecraft:fire_resistance 60 0 true', /^Applied effect /)

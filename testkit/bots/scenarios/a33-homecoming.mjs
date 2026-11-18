@@ -51,11 +51,14 @@ export default {
     async (ctx) => {
       const admin = await ctx.admin()
       const pat = await ctx.join('Pat')
-      const quiet = ctx.expectNoMessage(pat, /Homecoming/, 5 * SECOND)
+      const quiet = ctx.quiet(pat, /Homecoming/)
       const zones = await zoneList(ctx, admin, ['base', 'farm'])
       assert(/now off\.$/.test(zones.base) && /now no-build\.$/.test(zones.farm), `the zones stay unlocked: ${JSON.stringify(zones)}`)
       await ctx.command(admin, '/season info', /^Phase: Active, Open stage$/)
-      await quiet
+      // Five seconds on by Seasons' clock, and a second of game ticks: no second Homecoming.
+      await ctx.advance(admin, 5 * SECOND)
+      await ctx.sync(admin, [pat], 20)
+      quiet.verify()
     }
   ]
 }

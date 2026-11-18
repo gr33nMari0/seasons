@@ -24,6 +24,8 @@ export default {
 
     await ctx.command(admin, `/give Tripper ${TAGGED} 3`, /^Gave 3/)
     assert(await ctx.itemCount(admin, 'Tripper') === 8, 'the tagged stone arrived')
+    // The inventory sweep runs every 30 seconds by Seasons' clock.
+    await ctx.advance(admin, 30 * SECOND)
     await ctx.eventually(async () => {
       assert(await ctx.itemCount(admin, 'Tripper') === 5, 'the tagged stone is gone, the dirt stays')
     }, 32 * SECOND)

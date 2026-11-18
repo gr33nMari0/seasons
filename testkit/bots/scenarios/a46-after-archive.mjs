@@ -2,7 +2,7 @@
 // A46. After /season end, an owner can place and break blocks in their own cell for
 // decorating.afterArchive (15 minutes at TheRanch; 20 seconds here), then the cell locks. Their
 // neighbour's cell stays closed to them throughout.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { breakBlock, buildGallery, cellOf, gameMode, inside, place } from '../lib/hall.mjs'
 
 export default {
@@ -25,7 +25,6 @@ export default {
     // Archived players are sent to their own cell.
     await ctx.eventually(async () => assert(inside(cell, await ctx.position(admin, 'Owner')), 'the owner is in their cell'))
     await ctx.eventually(async () => assert(await gameMode(ctx, admin, 'Owner') === 0, 'the owner is in survival in their cell'))
-    const started = Date.now()
 
     const block = { x: cell.x0 + 1, y: -60, z: cell.z0 + 4 }
     assert(await place(ctx, admin, 'Owner', block), 'the owner places a block in their cell')
@@ -33,13 +32,20 @@ export default {
     assert(await place(ctx, admin, 'Owner', block), 'and places it back')
     assert(!await place(ctx, admin, 'Owner', { x: neighbour.x0 + 1, y: -60, z: neighbour.z0 + 4 }), 'the neighbour\'s cell is closed to them')
 
-    const locked = ctx.waitForMessages(owner, /^Your cell is locked\.$/, 30_000)
+    // Ten seconds on by Seasons' clock, the cell is still open; twenty, and it locks.
+    const early = ctx.quiet(owner, /^Your cell is locked\.$/)
+    await ctx.advance(admin, 10 * SECOND)
+    await ctx.sync(admin, [owner])
+    early.verify()
+    assert(await place(ctx, admin, 'Owner', { x: cell.x0 + 2, y: -60, z: cell.z0 + 4 }), 'the cell stayed open for the time given')
+    assert(await breakBlock(ctx, admin, 'Owner', { x: cell.x0 + 2, y: -60, z: cell.z0 + 4 }), 'and they can still break in it')
+    const locked = ctx.waitForMessages(owner, /^Your cell is locked\.$/, 10_000)
+    await ctx.advance(admin, 10 * SECOND)
     await locked
-    assert(Date.now() - started >= 10 * SECOND, 'the cell stayed open for the time given')
     await ctx.eventually(async () => assert(await gameMode(ctx, admin, 'Owner') === 2, 'the owner is in adventure once locked'))
     assert(!await breakBlock(ctx, admin, 'Owner', block), 'the locked cell refuses breaking')
     assert(!await place(ctx, admin, 'Owner', { x: cell.x0 + 1, y: -60, z: cell.z0 + 5 }), 'the locked cell refuses building')
     assert(await ctx.holds(admin, `block ${block.x} ${block.y} ${block.z} minecraft:stone`), 'what they built stays')
-    await sleep(500)
+    await ctx.sync(admin, [owner])
   }
 }

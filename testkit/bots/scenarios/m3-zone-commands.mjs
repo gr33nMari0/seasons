@@ -4,7 +4,7 @@
 // the season file they write, which a hand edit changes and /season reload picks up; a broken
 // zone, and one in a dimension the server doesn't have, that reload refuses; and the audit log,
 // which has every change with who made it.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
 import { BASE, LOCKED, OUTSIDE, drawBase, forceload, launchFrontier, zoneList } from '../lib/zones.mjs'
@@ -47,7 +47,7 @@ export default {
     await standAt(ctx, admin, 'Pat', OUTSIDE)
     await ctx.command(admin, '/season unlock base', /^Zone base is unlocked: it is off now\.$/)
     await move(ctx, admin, 'Pat', middle({ x: BASE.x + 10, y: FLOOR, z: BASE.z }), 'walk')
-    await sleep(SECOND)
+    await ctx.sync(admin, [pat], 20)
     await waitNear(ctx, admin, 'Pat', middle({ x: BASE.x + 10, y: FLOOR, z: BASE.z }))
     await ctx.command(admin, '/season unlock base', /^Zone base is already unlocked\.$/)
     const sent = ctx.waitForMessages(pat, /^You were in the base, which is locked, so you're back at the spawn\.$/, 10 * SECOND)

@@ -4,7 +4,7 @@
 // there, or pick up an item lying just inside; and pistons, hoppers, liquids and
 // explosions can't cross the edge. Each world rule has a control just outside the zone that does
 // change, so a rule can't pass by never being tested. A holder of seasons.zone.bypass may.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, blockItems } from '../lib/hall.mjs'
 import { clickBlock, hit, openContainer } from '../lib/protection.mjs'
 import { standAt } from '../lib/visits.mjs'
@@ -57,7 +57,7 @@ export default {
     await ctx.command(admin, `/summon minecraft:item 600.25 ${FLOOR} 607.5 {Item:{id:"minecraft:gold_nugget",count:1},PickupDelay:0s,Motion:[0.0,0.0,0.0]}`, /^Summoned /)
     await ctx.command(admin, `/summon minecraft:item 598.75 ${FLOOR} 607.5 {Item:{id:"minecraft:iron_nugget",count:1},PickupDelay:0s,Motion:[0.0,0.0,0.0]}`, /^Summoned /)
     await ctx.eventually(async () => assert(await carried(ctx, admin, 'Pat', 'minecraft:iron_nugget') === 1, 'Pat picks up the item outside'), 5 * SECOND)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20) // a second of pickup ticks for the item inside
     assert(await carried(ctx, admin, 'Pat', 'minecraft:gold_nugget') === 0, 'Pat doesn\'t pick up the item inside')
     assert(await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:gold_nugget"}}]'), 'the item inside is still there')
     await standAt(ctx, admin, 'Pat', { x: 560, y: FLOOR, z: 560 })
@@ -89,7 +89,8 @@ export default {
     await ctx.eventually(async () => assert(/gold_ingot/.test(await blockItems(ctx, admin, { x: 604, y: FLOOR - 1, z: 624 })), 'the hopper outside pulls from its chest'), 10 * SECOND)
     await ctx.eventually(async () => assert(await is(598, FLOOR, 601, 'minecraft:water'), 'water spreads outside the zone'), 10 * SECOND)
     await ctx.eventually(async () => assert(await is(598, FLOOR, 610, 'minecraft:lava'), 'lava spreads outside the zone'), 15 * SECOND)
-    await sleep(3 * SECOND)
+    // Pistons, hoppers and fluids need game ticks: two seconds of them more.
+    await ctx.sync(admin, [], 40)
     assert(await is(599, FLOOR, 609, 'minecraft:stone') && await is(600, FLOOR, 609, 'minecraft:air'), 'the piston can\'t push into the zone')
     assert(!/iron_ingot/.test(await blockItems(ctx, admin, { x: 600, y: FLOOR, z: 602 })), 'no hopper feeds a chest inside the zone')
     assert(/count: ?4/.test(await blockItems(ctx, admin, { x: 604, y: FLOOR, z: 604 })), 'no hopper pulls from a chest inside the zone')
@@ -102,7 +103,7 @@ export default {
     await setblock(601, FLOOR, 610, 'minecraft:stone')
     await setblock(602, FLOOR, 610, 'minecraft:stone')
     await ctx.command(admin, `/summon minecraft:tnt 601.5 ${FLOOR} 612.5 {fuse:1}`, /^Summoned /)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20) // the fuse and the explosion are game ticks
     assert(!await is(601, FLOOR, 615, 'minecraft:stone') || !await is(601, FLOOR, 616, 'minecraft:stone'), 'the explosion broke blocks outside the zone')
     assert(await is(601, FLOOR, 610, 'minecraft:stone') && await is(602, FLOOR, 610, 'minecraft:stone'), 'the blocks inside the zone stand')
 

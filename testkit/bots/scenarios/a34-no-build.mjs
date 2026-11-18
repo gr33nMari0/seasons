@@ -4,7 +4,7 @@
 // A44's other half: nobody places or breaks a cushion in a no-build zone; nor hits an armour stand
 // or knocks the item out of a frame, which are real hits. Placing, breaking,
 // buckets and lighting are the test plugin's stand-ins (docs/adr/0001, ADR 0003).
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { clickBlock, entityAt, hit, openContainer, placeEntity } from '../lib/protection.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
@@ -33,7 +33,7 @@ export default {
     // Walking in is fine.
     await standAt(ctx, admin, 'Pat', { x: 697, y: FLOOR, z: 705 })
     await move(ctx, admin, 'Pat', middle({ x: 703, y: FLOOR, z: 705 }), 'walk')
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [pat], 20)
     await waitNear(ctx, admin, 'Pat', middle({ x: 703, y: FLOOR, z: 705 }))
 
     // Chests open for real, and normal items can be taken.
@@ -75,7 +75,7 @@ export default {
     // An explosion breaks nothing.
     await standAt(ctx, admin, 'Pat', { x: 690, y: FLOOR, z: 690 })
     await ctx.command(admin, `/summon minecraft:tnt 713.5 ${FLOOR} 713.5 {fuse:1}`, /^Summoned /)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20) // the fuse and the explosion are game ticks
     assert(await ctx.holds(admin, `block 712 ${FLOOR} 712 minecraft:stone`), 'the stone stands')
     assert(await ctx.holds(admin, `block 713 ${FLOOR - 1} 713 minecraft:grass_block`), 'the floor under the TNT stands')
     assert(await ctx.holds(admin, `block 710 ${FLOOR} 710 minecraft:tnt`), 'the TNT nearby wasn\'t set off')

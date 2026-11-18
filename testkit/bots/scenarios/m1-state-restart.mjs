@@ -25,7 +25,10 @@ export default {
       await ctx.command(admin, '/season info', [/^Phase: Active, Open stage$/, /^Planned end: /])
       await ctx.command(admin, '/season status', /^The end countdown was interrupted by a restart at /)
       assert(ctx.bossBars(admin).length === 0, `no countdown after the restart, saw ${ctx.bossBars(admin)}`)
-      await ctx.expectNoMessage(admin, ONE_DAY, 8 * SECOND)
+      const quiet = ctx.quiet(admin, ONE_DAY)
+      await ctx.advance(admin, 8 * SECOND)
+      await ctx.sync(admin)
+      quiet.verify()
       assert(!discord.posts.some((p) => ONE_DAY.test(p.content ?? '')), 'the 1 day reminder was not sent again')
     }
   ]

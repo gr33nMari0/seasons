@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Sealing the Hall: no dropping or picking up items, no ender pearls or chorus fruit, an exit
 // anchor takes a visitor back, and a pearl thrown from outside can't land inside.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { HOME, bed, consume, drop, hallToVisit, hof, inGallery, middle, move, pearl, standAt, useItem, waitInHall, waitNear } from '../lib/visits.mjs'
 
@@ -25,7 +25,7 @@ export default {
     await noDrop
     assert(await ctx.itemCount(admin, 'Visitor') === 5, 'nothing was dropped')
     await ctx.command(admin, `/summon minecraft:item ${inside.x + 0.5} ${FLOOR} ${inside.z + 0.5} {Item:{id:"minecraft:diamond",count:1},PickupDelay:0s,Tags:["loot"]}`, /^Summoned /)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 40) // two seconds of pickup ticks
     assert(await ctx.itemCount(admin, 'Visitor') === 5, 'nothing was picked up')
     assert(await ctx.holds(admin, 'entity @e[type=item,tag=loot]'), 'the item is still on the floor')
     await ctx.command(admin, '/kill @e[type=item,tag=loot]', /^Killed /)
@@ -47,7 +47,7 @@ export default {
     // A pearl thrown from outside can't land in the Hall.
     await standAt(ctx, admin, 'Visitor', { x: 25, y: FLOOR, z: 40 })
     await pearl(ctx, admin, 'Visitor', { x: 25, y: FLOOR, z: 25 })
-    await sleep(3 * SECOND)
+    await ctx.sync(admin, [], 60) // the pearl's flight is game ticks
     assert(!inGallery(await ctx.position(admin, 'Visitor')), 'the pearl didn\'t carry the visitor in')
   }
 }

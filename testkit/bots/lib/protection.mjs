@@ -3,7 +3,7 @@
 // would through the test plugin (bots can't click blocks through the protocol translation,
 // docs/adr/0001), right-clicking entities as the bot itself, and checking that a view-only copy
 // gives nothing away.
-import { assert, sleep, waitUntil } from './context.mjs'
+import { assert, waitUntil } from './context.mjs'
 import { blockItems } from './hall.mjs'
 
 /**
@@ -35,7 +35,7 @@ export async function placeEntity (ctx, admin, name, type, at) {
 /** A player attacks the nearest entity of a type within 2 blocks of `at`, as a real hit would. */
 export async function hit (ctx, admin, name, type, at) {
   await ctx.command(admin, `/scenario hit ${name} ${type} ${at.x} ${at.y} ${at.z}`, /^Hit /)
-  await sleep(300)
+  await ctx.sync(admin, [], 6)
 }
 
 /** Whether an entity of a type stands (or hangs) at a block. */
@@ -53,20 +53,23 @@ export function seen (bot, name, at) {
   return found
 }
 
-/** The bot right-clicks an entity itself; armour stands at their head, where the helmet is. */
-export async function rightClick (bot, entity) {
+/**
+ * The bot right-clicks an entity itself; armour stands at their head, where the helmet is. Resolves
+ * once the server has had two ticks to handle the click.
+ */
+export async function rightClick (ctx, bot, entity) {
   if (entity.name === 'armor_stand') {
     await bot.activateEntityAt(entity, entity.position.offset(0, 1.7, 0))
   } else {
     await bot.activateEntity(entity)
   }
-  await sleep(500)
+  await ctx.sync(ctx.adminBot, [bot], 2)
 }
 
-/** The bot hits an entity itself. */
-export async function attack (bot, entity) {
+/** The bot hits an entity itself, and resolves once the server has had two ticks to handle it. */
+export async function attack (ctx, bot, entity) {
   bot.attack(entity)
-  await sleep(500)
+  await ctx.sync(ctx.adminBot, [bot], 2)
 }
 
 /** Resolves with the window the bot has open, once it has one. */
@@ -95,13 +98,13 @@ export async function expectViewOnly (ctx, admin, bot, block) {
   for (const [what, click] of Object.entries(clicks)) {
     await click()
     await bot._syncWindow(bot.currentWindow)
-    await sleep(200)
+    await ctx.sync(admin, [bot], 2)
     assert(await blockItems(ctx, admin, block) === stocked, `${what}: the container is unchanged`)
     assert(await ctx.itemCount(admin, bot.username) === carried, `${what}: ${bot.username} took nothing`)
     assert(!await ctx.holds(admin, 'entity @e[type=item]'), `${what}: nothing was dropped`)
   }
   bot.closeWindow(bot.currentWindow)
-  await sleep(300)
+  await ctx.sync(admin, [bot], 2)
 }
 
 /** The audit log's entries this month, oldest first. */

@@ -3,7 +3,7 @@
 // inside it, break no Hall block, item frame or armour stand and hurt nobody in the Hall; fire,
 // pistons, flowing water and dispensers can't cross its edge. Each rule has a control just outside
 // the Hall that does change, so a rule can't pass by never being tested.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { entityAt } from '../lib/protection.mjs'
 import { hallToVisit, standAt } from '../lib/visits.mjs'
@@ -32,7 +32,7 @@ export default {
     await setblock(43, FLOOR, 25, 'minecraft:stone')
     await setblock(42, FLOOR, 24, 'minecraft:stone')
     await ctx.command(admin, `/summon minecraft:tnt 41.5 ${FLOOR} 25.5 {fuse:1}`, /^Summoned /)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20) // the fuse and the explosion are game ticks
     assert(!await is(43, FLOOR, 25, 'minecraft:stone') || !await is(42, FLOOR, 24, 'minecraft:stone'), 'the explosion broke blocks outside the Hall')
     for (const [x, z] of [[38, 25], [38, 26], [37, 26]]) {
       assert(await is(x, FLOOR, z, 'minecraft:stone'), `the Hall block at ${x}, ${z} stands`)
@@ -45,7 +45,7 @@ export default {
     await setblock(33, FLOOR, 22, 'minecraft:stone')
     await setblock(35, FLOOR, 22, 'minecraft:stone')
     await ctx.command(admin, `/summon minecraft:tnt 34.5 ${FLOOR} 22.5 {fuse:1}`, /^Summoned /)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20) // the fuse and the explosion are game ticks
     assert(await is(33, FLOOR, 22, 'minecraft:stone') && await is(35, FLOOR, 22, 'minecraft:stone'), 'TNT inside the Hall breaks nothing')
     assert(await is(34, FLOOR - 1, 22, 'minecraft:grass_block'), 'not even the floor under it')
     assert(await health() === 20, 'nobody in the Hall is hurt')
@@ -79,7 +79,8 @@ export default {
     assert(await is(36, FLOOR, 31, 'minecraft:stone') && await is(36, FLOOR, 30, 'minecraft:air'), 'the piston can\'t push into the Hall')
     await ctx.eventually(async () => assert(await is(32, FLOOR, 31, 'minecraft:water'), 'water spreads outside the Hall'), 10 * SECOND)
     await ctx.eventually(async () => assert(await is(48, FLOOR, 33, 'minecraft:water'), 'the dispenser outside the Hall pours'), 10 * SECOND)
-    await sleep(3 * SECOND)
+    // Water and dispensers need game ticks: three seconds of them more.
+    await ctx.sync(admin, [], 60)
     assert(await is(32, FLOOR, 30, 'minecraft:air'), 'water doesn\'t flow into the Hall')
     assert(await is(30, FLOOR, 30, 'minecraft:air'), 'the dispenser can\'t pour into the Hall')
     await ctx.eventually(async () => {
