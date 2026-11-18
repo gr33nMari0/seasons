@@ -5,7 +5,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Milestone | State | Scenarios passing |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; part 3 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A15, A20, A21, A40, A46, A47, A50, A51. A6 waits for the zone lock in M3. A13 and A14 moved to M4 (pending confirmation) |
+| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; part 3 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53). A13 and A14 moved to M4 (pending confirmation, questions 27). `/season config get|set` comes with M3 (questions 54) |
 | M2 to M7 | Not started | — |
 
 ## M1
@@ -68,7 +68,9 @@ Part 3 seams, empty until then: `Galleries.lockAll`, `CellDirectory` (returns no
 | An import crash after the record is written, and after the cell is emptied, is finished at startup with every item once | `m1-import-crash-started.mjs`, `m1-import-crash-cleared.mjs` (two sessions each) |
 | Galleries and cells by command, their rules, a hand edit picked up by reload, a broken one refused | `m1-hall-commands.mjs`; unit: `GalleryFilesTest` |
 
-Built: gallery files (`galleries/<id>.yml`, validated on load and reload), `/hof gallery create|bounds|entry|exit|info`, `/hof cell new|bounds|anchor|unanchor|assign|unassign|info`, `/hof swap`, `/hof reconcile`, `/hof restore`, `/hof import [cell] [--dry-run]` and `/hof import undo`, `/season decorate open|close`, the decorating window in `season.json`, random assignment, game modes and building rules in the Hall, mannequin figures in the archived skin and gear, plaques, imported trophies, archive anchors and figures opening the archive view at a page, and journalled imports (`IMPORT_*` kinds, crash points `IMPORT_STARTED` and `IMPORT_CLEARED`). Decisions: `docs/questions.md` 36 to 48.
+Built: gallery files (`galleries/<id>.yml`, validated on load and reload), `/hof gallery create|bounds|entry|exit|info`, `/hof cell new|bounds|anchor|unanchor|assign|unassign|info`, `/hof swap`, `/hof reconcile`, `/hof restore`, `/hof import [cell] [--dry-run]` and `/hof import undo`, `/season decorate open|close`, the decorating window in `season.json`, random assignment, game modes and building rules in the Hall, mannequin figures in the archived skin and gear, plaques, imported trophies, archive anchors and figures opening the archive view at a page, and journalled imports (`IMPORT_*` kinds, crash points `IMPORT_STARTED` and `IMPORT_CLEARED`). Decisions: `docs/questions.md` 36 to 48, and 49 to 54 from the review.
+
+Review fixes: a cell changed between the import's scan and its clear stops that cell and changes nothing; `/season unarchive` refuses imported records; leaving the Hall puts back survival only for players Seasons switched, remembered across restarts; the import never writes a gallery that breaks the rules, and anchors a double chest at a half inside the cell. Unit: `ArchivingTest#aChestEmptiedAfterTheScan…`, `#anImportTakesTheCellsItems…`, `#anImportThatWouldWriteABrokenGallery…`, `#anImportedRecordIsNeverUnarchived`, `#leavingTheHallPutsBackSurvival…`.
 
 Not yet: the wand and `/hof stamp` (M5), access modes `bounds` and `gate`, view-only copies of decorative containers, visiting the Hall (`/hof`, beds), `/hof claim`.
 
