@@ -14,6 +14,7 @@ import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -101,7 +102,8 @@ public final class HallRules implements HallGuard {
           change(change.player(), change.block(), "change", change.how(), "hof.no-build");
       case Intent.Bucket bucket -> bucket(bucket);
       case Intent.UseBlock use -> useBlock(use);
-      case Intent.OpenContainer open -> open(open.player(), open.block());
+      case Intent.OpenContainer open -> open(open.player(), open.blocks());
+      case Intent.JoinContainers join -> join(join.player(), join.blocks());
       case Intent.UseEntity use -> useEntity(use.player(), use.at(), use.type());
       case Intent.PlaceEntity place -> placeEntity(place.player(), place.at(), place.type());
       case Intent.HurtEntity hurt -> entity(hurt.player(), hurt.at(), "hit", hurt.type());
@@ -148,7 +150,27 @@ public final class HallRules implements HallGuard {
     if (holdsSomething) {
       return Optional.of(Decision.deny(message("hof.rules.empty-first")));
     }
-    return Optional.of(Decision.allow());
+    // After their archive an owner may still rearrange, but what they break is gone.
+    return Optional.of(takingOut(player, block) ? Decision.allow() : Decision.allowWithoutDrops());
+  }
+
+  /**
+   * A chest just placed joined another into a double chest: both halves must be in one cell its
+   * owner may decorate, so a double chest never reaches across a cell's edge or the Hall's.
+   */
+  private Optional<Decision> join(PlayerId player, List<Position> blocks) {
+    Optional<Position> inHall = blocks.stream().filter(halls::inHall).findFirst();
+    if (inHall.isEmpty()) {
+      return Optional.empty();
+    }
+    String type = platform.world().block(inHall.get()).type();
+    if (bypasses(player)) {
+      return bypassed(player, "join", type, inHall.get());
+    }
+    if (oneCell(blocks, ref -> halls.canDecorate(player, ref))) {
+      return Optional.of(Decision.allow());
+    }
+    return refused(player, "join", type, inHall.get(), "hof.rules.no-join");
   }
 
   /** Any other change at a position: allowed only to a decorating owner in their own cell. */
@@ -185,7 +207,12 @@ public final class HallRules implements HallGuard {
     if (!halls.inHall(block) || bypasses(use.player())) {
       return Optional.empty();
     }
-    if (decorating(use.player(), block).isPresent()) {
+    if (takingOut(use.player(), block)) {
+      return Optional.of(Decision.allow());
+    }
+    if (decorating(use.player(), block).isPresent() && !use.interactable()) {
+      // After their archive an owner still builds against plain blocks; what does something, as a
+      // container does, is used as a visitor uses it.
       return Optional.of(Decision.allow());
     }
     String type = platform.world().block(block).type();
@@ -206,11 +233,18 @@ public final class HallRules implements HallGuard {
         use.player(), "use", type, block, use.interactable() ? "hof.rules.no-use" : "hof.no-build");
   }
 
-  /** Opening a block's inventory: the real one for its decorating owner, else a copy. */
-  private Optional<Decision> open(PlayerId player, Position block) {
-    if (!halls.inHall(block) || bypasses(player) || decorating(player, block).isPresent()) {
+  /**
+   * Opening a block's inventory, both halves of a double chest: the real one for an owner who may
+   * still take things out of the cell holding every half, else a copy.
+   */
+  private Optional<Decision> open(PlayerId player, List<Position> blocks) {
+    Optional<Position> inHall = blocks.stream().filter(halls::inHall).findFirst();
+    if (inHall.isEmpty()
+        || bypasses(player)
+        || oneCell(blocks, ref -> halls.canTakeOut(player, ref))) {
       return Optional.empty();
     }
+    Position block = inHall.get();
     String type = platform.world().block(block).type();
     if (!cellContainer(type)) {
       return refused(player, "open", type, block, "hof.rules.no-use");
@@ -258,7 +292,13 @@ public final class HallRules implements HallGuard {
       return bypassed(player, verb, type, at);
     }
     if (decorating(player, at).isPresent() && DECORATION.contains(path(type))) {
-      return Optional.of(Decision.allow());
+      // After their archive an owner may still turn a frame or put something in it, but hitting
+      // or using a stand would hand them what it holds.
+      boolean keeps = verb.equals("use") && path(type).endsWith("item_frame");
+      if (takingOut(player, at) || keeps) {
+        return Optional.of(Decision.allow());
+      }
+      return refused(player, verb, type, at, "hof.rules.keeps");
     }
     return refused(player, verb, type, at, "hof.rules.no-touch");
   }
@@ -327,6 +367,23 @@ public final class HallRules implements HallGuard {
 
   private Optional<HallService.CellRef> decorating(PlayerId player, Position at) {
     return halls.cellAt(at).filter(ref -> halls.canDecorate(player, ref));
+  }
+
+  /** Whether a player may take things out of the cell at a position: see HallService. */
+  private boolean takingOut(PlayerId player, Position at) {
+    return halls.cellAt(at).filter(ref -> halls.canTakeOut(player, ref)).isPresent();
+  }
+
+  /** Whether every block is in the same cell, and that cell passes a test. */
+  private boolean oneCell(List<Position> blocks, Predicate<HallService.CellRef> test) {
+    Optional<HallService.CellRef> first =
+        blocks.isEmpty() ? Optional.empty() : halls.cellAt(blocks.getFirst());
+    if (first.isEmpty() || !test.test(first.get())) {
+      return false;
+    }
+    String key = first.get().key();
+    return blocks.stream()
+        .allMatch(block -> halls.cellAt(block).filter(ref -> ref.key().equals(key)).isPresent());
   }
 
   private boolean bypasses(PlayerId player) {

@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.event;
 
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
+import java.util.List;
 
 /** Something a player is about to do, raised by an adapter from a platform event. */
 public sealed interface Intent {
@@ -81,8 +82,31 @@ public sealed interface Intent {
     }
   }
 
-  /** Opening the inventory of a block, such as a chest. */
-  record OpenContainer(PlayerId player, Position block) implements Intent {}
+  /**
+   * Opening the inventory of a block, such as a chest.
+   *
+   * @param blocks every block whose inventory opens: one, or both halves of a double chest
+   */
+  record OpenContainer(PlayerId player, List<Position> blocks) implements Intent {
+    public OpenContainer {
+      blocks = List.copyOf(blocks);
+    }
+
+    public OpenContainer(PlayerId player, Position block) {
+      this(player, List.of(block));
+    }
+  }
+
+  /**
+   * A chest just placed joined another into a double chest.
+   *
+   * @param blocks both halves
+   */
+  record JoinContainers(PlayerId player, List<Position> blocks) implements Intent {
+    public JoinContainers {
+      blocks = List.copyOf(blocks);
+    }
+  }
 
   /**
    * Changing a block other than by placing or breaking it: lighting it, bone meal, stripping or

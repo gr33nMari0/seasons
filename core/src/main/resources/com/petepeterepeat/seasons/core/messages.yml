@@ -180,6 +180,8 @@ hof:
     no-lava: "<red>Lava can't go in the Hall of Fame.</red>"
     no-use: "<red>You can't use that in the Hall of Fame.</red>"
     no-touch: "<red>You can't change anything in the Hall of Fame.</red>"
+    no-join: "<red>A double chest can't reach across a cell's edge or the Hall's.</red>"
+    keeps: "<red>Your cell keeps what's in it now: nothing comes out of it.</red>"
   nothing-archived: "<gray>Nothing is archived here yet.</gray>"
   figure-name: "<name> · Season <season>"
   plaque: "<name> · Season <season><newline>Advancements: <completed> / <visible><newline><gray>Right-click below for the season card</gray>"

@@ -110,9 +110,12 @@ export async function place (ctx, admin, name, at, block = 'minecraft:stone') {
   return line.startsWith('Placed')
 }
 
-/** Breaks a block as a player, firing BlockBreakEvent. Resolves with whether it was broken. */
-export async function breakBlock (ctx, admin, name, at) {
-  const line = await ctx.command(admin, `/scenario break ${name} ${at.x} ${at.y} ${at.z}`, /^(Broke|Breaking) /)
+/**
+ * Breaks a block as a player, firing BlockBreakEvent. Resolves with whether it was broken. With
+ * `drops`, it drops what survival would, unless Seasons says it drops nothing.
+ */
+export async function breakBlock (ctx, admin, name, at, { drops = false } = {}) {
+  const line = await ctx.command(admin, `/scenario break ${name} ${at.x} ${at.y} ${at.z}${drops ? ' drops' : ''}`, /^(Broke|Breaking) /)
   return line.startsWith('Broke')
 }
 

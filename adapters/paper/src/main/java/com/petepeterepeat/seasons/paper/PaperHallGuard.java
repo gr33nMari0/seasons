@@ -351,7 +351,12 @@ final class PaperHallGuard implements Listener {
     }
   }
 
+  /** Whether any block behind an inventory, either half of a double chest, is in the Hall. */
   private boolean inHall(Inventory inventory) {
+    List<Block> blocks = PaperChests.blocks(inventory);
+    if (!blocks.isEmpty()) {
+      return blocks.stream().anyMatch(this::protects);
+    }
     Location at = inventory.getLocation();
     return at != null && protects(at);
   }

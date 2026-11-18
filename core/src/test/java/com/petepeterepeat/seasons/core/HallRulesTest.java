@@ -45,6 +45,8 @@ class HallRulesTest {
   private static final Position CORRIDOR = Position.of(OVERWORLD, 2, 64, 2);
   private static final Position OUTSIDE = Position.of(OVERWORLD, 50, 64, 50);
   private static final Position JUST_OUTSIDE = Position.of(OVERWORLD, 31, 64, 5);
+  private static final Position HALL_EDGE = Position.of(OVERWORLD, 30, 64, 5);
+  private static final Position BETWEEN_CELLS = Position.of(OVERWORLD, 9, 64, 5);
   private static final BlockInfo CHEST = new BlockInfo("minecraft:chest", true, false, false);
   private static final BlockInfo POT = new BlockInfo("minecraft:decorated_pot", true, false, false);
   private static final BlockInfo FURNACE = new BlockInfo("minecraft:furnace", true, false, false);
@@ -353,6 +355,75 @@ class HallRulesTest {
   }
 
   @Test
+  void afterTheirArchiveAnOwnerArrangesTheirCellButTakesNothingOut() {
+    Optional<NeutralItem> diamonds = Optional.of(FakeItems.item("minecraft:diamond", 3));
+    container(ALSO_IN_C1, CHEST, diamonds);
+    run("/season end --now");
+    fake.player(alex).position = IN_C1;
+    assertThat(decide(new Intent.PlaceBlock(alex.id(), IN_C1, "minecraft:stone")))
+        .as("the time after their archive: they still build")
+        .isEqualTo(Decision.allow());
+    assertThat(decide(new Intent.BreakBlock(alex.id(), IN_C1)))
+        .as("but what they break drops nothing")
+        .isEqualTo(Decision.allowWithoutDrops());
+    assertThat(decide(new Intent.PickupItem(alex.id()))).isNotEqualTo(Decision.allow());
+
+    assertThat(text(decide(new Intent.OpenContainer(alex.id(), ALSO_IN_C1))))
+        .as("their stash opens as a copy")
+        .isEqualTo("(quietly)");
+    assertThat(fake.copies)
+        .singleElement()
+        .satisfies(copy -> assertThat(copy.items()).containsExactly(diamonds));
+    block(IN_C1, LEVER);
+    assertThat(text(decide(new Intent.UseBlock(alex.id(), IN_C1, true, false, true, false, true))))
+        .isEqualTo("You can't use that in the Hall of Fame.");
+    block(IN_C1, FakePlatform.STONE);
+    assertThat(decide(new Intent.UseBlock(alex.id(), IN_C1, true, false, false, false, false)))
+        .as("a click to build against a plain block")
+        .isEqualTo(Decision.allow());
+
+    assertThat(decide(new Intent.UseEntity(alex.id(), IN_C1, "minecraft:item_frame")))
+        .as("a frame can still be turned or filled")
+        .isEqualTo(Decision.allow());
+    assertThat(text(decide(new Intent.UseEntity(alex.id(), IN_C1, "minecraft:armor_stand"))))
+        .isEqualTo("Your cell keeps what's in it now: nothing comes out of it.");
+    assertThat(text(decide(new Intent.HurtEntity(alex.id(), IN_C1, "minecraft:item_frame"))))
+        .isEqualTo("Your cell keeps what's in it now: nothing comes out of it.");
+  }
+
+  @Test
+  void aDoubleChestNeverReachesAcrossACellOrTheHallsEdge() {
+    Optional<NeutralItem> diamonds = Optional.of(FakeItems.item("minecraft:diamond", 3));
+    container(IN_C1, CHEST, diamonds);
+    container(ALSO_IN_C1, CHEST);
+    container(IN_C2, CHEST);
+    container(HALL_EDGE, CHEST, diamonds);
+    container(JUST_OUTSIDE, CHEST);
+    container(OUTSIDE, CHEST);
+
+    assertThat(decide(new Intent.JoinContainers(alex.id(), List.of(IN_C1, ALSO_IN_C1))))
+        .as("within their own cell")
+        .isEqualTo(Decision.allow());
+    assertThat(text(decide(new Intent.JoinContainers(alex.id(), List.of(IN_C1, IN_C2)))))
+        .isEqualTo("A double chest can't reach across a cell's edge or the Hall's.");
+    assertThat(text(decide(new Intent.JoinContainers(kim.id(), List.of(JUST_OUTSIDE, HALL_EDGE)))))
+        .as("from outside the Hall")
+        .isEqualTo("A double chest can't reach across a cell's edge or the Hall's.");
+    assertThat(decide(new Intent.JoinContainers(kim.id(), List.of(OUTSIDE, JUST_OUTSIDE))))
+        .as("outside the Hall nothing is decided")
+        .isEqualTo(Decision.allow());
+
+    // One already there, however it came: a half outside or in another cell opens a copy.
+    assertThat(text(decide(new Intent.OpenContainer(kim.id(), List.of(JUST_OUTSIDE, HALL_EDGE)))))
+        .isEqualTo("(quietly)");
+    assertThat(text(decide(new Intent.OpenContainer(alex.id(), List.of(IN_C2, IN_C1)))))
+        .isEqualTo("(quietly)");
+    assertThat(decide(new Intent.OpenContainer(alex.id(), List.of(ALSO_IN_C1, IN_C1))))
+        .isEqualTo(Decision.allow());
+    assertThat(fake.copies).hasSize(2);
+  }
+
+  @Test
   void nothingCrossesIntoTheHallByItself() {
     HallGuard guard = fake.guard;
     assertThat(guard.protects(IN_C1)).isTrue();
@@ -381,7 +452,11 @@ class HallRulesTest {
             .findFirst()
             .orElseThrow()
             .getKey();
-    FakePlatform.Drawn drawn = fake.displays.remove(figure);
+    // The figure pushed out of its cell, though still in its chunk.
+    FakePlatform.Drawn drawn = fake.displays.get(figure);
+    fake.displays.put(
+        figure,
+        new FakePlatform.Drawn(drawn.tag(), BETWEEN_CELLS, drawn.equipment(), drawn.kind()));
     java.util.UUID stray = java.util.UUID.randomUUID();
     fake.displays.put(
         stray, new FakePlatform.Drawn("season-2/c1/7/plaque", IN_C1, List.of(), "text"));
@@ -394,11 +469,12 @@ class HallRulesTest {
         .filteredOn(d -> d.tag().equals("season-2/c1/2/figure"))
         .singleElement()
         .satisfies(d -> assertThat(d.equipment()).isEqualTo(drawn.equipment()));
-    assertThat(fake.displays).doesNotContainKey(stray);
+    assertThat(fake.displays).doesNotContainKey(stray).doesNotContainKey(figure);
     assertThat(audited("reconcile"))
         .extracting(e -> e.get("target").getAsString() + ": " + e.get("details").getAsString())
         .contains(
             "season-2:c1: drew the missing figure",
+            "season-2:c1: removed a stray display season-2/c1/2/figure",
             "season-2:c1: removed a stray display season-2/c1/7/plaque");
 
     // Once right, nothing more is done.
@@ -407,6 +483,27 @@ class HallRulesTest {
     fake.tick();
     fake.tick();
     assertThat(audited("reconcile")).hasSize(before);
+  }
+
+  @Test
+  void aDisplayFarFromItsCellIsRemovedWhenItsChunkLoads() throws IOException {
+    java.util.UUID far = java.util.UUID.randomUUID();
+    Position away = Position.of(OVERWORLD, 100, 64, 5);
+    fake.displays.put(
+        far, new FakePlatform.Drawn("season-2/c1/2/figure", away, List.of(), "figure"));
+    java.util.UUID unknown = java.util.UUID.randomUUID();
+    fake.displays.put(
+        unknown, new FakePlatform.Drawn("season-9/c1/9/figure", away, List.of(), "figure"));
+
+    fake.guard.entitiesLoaded(OVERWORLD, 100 >> 4, 0);
+
+    assertThat(fake.displays).doesNotContainKey(far);
+    assertThat(fake.displays)
+        .as("a display of a cell not known is kept, in case its gallery file comes back")
+        .containsKey(unknown);
+    assertThat(audited("reconcile"))
+        .extracting(e -> e.get("details").getAsString())
+        .contains("removed a stray display season-2/c1/2/figure");
   }
 
   @Test

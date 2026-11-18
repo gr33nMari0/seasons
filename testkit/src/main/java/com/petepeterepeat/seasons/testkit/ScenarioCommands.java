@@ -26,6 +26,7 @@ import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
 import org.bukkit.block.DoubleChest;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
@@ -60,11 +61,12 @@ import org.bukkit.util.Vector;
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
- *   <li>{@code place <player> <x> <y> <z> <block>} places a block as that player would, firing the
- *       same {@code BlockPlaceEvent}, because bots can't place blocks through the protocol
- *       translation (docs/adr/0001)
- *   <li>{@code break <player> <x> <y> <z>} breaks a block as that player would, firing {@code
- *       BlockBreakEvent}, for the same reason
+ *   <li>{@code place <player> <x> <y> <z> <block>} places a block, with its state if given, as that
+ *       player would, firing the same {@code BlockPlaceEvent}, because bots can't place blocks
+ *       through the protocol translation (docs/adr/0001)
+ *   <li>{@code break <player> <x> <y> <z> [drops]} breaks a block as that player would, firing
+ *       {@code BlockBreakEvent}, for the same reason; with {@code drops} it drops what survival
+ *       would unless a listener turns drops off
  *   <li>{@code use <player> <x> <y> <z>} right-clicks a block as that player would, firing {@code
  *       PlayerInteractEvent}: the translation drops a bot's clicks on blocks too, though not on
  *       entities; a last word {@code sneak} clicks while sneaking
@@ -204,8 +206,16 @@ final class ScenarioCommands implements BasicCommand, Listener {
 
   private void place(CommandSender sender, String[] args) {
     Player player = plugin.getServer().getPlayerExact(args[1]);
-    Material material = Material.matchMaterial(args[5]);
-    if (player == null || material == null) {
+    // A block, or a block with its state, such as minecraft:chest[facing=north,type=right].
+    BlockData data;
+    try {
+      data = plugin.getServer().createBlockData(args[5]);
+    } catch (IllegalArgumentException e) {
+      sender.sendMessage("Can't place " + args[5] + " as " + args[1]);
+      return;
+    }
+    Material material = data.getMaterial();
+    if (player == null) {
       sender.sendMessage("Can't place " + args[5] + " as " + args[1]);
       return;
     }
@@ -218,7 +228,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
     Block block = world.getBlockAt(x, y, z);
     // As the game does: the block is there while the event runs, and taken back if refused.
     BlockState replaced = block.getState();
-    block.setType(material, false);
+    block.setBlockData(data, false);
     BlockPlaceEvent event =
         new BlockPlaceEvent(
             block,
@@ -245,14 +255,21 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     Block block = loaded(player.getWorld(), args);
     Material was = block.getType();
+    // A last word "drops" breaks it as survival does, dropping what it drops unless a listener
+    // says otherwise; without it nothing drops, as before.
+    boolean drops = args.length > 5 && args[5].equals("drops");
     BlockBreakEvent event = new BlockBreakEvent(block, player);
-    event.setDropItems(false);
+    event.setDropItems(drops);
     plugin.getServer().getPluginManager().callEvent(event);
     if (event.isCancelled()) {
       sender.sendMessage("Breaking " + was.getKey() + " was refused");
       return;
     }
-    block.setType(Material.AIR);
+    if (event.isDropItems()) {
+      block.breakNaturally();
+    } else {
+      block.setType(Material.AIR);
+    }
     sender.sendMessage(
         "Broke "
             + was.getKey()

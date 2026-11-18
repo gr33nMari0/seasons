@@ -16,12 +16,10 @@ import java.util.List;
 import java.util.Optional;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
-import org.bukkit.block.DoubleChest;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Levelled;
@@ -218,6 +216,11 @@ final class PaperEvents implements Events, Listener {
             id(player),
             PaperPositions.toPosition(event.getBlockPlaced().getLocation()),
             event.getBlockPlaced().getType().getKey().asString()));
+    // A chest that joined another: the double chest it makes must stay on one side of every edge.
+    List<Block> halves = PaperChests.halves(event.getBlockPlaced());
+    if (!event.isCancelled() && halves.size() > 1) {
+      apply(event, player, new Intent.JoinContainers(id(player), PaperChests.positions(halves)));
+    }
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -337,19 +340,15 @@ final class PaperEvents implements Events, Listener {
     onInteractEntity(event);
   }
 
-  /** Opening a block's inventory: in the Hall, often swapped for a view-only copy. */
+  /**
+   * Opening a block's inventory, both halves of a double chest: in the Hall, often swapped for a
+   * view-only copy.
+   */
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onOpen(InventoryOpenEvent event) {
-    Inventory inventory = event.getInventory();
-    InventoryHolder holder = inventory.getHolder(false);
-    Location at = inventory.getLocation();
-    if (event.getPlayer() instanceof Player player
-        && at != null
-        && (holder instanceof BlockInventoryHolder || holder instanceof DoubleChest)) {
-      apply(
-          event,
-          player,
-          new Intent.OpenContainer(id(player), PaperPositions.toPosition(at.toBlockLocation())));
+    List<Block> blocks = PaperChests.blocks(event.getInventory());
+    if (event.getPlayer() instanceof Player player && !blocks.isEmpty()) {
+      apply(event, player, new Intent.OpenContainer(id(player), PaperChests.positions(blocks)));
     }
   }
 
@@ -621,6 +620,12 @@ final class PaperEvents implements Events, Listener {
   private void apply(Cancellable event, Player player, Intent intent) {
     switch (handler.decide(intent)) {
       case Decision.Allow allow -> {}
+      case Decision.AllowWithoutDrops withoutDrops -> {
+        if (event instanceof BlockBreakEvent broken) {
+          broken.setDropItems(false);
+          broken.setExpToDrop(0);
+        }
+      }
       case Decision.Deny deny -> {
         event.setCancelled(true);
         deny.message().ifPresent(message -> player.sendMessage(text.render(message)));

@@ -659,11 +659,14 @@ public final class HallVisits {
     return halls.inHall(platform.players().position(player)) && !bypasses(player);
   }
 
-  /** An owner decorating the cell they stand in picks up what they broke there. */
+  /**
+   * An owner decorating the cell they stand in before the season ends picks up what they broke
+   * there; after their archive nothing is picked up, so nothing leaves with them.
+   */
   private boolean decoratingHere(PlayerId player) {
     return halls
         .cellAt(platform.players().position(player))
-        .filter(ref -> halls.canDecorate(player, ref))
+        .filter(ref -> halls.canTakeOut(player, ref))
         .isPresent();
   }
 

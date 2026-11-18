@@ -497,6 +497,15 @@ public final class HallService {
                     HumanTime.duration(messages(), settings.afterArchive())));
   }
 
+  /**
+   * Whether a player may take things out of a cell now: open its containers for real, pick up and
+   * keep what they break. Only while decorating before the season ends; in the time after their
+   * archive an owner arranges their cell but takes nothing into the next season.
+   */
+  public boolean canTakeOut(PlayerId player, CellRef ref) {
+    return canDecorate(player, ref) && state.get().map(HallService::playing).orElse(false);
+  }
+
   /** Whether a player may build in a cell now. */
   public boolean canDecorate(PlayerId player, CellRef ref) {
     Optional<SeasonState> found = state.get();
