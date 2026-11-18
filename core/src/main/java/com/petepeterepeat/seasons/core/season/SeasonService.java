@@ -395,6 +395,31 @@ public final class SeasonService {
     state.ifPresent(current -> update(current.withFirst(first)));
   }
 
+  /** {@code /season unlock homecoming}, or its condition coming true. */
+  public Transition homecoming() {
+    return apply(new SeasonEvent.Homecoming());
+  }
+
+  /** Changes what the zones remember, and saves it. Nothing happens before {@code /season init}. */
+  public void updateZones(java.util.function.UnaryOperator<ZoneState> change) {
+    state.ifPresent(current -> update(current.withZones(change.apply(current.zones()))));
+  }
+
+  /**
+   * Runs a task on the server thread once the latest state is on disk, so what it does to the world
+   * never runs ahead of the state that records it. If that save failed, the task doesn't run.
+   */
+  public void afterSave(Runnable task) {
+    var _ =
+        lastSave.whenCompleteAsync(
+            (saved, failure) -> {
+              if (failure == null) {
+                task.run();
+              }
+            },
+            serverThread);
+  }
+
   /** Changes the decorating window, and saves it. Nothing happens before {@code /season init}. */
   public void updateDecorating(java.util.function.UnaryOperator<Decorating> change) {
     state.ifPresent(current -> update(current.withDecorating(change.apply(current.decorating()))));

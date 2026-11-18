@@ -163,11 +163,16 @@ public sealed interface Intent {
     PEARL,
     /** Chorus fruit. */
     CHORUS,
+    /** A portal. */
+    PORTAL,
     /** Seasons itself, such as /hof or launch. */
     SEASONS,
-    /** Anything else: commands, other plugins, portals. */
+    /** Anything else: commands and other plugins. */
     OTHER
   }
+
+  /** A trip through a portal that would make a new portal at a position, for its other end. */
+  record CreatePortal(PlayerId player, Position at) implements Intent {}
 
   /**
    * Getting on an entity: riding or sitting.

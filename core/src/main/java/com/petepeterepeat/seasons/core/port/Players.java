@@ -75,9 +75,9 @@ public interface Players {
   Optional<String> knownName(PlayerId id);
 
   /**
-   * Teleports an online player safely: dismounts them, stops elytra flight, resets fall distance
-   * and fire, closes menus and loads the destination chunk first, crossing dimensions if needed.
-   * Completes with false if they couldn't be moved.
+   * Teleports an online player safely: dismounts them, stops elytra flight, resets velocity, fall
+   * distance and fire, closes menus and loads the destination chunk first, crossing dimensions if
+   * needed. Completes with false if they couldn't be moved.
    */
   CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination);
 
@@ -89,6 +89,15 @@ public interface Players {
 
   /** The bed block an online player's respawn point is at, if it is a bed. */
   Optional<Position> bed(PlayerId id);
+
+  /** A title, with no subtitle, and a line on the action bar for one player. */
+  void alert(PlayerId id, Message title, Message actionBar);
+
+  /** Stops an online player where they are: off any mount, out of elytra flight, no velocity. */
+  void stopMoving(PlayerId id);
+
+  /** Celebration fireworks at a position, which hurt nobody. */
+  void fireworks(Position at);
 
   /** A title, a sound and fireworks for one player, such as at launch. */
   void celebrate(PlayerId id, Message title, Message subtitle);

@@ -31,6 +31,7 @@ import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
+import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -48,6 +49,8 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.core.zone.ZoneCommands;
+import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -100,6 +103,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
   private @Nullable HallRules rules;
+  private @Nullable Zones zones;
   private @Nullable RolloverArchiver archiverForTests;
   private LongSupplier nanoTime = System::nanoTime;
 
@@ -240,6 +244,18 @@ public final class Seasons implements SeasonsApi {
             world.resolve("seasons"),
             world.resolve("backups"));
     service = seasons;
+    Zones zoning =
+        new Zones(
+            platform,
+            config,
+            announcer,
+            new HallAudit(audit, clock),
+            clock,
+            halls::inHall,
+            entry::spawn,
+            hold::isHeld);
+    zones = zoning;
+    zoning.bind(seasons);
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
@@ -247,6 +263,7 @@ public final class Seasons implements SeasonsApi {
     visiting.start();
     reconciling.start();
     hallRules.start();
+    zoning.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -279,7 +296,7 @@ public final class Seasons implements SeasonsApi {
             clock);
     firsts = firstsTracker;
     firstsTracker.start();
-    platform.events().milestones(firstsTracker);
+    platform.events().milestones(both(firstsTracker, zoning));
     flusher =
         platform
             .scheduler()
@@ -312,12 +329,26 @@ public final class Seasons implements SeasonsApi {
                     visiting
                         .decide(intent)
                         .or(() -> halls.decide(intent))
-                        .or(() -> hallRules.decide(intent)),
+                        .or(() -> hallRules.decide(intent))
+                        .or(() -> zoning.decide(intent)),
                 visiting::damaged));
     platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
     platform.events().hall(hallRules);
-    platform.commands().register(built.root());
+    platform.events().zones(zoning);
+    platform
+        .commands()
+        .register(
+            built.root(
+                new ZoneCommands(
+                        platform,
+                        config,
+                        loader,
+                        writer,
+                        seasons,
+                        zoning,
+                        world.resolve("backups").resolve("seasons"))
+                    .nodes()));
     platform
         .commands()
         .register(
@@ -392,6 +423,29 @@ public final class Seasons implements SeasonsApi {
     };
   }
 
+  /** Milestones for season firsts and for the zones' unlock conditions. */
+  private static Milestones both(Milestones first, Milestones second) {
+    return new Milestones() {
+      @Override
+      public void advancementDone(PlayerId player, String advancement, String title) {
+        first.advancementDone(player, advancement, title);
+        second.advancementDone(player, advancement, title);
+      }
+
+      @Override
+      public void enteredDimension(PlayerId player, String dimension) {
+        first.enteredDimension(player, dimension);
+        second.enteredDimension(player, dimension);
+      }
+
+      @Override
+      public void dragonKilled() {
+        first.dragonKilled();
+        second.dragonKilled();
+      }
+    };
+  }
+
   /** Times reconciliation's budget with this clock; for tests, before {@link #start}. */
   void useNanoTime(LongSupplier clock) {
     this.nanoTime = clock;
@@ -421,6 +475,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (tripwire != null) {
       tripwire.stop();
+    }
+    if (zones != null) {
+      zones.stop();
     }
     if (firsts != null) {
       firsts.stop();

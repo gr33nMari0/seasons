@@ -13,4 +13,7 @@ public interface Milestones {
 
   /** A player arrived in a dimension, such as {@code minecraft:the_nether}. */
   void enteredDimension(PlayerId player, String dimension);
+
+  /** An ender dragon died, by anyone's hand or none. */
+  default void dragonKilled() {}
 }

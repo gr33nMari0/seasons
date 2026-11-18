@@ -25,4 +25,7 @@ public interface Events {
 
   /** Sets the Hall's say on changes nobody in particular makes. Until set, nothing is guarded. */
   void hall(HallGuard guard);
+
+  /** Sets the zones' say on changes nobody in particular makes. Until set, nothing is guarded. */
+  void zones(ZoneGuard guard);
 }
