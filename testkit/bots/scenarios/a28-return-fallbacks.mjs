@@ -15,7 +15,10 @@ export default {
     const admin = await ctx.admin()
     const visitor = await ctx.join('Visitor')
     await hallToVisit(ctx, admin)
-    const spawn = await ctx.position(admin, ctx.adminName)
+    // The world spawn, pinned: players join anywhere within the spawn radius around it, so where
+    // a bot joined says nothing about where the spawn is.
+    await ctx.command(admin, `/setworldspawn 0 ${FLOOR} 0`, /^Set the world spawn point to /)
+    const spawn = { x: 0.5, y: FLOOR, z: 0.5 }
     await ctx.command(admin, '/effect give Visitor minecraft:fire_resistance 600 0 true', /^Applied effect /)
     await bed(ctx, admin, { x: HOME.x + 1, y: FLOOR, z: HOME.z })
     await bed(ctx, admin, BED)
@@ -54,6 +57,6 @@ export default {
     await waitInHall(ctx, admin, 'Visitor')
     await ctx.command(admin, `/fill ${last.x - 9} ${FLOOR} ${last.z - 9} ${last.x + 9} ${FLOOR} ${last.z + 9} minecraft:lava`, /^Successfully filled /)
     await hof(ctx, visitor, '/hof leave', /^Your spot wasn't safe \(lava\), so you're at the season spawn\.$/)
-    await ctx.eventually(async () => assert(near(await ctx.position(admin, 'Visitor'), spawn, 12), 'at the spawn'))
+    await ctx.eventually(async () => assert(near(await ctx.position(admin, 'Visitor'), spawn, 2), 'at the spawn'))
   }
 }

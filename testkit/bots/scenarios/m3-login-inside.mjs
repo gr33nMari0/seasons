@@ -2,7 +2,7 @@
 // A player who logs in inside a blocked zone, as after an admin draws one around where they logged
 // out, is sent to the season spawn and told why. One online when a zone is drawn around them is
 // found by the sweep, with no event to give them away, and put back where it last saw them outside
-// every blocked zone.
+// every blocked zone, or at the spawn if that was inside the camp.
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { standAt } from '../lib/visits.mjs'
@@ -23,7 +23,9 @@ export default {
     const camp = { x: 400, y: FLOOR, z: -400 }
     await forceload(ctx, admin, camp, 30)
     await standAt(ctx, admin, 'Pat', camp)
-    const toldPat = ctx.waitForMessages(pat, /^The camp is locked until Homecoming\.$/, 10 * SECOND)
+    // Back where the sweep last saw them, the spawn they were teleported from; or, if it had
+    // already seen them on this spot, now inside the camp, at the spawn. Either way, told why.
+    const toldPat = ctx.waitForMessages(pat, /^(The camp is locked until Homecoming|You were in the camp, which is locked, so you're back at the spawn)\.$/, 10 * SECOND)
     await cylinder(ctx, admin, 'camp', { x: camp.x + 3, y: FLOOR, z: camp.z }, 10)
     await toldPat
     await ctx.eventually(async () => {
