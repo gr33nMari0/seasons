@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.scenario.CrashPoint;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.entity.TeleportFlag;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -28,22 +29,32 @@ import org.bukkit.block.Container;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Boat;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.boat.OakBoat;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.block.TNTPrimeEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.player.PlayerBucketEmptyEvent;
+import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.vehicle.VehicleMoveEvent;
+import org.bukkit.event.world.PortalCreateEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryView;
@@ -92,6 +103,23 @@ import org.bukkit.util.Vector;
  *       player would, firing {@code EntityPlaceEvent}
  *   <li>{@code hit <player> <type> <x> <y> <z>} has the player attack the nearest entity of a type,
  *       a real attack with all its events
+ *   <li>{@code move ... fly} moves a player as {@code walk} does, gliding with an elytra
+ *   <li>{@code place ... consume} takes the block placed from what the player carries, as the game
+ *       does, and is refused if they carry none
+ *   <li>{@code ride <player> <x> <y> <z>} seats the player in a new boat and moves the boat to a
+ *       spot with them in it, firing {@code VehicleMoveEvent} as a moving boat does
+ *   <li>{@code chorus <player> <x> <y> <z>} teleports the player with the cause eating chorus fruit
+ *       gives, since where the fruit lands is random
+ *   <li>{@code portal <player> <dimension> <x> <y> <z>} takes the player through a nether portal to
+ *       a spot: {@code PlayerPortalEvent}, then the teleport
+ *   <li>{@code portal-pair <player> <dimension> <x> <y> <z>} makes the obsidian frame the game
+ *       would build at a spot for the other end of the player's trip, firing {@code
+ *       PortalCreateEvent}
+ *   <li>{@code bucket <player> <x> <y> <z> <water|lava|fill>} empties or fills a bucket at a block
+ *       as the player, firing the bucket events
+ *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
+ *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
+ *   <li>{@code permit <player> <node>} gives the player a permission until they leave
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand, Listener {
@@ -194,10 +222,18 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "open" -> open(sender, args);
         case "place-entity" -> placeEntity(sender, args);
         case "hit" -> hit(sender, args);
+        case "ride" -> ride(sender, args);
+        case "chorus" -> chorus(sender, args);
+        case "portal" -> portal(sender, args);
+        case "portal-pair" -> portalPair(sender, args);
+        case "bucket" -> bucket(sender, args);
+        case "ignite" -> ignite(sender, args);
+        case "permit" -> permit(sender, args);
         default ->
             sender.sendMessage(
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
-                    + "|use-item|consume|drop|sit|glide|open|place-entity|hit ...");
+                    + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
+                    + "|portal-pair|bucket|ignite|permit ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
@@ -217,6 +253,11 @@ final class ScenarioCommands implements BasicCommand, Listener {
     Material material = data.getMaterial();
     if (player == null) {
       sender.sendMessage("Can't place " + args[5] + " as " + args[1]);
+      return;
+    }
+    boolean consume = args.length > 6 && args[6].equals("consume");
+    if (consume && !player.getInventory().contains(material)) {
+      sender.sendMessage("Placing " + material.getKey() + " was refused: " + args[1] + " has none");
       return;
     }
     World world = player.getWorld();
@@ -243,6 +284,9 @@ final class ScenarioCommands implements BasicCommand, Listener {
       replaced.update(true, false);
       sender.sendMessage("Placing " + material.getKey() + " was refused");
       return;
+    }
+    if (consume) {
+      player.getInventory().removeItem(ItemStack.of(material));
     }
     sender.sendMessage("Placed " + material.getKey() + " at " + x + ", " + y + ", " + z);
   }
@@ -337,6 +381,10 @@ final class ScenarioCommands implements BasicCommand, Listener {
     to.getChunk().addPluginChunkTicket(plugin);
     String how = args.length > 5 ? args[5] : "walk";
     boolean back = args.length > 6 && args[6].equals("back");
+    if (how.equals("fly")) {
+      player.getInventory().setChestplate(ItemStack.of(Material.ELYTRA));
+      player.setGliding(true);
+    }
     if (!clientMove(player, from, to)) {
       sender.sendMessage("Moving " + args[1] + " (" + how + ") was refused");
       return;
@@ -590,6 +638,196 @@ final class ScenarioCommands implements BasicCommand, Listener {
     player.resetCooldown();
     player.attack(target.get());
     sender.sendMessage("Hit " + type.getKey() + " as " + args[1]);
+  }
+
+  // Keeping the passenger on a teleport is deprecated, but this Paper still needs asking for it.
+  @SuppressWarnings("removal")
+  private void ride(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Riding as " + args[1] + " is impossible");
+      return;
+    }
+    Location from = java.util.Objects.requireNonNull(player.getLocation());
+    Location to = at(player.getWorld(), args, 2);
+    to.getChunk().addPluginChunkTicket(plugin);
+    Boat boat = player.getWorld().spawn(from, OakBoat.class);
+    boat.addPassenger(player);
+    plugin.getServer().getPluginManager().callEvent(new VehicleMoveEvent(boat, from, to));
+    if (!boat.getPassengers().contains(player)) {
+      sender.sendMessage("Riding " + args[1] + " to " + describe(to) + " was stopped");
+      boat.teleport(to);
+      return;
+    }
+    boat.teleport(to, TeleportFlag.EntityState.RETAIN_PASSENGERS);
+    sender.sendMessage("Rode " + args[1] + " in a boat to " + describe(to));
+  }
+
+  private void chorus(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Chorus teleport of " + args[1] + " was refused: not online");
+      return;
+    }
+    Location to = at(player.getWorld(), args, 2);
+    to.getChunk().addPluginChunkTicket(plugin);
+    boolean went = player.teleport(to, PlayerTeleportEvent.TeleportCause.CONSUMABLE_EFFECT);
+    sender.sendMessage("Chorus teleport of " + args[1] + (went ? " went" : " was refused"));
+  }
+
+  private void portal(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    World world = dimension(args[2]);
+    if (player == null || world == null) {
+      sender.sendMessage("Portal trip of " + args[1] + " was refused: no such player or dimension");
+      return;
+    }
+    Location to = at(world, args, 3);
+    to.getChunk().addPluginChunkTicket(plugin);
+    PlayerPortalEvent event =
+        new PlayerPortalEvent(
+            player,
+            java.util.Objects.requireNonNull(player.getLocation()),
+            to,
+            PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
+    plugin.getServer().getPluginManager().callEvent(event);
+    boolean went =
+        !event.isCancelled()
+            && player.teleport(event.getTo(), PlayerTeleportEvent.TeleportCause.NETHER_PORTAL);
+    sender.sendMessage("Portal trip of " + args[1] + (went ? " went" : " was refused"));
+  }
+
+  private void portalPair(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    World world = dimension(args[2]);
+    if (player == null || world == null) {
+      sender.sendMessage("Making a portal for " + args[1] + " is impossible");
+      return;
+    }
+    Location base = at(world, args, 3);
+    base.getChunk().addPluginChunkTicket(plugin);
+    // A frame four wide and five tall along x, as the game builds one, with portal blocks inside.
+    java.util.List<BlockState> blocks = new java.util.ArrayList<>();
+    for (int dx = 0; dx < 4; dx++) {
+      for (int dy = 0; dy < 5; dy++) {
+        Block block = base.clone().add(dx, dy, 0).getBlock();
+        boolean frame = dx == 0 || dx == 3 || dy == 0 || dy == 4;
+        BlockState state = block.getState();
+        state.setType(frame ? Material.OBSIDIAN : Material.NETHER_PORTAL);
+        blocks.add(state);
+      }
+    }
+    PortalCreateEvent event =
+        new PortalCreateEvent(blocks, world, player, PortalCreateEvent.CreateReason.NETHER_PAIR);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      sender.sendMessage("Making a portal for " + args[1] + " was refused");
+      return;
+    }
+    blocks.forEach(state -> state.update(true, false));
+    sender.sendMessage("Made a portal for " + args[1] + " at " + describe(base));
+  }
+
+  private void bucket(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Bucket of " + args[1] + " was refused: not online");
+      return;
+    }
+    Block block = loaded(player.getWorld(), args);
+    String what = args[5];
+    Block against = block.getRelative(BlockFace.DOWN);
+    org.bukkit.event.Cancellable event;
+    Material result;
+    if (what.equals("fill")) {
+      PlayerBucketFillEvent fill =
+          new PlayerBucketFillEvent(
+              player,
+              block,
+              block,
+              BlockFace.UP,
+              Material.BUCKET,
+              ItemStack.of(Material.BUCKET),
+              EquipmentSlot.HAND);
+      event = fill;
+      result = Material.AIR;
+      plugin.getServer().getPluginManager().callEvent(fill);
+    } else {
+      Material bucket = what.equals("lava") ? Material.LAVA_BUCKET : Material.WATER_BUCKET;
+      PlayerBucketEmptyEvent empty =
+          new PlayerBucketEmptyEvent(
+              player,
+              block,
+              against,
+              BlockFace.UP,
+              bucket,
+              ItemStack.of(bucket),
+              EquipmentSlot.HAND);
+      event = empty;
+      result = what.equals("lava") ? Material.LAVA : Material.WATER;
+      plugin.getServer().getPluginManager().callEvent(empty);
+    }
+    if (event.isCancelled()) {
+      sender.sendMessage(
+          "Bucket of " + what + " at " + describe(block.getLocation()) + " was refused");
+      return;
+    }
+    block.setType(result);
+    sender.sendMessage("Bucket of " + what + " at " + describe(block.getLocation()) + " went");
+  }
+
+  private void ignite(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Lighting as " + args[1] + " is impossible");
+      return;
+    }
+    Block block = loaded(player.getWorld(), args);
+    if (block.getType() == Material.TNT) {
+      TNTPrimeEvent event = new TNTPrimeEvent(block, TNTPrimeEvent.PrimeCause.PLAYER, player, null);
+      plugin.getServer().getPluginManager().callEvent(event);
+      if (event.isCancelled()) {
+        sender.sendMessage("Lighting the TNT at " + describe(block.getLocation()) + " was refused");
+        return;
+      }
+      block.setType(Material.AIR);
+      block.getWorld().spawn(block.getLocation().add(0.5, 0, 0.5), TNTPrimed.class);
+      sender.sendMessage("Lit the TNT at " + describe(block.getLocation()));
+      return;
+    }
+    BlockIgniteEvent event =
+        new BlockIgniteEvent(block, BlockIgniteEvent.IgniteCause.FLINT_AND_STEEL, player);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (event.isCancelled()) {
+      sender.sendMessage("Lighting " + describe(block.getLocation()) + " was refused");
+      return;
+    }
+    block.setType(Material.FIRE);
+    sender.sendMessage("Lit " + describe(block.getLocation()));
+  }
+
+  private void permit(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't permit " + args[1]);
+      return;
+    }
+    player.addAttachment(plugin, args[2], true);
+    sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  /** The position at three arguments from {@code from}, as given. */
+  private static Location at(World world, String[] args, int from) {
+    return new Location(
+        world,
+        Double.parseDouble(args[from]),
+        Double.parseDouble(args[from + 1]),
+        Double.parseDouble(args[from + 2]));
+  }
+
+  private @org.jspecify.annotations.Nullable World dimension(String id) {
+    NamespacedKey key = NamespacedKey.fromString(id);
+    return key == null ? null : plugin.getServer().getWorld(key);
   }
 
   /** The arguments with the type at index 2 dropped, so x y z are at 2 to 4 again. */
