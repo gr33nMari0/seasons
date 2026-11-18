@@ -81,6 +81,15 @@ public interface Players {
    */
   CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination);
 
+  /** How an online player is moving: riding, gliding, swimming, burning. */
+  Movement movement(PlayerId id);
+
+  /** Where an online player would respawn: their bed, anchor or set spawn point, if usable. */
+  Optional<Position> respawnPoint(PlayerId id);
+
+  /** The bed block an online player's respawn point is at, if it is a bed. */
+  Optional<Position> bed(PlayerId id);
+
   /** A title, a sound and fireworks for one player, such as at launch. */
   void celebrate(PlayerId id, Message title, Message subtitle);
 

@@ -50,8 +50,11 @@ firsts:
   rareItems: [heavy_core, totem_of_undying, trident, nether_star]
 
 hof:
-  # Where /hof works from: near a bed, no monsters near, no recent damage.
-  entry: { bedDistance: 3, anyBed: true, noHostiles: true, noDamageFor: 10s }
+  # Where /hof works from: within bedDistance of any bed (anyBed: false means only their own
+  # respawn bed), no monsters near, no damage in the last noDamageFor, on the ground (not riding,
+  # gliding, falling or swimming), not in lava, fire or powder snow. cooldown is the least time
+  # between visits, rateLimit between attempts.
+  entry: { bedDistance: 3, anyBed: true, noHostiles: true, noDamageFor: 10s, onGround: true, noHazards: true, cooldown: 0s, rateLimit: 5s }
   # Where /hof leave puts a player when their saved spot is unsafe, in order.
   returnSafety: { hostileRadius: 8, fallbacks: [bed, nearby, spawn] }
   # Damage immunity after every Seasons teleport.

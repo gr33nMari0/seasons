@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.player;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.AtomicFiles;
@@ -170,6 +171,17 @@ public final class PlayerStore {
       if (record.hallAdventure()) {
         node.node("hallAdventure").set(true);
       }
+      if (record.hallReturn().isPresent()) {
+        PlayerRecord.HallReturn back = record.hallReturn().get();
+        ConfigurationNode at = node.node("hallReturn");
+        at.node("dimension").set(back.at().dimension());
+        at.node("x").set(back.at().x());
+        at.node("y").set(back.at().y());
+        at.node("z").set(back.at().z());
+        at.node("yaw").set(back.at().yaw());
+        at.node("pitch").set(back.at().pitch());
+        at.node("gameMode").set(back.mode().name().toLowerCase(java.util.Locale.ROOT));
+      }
       StringWriter out = new StringWriter();
       GsonConfigurationLoader.builder()
           .indent(2)
@@ -239,7 +251,32 @@ public final class PlayerStore {
         furthest,
         pendingDisplays,
         destination.virtual() ? OptionalInt.empty() : OptionalInt.of(destination.getInt()),
-        node.node("hallAdventure").getBoolean(false));
+        node.node("hallAdventure").getBoolean(false),
+        hallReturn(node.node("hallReturn")));
+  }
+
+  private static Optional<PlayerRecord.HallReturn> hallReturn(ConfigurationNode node) {
+    if (node.virtual()) {
+      return Optional.empty();
+    }
+    GameMode mode;
+    try {
+      mode =
+          GameMode.valueOf(
+              node.node("gameMode").getString("survival").toUpperCase(java.util.Locale.ROOT));
+    } catch (IllegalArgumentException e) {
+      mode = GameMode.SURVIVAL;
+    }
+    return Optional.of(
+        new PlayerRecord.HallReturn(
+            new Position(
+                node.node("dimension").getString(FurthestBlock.OVERWORLD),
+                node.node("x").getDouble(),
+                node.node("y").getDouble(),
+                node.node("z").getDouble(),
+                node.node("yaw").getFloat(),
+                node.node("pitch").getFloat()),
+            mode));
   }
 
   private static void best(ConfigurationNode node, FurthestBlock.Best best) {

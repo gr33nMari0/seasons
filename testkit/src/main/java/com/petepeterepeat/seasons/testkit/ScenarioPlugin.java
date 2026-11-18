@@ -45,6 +45,7 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
   public void onEnable() {
     getServer().getPluginManager().registerEvents(this, this);
     ScenarioCommands commands = new ScenarioCommands(this);
+    getServer().getPluginManager().registerEvents(commands, this);
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,

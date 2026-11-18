@@ -22,6 +22,7 @@ import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -92,6 +93,7 @@ public final class Seasons implements SeasonsApi {
 
   private @Nullable ScheduledTask flusher;
   private @Nullable HallService hallService;
+  private @Nullable HallVisits visits;
   private @Nullable RolloverArchiver archiverForTests;
 
   /**
@@ -166,6 +168,9 @@ public final class Seasons implements SeasonsApi {
             announcer,
             RandomGenerator.getDefault());
     hallService = halls;
+    HallVisits visiting =
+        new HallVisits(platform, config, halls, players, immunity, clock, entry::spawn);
+    visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
     Optional<HallImporter> importer = Optional.empty();
@@ -225,6 +230,8 @@ public final class Seasons implements SeasonsApi {
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
+    visiting.bind(seasons::state);
+    visiting.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -279,13 +286,23 @@ public final class Seasons implements SeasonsApi {
             new SeasonCommands.Services(
                 archiver, unarchiver, recovery, players, furthest, login, archives, vaults, halls));
     commands = built;
-    platform.events().handle(new IntentRouter(hold, immunity, furthest, halls::decide));
+    platform
+        .events()
+        .handle(
+            new IntentRouter(
+                hold,
+                immunity,
+                furthest,
+                intent -> visiting.decide(intent).or(() -> halls.decide(intent)),
+                visiting::damaged));
     platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
     platform.commands().register(built.root());
     platform
         .commands()
-        .register(new HallCommands(platform, config, halls, renderer, importer, players).root());
+        .register(
+            new HallCommands(platform, config, halls, visiting, renderer, importer, players).root(),
+            List.of("halloffame"));
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -365,6 +382,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (hallService != null) {
       hallService.stop();
+    }
+    if (visits != null) {
+      visits.stop();
     }
     if (tripwire != null) {
       tripwire.stop();

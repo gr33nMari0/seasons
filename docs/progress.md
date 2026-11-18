@@ -5,8 +5,9 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Milestone | State | Scenarios passing |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; parts 3 and 4 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
-| M2 to M7 | Not started | — |
+| M1 Core rollover | Done (#8, #9, #10) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
+| M2 Hall protection | Part 1 (visits) in review (#11, branch `m2-hof-visits`) | A26, A27, A28, A29; A44 (sitting) |
+| M3 to M7 | Not started | — |
 
 ## M1
 
@@ -48,7 +49,7 @@ Movement spike (folded into A5, A6, A15): server-side teleports of bots work thr
 
 Part 3 seams, empty until then: `Galleries.lockAll`, `CellDirectory` (returns no cells, which is why archived players "stay"), `DisplayRenderer`, `HallBounds`.
 
-**Part 3: the Hall** (#10, branch `m1-hall-cells`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+**Part 3: the Hall** (#10). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
 
 | Scenario | Test |
 | --- | --- |
@@ -76,7 +77,7 @@ Not yet: the wand and `/hof stamp` (M5), access modes `bounds` and `gate`, view-
 
 Known limits: test bots stand still and send no movement packets, and can't place blocks themselves (ADR 0001); M2/M3's walking, flying and pearl scenarios need a Mineflayer that speaks the server's version.
 
-**Part 4: season firsts and the season card** (#10, branch `m1-hall-cells`). Passing end to end on Paper 26.3:
+**Part 4: season firsts and the season card** (#10). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
@@ -86,3 +87,21 @@ Known limits: test bots stand still and send no movement packets, and can't plac
 
 Built: season firsts for advancements, the Nether, the End, diamonds, elytras and `firsts.rareItems`, kept in `season.json`, broadcast and posted to Discord once each; `/season firsts`; the season card as a book from the plaque anchor; block counts with the statistics baseline; galleries left out at startup. Decisions: `docs/questions.md` 55 to 61. The dragon slayer first, awards and the egg wall wait for M4.
 
+
+## M2
+
+**Part 1: visiting the Hall** (#11, branch `m2-hof-visits`). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
+
+| Scenario | Test |
+| --- | --- |
+| A26 `/hof` within 3 blocks of any bed, a straw bed included, and by sneak-clicking a bed with an empty hand; refused with the reason with a monster near, after damage in the last 10 s, while falling or gliding, in lava, by the rate limit, and on a spot return safety would turn down (magma) | `a26-hof-entry.mjs`; unit: `HallVisitsTest#aBedNearbyTakes…`, `#eachCheckRefusesWithItsReasonInOrder`, `#sneakClickingABed…`, `#aSpotReturnSafetyWouldTurnDown…`, `#aFailedTeleportKeepsNoSavedSpot…` |
+| A27 leaving the Hall by walking, being pushed, falling or a pearl returns the player to their saved spot | `a27-sealing.mjs`: a real pearl; walking, pushing and falling are stand-ins (`/scenario move`, ADR 0003) that fire `PlayerMoveEvent` with no teleport event, differing only in where the player goes, since the server sees all three the same way; stepping out and straight back in one tick is caught only by the move event, which shows it is wired. Real client movement is unverified until Mineflayer speaks 26.3 (ADR 0001); unit: `HallVisitsTest#leavingTheBoundsByAnyRouteReturnsThem`, `#seasonsOwnTeleportsOutAreNotLeaving`, `#betweenSeasonsLeavingReturnsToTheHallEntry`, `#walkingInSavesWhereTheyCameFrom` |
+| A28 lava on the saved spot: the bed; the bed unsafe too: the nearest safe block within 8; nothing safe: the season spawn | `a28-return-fallbacks.mjs`; unit: `HallVisitsTest#anUnsafeSpotFallsBack…` |
+| A29 a creeper at the saved spot sends the player to their bed | `a29-creeper.mjs`; unit: `HallVisitsTest#aCreeperAtTheSavedSpot…` |
+| A44 (sitting half) a visitor sits on a cushion in someone else's cell, and on nothing else in the Hall | `a44-cushion-sit.mjs`; unit: `HallVisitsTest#insideNothingIsDropped…` |
+| The saved spot survives logging out and a restart; arrival immunity; the game mode they left in comes back | `m2-hof-restart.mjs` (two sessions); unit: `HallVisitsTest#theSavedSpotSurvivesARestart` |
+| No drops, pickups, pearls or chorus fruit inside; an exit anchor takes a visitor back; a pearl from outside can't land inside | `m2-hall-sealing.mjs` |
+
+Built: `/hof` (alias `/halloffame`), `/hof <season>`, `/hof <player>`, `/hof leave`, sneak-clicking a bed; the entry checks (`EntryChecks`) with the new `hof.entry` keys `onGround`, `noHazards`, `cooldown` and `rateLimit`; the saved return (position, dimension, yaw, pitch and game mode) in the player record, written before the teleport; return safety (`ReturnSafety`) with the bed, nearby and spawn fallbacks; arrival immunity; sealing (`HallVisits`): leaving the bounds by a move, a teleport or anything the 500 ms sweep notices returns the player, exit anchors, no drops, pickups, pearls, chorus fruit or riding, cushions as seats, and `seasons.hof.bypass`. Decisions: `docs/questions.md` 62 to 75 (73 to 75 from the review: `/hof` refuses a spot return safety would turn down, `/hof leave` only inside the Hall, stale saved spots dropped).
+
+Not yet (M2 part 2): cell containers and the lock (A22 to A24), walk-in cells and deny-by-default rules (A25), placing and breaking cushions (A44's other half; no-build zones with M3), reconciliation, the audit of blocked Hall interactions.

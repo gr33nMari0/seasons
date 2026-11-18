@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.Experience;
+import com.petepeterepeat.seasons.core.port.Movement;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
@@ -13,7 +14,10 @@ import com.petepeterepeat.seasons.core.port.Skin;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
@@ -42,6 +46,7 @@ final class PaperPlayers implements Players {
   private final Server server;
   private final PaperText text;
   private final NamespacedKey celebration;
+  private final Set<UUID> seasonsMoving = ConcurrentHashMap.newKeySet();
 
   /**
    * @param celebration the tag on launch fireworks, which {@link PaperEvents} keeps from hurting
@@ -230,6 +235,8 @@ final class PaperPlayers implements Players {
     player.setFireTicks(0);
     player.closeInventory();
     Location to = PaperPositions.toLocation(destination);
+    UUID uuid = player.getUniqueId();
+    seasonsMoving.add(uuid);
     return world
         .get()
         .getChunkAtAsync(to.getBlockX() >> 4, to.getBlockZ() >> 4, true)
@@ -237,12 +244,60 @@ final class PaperPlayers implements Players {
             player.isOnline()
                 ? player.teleportAsync(to, PlayerTeleportEvent.TeleportCause.PLUGIN)
                 : CompletableFuture.completedFuture(false))
+        .whenComplete((moved, failure) -> seasonsMoving.remove(uuid))
         .thenApply(moved -> {
           if (moved) {
             player.setFallDistance(0);
           }
           return moved;
         });
+  }
+
+  /** Whether Seasons is teleporting a player right now. */
+  boolean isSeasonsTeleport(Player player) {
+    return seasonsMoving.contains(player.getUniqueId());
+  }
+
+  @Override
+  public Movement movement(PlayerId id) {
+    return player(id)
+        .map(player ->
+            new Movement(
+                player.isInsideVehicle(),
+                player.isGliding(),
+                player.isSwimming() || player.isInWater(),
+                player.getFireTicks() > 0))
+        .orElse(Movement.STILL);
+  }
+
+  @Override
+  public Optional<Position> respawnPoint(PlayerId id) {
+    return player(id)
+        .flatMap(player -> Optional.ofNullable(player.getRespawnLocation()))
+        .map(PaperPositions::toPosition);
+  }
+
+  @Override
+  public Optional<Position> bed(PlayerId id) {
+    // The respawn location is where they would stand up, next to the bed: find the bed by it.
+    return player(id)
+        .flatMap(player -> Optional.ofNullable(player.getRespawnLocation()))
+        .flatMap(PaperPlayers::bedNear)
+        .map(PaperPositions::toPosition);
+  }
+
+  private static Optional<Location> bedNear(Location at) {
+    for (int dx = -2; dx <= 2; dx++) {
+      for (int dy = -1; dy <= 1; dy++) {
+        for (int dz = -2; dz <= 2; dz++) {
+          Location block = at.clone().add(dx, dy, dz);
+          if (PaperWorld.isBed(block.getBlock().getType())) {
+            return Optional.of(block.toBlockLocation());
+          }
+        }
+      }
+    }
+    return Optional.empty();
   }
 
   @Override
