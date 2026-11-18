@@ -560,7 +560,12 @@ public final class HallVisits {
         inside.add(player);
         Position from = lastOutside.remove(player);
         if (from != null && !bypasses(player)) {
-          enteredOtherwise(player, from);
+          if (platform.players().movement(player).riding()) {
+            // Ridden in, which no move event reports: back out the way they came.
+            moveOut(player, from);
+          } else {
+            enteredOtherwise(player, from);
+          }
         }
       } else if (!in && was) {
         leftHall(player);
@@ -571,6 +576,22 @@ public final class HallVisits {
     inside.retainAll(online);
     lastOutside.keySet().retainAll(online);
     moving.retainAll(online);
+  }
+
+  /** Puts a player who rode into the Hall back where they stood outside it, off their mount. */
+  private void moveOut(PlayerId player, Position from) {
+    moving.add(player);
+    var _ =
+        platform
+            .players()
+            .teleportSafely(player, from)
+            .whenCompleteAsync(
+                (moved, failure) -> {
+                  moving.remove(player);
+                  inside.remove(player);
+                  tell(player, "hof.sealed.no-riding");
+                },
+                serverThread);
   }
 
   /** Whether a player stands on an exit anchor, or on the block above one. */

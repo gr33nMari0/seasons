@@ -333,6 +333,13 @@ class HallVisitsTest {
     fake.player(sam).position = OUTSIDE;
     fake.player(sam).movement = new Movement(true, false, false, false);
     assertThat(decide(new Intent.Move(sam.id(), OUTSIDE, INSIDE))).isNotEqualTo(Decision.allow());
+
+    // Carried in on a mount, which no move event reports: the sweep puts them back out.
+    fake.tick();
+    fake.player(sam).position = INSIDE;
+    fake.tick();
+    assertThat(at(sam)).isEqualTo(OUTSIDE);
+    assertThat(lastHeard(sam)).isEqualTo("You can't ride in the Hall of Fame.");
   }
 
   @Test
