@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Reconciliation. When a Hall chunk loads, each cell's displays are checked against its records:
-// a figure moved out of its cell is drawn again, a stray tagged display is removed, and each
-// repair is audited. /hof reconcile does the same on demand, and puts back gear changed on a
+// a figure moved out of its cell is drawn again and the moved one removed, a stray tagged display
+// is removed, and each repair is audited. /hof reconcile does the same on demand, and puts back gear changed on a
 // figure. (Figures can't be killed: every hit on a display is cancelled, /kill's included.)
 import { assert } from '../lib/context.mjs'
 import { FLOOR, at, buildSeasonOneCell, selectorData } from '../lib/hall.mjs'
@@ -33,6 +33,9 @@ export default {
     await reloadChunks(ctx, admin, { x: X, z: Z }, { x: X + 16, z: Z + 10 }, { x: X, y: FLOOR, z: Z })
     await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'a figure is back in the cell once its chunk loads'))
     await ctx.eventually(async () => assert(!await ctx.holds(admin, 'entity @e[tag=stray]'), 'the stray display is removed'))
+    await ctx.eventually(async () => assert(!await ctx.holds(admin, `entity @e[type=minecraft:mannequin,x=${X + 21},y=${FLOOR},z=${Z + 3},dx=0,dy=1,dz=0]`), 'the figure moved out of its cell is removed'))
+    const figures = await ctx.command(admin, '/execute if entity @e[type=minecraft:mannequin]', /^Test passed\. Count: \d+$/)
+    assert(figures.endsWith('Count: 1'), `one figure is left: ${figures}`)
 
     await ctx.command(admin, `/item replace entity ${figure} weapon.mainhand with minecraft:dirt`, /^Replaced /)
     await ctx.command(admin, '/hof reconcile season-1', /^Reconciled season-1: 1 repair\.$/, 20_000)
@@ -43,7 +46,7 @@ export default {
     await ctx.command(admin, '/hof reconcile season-1', /^Reconciled season-1: 0 repairs\.$/, 20_000)
 
     const repairs = audit(ctx).filter((entry) => entry.action === 'reconcile' && entry.target === 'season-1:owner')
-    for (const what of [/drew the missing figure/, /removed a stray display season-1\/owner\/7\/plaque/, /fixed the figure's gear/]) {
+    for (const what of [/drew the missing figure/, /removed a stray display season-1\/owner\/1\/figure/, /removed a stray display season-1\/owner\/7\/plaque/, /fixed the figure's gear/]) {
       assert(repairs.some((entry) => what.test(entry.details)), `the repair "${what.source}" is audited: ${JSON.stringify(repairs)}`)
     }
   }

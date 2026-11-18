@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
@@ -43,6 +44,11 @@ public final class Reconciler {
 
   /** How far a display may stand from where it was drawn and still count as that display. */
   private static final double NEAR = 0.25;
+
+  /** Below and above any world's build height, for whole chunk columns. */
+  private static final int MIN_Y = -2048;
+
+  private static final int MAX_Y = 2047;
 
   private final Platform platform;
   private final HallService halls;
@@ -98,8 +104,12 @@ public final class Reconciler {
     tasks.clear();
   }
 
-  /** A chunk's entities loaded: queues every cell that touches it. */
+  /**
+   * A chunk's entities loaded: queues every cell that touches it, and next tick removes any display
+   * there that belongs to a cell somewhere else, such as a figure pushed out of the Hall.
+   */
   public void chunkLoaded(String dimension, int chunkX, int chunkZ) {
+    platform.scheduler().runGlobal(() -> strays(dimension, chunkX, chunkZ));
     for (Gallery gallery : halls.galleries()) {
       if (!gallery.dimension().equals(dimension)
           || gallery.bounds().isEmpty()
@@ -214,7 +224,16 @@ public final class Reconciler {
   int reconcile(HallService.CellRef ref, Optional<ArchiveRecord> record) {
     Bounds bounds = ref.cell().bounds().orElseThrow();
     Displays displays = platform.displays();
+    // Every display in the cell, and every one of the cell's own anywhere in its chunks, so one
+    // moved out of the cell is found and removed rather than left beside the one drawn again.
     List<Displays.Shown> shown = new ArrayList<>(displays.tagged(bounds.min(), bounds.max()));
+    Set<UUID> seen = new HashSet<>();
+    shown.forEach(display -> seen.add(display.id()));
+    for (Displays.Shown display : displays.tagged(columnsMin(bounds), columnsMax(bounds))) {
+      if (belongsTo(display, ref) && seen.add(display.id())) {
+        shown.add(display);
+      }
+    }
     List<HallRenderer.Planned> expected = record.map(r -> renderer.plan(ref, r)).orElse(List.of());
     int repairs = 0;
     for (HallRenderer.Planned planned : expected) {
@@ -277,6 +296,54 @@ public final class Reconciler {
       }
     }
     return Optional.empty();
+  }
+
+  /** Removes the displays in a loaded chunk whose cell's chunks are elsewhere. */
+  private void strays(String dimension, int chunkX, int chunkZ) {
+    if (!platform.world().isLoaded(Position.of(dimension, chunkX * 16.0, 0, chunkZ * 16.0))) {
+      return;
+    }
+    Position min = Position.of(dimension, chunkX * 16.0, MIN_Y, chunkZ * 16.0);
+    Position max = Position.of(dimension, chunkX * 16.0 + 15, MAX_Y, chunkZ * 16.0 + 15);
+    for (Displays.Shown display : platform.displays().tagged(min, max)) {
+      Optional<HallService.CellRef> ref =
+          DisplayTag.parse(display.tag()).flatMap(tag -> find(tag.gallery() + ":" + tag.cell()));
+      // A display of a cell that isn't known (a gallery file left out) is kept until it is.
+      if (ref.isEmpty()) {
+        continue;
+      }
+      Optional<Bounds> bounds = ref.get().cell().bounds();
+      boolean home =
+          bounds.isPresent()
+              && ref.get().gallery().dimension().equals(dimension)
+              && touches(bounds.get(), chunkX, chunkZ);
+      if (!home) {
+        platform.displays().remove(display.id());
+        repaired(ref.get(), "removed a stray display " + display.tag());
+      }
+    }
+  }
+
+  private static boolean belongsTo(Displays.Shown display, HallService.CellRef ref) {
+    return DisplayTag.parse(display.tag())
+        .filter(
+            tag -> tag.gallery().equals(ref.gallery().id()) && tag.cell().equals(ref.cell().id()))
+        .isPresent();
+  }
+
+  /** The lowest corner of the whole chunk columns a box touches. */
+  private static Position columnsMin(Bounds bounds) {
+    return Position.of(
+        bounds.dimension(), (bounds.minX() >> 4) * 16.0, MIN_Y, (bounds.minZ() >> 4) * 16.0);
+  }
+
+  /** The highest corner of the whole chunk columns a box touches. */
+  private static Position columnsMax(Bounds bounds) {
+    return Position.of(
+        bounds.dimension(),
+        (bounds.maxX() >> 4) * 16.0 + 15,
+        MAX_Y,
+        (bounds.maxZ() >> 4) * 16.0 + 15);
   }
 
   /** Whether every chunk a box touches is loaded. */
