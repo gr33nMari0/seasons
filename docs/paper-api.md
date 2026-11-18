@@ -87,7 +87,7 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 
 | API | For |
 | --- | --- |
-| `ServerLoadEvent`, `PlayerJoinEvent`, `Player#setOp`, `Server#getPort`, `Server#shutdown`, `PluginManager#isPluginEnabled` | Driving the scenario run |
+| `JavaPlugin#onLoad`, `ServerLoadEvent`, `PlayerJoinEvent`, `Player#setOp`, `Server#getPort`, `Server#shutdown`, `PluginManager#isPluginEnabled` | Driving the scenario run |
 | `Server#getWorlds`, `World#getWorldFolder` | Finding Seasons' data folder in the overworld |
 | `LifecycleEvents.COMMANDS`, `Commands#register(String, String, BasicCommand)`, `BasicCommand#execute`, `#permission`, `CommandSourceStack#getSender`, `ServicesManager#getRegistration`, `Server#getPlayerExact`, `#getOfflinePlayerIfCached`, `GlobalRegionScheduler#execute` | `/scenario` and the scenario hooks (ADR 0003) |
 | `Material#matchMaterial`, `Player#getWorld`, `World#getChunkAt`, `Chunk#addPluginChunkTicket`, `World#getBlockAt`, `Block#getState`, `#getRelative`, `#setType`, `new BlockPlaceEvent(...)`, `PluginManager#callEvent` | `/scenario place`: a bot's block placement, which the protocol translation drops (A15) |

@@ -32,6 +32,7 @@ const log = (line) => console.log(`[scenarios] ${line}`)
 const files = readdirSync(join(here, 'scenarios')).filter((f) => f.endsWith('.mjs')).sort()
 const wanted = positionals.length ? positionals : files.map((f) => f.replace(/\.mjs$/, ''))
 const results = []
+const startedAt = Date.now()
 
 for (const name of wanted) {
   if (!files.includes(`${name}.mjs`)) {
@@ -71,7 +72,8 @@ for (const name of wanted) {
 }
 
 mkdirSync(values.out, { recursive: true })
-writeFileSync(join(values.out, 'results.json'), JSON.stringify({ results }, null, 2))
+// startedAt and finishedAt (epoch ms) feed Gradle's scenario timing report.
+writeFileSync(join(values.out, 'results.json'), JSON.stringify({ startedAt, finishedAt: Date.now(), results }, null, 2))
 const failed = results.filter((r) => !r.passed).length
 log(`${results.length - failed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

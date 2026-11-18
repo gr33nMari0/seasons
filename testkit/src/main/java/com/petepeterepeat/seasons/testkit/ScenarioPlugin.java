@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.paper.PaperItemCodec;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.IOException;
+import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -41,8 +42,21 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
   private final Path nbt = Path.of(property("seasons.scenario.nbt"));
   private final String adminName = property("seasons.scenario.admin");
 
+  /**
+   * When this plugin was loaded and enabled, for the timing report: before and after the worlds.
+   */
+  private long loadedAt;
+
+  private long enabledAt;
+
+  @Override
+  public void onLoad() {
+    loadedAt = System.currentTimeMillis();
+  }
+
   @Override
   public void onEnable() {
+    enabledAt = System.currentTimeMillis();
     getServer().getPluginManager().registerEvents(this, this);
     ScenarioCommands commands = new ScenarioCommands(this);
     getServer().getPluginManager().registerEvents(commands, this);
@@ -78,6 +92,7 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
     if (event.getType() != ServerLoadEvent.LoadType.STARTUP) {
       return;
     }
+    writeBootTiming();
     Map<String, Object> result = new LinkedHashMap<>();
     List<String> failures = new ArrayList<>();
     checkSeasonsEnabled(failures);
@@ -94,6 +109,26 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
           result.put("runnerExit", exit);
           getServer().getGlobalRegionScheduler().execute(this, () -> finish(result, exit == 0));
         });
+  }
+
+  /**
+   * Writes when the JVM started, this plugin loaded and enabled, and the server finished loading,
+   * as epoch milliseconds, for Gradle's scenario timing report.
+   */
+  private void writeBootTiming() {
+    String json =
+        "{\"jvmStart\":%d,\"pluginLoad\":%d,\"pluginEnable\":%d,\"serverLoaded\":%d}"
+            .formatted(
+                ManagementFactory.getRuntimeMXBean().getStartTime(),
+                loadedAt,
+                enabledAt,
+                System.currentTimeMillis());
+    try {
+      Files.createDirectories(out);
+      Files.writeString(out.resolve("boot-timing.json"), json);
+    } catch (IOException e) {
+      getSLF4JLogger().error("Can't write boot-timing.json", e);
+    }
   }
 
   private void checkSeasonsEnabled(List<String> failures) {

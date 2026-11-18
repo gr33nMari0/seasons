@@ -97,6 +97,101 @@ val scenarioTls = tasks.register("scenarioTls") {
     }
 }
 
+// Boot, scenario and shutdown time for each session that ran, slowest first. Boot runs from the
+// task starting to the server having loaded (split at the JVM starting, the test plugin loading
+// before the worlds and enabling after them); scenario from then until the bot runner finished;
+// shutdown from then until the task ended. A session that halted on purpose has its runner
+// outlive the server, so its shutdown counts only what is left after the runner.
+data class TimingRow(
+    val version: String, val name: String, val session: Int, val start: Long, val end: Long,
+    val jvm: Long?, val load: Long?, val enable: Long?, val booted: Long?, val ran: Long?,
+    val passed: String,
+) {
+    val total get() = end - start
+    val boot get() = booted?.let { it - start }
+    val scenario get() = if (booted != null && ran != null) ran - booted else null
+    val shutdown get() = ran?.let { maxOf(0, end - it) }
+}
+
+val scenarioTimings = tasks.register("scenarioTimings") {
+    group = "verification"
+    description = "Writes build/reports/scenario-timings.md from the scenario sessions that ran."
+    val resultsRoot = layout.buildDirectory.dir("scenario-results")
+    val report = rootProject.layout.buildDirectory.file("reports/scenario-timings.md")
+    outputs.file(report)
+    outputs.upToDateWhen { false }
+    doLast {
+        fun num(map: Map<*, *>?, key: String) = (map?.get(key) as Number?)?.toLong()
+        fun json(f: File) = if (f.exists()) JsonSlurper().parse(f) as Map<*, *> else null
+        val rows = resultsRoot.get().asFile.listFiles().orEmpty().filter { it.isDirectory }.flatMap { versionDir ->
+            versionDir.listFiles().orEmpty().filter { it.isDirectory && it.name != "nbt" }.flatMap { scenarioDir ->
+                scenarioDir.listFiles().orEmpty().mapNotNull { dir ->
+                    val start = dir.resolve("task-start").takeIf { it.exists() }?.readText()?.toLong() ?: return@mapNotNull null
+                    val end = dir.resolve("task-end").takeIf { it.exists() }?.readText()?.toLong() ?: return@mapNotNull null
+                    val boot = json(dir.resolve("boot-timing.json"))
+                    val runner = json(dir.resolve("results.json"))
+                    val result = json(dir.resolve("result.json"))
+                    val halted = dir.resolve("halted.json").exists()
+                    val passed = when {
+                        result != null -> if (result["passed"] == true) "pass" else "FAIL"
+                        halted -> "halt"
+                        else -> "?"
+                    }
+                    TimingRow(
+                        versionDir.name, scenarioDir.name, dir.name.toInt(), start, end,
+                        num(boot, "jvmStart"), num(boot, "pluginLoad"), num(boot, "pluginEnable"),
+                        num(boot, "serverLoaded"), num(runner, "finishedAt"), passed,
+                    )
+                }
+            }
+        }.sortedByDescending { it.total }
+        fun s(ms: Long?) = ms?.let { "%.1f".format(it / 1000.0) } ?: "–"
+        fun sum(f: (TimingRow) -> Long?) = rows.sumOf { f(it) ?: 0L }
+        val wall = if (rows.isEmpty()) 0L else rows.maxOf { it.end } - rows.minOf { it.start }
+        val firstSessions = rows.filter { it.session == 1 }
+        val laterSessions = rows.filter { it.session > 1 }
+        fun avg(list: List<TimingRow>, f: (TimingRow) -> Long?) =
+            list.mapNotNull(f).takeIf { it.isNotEmpty() }?.average()?.toLong()
+        val text = buildString {
+            appendLine("# Scenario timings")
+            appendLine()
+            appendLine("Written by `./gradlew scenarioTest` (task `scenarioTimings`). Seconds; slowest session first.")
+            appendLine()
+            appendLine("| | Sessions | Wall clock | Boot | Scenario | Shutdown | Between tasks |")
+            appendLine("| --- | --- | --- | --- | --- | --- | --- |")
+            appendLine(
+                "| Total | ${rows.size} | ${s(wall)} | ${s(sum { it.boot })} | ${s(sum { it.scenario })} | " +
+                    "${s(sum { it.shutdown })} | ${s(wall - sum { it.total })} |",
+            )
+            appendLine()
+            appendLine("Boot, averaged: Gradle to JVM start, JVM start to the test plugin loading (Paper's own start), loading to enabling (the worlds, then Seasons and Seasons Web enabling), enabling to the server having loaded.")
+            appendLine()
+            appendLine("| Sessions | Count | Gradle → JVM | JVM → load | Worlds, plugins | → loaded | Boot |")
+            appendLine("| --- | --- | --- | --- | --- | --- | --- |")
+            for ((label, list) in listOf("First (new world)" to firstSessions, "Later (same world)" to laterSessions)) {
+                appendLine(
+                    "| $label | ${list.size} | ${s(avg(list) { r -> r.jvm?.let { it - r.start } })} | " +
+                        "${s(avg(list) { r -> r.load?.let { l -> r.jvm?.let { l - it } } })} | " +
+                        "${s(avg(list) { r -> r.enable?.let { e -> r.load?.let { e - it } } })} | " +
+                        "${s(avg(list) { r -> r.booted?.let { b -> r.enable?.let { b - it } } })} | " +
+                        "${s(avg(list) { it.boot })} |",
+                )
+            }
+            appendLine()
+            appendLine("| Version | Scenario | Session | Result | Total | Boot | Scenario | Shutdown |")
+            appendLine("| --- | --- | --- | --- | --- | --- | --- | --- |")
+            for (r in rows) {
+                appendLine(
+                    "| ${r.version} | ${r.name} | ${r.session} | ${r.passed} | ${s(r.total)} | ${s(r.boot)} | " +
+                        "${s(r.scenario)} | ${s(r.shutdown)} |",
+                )
+            }
+        }
+        report.get().asFile.apply { parentFile.mkdirs() }.writeText(text)
+        logger.lifecycle("Scenario timings: ${report.get().asFile}")
+    }
+}
+
 val scenarioServers = minecraftVersions.map { version ->
     val runDir = layout.buildDirectory.dir("scenario/$version")
     val resultsDir = layout.buildDirectory.dir("scenario-results/$version")
@@ -148,6 +243,8 @@ val scenarioServers = minecraftVersions.map { version ->
                 doFirst {
                     val run = runDir.get().asFile
                     outDir.get().asFile.deleteRecursively()
+                    outDir.get().asFile.mkdirs()
+                    outDir.get().file("task-start").asFile.writeText(System.currentTimeMillis().toString())
                     run.mkdirs()
                     if (session == 1) {
                         // A fresh world and fresh Seasons files; the downloaded jars and libraries are kept.
@@ -172,6 +269,7 @@ val scenarioServers = minecraftVersions.map { version ->
                     )
                 }
                 doLast {
+                    outDir.get().file("task-end").asFile.writeText(System.currentTimeMillis().toString())
                     val result = outDir.get().file("result.json").asFile
                     val halted = outDir.get().file("halted.json").asFile
                     if (!result.exists() && halted.exists()) {
@@ -206,6 +304,7 @@ val scenarioServers = minecraftVersions.map { version ->
     }
     // Scenarios share one run directory per version, so they run one after another.
     tasksForVersion.zipWithNext { earlier, later -> later.configure { mustRunAfter(earlier) } }
+    tasksForVersion.forEach { it.configure { finalizedBy(scenarioTimings) } }
     Triple(version, tasksForVersion, nbtDir)
 }
 
