@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A34. In a no-build zone a player can walk in, open chests and take normal items, and use a farm's
 // button, but can't place, break, use buckets or light TNT, and an explosion there breaks nothing.
-// A44's other half: nobody places or breaks a cushion in a no-build zone. Placing, breaking,
+// A44's other half: nobody places or breaks a cushion in a no-build zone; nor hits an armour stand
+// or knocks the item out of a frame, which are real hits. Placing, breaking,
 // buckets and lighting are the test plugin's stand-ins (docs/adr/0001, ADR 0003).
 import { SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
@@ -25,6 +26,9 @@ export default {
     await setblock(710, FLOOR, 710, 'minecraft:tnt')
     await setblock(712, FLOOR, 712, 'minecraft:stone')
     await ctx.command(admin, `/summon minecraft:cushion 714.5 ${FLOOR} 704.5`, /^Summoned /)
+    await ctx.command(admin, `/summon minecraft:armor_stand 716.5 ${FLOOR} 706.5 {equipment:{head:{id:"minecraft:iron_helmet",count:1}}}`, /^Summoned /)
+    await setblock(716, FLOOR, 709, 'minecraft:stone')
+    await ctx.command(admin, `/summon minecraft:item_frame 716.5 ${FLOOR + 1} 709.5 {Facing:1b,Item:{id:"minecraft:diamond",count:1}}`, /^Summoned /)
 
     // Walking in is fine.
     await standAt(ctx, admin, 'Pat', { x: 697, y: FLOOR, z: 705 })
@@ -57,6 +61,16 @@ export default {
     await standAt(ctx, admin, 'Pat', { x: 713, y: FLOOR, z: 704 })
     await hit(ctx, admin, 'Pat', 'minecraft:cushion', { x: 714, y: FLOOR, z: 704 })
     assert(await entityAt(ctx, admin, 'minecraft:cushion', { x: 714, y: FLOOR, z: 704 }), 'the cushion is still there')
+
+    // Armour stands and item frames: hits refused, so the frame keeps its diamond.
+    await standAt(ctx, admin, 'Pat', { x: 715, y: FLOOR, z: 707 })
+    told = ctx.waitForMessages(pat, [NO_BUILD, NO_BUILD], 10 * SECOND)
+    await hit(ctx, admin, 'Pat', 'minecraft:armor_stand', { x: 716, y: FLOOR, z: 706 })
+    await standAt(ctx, admin, 'Pat', { x: 715, y: FLOOR, z: 709 })
+    await hit(ctx, admin, 'Pat', 'minecraft:item_frame', { x: 716, y: FLOOR + 1, z: 709 })
+    await told
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:armor_stand,nbt={equipment:{head:{id:"minecraft:iron_helmet"}}}]'), 'the armour stand keeps its helmet')
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:item_frame,nbt={Item:{id:"minecraft:diamond"}}]'), 'the frame keeps its diamond')
 
     // An explosion breaks nothing.
     await standAt(ctx, admin, 'Pat', { x: 690, y: FLOOR, z: 690 })

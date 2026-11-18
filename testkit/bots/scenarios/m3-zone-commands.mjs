@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The /season zone commands: add (a cylinder where the admin stands, with --max-y, and a box from
 // two corners), list, mode, after, remove, and /season unlock and lock for one zone; each refusal;
-// the season file they write, which a hand edit changes and /season reload picks up; and a broken
-// zone that reload refuses.
+// the season file they write, which a hand edit changes and /season reload picks up; a broken
+// zone, and one in a dimension the server doesn't have, that reload refuses; and the audit log,
+// which has every change with who made it.
 import { SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
@@ -70,6 +71,10 @@ export default {
     ].join('\n'))
     await ctx.command(admin, '/season reload', [/^Reload failed/, /seasons\/3\.yml/])
     assert(/now block\.$/.test((await zoneList(ctx, admin, ['base'])).base), 'the zones stay as they were')
+    // So is a zone in a dimension the server doesn't have, which would lock nothing.
+    const typo = 'typo: { dimension: minecraft:the_neter, shape: { cylinder: { center: [0, 0], radius: 100 } } }'
+    ctx.writeFile(SEASON_FILE, good.replace(/zones:\n( +)/, (line, indent) => `zones:\n${indent}${typo}\n${indent}`))
+    await ctx.command(admin, '/season reload', [/^Reload failed/, /seasons\/3\.yml.*zones\.typo\.dimension.*minecraft:the_neter/])
     ctx.writeFile(SEASON_FILE, good)
     await ctx.command(admin, '/season reload', /^Reloaded /)
     await forceload(ctx, admin, BASE, 10)
@@ -77,5 +82,19 @@ export default {
     const told = ctx.waitForMessages(pat, LOCKED('base'), 10 * SECOND)
     await move(ctx, admin, 'Pat', middle(BASE), 'walk')
     await told
+
+    // Every change is in the audit log, with who made it.
+    const audit = ctx.readFile(`world/dimensions/minecraft/overworld/seasons/audit/${new Date().toISOString().slice(0, 7)}.jsonl`)
+    for (const entry of [
+      /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.tower","result":"ok","details":"none -> a cylinder /,
+      /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.mine\.mode","result":"ok","details":"block -> announce"/,
+      /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.mine\.afterUnlock","result":"ok","details":"off -> no-build"/,
+      /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.tower","result":"ok","details":"a cylinder [^"]* -> none"/,
+      /"actor":"SeasonsAdmin","action":"zone-unlock","target":"base"/,
+      /"actor":"SeasonsAdmin","action":"zone-lock","target":"base"/,
+      /"actor":"Pat","action":"zone-blocked","target":"base","result":"denied","details":"walk in at /
+    ]) {
+      assert(entry.test(audit), `the audit log has ${entry}: ${audit}`)
+    }
   }
 }

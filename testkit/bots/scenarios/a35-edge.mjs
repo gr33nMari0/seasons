@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A35. Before Homecoming, a player standing at the edge of a blocked zone can't break, place, open
-// or use a bucket on anything inside it, or use its blocks; and pistons, hoppers, liquids and
+// or use a bucket on anything inside it, or use its blocks, hit an armour stand or a frame's item
+// there, or pick up an item lying just inside; and pistons, hoppers, liquids and
 // explosions can't cross the edge. Each world rule has a control just outside the zone that does
 // change, so a rule can't pass by never being tested. A holder of seasons.zone.bypass may.
 import { SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR, blockItems } from '../lib/hall.mjs'
-import { clickBlock, openContainer } from '../lib/protection.mjs'
+import { clickBlock, hit, openContainer } from '../lib/protection.mjs'
 import { standAt } from '../lib/visits.mjs'
-import { EDGE, box, breakBlock, bucket, launchFrontier, permit, place } from '../lib/zones.mjs'
+import { EDGE, box, breakBlock, bucket, carried, launchFrontier, permit, place } from '../lib/zones.mjs'
 
 // The vault zone spans x 600 to 610, z 600 to 610, from the floor (y -60) up; the ground under it
 // (y -61) is outside it.
@@ -37,6 +38,28 @@ export default {
     assert(await is(600, FLOOR, 606, 'minecraft:stone') && await is(600, FLOOR, 607, 'minecraft:air') && await is(600, FLOOR, 608, 'minecraft:air'), 'nothing inside changed')
     assert(await is(600, FLOOR, 603, 'minecraft:lever[powered=false]'), 'the lever is still off')
     assert(await place(ctx, admin, 'Pat', { x: 598, y: FLOOR, z: 607 }, 'minecraft:stone'), 'placing outside is fine')
+
+    // Entities inside can't be hit from the edge: the stand keeps its helmet, the frame its emerald.
+    await ctx.command(admin, `/summon minecraft:armor_stand 600.5 ${FLOOR} 609.5 {equipment:{head:{id:"minecraft:iron_helmet",count:1}}}`, /^Summoned /)
+    await setblock(600, FLOOR, 604, 'minecraft:stone')
+    await ctx.command(admin, `/summon minecraft:item_frame 600.5 ${FLOOR + 1} 604.5 {Facing:1b,Item:{id:"minecraft:emerald",count:1}}`, /^Summoned /)
+    const hits = ctx.waitForMessages(pat, [EDGE('vault'), EDGE('vault')], 10 * SECOND)
+    await standAt(ctx, admin, 'Pat', { x: 599, y: FLOOR, z: 609 })
+    await hit(ctx, admin, 'Pat', 'minecraft:armor_stand', { x: 600, y: FLOOR, z: 609 })
+    await standAt(ctx, admin, 'Pat', { x: 599, y: FLOOR, z: 604 })
+    await hit(ctx, admin, 'Pat', 'minecraft:item_frame', { x: 600, y: FLOOR + 1, z: 604 })
+    await hits
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:armor_stand,nbt={equipment:{head:{id:"minecraft:iron_helmet"}}}]'), 'the armour stand keeps its helmet')
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:item_frame,nbt={Item:{id:"minecraft:emerald"}}]'), 'the frame keeps its emerald')
+
+    // An item lying just inside isn't picked up from the edge; one just outside is.
+    await standAt(ctx, admin, 'Pat', { x: 599, y: FLOOR, z: 607 })
+    await ctx.command(admin, `/summon minecraft:item 600.25 ${FLOOR} 607.5 {Item:{id:"minecraft:gold_nugget",count:1},PickupDelay:0s,Motion:[0.0,0.0,0.0]}`, /^Summoned /)
+    await ctx.command(admin, `/summon minecraft:item 598.75 ${FLOOR} 607.5 {Item:{id:"minecraft:iron_nugget",count:1},PickupDelay:0s,Motion:[0.0,0.0,0.0]}`, /^Summoned /)
+    await ctx.eventually(async () => assert(await carried(ctx, admin, 'Pat', 'minecraft:iron_nugget') === 1, 'Pat picks up the item outside'), 5 * SECOND)
+    await sleep(2 * SECOND)
+    assert(await carried(ctx, admin, 'Pat', 'minecraft:gold_nugget') === 0, 'Pat doesn\'t pick up the item inside')
+    assert(await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:gold_nugget"}}]'), 'the item inside is still there')
     await standAt(ctx, admin, 'Pat', { x: 560, y: FLOOR, z: 560 })
 
     // A piston outside pushing a block in, and one pushing outside only.

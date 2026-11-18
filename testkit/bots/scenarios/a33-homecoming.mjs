@@ -2,7 +2,8 @@
 // @sessions 2
 // A33. /season unlock homecoming switches every zone to its afterUnlock mode in one tick (off by
 // default, so players can build in old bases), with a title, a broadcast and a Discord post, and
-// fireworks at the spawn. It happens once: a second unlock is refused, and a restart neither
+// fireworks at the spawn; a zone locked again on its own before it opens with the rest. It happens
+// once: a second unlock is refused, and a restart neither
 // relocks anything nor repeats the fanfare. That every zone switches in the same tick is a unit
 // test (ZonesTest); here /season zone list shows each zone's mode in force.
 import { SECOND, assert } from '../lib/context.mjs'
@@ -25,6 +26,9 @@ export default {
       await box(ctx, admin, 'farm', FARM.from, FARM.to)
       await ctx.command(admin, '/season zone after farm no-build', /^Zone farm becomes no-build once it unlocks\.$/)
 
+      // The base, unlocked and locked again on its own, still opens at Homecoming.
+      await ctx.command(admin, '/season unlock base', /^Zone base is unlocked: it is off now\.$/)
+      await ctx.command(admin, '/season lock base', /^Zone base is locked again: it is block now\.$/)
       let zones = await zoneList(ctx, admin, ['base', 'farm'])
       assert(/now block\.$/.test(zones.base) && /now block\.$/.test(zones.farm), `both zones are locked: ${JSON.stringify(zones)}`)
 
