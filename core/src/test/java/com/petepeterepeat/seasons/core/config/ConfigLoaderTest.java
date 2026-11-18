@@ -220,6 +220,39 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void aSpawnInsideAZoneLoadsWithAWarningAndABrokenZoneDoesNot() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        spawn: { dimension: minecraft:overworld, pos: [3000, -60, 0] }
+        zones:
+          pen: { dimension: minecraft:overworld, shape: { cylinder: { center: [3000, 0], radius: 20 } } }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.snapshot().get().season(3).orElseThrow().zones()).containsKey("pen");
+    assertThat(result.warnings())
+        .containsExactly(
+            "seasons/3.yml: Season 3's spawn at 3000, -60, 0 is inside zone pen; /season launch is"
+                + " refused until one of them moves");
+
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        "schema-version: 1\nseason: 3\nzones:\n  pen: { shape: { cylinder: { center: [0, 0] } } }\n");
+    assertThat(loader(Map.of()).load().problems())
+        .singleElement()
+        .satisfies(problem -> {
+          assertThat(problem.file()).isEqualTo("seasons/3.yml");
+          assertThat(problem.path()).contains("zones.pen.shape.cylinder.radius");
+        });
+  }
+
+  @Test
   void durationsRoundTrip() {
     for (String text : List.of("7d", "1d", "1h30m", "10m", "10s", "0")) {
       assertThat(Durations.format(Durations.parse(text))).isEqualTo(text);

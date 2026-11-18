@@ -87,6 +87,23 @@ class SeasonStoreTest {
   }
 
   @Test
+  void zonesUnlockedOnTheirOwnAndMilestonesRoundTripAndEndWithTheSeason() throws IOException {
+    PlayerId alex = new PlayerId(UUID.randomUUID());
+    SeasonState state =
+        SeasonState.start(3, Stage.FRONTIER, Optional.of(NOW))
+            .withZones(
+                ZoneState.NONE
+                    .with("tower", true)
+                    .with("base", false)
+                    .withDragonKilled()
+                    .withReachedEnd(alex));
+    store().save(state).join();
+
+    assertThat(store().load()).contains(state);
+    assertThat(state.next(NOW).zones()).isEqualTo(ZoneState.NONE);
+  }
+
+  @Test
   void writesAFormatVersion() throws IOException {
     store().save(SeasonState.start(2, Stage.OPEN, Optional.empty())).join();
 
