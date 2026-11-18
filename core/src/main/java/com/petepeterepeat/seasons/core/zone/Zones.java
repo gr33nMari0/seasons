@@ -274,7 +274,11 @@ public final class Zones implements ZoneGuard, Milestones {
       case Intent.Bucket bucket -> change(player, bucket.block(), "empty", bucket.bucket(), true);
       case Intent.UseBlock use -> change(player, use.block(), "use", block(use.block()), false);
       case Intent.OpenContainer open ->
-          change(player, open.blocks().getFirst(), "open", block(open.blocks().getFirst()), false);
+          // Either half of a double chest inside a zone keeps both closed.
+          open.blocks().stream()
+              .map(at -> change(player, at, "open", block(at), false))
+              .flatMap(Optional::stream)
+              .findFirst();
       case Intent.JoinContainers join ->
           join.blocks().stream()
               .map(at -> change(player, at, "join", block(at), true))
