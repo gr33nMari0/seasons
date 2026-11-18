@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Reconciliation. When a Hall chunk loads, each cell's displays are checked against its records:
-// a killed figure is drawn again, a stray tagged display is removed, and each repair is audited.
-// /hof reconcile does the same on demand, and puts back gear changed on a figure.
+// a figure moved out of its cell is drawn again, a stray tagged display is removed, and each
+// repair is audited. /hof reconcile does the same on demand, and puts back gear changed on a
+// figure. (Figures can't be killed: every hit on a display is cancelled, /kill's included.)
 import { assert } from '../lib/context.mjs'
 import { FLOOR, at, buildSeasonOneCell, selectorData } from '../lib/hall.mjs'
 import { audit, reloadChunks } from '../lib/protection.mjs'
@@ -25,19 +26,19 @@ export default {
     const figure = at('minecraft:mannequin', built.stand)
     await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'the import drew the figure'))
 
-    await ctx.command(admin, '/kill @e[type=minecraft:mannequin]', /^Killed /)
+    await ctx.command(admin, `/tp @e[type=minecraft:mannequin] ${X + 21} ${FLOOR} ${Z + 3}`, /^Teleported /)
     await ctx.command(admin, `/summon minecraft:text_display ${X + 3} ${FLOOR + 1} ${Z + 3} {Tags:["stray"],BukkitValues:{"seasons:display":"season-1/owner/7/plaque"}}`, /^Summoned /)
-    assert(!await ctx.holds(admin, `entity ${figure}`), 'the figure is gone')
+    assert(!await ctx.holds(admin, `entity ${figure}`), 'the figure has left its cell')
 
     await reloadChunks(ctx, admin, { x: X, z: Z }, { x: X + 16, z: Z + 10 }, { x: X, y: FLOOR, z: Z })
-    await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'the figure is back once its chunk loads'))
+    await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'a figure is back in the cell once its chunk loads'))
     await ctx.eventually(async () => assert(!await ctx.holds(admin, 'entity @e[tag=stray]'), 'the stray display is removed'))
 
-    await ctx.command(admin, `/item replace entity ${figure} armor.chest with minecraft:dirt`, /^Replaced /)
+    await ctx.command(admin, `/item replace entity ${figure} weapon.mainhand with minecraft:dirt`, /^Replaced /)
     await ctx.command(admin, '/hof reconcile season-1', /^Reconciled season-1: 1 repair\.$/, 20_000)
     await ctx.eventually(async () => {
-      const chest = await selectorData(ctx, admin, figure, 'equipment.chest.id')
-      assert(chest === '"minecraft:iron_chestplate"', `the figure wears its own chestplate again: ${chest}`)
+      const held = await selectorData(ctx, admin, figure, 'equipment.mainhand.id')
+      assert(held === '"minecraft:diamond_sword"', `the figure holds its own sword again: ${held}`)
     })
     await ctx.command(admin, '/hof reconcile season-1', /^Reconciled season-1: 0 repairs\.$/, 20_000)
 

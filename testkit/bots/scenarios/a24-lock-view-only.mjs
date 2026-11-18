@@ -3,7 +3,7 @@
 // A24. After the lock, the owner's chest opens as a view-only copy for everyone, the owner
 // included, and still does after a restart. (decorating.afterArchive is 0 here, so the cell locks
 // at the end and stays locked.)
-import { assert } from '../lib/context.mjs'
+import { SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR, blockItems, breakBlock, buildGallery, cellOf, gameMode, inside, layout, place, visit } from '../lib/hall.mjs'
 import { expectViewOnly, openContainer, openWindow } from '../lib/protection.mjs'
 
@@ -52,6 +52,8 @@ export default {
       const stocked = await blockItems(ctx, admin, chest)
       assert(/diamond/.test(stocked ?? ''), 'the chest kept its diamonds through the restart')
       await ctx.eventually(async () => assert(inside(cell, await ctx.position(admin, 'Owner')), 'the owner is in their cell'))
+      // A joining player is held until login catch-up has run, a tick or two (questions 34).
+      await sleep(SECOND)
       assert(await openContainer(ctx, admin, 'Owner', chest) === 'copy', 'after a restart it is still a copy')
       await expectViewOnly(ctx, admin, owner, chest)
       assert(await blockItems(ctx, admin, chest) === stocked, 'and nothing left it')

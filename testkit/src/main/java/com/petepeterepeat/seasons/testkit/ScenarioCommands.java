@@ -496,20 +496,36 @@ final class ScenarioCommands implements BasicCommand, Listener {
     // What the game does next when the click goes through: a container opens its inventory.
     if (event.useInteractedBlock() != org.bukkit.event.Event.Result.DENY
         && block.getState() instanceof Container container
-        && player.getOpenInventory().getType() == InventoryType.CRAFTING) {
+        && ownInventoryOnly(player)) {
       player.openInventory(container.getInventory());
     }
-    InventoryView view = player.getOpenInventory();
-    String opened;
-    if (view.getType() == InventoryType.CRAFTING) {
-      opened = "nothing";
-    } else if (view.getTopInventory().getHolder(false) instanceof BlockInventoryHolder
-        || view.getTopInventory().getHolder(false) instanceof DoubleChest) {
-      opened = "the real one";
-    } else {
-      opened = "a copy";
-    }
-    sender.sendMessage("Opened " + block.getType().getKey() + " as " + args[1] + ": " + opened);
+    // A plugin may open something else instead a tick later, as Seasons opens a view-only copy.
+    String type = block.getType().getKey().toString();
+    player
+        .getScheduler()
+        .runDelayed(
+            plugin,
+            task -> {
+              InventoryView view = player.getOpenInventory();
+              String opened;
+              if (ownInventoryOnly(player)) {
+                opened = "nothing";
+              } else if (view.getTopInventory().getHolder(false) instanceof BlockInventoryHolder
+                  || view.getTopInventory().getHolder(false) instanceof DoubleChest) {
+                opened = "the real one";
+              } else {
+                opened = "a copy";
+              }
+              sender.sendMessage("Opened " + type + " as " + args[1] + ": " + opened);
+            },
+            null,
+            3);
+  }
+
+  /** Whether a player has no menu open: only their own inventory, survival's or creative's. */
+  private static boolean ownInventoryOnly(Player player) {
+    InventoryType type = player.getOpenInventory().getType();
+    return type == InventoryType.CRAFTING || type == InventoryType.CREATIVE;
   }
 
   private void placeEntity(CommandSender sender, String[] args) {
