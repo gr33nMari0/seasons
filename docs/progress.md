@@ -5,7 +5,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Milestone | State | Scenarios passing |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; part 3 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53). A13 and A14 moved to M4 (pending confirmation, questions 27). `/season config get|set` comes with M3 (questions 54) |
+| M1 Core rollover | Parts 1 (#8) and 2 (#9) done; parts 3 and 4 in review (#10, branch `m1-hall-cells`) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
 | M2 to M7 | Not started | — |
 
 ## M1
@@ -40,7 +40,7 @@ Built: the state machine (Active with Frontier and Open, Ending as countdown the
 | `/season archive`, `spawn set`, `reprocess` | `m1-archive-commands.mjs` (two sessions) |
 | Review fixes: nothing leaves the player before the clear (cursor and grid), archive files never overwritten, unarchive never re-archived into an older season, launch waits for unarchived players, players held at login | unit: `ArchivingTest#aCrashAtAnyStep…` (with a cursor item), `#aFailedWriteLeavesEverything…`, `#aJoiningPlayerIsHeld…`, `#unarchivingDuringALaterSeason…`, `#unarchivingAnOlderSeason…`, `#anArchiveFileIsMovedAside…`, `PaperPortsTest#settling…` |
 
-A13 (firsts) and A14 (season card): moved to M4 (pending confirmation), see `docs/questions.md` 27. Not failing; not part of M1.
+A13 (firsts) and A14 (season card): built in part 4, below (questions 27).
 
 Built: `Archiver` and `Unarchiver` with journal recovery at every step, archive and vault files, `/season launch`, `spawn set`, `archive`, `unarchive`, `reprocess`, login catch-up, season entry (safe teleport, immunity, celebration, statistics baseline), the furthest-block tracker, the paged archive view, a minimal tripwire (pickup and inventory-close checks, a 30-second sweep; delete, audit, warn; the Discord webhook waits for M4), and the scenario hooks (ADR 0003). `StubArchiver` is gone.
 
@@ -75,3 +75,14 @@ Review fixes: a cell changed between the import's scan and its clear stops that 
 Not yet: the wand and `/hof stamp` (M5), access modes `bounds` and `gate`, view-only copies of decorative containers, visiting the Hall (`/hof`, beds), `/hof claim`.
 
 Known limits: test bots stand still and send no movement packets, and can't place blocks themselves (ADR 0001); M2/M3's walking, flying and pearl scenarios need a Mineflayer that speaks the server's version.
+
+**Part 4: season firsts and the season card** (#10, branch `m1-hall-cells`). Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A13 the first to an advancement is broadcast and posted to Discord, the second isn't; the Nether and a rare item are firsts too; `/season firsts` lists them | `a13-firsts.mjs`; unit: `FirstsAndCardTest#theFirstToEachMilestone…`, `#nothingIsAFirstOnceTheSeasonHasEnded`, `SeasonStoreTest#seasonFirstsRoundTrip…` |
+| A14 the season card: highlights, firsts, furthest block and every General-tab statistic as the season's difference; it opens as a book from the plaque anchor | `a14-season-card.mjs` (card lines through the scenario hooks, ADR 0003); unit: `FirstsAndCardTest#theSeasonCardHas…`, `#theCardOpensFromThePlaqueAnchorAsABook` |
+| A broken gallery file at startup is left out alone; status and joining admins are told; end and launch wait for a reload that fixes it | `m1-gallery-left-out.mjs` (two sessions); unit: `FirstsAndCardTest#aBrokenGalleryIsLeftOut…`, `#aGalleryBrokenDuringTheIntermission…` |
+
+Built: season firsts for advancements, the Nether, the End, diamonds, elytras and `firsts.rareItems`, kept in `season.json`, broadcast and posted to Discord once each; `/season firsts`; the season card as a book from the plaque anchor; block counts with the statistics baseline; galleries left out at startup. Decisions: `docs/questions.md` 55 to 61. The dragon slayer first, awards and the egg wall wait for M4.
+
