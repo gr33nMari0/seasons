@@ -164,11 +164,11 @@ final class ScenarioWorld implements Listener {
 
   private void clearScoreboard() {
     Scoreboard board = server.getScoreboardManager().getMainScoreboard();
-    board.getObjectives().forEach(Objective::unregister);
-    board.getTeams().forEach(Team::unregister);
     for (String entry : board.getEntries()) {
       board.resetScores(entry);
     }
+    board.getObjectives().forEach(Objective::unregister);
+    board.getTeams().forEach(Team::unregister);
   }
 
   private void restoreWorlds(List<String> unrestored) {
@@ -509,7 +509,7 @@ final class ScenarioWorld implements Listener {
     print.put(
         "scoreboard.teams",
         board.getTeams().stream().map(Team::getName).sorted().collect(Collectors.joining(",")));
-    print.put("scoreboard.entries", Integer.toString(board.getEntries().size()));
+    print.put("scoreboard.entries", String.join(",", new java.util.TreeSet<>(board.getEntries())));
     List<String> bars = new ArrayList<>();
     server.getBossBars().forEachRemaining(bar -> bars.add(bar.getKey().toString()));
     print.put("bossBars", String.join(",", bars));
