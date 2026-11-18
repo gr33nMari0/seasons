@@ -281,6 +281,68 @@ class HallVisitsTest {
   }
 
   @Test
+  void aSpotReturnSafetyWouldTurnDownIsTurnedDownAtTheStart() {
+    // Magma underfoot: coming back would mean their bed, a free teleport home.
+    fake.setBlock(100, 63, 100, FakePlatform.MAGMA);
+    hof(alex, "/hof");
+    assertThat(lastHeard(alex)).isEqualTo("This spot isn't safe to come back to (magma).");
+    assertThat(at(alex)).isEqualTo(HOME);
+    fake.blocks.remove(List.of(100, 63, 100));
+
+    // A monster 7 blocks below: outside vanilla's sleeping box, inside the return radius.
+    fake.monsters.add(Position.of(OVERWORLD, 100.5, 57, 100.5));
+    hof(alex, "/hof");
+    assertThat(lastHeard(alex))
+        .isEqualTo("This spot isn't safe to come back to (monsters nearby).");
+    assertThat(at(alex)).isEqualTo(HOME);
+    fake.monsters.clear();
+
+    // Standing on a slab is a fine spot to leave from and to come back to.
+    fake.setBlock(100, 64, 100, FakePlatform.SLAB);
+    Position onSlab = new Position(OVERWORLD, 100.5, 64.5, 100.5, 90f, 10f);
+    fake.player(alex).position = onSlab;
+    hof(alex, "/hof");
+    assertThat(at(alex)).isEqualTo(ENTRY);
+    fake.tick();
+    hof(alex, "/hof leave");
+    assertThat(at(alex)).isEqualTo(onSlab);
+    assertThat(lastHeard(alex)).isEqualTo("Back where you left.");
+  }
+
+  @Test
+  void aFailedTeleportKeepsNoSavedSpotAndLeaveWorksOnlyInside() {
+    fake.teleportsFail = true;
+    hof(alex, "/hof");
+    assertThat(lastHeard(alex)).isEqualTo("You couldn't be moved. Try again in a moment.");
+    assertThat(at(alex)).isEqualTo(HOME);
+    assertThat(saved(alex)).isEmpty();
+    fake.teleportsFail = false;
+
+    // A saved spot left over outside the Hall, as after a crash, takes them nowhere.
+    var store = seasons.players().orElseThrow();
+    var _ =
+        store.putNow(
+            store
+                .find(alex.id())
+                .orElseThrow()
+                .withHallReturn(Optional.of(new PlayerRecord.HallReturn(HOME, GameMode.SURVIVAL))));
+    fake.player(alex).position = OUTSIDE;
+    hof(alex, "/hof leave");
+    assertThat(lastHeard(alex)).isEqualTo("You aren't visiting the Hall of Fame.");
+    assertThat(at(alex)).isEqualTo(OUTSIDE);
+
+    // After a restart, the sweep finds them outside the Hall and drops it.
+    restart();
+    fake.tick();
+    assertThat(saved(alex)).isEmpty();
+
+    // Walking in now saves where they came in from.
+    decide(new Intent.Move(alex.id(), OUTSIDE, INSIDE));
+    fake.player(alex).position = INSIDE;
+    assertThat(saved(alex)).map(PlayerRecord.HallReturn::at).contains(OUTSIDE);
+  }
+
+  @Test
   void leavingTheBoundsByAnyRouteReturnsThem() {
     visit();
     fake.player(alex).position = INSIDE;

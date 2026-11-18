@@ -57,11 +57,23 @@ export default {
     const glided = ctx.waitForMessages(visitor, /^You can't use \/hof while gliding\.$/)
     await whileGliding(ctx, admin, 'Visitor', 'hof')
     await glided
+    // Without the elytra the server stops them gliding, which a still bot never would.
+    await ctx.command(admin, '/item replace entity Visitor armor.chest with minecraft:air', /^Replaced /)
     await sleep(RATE_LIMIT + 200)
 
-    // Lava, with fire resistance so it does no harm.
-    await standAt(ctx, admin, 'Visitor', HOME)
+    // Fire resistance from here on, so magma and lava do no harm.
     await ctx.command(admin, '/effect give Visitor minecraft:fire_resistance 60 0 true', /^Applied effect /)
+
+    // Magma underfoot: return safety would send them to their bed on the way back, a free
+    // teleport home, so the spot is turned down now. Before the lava, which leaves them burning.
+    const magma = { x: HOME.x, y: FLOOR, z: HOME.z - 12 }
+    await bed(ctx, admin, { x: magma.x + 1, y: FLOOR, z: magma.z })
+    await ctx.command(admin, `/setblock ${magma.x} ${magma.y - 1} ${magma.z} minecraft:magma_block`, /^Changed the block/)
+    await standAt(ctx, admin, 'Visitor', magma)
+    await hof(ctx, visitor, '/hof', /^This spot isn't safe to come back to \(magma\)\.$/)
+
+    // Lava.
+    await standAt(ctx, admin, 'Visitor', HOME)
     await ctx.command(admin, `/setblock ${HOME.x} ${HOME.y} ${HOME.z} minecraft:lava`, /^Changed the block/)
     await hof(ctx, visitor, '/hof', /^You're standing in lava\.$/)
     await ctx.command(admin, `/setblock ${HOME.x} ${HOME.y} ${HOME.z} minecraft:air`, /^Changed the block/)

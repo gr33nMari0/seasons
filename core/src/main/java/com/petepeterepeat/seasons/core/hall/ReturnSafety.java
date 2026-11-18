@@ -18,6 +18,9 @@ public final class ReturnSafety {
   /** How far around a saved spot the nearest safe one is looked for. */
   public static final int NEARBY = 8;
 
+  /** How far below the feet the block stood on is looked for. */
+  private static final double FOOTING = 0.05;
+
   private ReturnSafety() {}
 
   /**
@@ -31,12 +34,12 @@ public final class ReturnSafety {
       List<Position> hostiles,
       int hostileRadius) {
     String dimension = spot.dimension();
-    BlockInfo below =
-        blocks.apply(Position.of(dimension, spot.blockX(), spot.blockY() - 1, spot.blockZ()));
-    BlockInfo feet =
-        blocks.apply(Position.of(dimension, spot.blockX(), spot.blockY(), spot.blockZ()));
-    BlockInfo head =
-        blocks.apply(Position.of(dimension, spot.blockX(), spot.blockY() + 1, spot.blockZ()));
+    // Standing on a slab, a bed or farmland puts the feet partway up a block: the floor is the
+    // block just under the feet, and the body fills the two blocks above it.
+    int floor = (int) Math.floor(spot.y() - FOOTING);
+    BlockInfo below = blocks.apply(Position.of(dimension, spot.blockX(), floor, spot.blockZ()));
+    BlockInfo feet = blocks.apply(Position.of(dimension, spot.blockX(), floor + 1, spot.blockZ()));
+    BlockInfo head = blocks.apply(Position.of(dimension, spot.blockX(), floor + 2, spot.blockZ()));
     for (BlockInfo block : List.of(feet, head, below)) {
       Optional<String> hazard = EntryChecks.hazardOf(block.type());
       if (hazard.isPresent()) {

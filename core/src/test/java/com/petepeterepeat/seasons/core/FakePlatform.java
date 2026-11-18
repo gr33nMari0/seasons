@@ -80,6 +80,11 @@ public final class FakePlatform {
   public static final BlockInfo STONE = new BlockInfo("minecraft:stone", true, false, false);
   public static final BlockInfo LAVA = new BlockInfo("minecraft:lava", false, true, false);
   public static final BlockInfo BED = new BlockInfo("minecraft:straw_bed", true, false, true);
+  public static final BlockInfo MAGMA = new BlockInfo("minecraft:magma_block", true, false, false);
+  public static final BlockInfo SLAB = new BlockInfo("minecraft:oak_slab", true, false, false);
+
+  /** Every Seasons teleport fails, as when another plugin cancels it. */
+  public boolean teleportsFail;
 
   public void setBlock(int x, int y, int z, BlockInfo block) {
     blocks.put(List.of(x, y, z), block);
@@ -321,7 +326,7 @@ public final class FakePlatform {
 
           @Override
           public CompletableFuture<Boolean> teleportSafely(PlayerId id, Position destination) {
-            if (find(id).isEmpty()) {
+            if (find(id).isEmpty() || teleportsFail) {
               return CompletableFuture.completedFuture(false);
             }
             state(id).position = destination;

@@ -81,6 +81,9 @@ public final class HallVisits {
   /** Players the sweep last saw inside the Hall. */
   private final Set<PlayerId> inside = new HashSet<>();
 
+  /** Online players the sweep has seen at least once since they joined. */
+  private final Set<PlayerId> known = new HashSet<>();
+
   /** Where each player outside the Hall last stood, as the sweep saw them. */
   private final Map<PlayerId, Position> lastOutside = new HashMap<>();
 
@@ -193,6 +196,14 @@ public final class HallVisits {
           failed.get().placeholders().toArray(String[]::new));
       return;
     }
+    // A spot that return safety would turn down would send them to their bed or the spawn on the
+    // way back: a free teleport home. So it is turned down now, by the same rules.
+    int radius = config.get().config().hof().returnSafety().hostileRadius();
+    Optional<String> unsafe = ReturnSafety.unsafe(at, blocks(), hostiles(at, radius), radius);
+    if (unsafe.isPresent()) {
+      tell(player, "hof.entry.unsafe", "reason", messages().text("hof.unsafe." + unsafe.get()));
+      return;
+    }
     HallReturn back = new HallReturn(at, platform.players().gameMode(player));
     moving.add(player);
     var _ =
@@ -206,7 +217,14 @@ public final class HallVisits {
                     return;
                   }
                   lastVisit.put(player, clock.instant());
-                  moveTo(player, destination.get(), "hof.visit.arrived");
+                  moveTo(
+                      player,
+                      destination.get(),
+                      "hof.visit.arrived",
+                      // They never left: a saved spot outside the Hall would be a free teleport.
+                      () -> {
+                        var _ = saveReturn(player, Optional.empty());
+                      });
                 },
                 serverThread);
   }
@@ -271,6 +289,13 @@ public final class HallVisits {
 
   /** Moves a player within or into the Hall, with arrival immunity. */
   private void moveTo(PlayerId player, Position destination, String messageKey) {
+    moveTo(player, destination, messageKey, () -> {});
+  }
+
+  /**
+   * @param failed run if the teleport didn't happen
+   */
+  private void moveTo(PlayerId player, Position destination, String messageKey, Runnable failed) {
     moving.add(player);
     var _ =
         platform
@@ -280,6 +305,7 @@ public final class HallVisits {
                 (moved, failure) -> {
                   moving.remove(player);
                   if (failure != null || !Boolean.TRUE.equals(moved)) {
+                    failed.run();
                     tell(player, "hof.visit.failed");
                     return;
                   }
@@ -293,9 +319,16 @@ public final class HallVisits {
 
   // Return
 
-  /** {@code /hof leave}. */
+  /**
+   * {@code /hof leave}. Only from inside the Hall: a saved spot left over outside it, after a
+   * failed teleport or a crash, would otherwise be a teleport from anywhere.
+   */
   public void leave(PlayerId player) {
     if (moving.contains(player)) {
+      return;
+    }
+    if (!halls.inHall(platform.players().position(player))) {
+      tell(player, "hof.leave.not-visiting");
       return;
     }
     Optional<HallReturn> back = savedReturn(player);
@@ -303,10 +336,7 @@ public final class HallVisits {
       returnTo(player, back.get(), "hof.leave.returned");
       return;
     }
-    boolean in = halls.inHall(platform.players().position(player));
-    if (!in) {
-      tell(player, "hof.leave.not-visiting");
-    } else if (state.get().map(s -> !playing(s)).orElse(false)) {
+    if (state.get().map(s -> !playing(s)).orElse(false)) {
       tell(player, "hof.leave.to-entry");
     } else {
       tell(player, "hof.leave.no-return");
@@ -417,7 +447,12 @@ public final class HallVisits {
   /** Left the Hall's bounds by some route: back to the saved spot, or the Hall entry. */
   private void leftHall(PlayerId player) {
     inside.remove(player);
-    if (moving.contains(player) || bypasses(player)) {
+    if (moving.contains(player)) {
+      return;
+    }
+    if (bypasses(player)) {
+      // They may leave as they like, so the saved spot is done with.
+      dropStaleReturn(player);
       return;
     }
     Optional<HallReturn> back = savedReturn(player);
@@ -525,7 +560,8 @@ public final class HallVisits {
 
   /**
    * Came into the Hall without {@code /hof}, such as walking in after Homecoming: where they came
-   * from is where leaving takes them back to.
+   * from is where leaving takes them back to. A saved spot they already have is kept: stepping out
+   * and straight back must not swap it for a spot just outside the Hall.
    */
   private void enteredOtherwise(PlayerId player, Position from) {
     inside.add(player);
@@ -555,6 +591,11 @@ public final class HallVisits {
       if (moving.contains(player)) {
         continue;
       }
+      if (known.add(player) && !in) {
+        // First seen outside the Hall: a saved spot now is left over, such as from a crash between
+        // the teleport back and forgetting it.
+        dropStaleReturn(player);
+      }
       boolean was = inside.contains(player);
       if (in && !was) {
         inside.add(player);
@@ -574,6 +615,7 @@ public final class HallVisits {
       }
     }
     inside.retainAll(online);
+    known.retainAll(online);
     lastOutside.keySet().retainAll(online);
     moving.retainAll(online);
   }
@@ -649,6 +691,14 @@ public final class HallVisits {
     if (record.isPresent()) {
       var _ =
           players.putNow(record.get().withHallReturn(Optional.empty()).withHallAdventure(false));
+    }
+  }
+
+  /** Drops a saved spot of a player outside the Hall, where it could only be a free teleport. */
+  private void dropStaleReturn(PlayerId player) {
+    if (savedReturn(player).isPresent()) {
+      LOG.info("Dropping {}'s saved Hall return: they are outside the Hall", player);
+      var _ = saveReturn(player, Optional.empty());
     }
   }
 

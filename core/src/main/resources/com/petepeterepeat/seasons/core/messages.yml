@@ -245,6 +245,7 @@ hof:
     falling: "<red>You can't use /hof while falling.</red>"
     monsters: "<red>Monsters are nearby.</red>"
     damage: "<red>You were hurt in the last <seconds> seconds.</red>"
+    unsafe: "<red>This spot isn't safe to come back to (<reason>).</red>"
   leave:
     returned: "<gray>Back where you left.</gray>"
     left-hall: "<gray>You left the Hall of Fame, so you're back where you came from.</gray>"
