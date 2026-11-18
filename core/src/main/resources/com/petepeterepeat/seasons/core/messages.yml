@@ -171,6 +171,15 @@ hof:
   locked: "<gold>The Season <season> galleries are locked.</gold>"
   assigned: "<gold>Your Hall of Fame cell for Season <season> is <cell> in <gallery>.</gold>"
   no-build: "<red>You can't build here.</red>"
+  view-only: "<name>'s cell · Season <season>"
+  view-only-hall: "Hall of Fame"
+  rules:
+    no-hopper: "<red>Hoppers, droppers, dispensers, crafters and ender chests can't go in the Hall of Fame.</red>"
+    no-container: "<red>That container can't go in a cell.</red>"
+    empty-first: "<red>Take everything out of it first.</red>"
+    no-lava: "<red>Lava can't go in the Hall of Fame.</red>"
+    no-use: "<red>You can't use that in the Hall of Fame.</red>"
+    no-touch: "<red>You can't change anything in the Hall of Fame.</red>"
   nothing-archived: "<gray>Nothing is archived here yet.</gray>"
   figure-name: "<name> · Season <season>"
   plaque: "<name> · Season <season><newline>Advancements: <completed> / <visible><newline><gray>Right-click below for the season card</gray>"
@@ -271,7 +280,9 @@ hof:
   dry-run:
     cells: "<gray>Hall of Fame: <free> free cells in Season <season>'s galleries for <players> players still without one.</gray>"
     shortfall: "<red>Hall of Fame: only <free> free cells in Season <season>'s galleries for <players> players without one, so <short> would be archived without displays.</red>"
-  reconciled: "<green>Redrew the displays of <count> archives in <gallery>.</green>"
+  reconciled: "<green>Reconciled <gallery>: <count> repairs.</green>"
+  reconciled-one: "<green>Reconciled <gallery>: 1 repair.</green>"
+  reconcile-failed: "<red>Reconciling <gallery> failed: <error>. See the server log.</red>"
   restored: "<green>Redrew <name>'s Season <season> displays.</green>"
   no-archive: "<red><name> has no Season <season> archive.</red>"
   import:

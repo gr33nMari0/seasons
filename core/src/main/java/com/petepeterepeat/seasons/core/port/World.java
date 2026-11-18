@@ -15,6 +15,9 @@ public interface World {
   /** The block at a position, in a loaded chunk; air if its chunk isn't loaded. */
   BlockInfo block(Position position);
 
+  /** Whether the chunk holding a position is loaded, entities included. Never loads it. */
+  boolean isLoaded(Position position);
+
   /** Loads (and generates if needed) the chunk holding a position without stalling the tick. */
   CompletableFuture<Void> loadChunk(Position position);
 }

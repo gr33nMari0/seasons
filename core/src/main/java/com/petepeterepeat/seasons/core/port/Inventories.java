@@ -2,8 +2,11 @@
 package com.petepeterepeat.seasons.core.port;
 
 import java.util.List;
+import java.util.Optional;
 
-/** Reads, clears and restores what a player carries, as neutral item records. */
+/**
+ * Reads, clears and restores what a player carries, and reads containers, as neutral item records.
+ */
 public interface Inventories {
   /** Copies everything the player carries. Call on the player's thread. */
   InventorySnapshot snapshot(PlayerId player);
@@ -35,6 +38,13 @@ public interface Inventories {
    * @return what was deleted, such as "3 × minecraft:stone"
    */
   List<String> purgeArchived(PlayerId player);
+
+  /**
+   * What a container block holds, slot by slot, if the block holds items at all: a chest (both
+   * halves of a double chest), a barrel, a shulker box, a decorated pot. Empty if it isn't loaded
+   * or holds no items.
+   */
+  Optional<List<Optional<NeutralItem>>> container(Position block);
 
   /** The game's data version, which items written now carry as {@code DataVersion}. */
   int dataVersion();

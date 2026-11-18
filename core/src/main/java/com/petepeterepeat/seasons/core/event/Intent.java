@@ -55,6 +55,7 @@ public sealed interface Intent {
    * @param sneaking whether the player is sneaking
    * @param emptyHand whether the main hand is empty
    * @param bed whether the block is a bed of any kind
+   * @param interactable whether right-clicking the block does something, as a door or lever does
    */
   record UseBlock(
       PlayerId player,
@@ -62,12 +63,54 @@ public sealed interface Intent {
       boolean mainHand,
       boolean sneaking,
       boolean emptyHand,
-      boolean bed)
+      boolean bed,
+      boolean interactable)
       implements Intent {
     public UseBlock(PlayerId player, Position block, boolean mainHand) {
-      this(player, block, mainHand, false, false, false);
+      this(player, block, mainHand, false, false, false, true);
+    }
+
+    public UseBlock(
+        PlayerId player,
+        Position block,
+        boolean mainHand,
+        boolean sneaking,
+        boolean emptyHand,
+        boolean bed) {
+      this(player, block, mainHand, sneaking, emptyHand, bed, true);
     }
   }
+
+  /** Opening the inventory of a block, such as a chest. */
+  record OpenContainer(PlayerId player, Position block) implements Intent {}
+
+  /**
+   * Changing a block other than by placing or breaking it: lighting it, bone meal, stripping or
+   * waxing it.
+   *
+   * @param how a namespaced id for what does it, such as {@code minecraft:flint_and_steel}
+   */
+  record ChangeBlock(PlayerId player, Position block, String how) implements Intent {}
+
+  /**
+   * Filling or emptying a bucket at a block.
+   *
+   * @param bucket the bucket's namespaced item id, such as {@code minecraft:lava_bucket}
+   */
+  record Bucket(PlayerId player, Position block, String bucket) implements Intent {}
+
+  /**
+   * Right-clicking an entity that isn't one of Seasons' displays, such as an item frame.
+   *
+   * @param type the entity's namespaced type, such as {@code minecraft:item_frame}
+   */
+  record UseEntity(PlayerId player, Position at, String type) implements Intent {}
+
+  /** Placing an entity: an item frame, a painting, an armour stand, a cushion, a minecart. */
+  record PlaceEntity(PlayerId player, Position at, String type) implements Intent {}
+
+  /** Hitting or breaking an entity that isn't a player, by hand or with a projectile. */
+  record HurtEntity(PlayerId player, Position at, String type) implements Intent {}
 
   /**
    * Interacting with one of Seasons' own displays, such as a figure. The adapter always cancels the

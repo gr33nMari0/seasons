@@ -18,11 +18,14 @@ import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
+import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -55,6 +58,7 @@ import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiPredicate;
+import java.util.function.LongSupplier;
 import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -94,7 +98,10 @@ public final class Seasons implements SeasonsApi {
   private @Nullable ScheduledTask flusher;
   private @Nullable HallService hallService;
   private @Nullable HallVisits visits;
+  private @Nullable Reconciler reconciler;
+  private @Nullable HallRules rules;
   private @Nullable RolloverArchiver archiverForTests;
+  private LongSupplier nanoTime = System::nanoTime;
 
   /**
    * @param environment environment variables, for the webhook overrides
@@ -173,6 +180,12 @@ public final class Seasons implements SeasonsApi {
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
+    Reconciler reconciling =
+        new Reconciler(platform, halls, renderer, archives, writer, audit, nanoTime);
+    reconciler = reconciling;
+    HallRules hallRules =
+        new HallRules(platform, config, halls, new HallAudit(audit, clock), reconciling);
+    rules = hallRules;
     Optional<HallImporter> importer = Optional.empty();
 
     Optional<Archiver> archiver = Optional.empty();
@@ -232,6 +245,8 @@ public final class Seasons implements SeasonsApi {
     halls.start();
     visiting.bind(seasons::state);
     visiting.start();
+    reconciling.start();
+    hallRules.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -293,15 +308,22 @@ public final class Seasons implements SeasonsApi {
                 hold,
                 immunity,
                 furthest,
-                intent -> visiting.decide(intent).or(() -> halls.decide(intent)),
+                intent ->
+                    visiting
+                        .decide(intent)
+                        .or(() -> halls.decide(intent))
+                        .or(() -> hallRules.decide(intent)),
                 visiting::damaged));
     platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
+    platform.events().hall(hallRules);
     platform.commands().register(built.root());
     platform
         .commands()
         .register(
-            new HallCommands(platform, config, halls, visiting, renderer, importer, players).root(),
+            new HallCommands(
+                    platform, config, halls, visiting, renderer, reconciling, importer, players)
+                .root(),
             List.of("halloffame"));
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
@@ -370,6 +392,11 @@ public final class Seasons implements SeasonsApi {
     };
   }
 
+  /** Times reconciliation's budget with this clock; for tests, before {@link #start}. */
+  void useNanoTime(LongSupplier clock) {
+    this.nanoTime = clock;
+  }
+
   /** Ends seasons with this archiver instead of the real one; for tests, before {@link #start}. */
   void useArchiver(RolloverArchiver archiver) {
     this.archiverForTests = archiver;
@@ -385,6 +412,12 @@ public final class Seasons implements SeasonsApi {
     }
     if (visits != null) {
       visits.stop();
+    }
+    if (reconciler != null) {
+      reconciler.stop();
+    }
+    if (rules != null) {
+      rules.stop();
     }
     if (tripwire != null) {
       tripwire.stop();

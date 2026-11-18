@@ -479,7 +479,9 @@ public final class HallVisits {
       case Intent.DropItem drop ->
           sealed(player) ? Optional.of(Decision.deny(message("hof.sealed.no-drop"))) : none();
       case Intent.PickupItem pickup ->
-          sealed(player) ? Optional.of(new Decision.Deny(Optional.empty())) : none();
+          sealed(player) && !decoratingHere(player)
+              ? Optional.of(new Decision.Deny(Optional.empty()))
+              : none();
       case Intent.UseItem use ->
           use.item().equals(ENDER_PEARL) && sealed(player)
               ? Optional.of(Decision.deny(message("hof.sealed.no-pearl")))
@@ -655,6 +657,14 @@ public final class HallVisits {
 
   private boolean sealed(PlayerId player) {
     return halls.inHall(platform.players().position(player)) && !bypasses(player);
+  }
+
+  /** An owner decorating the cell they stand in picks up what they broke there. */
+  private boolean decoratingHere(PlayerId player) {
+    return halls
+        .cellAt(platform.players().position(player))
+        .filter(ref -> halls.canDecorate(player, ref))
+        .isPresent();
   }
 
   private boolean bypasses(PlayerId player) {

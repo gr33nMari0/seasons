@@ -8,6 +8,7 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Figure;
+import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -15,6 +16,7 @@ import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
@@ -92,53 +94,91 @@ public final class HallRenderer implements DisplayRenderer {
   /** Draws a cell's displays; its chunks are loaded. */
   void draw(HallService.CellRef ref, ArchiveRecord archive) {
     Bounds bounds = ref.cell().bounds().orElseThrow();
+    platform
+        .displays()
+        .removeTagged(
+            bounds.min(),
+            bounds.max(),
+            DisplayTag.prefix(ref.gallery().id(), ref.cell().id(), archive.season()));
+    plan(ref, archive).forEach(this::spawn);
+  }
+
+  /** One display a cell shows for an archive. */
+  sealed interface Planned {
+    String tag();
+
+    Position at();
+
+    record Text(Position at, Message text, String tag) implements Planned {}
+
+    record Shape(Figure figure) implements Planned {
+      @Override
+      public String tag() {
+        return figure.tag();
+      }
+
+      @Override
+      public Position at() {
+        return figure.at();
+      }
+    }
+
+    record Item(Position at, NeutralItem item, String tag) implements Planned {}
+  }
+
+  /** The displays a cell shows for an archive: its figure, plaque and an import's trophies. */
+  List<Planned> plan(HallService.CellRef ref, ArchiveRecord archive) {
     String gallery = ref.gallery().id();
     String cell = ref.cell().id();
     int season = archive.season();
-    platform
-        .displays()
-        .removeTagged(bounds.min(), bounds.max(), DisplayTag.prefix(gallery, cell, season));
     Messages messages = config.get().messages();
     String seasonText = Integer.toString(season);
+    List<Planned> planned = new ArrayList<>();
     ref.cell()
         .anchor(AnchorType.FIGURE)
         .ifPresent(anchor ->
-            platform
-                .displays()
-                .spawnFigure(
+            planned.add(
+                new Planned.Shape(
                     new Figure(
                         HallService.standOn(anchor.at()),
                         messages.get(
                             "hof.figure-name", "name", archive.name(), "season", seasonText),
                         archive.skin(),
                         archive.figureEquipment(),
-                        new DisplayTag(gallery, cell, season, DisplayTag.FIGURE).toString())));
+                        new DisplayTag(gallery, cell, season, DisplayTag.FIGURE).toString()))));
     ref.cell()
         .anchor(AnchorType.PLAQUE)
         .ifPresent(anchor ->
-            platform
-                .displays()
-                .spawnText(
+            planned.add(
+                new Planned.Text(
                     above(anchor.at(), PLAQUE_HEIGHT),
                     plaque(messages, archive),
-                    new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString()));
+                    new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString())));
     if (archive.imported().isPresent()) {
-      List<Anchor> trophies = ref.cell().anchors(AnchorType.TROPHY);
       List<ImportedCell.Frame> frames = new ArrayList<>(archive.imported().get().frames());
-      for (Anchor trophy : trophies) {
+      for (Anchor trophy : ref.cell().anchors(AnchorType.TROPHY)) {
         frames.stream()
             .filter(frame -> trophy.isAt(frame.at()))
             .findFirst()
             .flatMap(ImportedCell.Frame::item)
             .ifPresent(item ->
-                platform
-                    .displays()
-                    .spawnItem(
+                planned.add(
+                    new Planned.Item(
                         above(trophy.at(), 0.5),
                         item,
-                        new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString()));
+                        new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString())));
       }
     }
+    return planned;
+  }
+
+  /** Spawns one planned display. */
+  UUID spawn(Planned planned) {
+    return switch (planned) {
+      case Planned.Shape shape -> platform.displays().spawnFigure(shape.figure());
+      case Planned.Text text -> platform.displays().spawnText(text.at(), text.text(), text.tag());
+      case Planned.Item item -> platform.displays().spawnItem(item.at(), item.item(), item.tag());
+    };
   }
 
   private static Message plaque(Messages messages, ArchiveRecord archive) {
@@ -169,7 +209,7 @@ public final class HallRenderer implements DisplayRenderer {
   }
 
   /** Loads every chunk a box touches. */
-  private CompletableFuture<Void> loaded(Bounds bounds) {
+  CompletableFuture<Void> loaded(Bounds bounds) {
     List<CompletableFuture<Void>> chunks = new ArrayList<>();
     for (int x = bounds.minX() >> 4; x <= bounds.maxX() >> 4; x++) {
       for (int z = bounds.minZ() >> 4; z <= bounds.maxZ() >> 4; z++) {
