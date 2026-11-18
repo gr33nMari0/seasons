@@ -38,7 +38,6 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
-import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -53,8 +52,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * The Hall of Fame's protection from Paper's events. What a player does goes to the core as an
  * intent through {@link PaperEvents}; what nobody in particular does (explosions, fire, pistons,
- * liquids, hoppers, growth, spawning) is refused when it would change the Hall, as {@link
- * HallGuard} says.
+ * liquids, hoppers, growth, spawning; a projectile breaking a pot is an entity changing a block) is
+ * refused when it would change the Hall, as {@link HallGuard} says.
  */
 final class PaperHallGuard implements Listener {
   private final PaperEvents events;
@@ -364,15 +363,6 @@ final class PaperHallGuard implements Listener {
     if (reason != CreatureSpawnEvent.SpawnReason.CUSTOM
         && reason != CreatureSpawnEvent.SpawnReason.COMMAND
         && protects(event.getLocation())) {
-      event.setCancelled(true);
-    }
-  }
-
-  /** Projectiles change nothing in the Hall: no broken pots, lit candles or pressed targets. */
-  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-  void onProjectileHit(ProjectileHitEvent event) {
-    Block hit = event.getHitBlock();
-    if (hit != null && protects(hit)) {
       event.setCancelled(true);
     }
   }
