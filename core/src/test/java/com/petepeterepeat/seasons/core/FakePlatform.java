@@ -62,6 +62,7 @@ public final class FakePlatform {
   public IntentHandler handler = intent -> com.petepeterepeat.seasons.core.event.Decision.allow();
   public @Nullable Sessions sessions;
   public @Nullable TripwireReport tripwire;
+  public com.petepeterepeat.seasons.core.port.@Nullable Milestones milestones;
   public final Map<PlayerId, FakePlayer> players = new HashMap<>();
   public final List<PagedView> opened = new ArrayList<>();
   public final List<String> objectives = new ArrayList<>();
@@ -81,6 +82,11 @@ public final class FakePlatform {
     public int saves;
     public int resets;
     public final List<Message> titles = new ArrayList<>();
+    public java.util.Set<String> carried = new java.util.HashSet<>();
+    public Map<String, Long> counts = new HashMap<>();
+
+    /** The books opened for them: each book's pages of lines. */
+    public final List<List<List<Message>>> books = new ArrayList<>();
   }
 
   /** Adds an online player, with an empty inventory. */
@@ -183,6 +189,12 @@ public final class FakePlatform {
   public Platform platform(Capabilities capabilities, Path dir) {
     Players players =
         new Players() {
+          @Override
+          public void openBook(
+              PlayerId id, Message title, Message author, List<List<Message>> pages) {
+            state(id).books.add(pages);
+          }
+
           @Override
           public Collection<PlayerRef> online() {
             return List.copyOf(online);
@@ -300,6 +312,11 @@ public final class FakePlatform {
         };
     Inventories inventories =
         new Inventories() {
+          @Override
+          public java.util.Set<String> carriedItemIds(PlayerId player) {
+            return java.util.Set.copyOf(state(player).carried);
+          }
+
           @Override
           public InventorySnapshot snapshot(PlayerId player) {
             return state(player).inventory;
@@ -429,6 +446,11 @@ public final class FakePlatform {
           public void tripwire(TripwireReport report) {
             tripwire = report;
           }
+
+          @Override
+          public void milestones(com.petepeterepeat.seasons.core.port.Milestones m) {
+            milestones = m;
+          }
         };
     DragonFight dragon =
         new DragonFight() {
@@ -442,7 +464,18 @@ public final class FakePlatform {
             return Optional.empty();
           }
         };
-    Statistics statistics = player -> Map.copyOf(state(player).statistics);
+    Statistics statistics =
+        new Statistics() {
+          @Override
+          public Map<String, Long> general(PlayerId player) {
+            return Map.copyOf(state(player).statistics);
+          }
+
+          @Override
+          public Map<String, Long> counts(PlayerId player) {
+            return Map.copyOf(state(player).counts);
+          }
+        };
     Scheduler scheduler =
         new Scheduler() {
           @Override

@@ -738,6 +738,14 @@ public final class HallService {
         continue;
       }
       for (Cell cell : gallery.cells()) {
+        for (Anchor anchor : cell.anchors(AnchorType.PLAQUE)) {
+          if (anchor.isAt(use.block())) {
+            if (use.mainHand()) {
+              openCard(use.player(), new CellRef(gallery, cell));
+            }
+            return Optional.of(new Decision.Deny(Optional.empty()));
+          }
+        }
         for (Anchor anchor : cell.anchors(AnchorType.ARCHIVE)) {
           if (anchor.isAt(use.block())) {
             if (use.mainHand()) {
@@ -781,6 +789,64 @@ public final class HallService {
               Optional<ArchiveRecord> read = failure == null ? found : Optional.empty();
               platform.scheduler().runGlobal(() -> show(viewer, read, page));
             });
+  }
+
+  /** Opens the season card of a cell's owner for its gallery's season, as a book. */
+  public void openCard(PlayerId viewer, CellRef ref) {
+    int season = ref.gallery().season();
+    Optional<PlayerId> owner = ref.cell().owner(season);
+    if (owner.isEmpty()) {
+      platform.players().sendMessage(viewer, messages().get("hof.nothing-archived"));
+      return;
+    }
+    var _ =
+        card(owner.get(), season)
+            .whenComplete((card, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't read an archive for the season card", failure);
+              }
+              Optional<SeasonCard> found = failure == null ? card : Optional.empty();
+              platform
+                  .scheduler()
+                  .runGlobal(() -> {
+                    if (platform.players().find(viewer).isEmpty()) {
+                      return;
+                    }
+                    if (found.isEmpty()) {
+                      platform
+                          .players()
+                          .sendMessage(viewer, messages().get("hof.nothing-archived"));
+                      return;
+                    }
+                    platform
+                        .players()
+                        .openBook(
+                            viewer,
+                            found.get().title(),
+                            messages().get("card.author"),
+                            found.get().messages());
+                  });
+            });
+  }
+
+  /**
+   * A player's season card, from their archive, their record and the season's firsts; empty if they
+   * have no archive for that season.
+   */
+  public CompletableFuture<Optional<SeasonCard>> card(PlayerId player, int season) {
+    return writer
+        .submit(() -> archives.read(player, season))
+        .thenApplyAsync(
+            found ->
+                found.map(archive ->
+                    SeasonCard.of(
+                        archive,
+                        players.find(player),
+                        state.get().map(s -> s.firsts(season)).orElse(List.of()).stream()
+                            .filter(first -> first.player().equals(player))
+                            .toList(),
+                        messages())),
+            platform.scheduler()::runGlobal);
   }
 
   private void show(PlayerId viewer, Optional<ArchiveRecord> found, int page) {

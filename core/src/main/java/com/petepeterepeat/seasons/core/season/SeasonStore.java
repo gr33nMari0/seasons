@@ -112,6 +112,15 @@ public final class SeasonStore {
       for (Map.Entry<PlayerId, Instant> lock : decorating.lockAt().entrySet()) {
         node.node("decorating", "lockAt", lock.getKey().toString()).set(lock.getValue().toString());
       }
+      for (SeasonFirst first : state.firsts()) {
+        ConfigurationNode entry = node.node("firsts").appendListNode();
+        entry.node("season").set(first.season());
+        entry.node("key").set(first.key());
+        entry.node("label").set(first.label());
+        entry.node("player").set(first.player().toString());
+        entry.node("name").set(first.name());
+        entry.node("at").set(first.at().toString());
+      }
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -168,7 +177,27 @@ public final class SeasonStore {
             ? Optional.empty()
             : Optional.of(node.node("initSeason").getInt()),
         node.node("launchApplied").getBoolean(true),
-        decorating(node.node("decorating")));
+        decorating(node.node("decorating")),
+        firsts(node.node("firsts")));
+  }
+
+  private static List<SeasonFirst> firsts(ConfigurationNode node) throws IOException {
+    List<SeasonFirst> firsts = new java.util.ArrayList<>();
+    for (ConfigurationNode entry : node.childrenList()) {
+      try {
+        firsts.add(
+            new SeasonFirst(
+                entry.node("season").getInt(),
+                entry.node("key").getString(""),
+                entry.node("label").getString(""),
+                new PlayerId(UUID.fromString(entry.node("player").getString(""))),
+                entry.node("name").getString(""),
+                instant(entry.node("at"))));
+      } catch (IllegalArgumentException e) {
+        throw new IOException("season.json has a damaged firsts entry", e);
+      }
+    }
+    return firsts;
   }
 
   private static Decorating decorating(ConfigurationNode node) throws IOException {

@@ -33,9 +33,11 @@ import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.Phase;
 import com.petepeterepeat.seasons.core.season.SeasonEvent;
+import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import com.petepeterepeat.seasons.core.season.SeasonMachine;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
@@ -158,6 +160,10 @@ final class SeasonCommands {
                 .permission(PERMISSION_ADMIN_SEASON)
                 .then(CommandNode.literal("set").executes(this::setSpawn)))
         .then(
+            CommandNode.literal("firsts")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::firsts))
+        .then(
             CommandNode.literal("archive")
                 .permission(PERMISSION_ADMIN_SEASON)
                 .then(CommandNode.argument("player", ArgumentType.word()).executes(this::archive)))
@@ -228,6 +234,12 @@ final class SeasonCommands {
     }
     state.ifPresent(current -> playerStatus(source, messages, current));
     journalStatus(source, messages);
+    for (Map.Entry<String, List<ConfigProblem>> gallery :
+        config.get().galleriesLeftOut().entrySet()) {
+      for (ConfigProblem problem : gallery.getValue()) {
+        source.reply(galleryLeftOut(messages, gallery.getKey(), problem));
+      }
+    }
     for (ConfigProblem problem : startupProblems) {
       source.reply(
           messages.get(
@@ -264,6 +276,39 @@ final class SeasonCommands {
                   messages.get("info.cell", "cell", ref.cell().id(), "gallery", ref.gallery().id()))
               .orElseGet(() -> messages.get("info.no-cell")));
     }
+  }
+
+  /** {@code /season firsts}: this season's firsts, oldest first. */
+  void firsts(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Optional<SeasonState> current = seasons.state();
+    List<SeasonFirst> firsts = current.map(s -> s.firsts(s.season())).orElse(List.of());
+    if (firsts.isEmpty()) {
+      source.reply(messages.get("firsts.none", "season", season()));
+      return;
+    }
+    source.reply(messages.get("firsts.header", "season", season()));
+    for (SeasonFirst first : firsts) {
+      source.reply(
+          messages.get(
+              "firsts.line",
+              "name",
+              first.name(),
+              "what",
+              Messages.plain(FirstsTracker.what(messages, first)),
+              "time",
+              HumanTime.time(first.at().atZone(ZoneId.systemDefault()))));
+    }
+  }
+
+  /** A gallery left out at startup, for /season status and admins as they join. */
+  static Message galleryLeftOut(Messages messages, String gallery, ConfigProblem problem) {
+    return messages.get(
+        "status.gallery-left-out",
+        "gallery",
+        gallery,
+        "problem",
+        messages.text(problemKey(problem), problemPlaceholders(problem)));
   }
 
   void decorateOpen(CommandSource source, Arguments arguments) {
@@ -746,6 +791,13 @@ final class SeasonCommands {
               "reason",
               messages.text(refused.messageKey(), "season", season())));
       return;
+    }
+    if (config.get().anyGalleryLeftOut()) {
+      source.reply(
+          messages.get(
+              "end.dry-run.refused",
+              "reason",
+              messages.text("end.galleries-left-out", "season", season())));
     }
     source.reply(messages.get("end.dry-run.header", "season", season()));
     if (now) {

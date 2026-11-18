@@ -46,6 +46,7 @@ status:
   furthest: "<gray>Furthest block from 0,0 this season: <distance> blocks, by <name> at <x>, <z></gray>"
   no-furthest: "<gray>No block placed yet this season.</gray>"
   recovery-failed: "<red>Recovery of <name>'s Season <season> archive stopped: <reason>. Fix it, then run /season reprocess <name>.</red>"
+  gallery-left-out: "<red>Gallery <gallery> couldn't be loaded at startup, so it is left out, and /season end and /season launch are refused until it is fixed and /season reload succeeds:</red> <problem>"
 
 info:
   season: "<gray>Season</gray> <white><season></white>"
@@ -80,6 +81,7 @@ end:
   interrupted: "<yellow>The server restarted during the end countdown of Season <season>, so it was cancelled. Run /season end to start it again.</yellow>"
   archiving-failed: "<red>Archiving for Season <season> stopped: <error>. See the server log.</red>"
   not-saved: "<red>Season <season> wasn't ended: season.json couldn't be saved, so nobody was archived. Fix the problem in the server log, restart, then run /season end again.</red>"
+  galleries-left-out: "<red>Season <season> can't end while a gallery file failed to load: its players would be archived without cells. Fix it and run /season reload; /season status shows the problem.</red>"
   already-ending: "<red>Season <season> is already ending. /season cancel stops the countdown.</red>"
   already-ended: "<red>Season <season> has already ended. /season launch starts the next one.</red>"
   not-counting: "<red>No countdown is running.</red>"
@@ -100,6 +102,7 @@ cancel:
 
 launch:
   refused: "<red>Season <season> can only be launched from the Intermission.</red>"
+  galleries-left-out: "<red>Season <next> can't launch while a gallery file failed to load. Fix it and run /season reload; /season status shows the problem.</red>"
   no-spawn: "<red>Set Season <next>'s spawn first: stand there and run /season spawn set.</red>"
   bad-dimension: "<red>Season <next>'s spawn is in a dimension this server doesn't have. Set it again with /season spawn set.</red>"
   busy: "<red>Someone is being archived or unarchived right now. Try again in a moment.</red>"
@@ -170,8 +173,8 @@ hof:
   no-build: "<red>You can't build here.</red>"
   nothing-archived: "<gray>Nothing is archived here yet.</gray>"
   figure-name: "<name> · Season <season>"
-  plaque: "<name> · Season <season><newline>Advancements: <completed> / <visible>"
-  plaque-imported: "<name> · Season <season><newline>Season <season> · imported"
+  plaque: "<name> · Season <season><newline>Advancements: <completed> / <visible><newline><gray>Right-click below for the season card</gray>"
+  plaque-imported: "<name> · Season <season><newline>Season <season> · imported<newline><gray>Right-click below for the season card</gray>"
   no-free-cell: "<yellow>No free Hall of Fame cell is left in Season <season>'s galleries for <name>; they are archived without displays.</yellow>"
   player-only: "<red>Run this in game.</red>"
   no-gallery: "<red>There is no gallery <gallery>.</red>"
@@ -183,6 +186,7 @@ hof:
   gallery:
     created: "<green>Created gallery <gallery> for Season <season>.</green>"
     exists: "<red>Gallery <gallery> already exists.</red>"
+    left-out: "<red>galleries/<gallery>.yml failed to load at startup, so a new gallery would write over it. Fix the file and run /season reload.</red>"
     bounds: "<green>Gallery <gallery> now spans <from> to <to>.</green>"
     overlaps: "<red>Gallery <gallery> would overlap <other>.</red>"
     cells-outside: "<red>Cell <cell> would end up outside gallery <gallery>.</red>"
@@ -236,6 +240,46 @@ hof:
     undone: "<green>Put back <count> cell of <gallery>.</green>"
     undone-many: "<green>Put back <count> cells of <gallery>.</green>"
     undo-stopped: "<red>Undoing the import of cell <cell> stopped: <reason>.</red>"
+
+firsts:
+  announce: "<gold>Season first!</gold> <yellow><name></yellow> <what>."
+  discord: "Season first! <name> <what>."
+  none: "<gray>No season firsts yet in Season <season>.</gray>"
+  header: "<gold>Season <season> firsts:</gold>"
+  line: "<yellow><name></yellow> <what> <gray>(<time>)</gray>"
+  what:
+    advancement: "completed [<subject>]"
+    nether: "reached the Nether"
+    end: "reached the End"
+    item: "found <subject>"
+
+card:
+  title: "<name> · Season <season>"
+  name: "<dark_aqua><bold><name></bold></dark_aqua>"
+  season: "Season <season>"
+  imported: "Season <season> · imported"
+  sign: "<dark_gray><text></dark_gray>"
+  days: "<gray>Played <first> to <last></gray>"
+  play-time: "Play time: <value>"
+  deaths: "Deaths: <value>"
+  mob-kills: "Mobs killed: <value>"
+  player-kills: "Players killed: <value>"
+  travelled: "Travelled: <value>"
+  diamonds: "Diamonds mined: <value>"
+  debris: "Ancient debris mined: <value>"
+  placed: "Blocks placed: <value>"
+  mined: "Blocks mined: <value>"
+  advancements: "Advancements: <completed> / <visible>"
+  furthest: "Furthest block: <distance> blocks, at <x>, <z>"
+  furthest-none: "Furthest block: none"
+  ended: "Ended at <x>, <y>, <z> in <dimension>"
+  firsts: "<dark_aqua><bold>Season firsts</bold></dark_aqua>"
+  firsts-none: "<gray>None this season</gray>"
+  general: "<dark_aqua><bold>Statistics</bold></dark_aqua>"
+  stat: "<stat>: <value>"
+  hours-minutes: "<hours> h <minutes> min"
+  blocks: "<n> blocks"
+  author: "Seasons"
 
 homecoming:
   refused: "<red>Homecoming only happens once, in the Frontier stage.</red>"

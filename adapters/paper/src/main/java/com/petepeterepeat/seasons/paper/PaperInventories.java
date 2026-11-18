@@ -109,6 +109,25 @@ final class PaperInventories implements Inventories {
   }
 
   @Override
+  public java.util.Set<String> carriedItemIds(PlayerId id) {
+    java.util.Set<String> ids = new java.util.HashSet<>();
+    players
+        .player(id)
+        .ifPresent(player -> {
+          for (ItemStack stack : player.getInventory().getContents()) {
+            if (stack != null && !stack.isEmpty()) {
+              ids.add(stack.getType().getKey().asString());
+            }
+          }
+          ItemStack cursor = player.getItemOnCursor();
+          if (!cursor.isEmpty()) {
+            ids.add(cursor.getType().getKey().asString());
+          }
+        });
+    return ids;
+  }
+
+  @Override
   public List<String> purgeArchived(PlayerId id) {
     Optional<Player> found = players.player(id);
     if (found.isEmpty()) {

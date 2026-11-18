@@ -226,6 +226,11 @@ public final class HallCommands {
       source.reply(messages().get("hof.gallery.exists", "gallery", id));
       return;
     }
+    if (config.get().galleriesLeftOut().containsKey(id)) {
+      // Its file is there but failed to load; a new one would write over it.
+      source.reply(messages().get("hof.gallery.left-out", "gallery", id));
+      return;
+    }
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
     saved(

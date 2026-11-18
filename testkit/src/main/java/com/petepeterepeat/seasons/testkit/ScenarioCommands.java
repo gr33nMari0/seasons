@@ -34,6 +34,7 @@ import org.bukkit.plugin.RegisteredServiceProvider;
  * <ul>
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
+ *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
  *   <li>{@code place <player> <x> <y> <z> <block>} places a block as that player would, firing the
  *       same {@code BlockPlaceEvent}, because bots can't place blocks through the protocol
@@ -92,6 +93,27 @@ final class ScenarioCommands implements BasicCommand {
                                 }
                               }));
         }
+        case "card" -> {
+          var _ =
+              hooks
+                  .card(id(args[1]), Integer.parseInt(args[2]))
+                  .whenComplete((lines, failure) ->
+                      plugin
+                          .getServer()
+                          .getGlobalRegionScheduler()
+                          .execute(
+                              plugin,
+                              () ->
+                                  sender.sendMessage(
+                                      failure != null
+                                          ? "Scenario card failed: " + failure
+                                          : "Card of "
+                                              + args[1]
+                                              + " for Season "
+                                              + args[2]
+                                              + ": "
+                                              + String.join(" | ", lines))));
+        }
         case "open-archive" -> {
           Player viewer = plugin.getServer().getPlayerExact(args[1]);
           if (viewer == null) {
@@ -113,7 +135,7 @@ final class ScenarioCommands implements BasicCommand {
         case "use" -> use(sender, args);
         default ->
             sender.sendMessage(
-                "Usage: /scenario crash-at|archive|open-archive|place|break|use ...");
+                "Usage: /scenario crash-at|archive|card|open-archive|place|break|use ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);

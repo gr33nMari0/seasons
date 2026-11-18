@@ -96,7 +96,8 @@ public final class SeasonEntry {
     if (online.isEmpty()) {
       return;
     }
-    Map<String, Long> baseline = platform.statistics().general(player);
+    Map<String, Long> baseline = new java.util.HashMap<>(platform.statistics().general(player));
+    baseline.putAll(platform.statistics().counts(player));
     PlayerRecord record =
         store
             .getOrCreate(player, online.get().name())

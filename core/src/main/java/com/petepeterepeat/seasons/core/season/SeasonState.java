@@ -4,6 +4,8 @@ package com.petepeterepeat.seasons.core.season;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -22,6 +24,8 @@ import java.util.Set;
  * @param launchApplied whether this season's launch finished its world changes (spawn, dragon flag,
  *     deaths objective); a launch cut short by a crash finishes them at startup
  * @param decorating the decorating window and the cells still open after archiving
+ * @param firsts every season first recorded, this season's and earlier ones', oldest first; season
+ *     cards read earlier seasons' from here after launch
  */
 public record SeasonState(
     int season,
@@ -35,9 +39,11 @@ public record SeasonState(
     Optional<Instant> countdownInterrupted,
     Optional<Integer> initSeason,
     boolean launchApplied,
-    Decorating decorating) {
+    Decorating decorating,
+    List<SeasonFirst> firsts) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
+    firsts = List.copyOf(firsts);
   }
 
   /** A season recorded with {@code /season init} or started at launch. */
@@ -54,7 +60,8 @@ public record SeasonState(
         Optional.empty(),
         Optional.empty(),
         launchedAt.isEmpty(),
-        Decorating.NONE);
+        Decorating.NONE,
+        List.of());
   }
 
   /** The state {@code /season init} records. */
@@ -72,7 +79,8 @@ public record SeasonState(
         Optional.empty(),
         Optional.of(season),
         true,
-        Decorating.NONE);
+        Decorating.NONE,
+        List.of());
   }
 
   /** A season launched from this one's Intermission, keeping what it needs to remember. */
@@ -90,7 +98,8 @@ public record SeasonState(
         Optional.empty(),
         initSeason,
         false,
-        Decorating.NONE);
+        Decorating.NONE,
+        firsts);
   }
 
   public SeasonState withLaunchApplied() {
@@ -106,7 +115,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         true,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -122,7 +132,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -139,7 +150,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -155,7 +167,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -171,7 +184,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -187,7 +201,8 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -203,7 +218,8 @@ public record SeasonState(
         at,
         initSeason,
         launchApplied,
-        decorating);
+        decorating,
+        firsts);
   }
 
   public SeasonState withDecorating(Decorating next) {
@@ -219,6 +235,37 @@ public record SeasonState(
         countdownInterrupted,
         initSeason,
         launchApplied,
+        next,
+        firsts);
+  }
+
+  /** The first recorded for a key in this season, if any. */
+  public java.util.Optional<SeasonFirst> first(String key) {
+    return firsts.stream().filter(f -> f.season() == season && f.key().equals(key)).findFirst();
+  }
+
+  /** One season's firsts, oldest first. */
+  public List<SeasonFirst> firsts(int season) {
+    return firsts.stream().filter(f -> f.season() == season).toList();
+  }
+
+  /** The same state with one more first. */
+  public SeasonState withFirst(SeasonFirst first) {
+    List<SeasonFirst> next = new ArrayList<>(firsts);
+    next.add(first);
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        launchApplied,
+        decorating,
         next);
   }
 }

@@ -89,6 +89,7 @@ public final class SeasonService {
   private Instant startedAt;
   private @Nullable ProgressBar bar;
   private @Nullable ScheduledTask ticker;
+  private boolean autoEndHeld;
 
   /**
    * @param seasonsDirectory {@code <world>/seasons/seasons}, where season files live
@@ -205,6 +206,11 @@ public final class SeasonService {
 
   /** {@code /season end}, with {@code --now} as {@code skipCountdown}. */
   public Transition end(boolean skipCountdown) {
+    if (config.get().anyGalleryLeftOut()
+        && state.map(s -> s.phase() instanceof Phase.Active).orElse(false)) {
+      // Its players would be archived without cells or displays.
+      return new Transition.Refused("end.galleries-left-out");
+    }
     Duration countdown =
         skipCountdown ? Duration.ZERO : config.get().config().schedule().endCountdown();
     Transition transition = apply(new End(countdown));
@@ -230,6 +236,9 @@ public final class SeasonService {
    * Why {@code /season launch} would be refused now, as a messages.yml key; empty if it wouldn't.
    */
   public Optional<String> launchRefusal() {
+    if (config.get().anyGalleryLeftOut()) {
+      return Optional.of("launch.galleries-left-out");
+    }
     Transition would = SeasonMachine.apply(state, new SeasonEvent.Launch(), clock.instant());
     if (would instanceof Transition.Refused refused) {
       return Optional.of(refused.messageKey());
@@ -312,6 +321,14 @@ public final class SeasonService {
     if (snapshot.config().schedule().autoEnd()) {
       Optional<Instant> at = Reminders.autoEndAt(state.get(), startedAt);
       if (at.isPresent() && !now.isBefore(at.get())) {
+        if (snapshot.anyGalleryLeftOut()) {
+          // Waits for the gallery to be fixed, telling admins once.
+          if (!autoEndHeld) {
+            autoEndHeld = true;
+            announcer.admins(ADMIN_PERMISSION, "end.galleries-left-out", "season", seasonNumber());
+          }
+          return;
+        }
         update(state.get().withAutoEndStarted());
         end(false);
       }
@@ -371,6 +388,11 @@ public final class SeasonService {
   /** A season with no file yet keeps the planned end it has. */
   private boolean fileMissing(ConfigSnapshot snapshot) {
     return state.isPresent() && snapshot.season(state.get().season()).isEmpty();
+  }
+
+  /** Records a season first, and saves it. Nothing happens before {@code /season init}. */
+  public void addFirst(SeasonFirst first) {
+    state.ifPresent(current -> update(current.withFirst(first)));
   }
 
   /** Changes the decorating window, and saves it. Nothing happens before {@code /season init}. */

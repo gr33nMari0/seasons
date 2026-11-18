@@ -52,7 +52,8 @@ public final class ScenarioHooks implements CrashPoints {
       Menus menus,
       SerialWriter writer,
       Supplier<ConfigSnapshot> config,
-      java.util.concurrent.Executor serverThread) {}
+      java.util.concurrent.Executor serverThread,
+      java.util.function.BiFunction<PlayerId, Integer, CompletableFuture<List<String>>> cards) {}
 
   /**
    * @param halt stops the server dead, as a crash would
@@ -126,6 +127,11 @@ public final class ScenarioHooks implements CrashPoints {
               first,
               "Record of %s: archivedThrough=%d pending=%d".formatted(name, through, pending));
         });
+  }
+
+  /** A player's season card as plain lines; empty if they have no archive for the season. */
+  public CompletableFuture<List<String>> card(PlayerId player, int season) {
+    return wired().cards().apply(player, season);
   }
 
   /** Opens one archive's view for a viewer; completes with false if there is no such archive. */

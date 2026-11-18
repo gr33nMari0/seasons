@@ -27,7 +27,8 @@ import java.util.OptionalInt;
  * @param name the player's name at archive time; plaques keep it if they rename
  * @param overflow cursor and crafting-grid items that had no room in the inventory
  * @param contentHash {@link ArchiveHash} of the slots archiving clears
- * @param statistics this season's difference of each General-tab statistic
+ * @param statistics this season's difference of each General-tab statistic, and of the block counts
+ *     under {@code seasons:} ids (see {@link com.petepeterepeat.seasons.core.port.Statistics})
  * @param heldSlot the hotbar slot in the player's main hand, which the figure holds
  * @param imported for a cell {@code /hof import} converted, what it took and from where; such a
  *     record has an empty inventory and its hash covers the imported items

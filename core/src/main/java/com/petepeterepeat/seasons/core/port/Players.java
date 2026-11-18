@@ -18,6 +18,14 @@ public interface Players {
   /** Sends a message. Placeholders are always inserted as literal text. */
   void sendMessage(PlayerId id, Message message);
 
+  /**
+   * Opens a written book for a player to read, without any item: nothing is given or left behind.
+   *
+   * @param pages each page's lines
+   */
+  void openBook(
+      PlayerId id, Message title, Message author, java.util.List<java.util.List<Message>> pages);
+
   /** Sends a message to every online player and the console. */
   void broadcast(Message message);
 

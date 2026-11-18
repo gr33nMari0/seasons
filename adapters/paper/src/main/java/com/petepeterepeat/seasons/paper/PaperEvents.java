@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.port.Events;
+import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
@@ -29,6 +30,7 @@ import org.bukkit.event.entity.ItemSpawnEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -53,6 +55,8 @@ final class PaperEvents implements Events, Listener {
   private final PaperInventories inventories;
   private final PaperPlayers players;
   private final PaperDisplays displays;
+  private final PaperAdvancements advancements;
+  private @Nullable Milestones milestones;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
   private @Nullable TripwireReport tripwire;
@@ -62,8 +66,10 @@ final class PaperEvents implements Events, Listener {
       PaperText text,
       PaperInventories inventories,
       PaperPlayers players,
-      PaperDisplays displays) {
+      PaperDisplays displays,
+      PaperAdvancements advancements) {
     this.plugin = plugin;
+    this.advancements = advancements;
     this.text = text;
     this.inventories = inventories;
     this.players = players;
@@ -83,6 +89,22 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void tripwire(TripwireReport report) {
     this.tripwire = report;
+  }
+
+  @Override
+  public void milestones(Milestones listener) {
+    this.milestones = listener;
+    advancements.milestones(listener);
+  }
+
+  /** Arriving in the Nether or the End can be a season first. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onChangedWorld(PlayerChangedWorldEvent event) {
+    Milestones listening = milestones;
+    if (listening != null) {
+      Player player = event.getPlayer();
+      listening.enteredDimension(id(player), player.getWorld().getKey().asString());
+    }
   }
 
   @EventHandler(priority = EventPriority.MONITOR)

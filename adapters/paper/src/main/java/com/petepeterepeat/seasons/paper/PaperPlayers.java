@@ -80,6 +80,24 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public void openBook(
+      PlayerId id, Message title, Message author, java.util.List<java.util.List<Message>> pages) {
+    player(id)
+        .ifPresent(player -> {
+          java.util.List<net.kyori.adventure.text.Component> rendered = new java.util.ArrayList<>();
+          for (java.util.List<Message> page : pages) {
+            rendered.add(
+                net.kyori.adventure.text.Component.join(
+                    net.kyori.adventure.text.JoinConfiguration.newlines(),
+                    page.stream().map(text::render).toList()));
+          }
+          player.openBook(
+              net.kyori.adventure.inventory.Book.book(
+                  text.render(title), text.render(author), rendered));
+        });
+  }
+
+  @Override
   public void broadcast(Message message) {
     server.broadcast(text.render(message));
   }

@@ -72,6 +72,21 @@ class SeasonStoreTest {
   }
 
   @Test
+  void seasonFirstsRoundTripAndOutliveTheirSeason() throws IOException {
+    PlayerId alex = new PlayerId(UUID.randomUUID());
+    SeasonFirst first =
+        new SeasonFirst(
+            2, "advancement:minecraft:story/mine_stone", "Stone Age", alex, "Alex", NOW);
+    SeasonState state = SeasonState.start(2, Stage.OPEN, Optional.empty()).withFirst(first);
+    store().save(state).join();
+
+    assertThat(store().load()).contains(state);
+    SeasonState next = state.next(NOW);
+    assertThat(next.firsts(2)).containsExactly(first);
+    assertThat(next.first("advancement:minecraft:story/mine_stone")).isEmpty();
+  }
+
+  @Test
   void writesAFormatVersion() throws IOException {
     store().save(SeasonState.start(2, Stage.OPEN, Optional.empty())).join();
 

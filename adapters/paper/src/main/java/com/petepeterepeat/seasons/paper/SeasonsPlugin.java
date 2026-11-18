@@ -47,9 +47,9 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperInventories inventories = new PaperInventories(players, codec, archived);
     PaperDisplays displays =
         new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
-    PaperEvents events = new PaperEvents(this, text, inventories, players, displays);
-    PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperAdvancements advancements = new PaperAdvancements(server, players);
+    PaperEvents events = new PaperEvents(this, text, inventories, players, displays, advancements);
+    PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperStorage storage = new PaperStorage(this, server);
     Platform platform =
         new Platform(
