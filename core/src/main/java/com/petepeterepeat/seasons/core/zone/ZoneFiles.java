@@ -23,6 +23,10 @@ import org.spongepowered.configurate.serialize.SerializationException;
  *   old-world:  { dimension: minecraft:overworld, shape: { cylinder: { center: [0, 0], radius: 12000 } }, mode: block, lockedUntil: homecoming, afterUnlock: off }
  *   old-nether: { dimension: minecraft:the_nether, shape: { cylinder: { center: [0, 0], radius: 1500, maxY: 127 } } }
  *   far-build:  { dimension: minecraft:overworld, shape: { box: { min: [9000, -64, 200], max: [9100, 320, 300] } }, exempt: [{ min: [9010, 60, 210], max: [9020, 80, 220] }] }
+ *   frontier:   { shape: { outside: { circle: { center: [18450, -9120], radius: 6000 } } } }
+ *   edge:       { shape: { outside: { box: { min: [-30000, -30000], max: [30000, 30000] } } } }
+ *   sky:        { shape: { y-above: 200 } }
+ *   roof:       { dimension: minecraft:the_nether, shape: { y-below: 127 } }
  * homecoming:
  *   unlock: { manual: true }
  * </pre>
@@ -33,6 +37,7 @@ import org.spongepowered.configurate.serialize.SerializationException;
  */
 public final class ZoneFiles {
   private static final Pattern DIMENSION = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
+  private static final String SHAPES = "cylinder, box, outside, y-above or y-below";
 
   private ZoneFiles() {}
 
@@ -116,29 +121,72 @@ public final class ZoneFiles {
 
   private static ZoneShape shape(ConfigurationNode node, String path) throws Invalid {
     if (!node.isMap() || node.childrenMap().size() != 1) {
-      throw new Invalid(path, "a shape is one of cylinder or box");
+      throw new Invalid(path, "a shape is one of " + SHAPES);
     }
     String kind = String.valueOf(node.childrenMap().keySet().iterator().next());
     ConfigurationNode shape = node.node(kind);
     return switch (kind) {
       case "cylinder" -> cylinder(shape, path + ".cylinder");
       case "box" -> box(shape, path + ".box");
-      case "outside", "y-above", "y-below" ->
-          throw new Invalid(path, kind + " isn't built yet; cylinder and box are");
-      default -> throw new Invalid(path, "a shape is one of cylinder or box, not " + kind);
+      case "outside" -> outside(shape, path + ".outside");
+      case "y-above" -> new ZoneShape.YAbove(height(shape, path + ".y-above"));
+      case "y-below" -> new ZoneShape.YBelow(height(shape, path + ".y-below"));
+      default -> throw new Invalid(path, "a shape is one of " + SHAPES + ", not " + kind);
     };
   }
 
-  private static ZoneShape.Cylinder cylinder(ConfigurationNode node, String path) throws Invalid {
-    double[] center = numbers(node.node("center"), 2, path + ".center", "[x, z]");
+  /**
+   * {@code outside: { circle: { center: [x, z], radius: r } }} or {@code { box: { min, max } }}.
+   */
+  private static ZoneShape outside(ConfigurationNode node, String path) throws Invalid {
+    if (!node.isMap() || node.childrenMap().size() != 1) {
+      throw new Invalid(path, "is the outside of one circle or one box");
+    }
+    String kind = String.valueOf(node.childrenMap().keySet().iterator().next());
+    ConfigurationNode inner = node.node(kind);
+    String at = path + "." + kind;
+    return switch (kind) {
+      case "circle" -> {
+        double[] center = numbers(inner.node("center"), 2, at + ".center", "[x, z]");
+        yield new ZoneShape.OutsideCircle(center[0], center[1], radius(inner, at));
+      }
+      case "box" -> {
+        double[] min = numbers(inner.node("min"), 2, at + ".min", "[x, z]");
+        double[] max = numbers(inner.node("max"), 2, at + ".max", "[x, z]");
+        yield ZoneShape.OutsideBox.between(
+            (int) Math.floor(min[0]),
+            (int) Math.floor(min[1]),
+            (int) Math.floor(max[0]),
+            (int) Math.floor(max[1]));
+      }
+      default -> throw new Invalid(path, "is the outside of a circle or a box, not " + kind);
+    };
+  }
+
+  /** The y of {@code y-above} or {@code y-below}: a whole number. */
+  private static int height(ConfigurationNode node, String path) throws Invalid {
+    if (!(node.raw() instanceof Number number)
+        || number.doubleValue() != Math.rint(number.doubleValue())) {
+      throw new Invalid(path, "needs a whole number, the y it starts at");
+    }
+    return number.intValue();
+  }
+
+  private static double radius(ConfigurationNode node, String path) throws Invalid {
     Object radius = node.node("radius").raw();
     if (!(radius instanceof Number number) || !(number.doubleValue() > 0)) {
       throw new Invalid(path + ".radius", "needs a number of blocks more than 0");
     }
+    return number.doubleValue();
+  }
+
+  private static ZoneShape.Cylinder cylinder(ConfigurationNode node, String path) throws Invalid {
+    double[] center = numbers(node.node("center"), 2, path + ".center", "[x, z]");
+    double radius = radius(node, path);
     OptionalInt minY = whole(node.node("minY"), path + ".minY");
     OptionalInt maxY = whole(node.node("maxY"), path + ".maxY");
     try {
-      return new ZoneShape.Cylinder(center[0], center[1], number.doubleValue(), minY, maxY);
+      return new ZoneShape.Cylinder(center[0], center[1], radius, minY, maxY);
     } catch (IllegalArgumentException e) {
       throw new Invalid(path, String.valueOf(e.getMessage()));
     }
@@ -276,6 +324,19 @@ public final class ZoneFiles {
         }
       }
       case ZoneShape.Box box -> writeBox(node.node("shape", "box"), box);
+      case ZoneShape.OutsideCircle circle -> {
+        ConfigurationNode at = node.node("shape", "outside", "circle");
+        at.node("center").appendListNode().set(number(circle.centerX()));
+        at.node("center").appendListNode().set(number(circle.centerZ()));
+        at.node("radius").set(number(circle.radius()));
+      }
+      case ZoneShape.OutsideBox box -> {
+        ConfigurationNode at = node.node("shape", "outside", "box");
+        at.node("min").setList(Integer.class, List.of(box.minX(), box.minZ()));
+        at.node("max").setList(Integer.class, List.of(box.maxX(), box.maxZ()));
+      }
+      case ZoneShape.YAbove above -> node.node("shape", "y-above").set(above.y());
+      case ZoneShape.YBelow below -> node.node("shape", "y-below").set(below.y());
     }
     node.node("mode").set(zone.mode().id());
     writeCondition(node.node("lockedUntil"), zone.lockedUntil());

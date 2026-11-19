@@ -43,11 +43,65 @@ class ZoneShapesTest {
   }
 
   @Test
+  void anOutsideCircleIsExactlyWhatTheCylinderLeavesOut() {
+    ZoneShape cylinder =
+        new ZoneShape.Cylinder(3000, -20, 25, OptionalInt.empty(), OptionalInt.empty());
+    ZoneShape outside = new ZoneShape.OutsideCircle(3000, -20, 25);
+    for (int x = 2960; x <= 3040; x++) {
+      for (int z = -60; z <= 20; z++) {
+        assertThat(outside.contains(x, 64, z)).isNotEqualTo(cylinder.contains(x, 64, z));
+      }
+    }
+    assertThat(outside.contains(3100, -64, 0)).isTrue();
+    assertThat(outside.contains(3100, 319, 0)).isTrue();
+  }
+
+  @Test
+  void anOutsideBoxHoldsEveryColumnBeyondItAtEveryHeight() {
+    ZoneShape edge = ZoneShape.OutsideBox.between(100, 100, -100, -100);
+    assertThat(edge.contains(100, 64, -100)).isFalse();
+    assertThat(edge.contains(0, -64, 0)).isFalse();
+    assertThat(edge.contains(101, 64, 0)).isTrue();
+    assertThat(edge.contains(0, 320, -101)).isTrue();
+  }
+
+  @Test
+  void heightZonesIncludeTheirYAcrossTheWholeDimension() {
+    ZoneShape sky = new ZoneShape.YAbove(128);
+    assertThat(sky.contains(0, 128, 0)).isTrue();
+    assertThat(sky.contains(25_000_000, 300, -25_000_000)).isTrue();
+    assertThat(sky.contains(0, 127, 0)).isFalse();
+    ZoneShape roof = new ZoneShape.YBelow(127);
+    assertThat(roof.contains(5, 127, 5)).isTrue();
+    assertThat(roof.contains(5, 128, 5)).isFalse();
+    assertThat(roof.reaches(0, 0, 15, 15)).isTrue();
+  }
+
+  @Test
+  void anOutsideShapeDoesntReachChunksWhollyInsideIt() {
+    ZoneShape frontier = new ZoneShape.OutsideCircle(0, 0, 100);
+    assertThat(frontier.reaches(0, 0, 15, 15)).isFalse();
+    assertThat(frontier.reaches(-16, -16, -1, -1)).isFalse();
+    assertThat(frontier.reaches(96, 0, 111, 15)).isTrue();
+    ZoneShape edge = new ZoneShape.OutsideBox(-100, -100, 100, 100);
+    assertThat(edge.reaches(96, 96, 100, 100)).isFalse();
+    assertThat(edge.reaches(96, 96, 111, 111)).isTrue();
+    ZoneShape cylinder =
+        new ZoneShape.Cylinder(0, 0, 100, OptionalInt.empty(), OptionalInt.empty());
+    assertThat(cylinder.reaches(0, 0, 15, 15)).isTrue();
+    assertThat(cylinder.reaches(112, 0, 127, 15)).isFalse();
+  }
+
+  @Test
   void badShapesAreRefused() {
     assertThatThrownBy(
             () -> new ZoneShape.Cylinder(0, 0, 0, OptionalInt.empty(), OptionalInt.empty()))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new ZoneShape.Cylinder(0, 0, 5, OptionalInt.of(10), OptionalInt.of(9)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new ZoneShape.OutsideCircle(0, 0, 0))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new ZoneShape.OutsideBox(5, 0, 4, 0))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
