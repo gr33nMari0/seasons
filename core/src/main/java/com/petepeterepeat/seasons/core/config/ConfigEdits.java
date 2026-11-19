@@ -88,6 +88,21 @@ public final class ConfigEdits {
       FileEdit edit,
       String failedKey,
       Runnable done) {
+    edit(source, change, file, edit, failedKey, done, new String[0]);
+  }
+
+  /**
+   * As {@link #edit(CommandSource, Change, Path, FileEdit, String, Runnable)}, with more
+   * placeholders for {@code failedKey}'s message, as name, value pairs.
+   */
+  public void edit(
+      CommandSource source,
+      Change change,
+      Path file,
+      FileEdit edit,
+      String failedKey,
+      Runnable done,
+      String... failedPlaceholders) {
     var _ =
         writer
             .submit(() -> writeAndLoad(file, edit))
@@ -96,12 +111,13 @@ public final class ConfigEdits {
                     .scheduler()
                     .runGlobal(() -> {
                       if (failure != null || result.snapshot().isEmpty()) {
-                        String error =
-                            failure != null
-                                ? String.valueOf(failure.getMessage())
-                                : firstProblem(result);
+                        String error = failure != null ? reason(failure) : firstProblem(result);
                         LOG.error("A config edit ({}) failed: {}", change.target(), error, failure);
-                        source.reply(messages().get(failedKey, "error", error));
+                        String[] placeholders =
+                            Arrays.copyOf(failedPlaceholders, failedPlaceholders.length + 2);
+                        placeholders[failedPlaceholders.length] = "error";
+                        placeholders[failedPlaceholders.length + 1] = error;
+                        source.reply(messages().get(failedKey, placeholders));
                         return;
                       }
                       config.set(result.snapshot().get());
@@ -163,6 +179,17 @@ public final class ConfigEdits {
               + ")",
           e);
     }
+  }
+
+  /** Why an edit failed, from inside the wrappers the writer thread put round it. */
+  private static String reason(Throwable failure) {
+    Throwable cause = failure;
+    while ((cause instanceof java.util.concurrent.CompletionException
+            || cause instanceof java.io.UncheckedIOException)
+        && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return String.valueOf(cause.getMessage());
   }
 
   /** The first reason a load failed, as admins read it. */

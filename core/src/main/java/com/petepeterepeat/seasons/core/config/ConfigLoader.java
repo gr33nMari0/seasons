@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -112,8 +113,18 @@ public final class ConfigLoader {
   /** The bundled defaults, with no secrets and no season files. */
   public static ConfigSnapshot defaults() {
     try {
-      SeasonsConfig config = map(bundledNode(CONFIG));
-      return new ConfigSnapshot(config, Messages.defaults(), Secrets.none(), Map.of());
+      ConfigurationNode bundled = bundledNode(CONFIG);
+      SeasonsConfig config = map(bundled);
+      return new ConfigSnapshot(
+          config,
+          Messages.defaults(),
+          Secrets.none(),
+          Map.of(),
+          Map.of(),
+          Map.of(),
+          Waypoints.NONE,
+          List.of(),
+          settings(bundled, bundled));
     } catch (IOException e) {
       throw new IllegalStateException("The bundled config.yml doesn't load", e);
     }
@@ -127,6 +138,11 @@ public final class ConfigLoader {
   /** {@code <world>/seasons/markers.yml}, the shared waypoints. */
   public Path markersFile() {
     return markersFile;
+  }
+
+  /** {@code plugins/Seasons/config.yml}. */
+  public Path configFile() {
+    return configDirectory.resolve(CONFIG);
   }
 
   /** Writes the bundled config.yml, messages.yml and secrets.yml where a server has none. */
@@ -164,7 +180,8 @@ public final class ConfigLoader {
     List<ConfigProblem> problems = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
-    SeasonsConfig config = loadConfig(problems, warnings);
+    Map<String, String> settings = new LinkedHashMap<>();
+    SeasonsConfig config = loadConfig(problems, warnings, settings);
     Messages messages = loadMessages(problems);
     Secrets secrets = loadSecrets(problems);
     Map<Integer, SeasonFile> seasons = loadSeasons(problems, warnings);
@@ -185,7 +202,15 @@ public final class ConfigLoader {
     return new Result(
         Optional.of(
             new ConfigSnapshot(
-                config, messages, secrets, seasons, galleries, leftOut, waypoints, markersLeftOut)),
+                config,
+                messages,
+                secrets,
+                seasons,
+                galleries,
+                leftOut,
+                waypoints,
+                markersLeftOut,
+                settings)),
         problems,
         warnings);
   }
@@ -285,7 +310,13 @@ public final class ConfigLoader {
     return Waypoints.NONE;
   }
 
-  private @Nullable SeasonsConfig loadConfig(List<ConfigProblem> problems, List<String> warnings) {
+  /**
+   * config.yml over the bundled defaults.
+   *
+   * @param settings filled with every setting's value as written, for {@code /season config get}
+   */
+  private @Nullable SeasonsConfig loadConfig(
+      List<ConfigProblem> problems, List<String> warnings, Map<String, String> settings) {
     Path file = configDirectory.resolve(CONFIG);
     try {
       ConfigurationNode node = Files.exists(file) ? yaml(file).load() : yamlNode();
@@ -297,6 +328,7 @@ public final class ConfigLoader {
       node.mergeFrom(defaults);
       SeasonsConfig config = map(node);
       validate(config, problems);
+      settings.putAll(settings(node, defaults));
       return config;
     } catch (ParsingException e) {
       problems.add(syntax(CONFIG, e));
@@ -635,6 +667,41 @@ public final class ConfigLoader {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Every setting the bundled config.yml has, in its order, by key path, with its value in {@code
+   * merged} as text: a list as {@code [a, b]}. Keys only a server's file has are left out.
+   */
+  static Map<String, String> settings(ConfigurationNode merged, ConfigurationNode defaults) {
+    Map<String, String> out = new LinkedHashMap<>();
+    collect(merged, defaults, out);
+    out.remove(SCHEMA_KEY);
+    return out;
+  }
+
+  private static void collect(
+      ConfigurationNode merged, ConfigurationNode defaults, Map<String, String> out) {
+    for (Map.Entry<Object, ? extends ConfigurationNode> child : defaults.childrenMap().entrySet()) {
+      ConfigurationNode value = merged.node(child.getKey());
+      if (child.getValue().isMap()) {
+        collect(value, child.getValue(), out);
+      } else {
+        out.put(dotted(child.getValue()), text(value));
+      }
+    }
+  }
+
+  /** A setting's value as admins read it. */
+  private static String text(ConfigurationNode node) {
+    if (node.isList()) {
+      List<String> items = new ArrayList<>();
+      for (ConfigurationNode item : node.childrenList()) {
+        items.add(text(item));
+      }
+      return "[" + String.join(", ", items) + "]";
+    }
+    return String.valueOf(node.raw());
   }
 
   /** Keys in a server's file that the bundled defaults don't have: a warning, not an error. */

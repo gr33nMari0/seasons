@@ -72,6 +72,26 @@ class ZoneFilesTest {
   }
 
   @Test
+  void theOutsideAndHeightShapesRead() throws Exception {
+    Map<String, Zone> zones =
+        ZoneFiles.zones(
+            yaml(
+                """
+                frontier: { shape: { outside: { circle: { center: [18450, -9120], radius: 6000 } } } }
+                edge:     { shape: { outside: { box: { min: [30000, 30000], max: [-30000, -30000] } } } }
+                sky:      { shape: { y-above: 200 } }
+                roof:     { dimension: minecraft:the_nether, shape: { y-below: 127 } }
+                """));
+    assertThat(zones.get("frontier").shape())
+        .isEqualTo(new ZoneShape.OutsideCircle(18450, -9120, 6000));
+    assertThat(zones.get("edge").shape())
+        .isEqualTo(new ZoneShape.OutsideBox(-30000, -30000, 30000, 30000));
+    assertThat(zones.get("sky").shape()).isEqualTo(new ZoneShape.YAbove(200));
+    assertThat(zones.get("roof").shape()).isEqualTo(new ZoneShape.YBelow(127));
+    assertThat(zones.get("roof").dimension()).isEqualTo("minecraft:the_nether");
+  }
+
+  @Test
   void whatCommandsWriteReadsBackTheSame() throws Exception {
     Zone zone =
         new Zone(
@@ -91,9 +111,18 @@ class ZoneFilesTest {
             "base",
             "minecraft:overworld",
             new ZoneShape.Cylinder(500, -20, 30, OptionalInt.of(-10), OptionalInt.of(80)));
+    List<Zone> shapes =
+        List.of(
+            Zone.drawn("frontier", "minecraft:overworld", new ZoneShape.OutsideCircle(3000, 0, 50)),
+            Zone.drawn("edge", "minecraft:overworld", new ZoneShape.OutsideBox(-5, -6, 7, 8)),
+            Zone.drawn("sky", "minecraft:overworld", new ZoneShape.YAbove(200)),
+            Zone.drawn("roof", "minecraft:the_nether", new ZoneShape.YBelow(127)));
     ConfigurationNode root = YamlConfigurationLoader.builder().build().createNode();
     ZoneFiles.write(root.node("zones"), zone);
     ZoneFiles.write(root.node("zones"), circle);
+    for (Zone shaped : shapes) {
+      ZoneFiles.write(root.node("zones"), shaped);
+    }
     StringWriter out = new StringWriter();
     YamlConfigurationLoader.builder()
         .nodeStyle(NodeStyle.BLOCK)
@@ -104,6 +133,8 @@ class ZoneFilesTest {
     assertThat(out.toString()).doesNotContain("afterUnlock: off\n").contains("radius: 30\n");
     Map<String, Zone> read = ZoneFiles.zones(yaml(out.toString()).node("zones"));
     assertThat(read).containsEntry("far-build", zone).containsEntry("base", circle);
+    assertThat(read.values()).containsAll(shapes);
+    assertThat(out.toString()).contains("y-above: 200\n").contains("y-below: 127\n");
   }
 
   @Test
@@ -111,9 +142,34 @@ class ZoneFilesTest {
     assertThatThrownBy(() ->
             ZoneFiles.zones(yaml("ring: { shape: { outside: { center: [0, 0], radius: 5 } } }")))
         .isInstanceOf(ZoneFiles.Invalid.class)
-        .hasMessageContaining("outside isn't built yet")
+        .hasMessageContaining("one circle or one box")
         .extracting(e -> ((ZoneFiles.Invalid) e).path())
-        .isEqualTo("zones.ring.shape");
+        .isEqualTo("zones.ring.shape.outside");
+    assertThatThrownBy(() ->
+            ZoneFiles.zones(
+                yaml("ring: { shape: { outside: { circle: { center: [0, 0], radius: 0 } } } }")))
+        .extracting(e -> ((ZoneFiles.Invalid) e).path())
+        .isEqualTo("zones.ring.shape.outside.circle.radius");
+    assertThatThrownBy(() ->
+            ZoneFiles.zones(
+                yaml("ring: { shape: { outside: { box: { min: [0, 0, 0], max: [1, 1] } } } }")))
+        .extracting(e -> ((ZoneFiles.Invalid) e).path())
+        .isEqualTo("zones.ring.shape.outside.box.min");
+    assertThatThrownBy(() ->
+            ZoneFiles.zones(
+                yaml(
+                    "ring: { shape: { outside: { circle: { center: [0, 0], radius: 5 }, box: {"
+                        + " min: [0, 0], max: [1, 1] } } } }")))
+        .extracting(e -> ((ZoneFiles.Invalid) e).path())
+        .isEqualTo("zones.ring.shape.outside");
+    assertThatThrownBy(() -> ZoneFiles.zones(yaml("sky: { shape: { y-above: high } }")))
+        .extracting(e -> ((ZoneFiles.Invalid) e).path())
+        .isEqualTo("zones.sky.shape.y-above");
+    assertThatThrownBy(() -> ZoneFiles.zones(yaml("sky: { shape: { y-below: 1.5 } }")))
+        .extracting(e -> ((ZoneFiles.Invalid) e).path())
+        .isEqualTo("zones.sky.shape.y-below");
+    assertThatThrownBy(() -> ZoneFiles.zones(yaml("sky: { shape: { sphere: 5 } }")))
+        .hasMessageContaining("cylinder, box, outside, y-above or y-below, not sphere");
     assertThatThrownBy(() ->
             ZoneFiles.zones(yaml("base: { shape: { cylinder: { center: [0, 0], radius: -3 } } }")))
         .isInstanceOf(ZoneFiles.Invalid.class)

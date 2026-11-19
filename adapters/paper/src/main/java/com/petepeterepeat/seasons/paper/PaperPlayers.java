@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.message.Message;
+import com.petepeterepeat.seasons.core.port.BorderSquare;
 import com.petepeterepeat.seasons.core.port.Experience;
 import com.petepeterepeat.seasons.core.port.Movement;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -30,6 +31,7 @@ import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
+import org.bukkit.WorldBorder;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Entity;
@@ -324,6 +326,23 @@ final class PaperPlayers implements Players {
           player.leaveVehicle();
           player.setGliding(false);
           player.setVelocity(new Vector());
+        });
+  }
+
+  @Override
+  public void showBorder(PlayerId id, Optional<BorderSquare> border) {
+    player(id)
+        .ifPresent(player -> {
+          if (border.isEmpty()) {
+            player.setWorldBorder(null);
+            return;
+          }
+          // A virtual border: the world's own is never changed, and its coordinates aren't scaled
+          // in the Nether.
+          WorldBorder own = server.createWorldBorder();
+          own.setCenter(border.get().centerX(), border.get().centerZ());
+          own.setSize(Math.min(border.get().size(), own.getMaxSize()));
+          player.setWorldBorder(own);
         });
   }
 

@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.integrations.bluemap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.flowpowered.math.vector.Vector2i;
 import com.petepeterepeat.seasons.core.map.MapModel;
@@ -244,6 +245,35 @@ class BlueMapPublisherTest {
           .isLessThanOrEqualTo(0.5);
     }
     assertThat(BlueMapPublisher.points(1_000_000)).isEqualTo(720);
+  }
+
+  @Test
+  void anOutsideZoneIsARingWithItsInsideAsAHoleAndSitsAtItsFrontier() throws Exception {
+    FakeBlueMap api = blueMap();
+    BlueMapPublisher publisher = publisher();
+    Area frontier =
+        new Area(
+            "zone-frontier",
+            "frontier: locked until Homecoming",
+            OVERWORLD,
+            Outline.Beyond.around(new Outline.Circle(18450, -9120, 6000)),
+            List.of(new Outline.Rectangle(-10, -10, 11, 11)),
+            -64,
+            320,
+            Style.LOCKED);
+
+    publisher.publish(new MapModel("Seasons", List.of(), List.of(frontier), List.of()));
+    publisher.flush();
+
+    ExtrudeMarker zone =
+        (ExtrudeMarker) api.maps.get("world").getMarkerSets().get("seasons").get("zone-frontier");
+    // The ring's outer edge, 18,000 from the centre: twice the radius beyond the circle.
+    assertThat(zone.getShape().getMin().getX()).isCloseTo(18450 - 18000, within(1.0));
+    assertThat(zone.getShape().getMax().getY()).isCloseTo(-9120 + 18000, within(1.0));
+    assertThat(zone.getHoles()).hasSize(2);
+    assertThat(zone.getHoles().iterator().next().getMin().getX()).isCloseTo(12450, within(1.0));
+    assertThat(zone.getPosition().getX()).isEqualTo(18450);
+    assertThat(zone.getPosition().getZ()).isEqualTo(-9120);
   }
 
   @Test

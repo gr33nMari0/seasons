@@ -99,6 +99,12 @@ public interface Players {
   /** Stops an online player where they are: off any mount, out of elytra flight, no velocity. */
   void stopMoving(PlayerId id);
 
+  /**
+   * Shows one online player a world border of their own, visual only, or with none puts back the
+   * border of the world they are in. The world's own border never changes.
+   */
+  void showBorder(PlayerId id, Optional<BorderSquare> border);
+
   /** Celebration fireworks at a position, which hurt nobody. */
   void fireworks(Position at);
 

@@ -253,6 +253,34 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void aSpawnOrCandidateBeyondAnOutsideZoneOrInAHeightZoneLoadsWithAWarning() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        spawn: { dimension: minecraft:overworld, pos: [3000, -60, 0] }
+        spawnCandidates:
+          mesa: { pos: [3010, 80, 0] }
+          dune: { pos: [3005, 60, 0] }
+        zones:
+          frontier: { shape: { outside: { circle: { center: [3300, 0], radius: 295 } } } }
+          sky: { shape: { y-above: 70 } }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.warnings())
+        .containsExactlyInAnyOrder(
+            "seasons/3.yml: Season 3's spawn at 3000, -60, 0 is inside zone frontier; /season"
+                + " launch is refused until one of them moves",
+            "seasons/3.yml: Season 3's spawn candidate mesa at 3010, 80, 0 is inside zone sky;"
+                + " every candidate must stay outside every zone");
+  }
+
+  @Test
   void spawnCandidatesLoadAndOneInsideAZoneIsAWarning() throws IOException {
     Files.createDirectories(worldDir().resolve("seasons"));
     Files.writeString(

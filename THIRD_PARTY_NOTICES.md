@@ -6,6 +6,7 @@ Seasons and Seasons Web are licensed under the PolyForm Noncommercial License 1.
 | --- | --- | --- | --- |
 | [Configurate](https://github.com/SpongePowered/Configurate) (`configurate-core`, `configurate-yaml`, which itself bundles SnakeYAML, and `configurate-gson`) | 4.2.0 | Apache-2.0 | Seasons |
 | [Gson](https://github.com/google/gson) (for `configurate-gson`) | 2.15.0 | Apache-2.0 | Seasons |
+| [SnakeYAML](https://bitbucket.org/snakeyaml/snakeyaml) (editing `config.yml` in place, ADR 0005) | 2.7 | Apache-2.0 | Seasons |
 | [geantyref](https://github.com/leangen/geantyref) (a Configurate dependency) | 1.3.16 | Apache-2.0 | Seasons |
 | [option](https://github.com/KyoriPowered/option) (a Configurate dependency) | 1.1.0 | MIT | Seasons |
 

@@ -5,6 +5,8 @@ paper = "26.3.build.+"
 configurate = "4.2.0"
 # configurate-gson asks for Gson 2.8.0 (2016); the bundled copy is this newer one.
 gson = "2.15.0"
+# Editing config.yml in place for /season config set (docs/adr/0005-snakeyaml-for-config-set.md).
+snakeyaml = "2.7"
 bstats = "3.2.1"
 bluemap = "2.8.2"
 # Test servers only: BlueMap on the scenario server that asks for it (docs/adr/0004). The API it
@@ -30,6 +32,7 @@ configurate-yaml = { module = "org.spongepowered:configurate-yaml", version.ref 
 # JSON data files (docs/adr/0002-configurate-gson.md).
 configurate-gson = { module = "org.spongepowered:configurate-gson", version.ref = "configurate" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 bluemap-api = { module = "de.bluecolored:bluemap-api", version.ref = "bluemap" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }

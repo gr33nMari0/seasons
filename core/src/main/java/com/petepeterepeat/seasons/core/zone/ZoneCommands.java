@@ -142,6 +142,21 @@ public final class ZoneCommands {
         }
         shape = box(words);
       }
+      case "outside" -> {
+        if (words.size() >= 2 && words.get(1).equals("circle")) {
+          if (source.player().isEmpty()) {
+            source.reply(messages.get("zone.player-only"));
+            return;
+          }
+          shape = outsideCircle(platform.players().position(source.player().get()), words);
+        } else if (words.size() == 2 && words.get(1).equals("box")) {
+          source.reply(messages.get("zone.outside-corners", "id", id));
+          return;
+        } else {
+          shape = outsideBox(words);
+        }
+      }
+      case "y-above", "y-below" -> shape = height(words);
       default -> shape = Optional.empty();
     }
     if (shape.isEmpty()) {
@@ -244,6 +259,49 @@ public final class ZoneCommands {
       }
       return Optional.of(ZoneShape.Box.between(c[0], c[1], c[2], c[3], c[4], c[5]));
     } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
+  }
+
+  /** {@code outside circle <radius>}, centred on the block at {@code at}, as a cylinder is. */
+  private static Optional<ZoneShape> outsideCircle(Position at, List<String> words) {
+    if (words.size() != 3) {
+      return Optional.empty();
+    }
+    try {
+      return Optional.of(
+          new ZoneShape.OutsideCircle(at.blockX(), at.blockZ(), Integer.parseInt(words.get(2))));
+    } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
+  }
+
+  /** {@code outside box <x1> <z1> <x2> <z2>}. */
+  private static Optional<ZoneShape> outsideBox(List<String> words) {
+    if (words.size() != 6 || !words.get(1).equals("box")) {
+      return Optional.empty();
+    }
+    try {
+      int[] c = new int[4];
+      for (int i = 0; i < 4; i++) {
+        c[i] = Integer.parseInt(words.get(i + 2));
+      }
+      return Optional.of(ZoneShape.OutsideBox.between(c[0], c[1], c[2], c[3]));
+    } catch (IllegalArgumentException e) {
+      return Optional.empty();
+    }
+  }
+
+  /** {@code y-above <y>} or {@code y-below <y>}. */
+  private static Optional<ZoneShape> height(List<String> words) {
+    if (words.size() != 2) {
+      return Optional.empty();
+    }
+    try {
+      int y = Integer.parseInt(words.get(1));
+      return Optional.of(
+          words.getFirst().equals("y-above") ? new ZoneShape.YAbove(y) : new ZoneShape.YBelow(y));
+    } catch (NumberFormatException e) {
       return Optional.empty();
     }
   }
@@ -455,7 +513,10 @@ public final class ZoneCommands {
     return config.get().season(season);
   }
 
-  /** A shape as admins read it: "a cylinder of radius 12 around 200, 200 up to y 80". */
+  /**
+   * A shape as admins read it: "a cylinder of radius 12 around 200, 200 up to y 80", "everywhere
+   * beyond a circle of radius 6000 around 18450, -9120" or "everything from y 200 up".
+   */
   private String describe(ZoneShape shape) {
     Messages messages = messages();
     return switch (shape) {
@@ -493,6 +554,30 @@ public final class ZoneCommands {
               Integer.toString(b.maxY()),
               "z2",
               Integer.toString(b.maxZ()));
+      case ZoneShape.OutsideCircle c ->
+          messages.text(
+              "zone.shape.outside-circle",
+              "radius",
+              number(c.radius()),
+              "x",
+              number(c.centerX()),
+              "z",
+              number(c.centerZ()));
+      case ZoneShape.OutsideBox b ->
+          messages.text(
+              "zone.shape.outside-box",
+              "x1",
+              Integer.toString(b.minX()),
+              "z1",
+              Integer.toString(b.minZ()),
+              "x2",
+              Integer.toString(b.maxX()),
+              "z2",
+              Integer.toString(b.maxZ()));
+      case ZoneShape.YAbove above ->
+          messages.text("zone.shape.y-above", "y", Integer.toString(above.y()));
+      case ZoneShape.YBelow below ->
+          messages.text("zone.shape.y-below", "y", Integer.toString(below.y()));
     };
   }
 

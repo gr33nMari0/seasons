@@ -221,3 +221,36 @@ export async function zoneList (ctx, admin, ids) {
   const lines = await ctx.command(admin, '/season zone list', ids.map((id) => new RegExp(`^${id}: `)))
   return Object.fromEntries(ids.map((id, i) => [id, lines[i]]))
 }
+
+/** Whether a position is inside a circle of `radius` around `centre`, as Seasons counts blocks. */
+export function inCircle (centre, radius, at) {
+  const dx = Math.floor(at.x) + 0.5 - centre.x
+  const dz = Math.floor(at.z) + 0.5 - centre.z
+  return dx * dx + dz * dz <= radius * radius
+}
+
+/**
+ * Draws an `outside circle` zone standing at its centre, which must hold the spawn: everything
+ * beyond the circle is the zone. Keeps the chunks out to a little past the edge loaded.
+ */
+export async function outsideCircle (ctx, admin, id, centre, radius) {
+  await forceload(ctx, admin, centre, radius + 24)
+  await standAt(ctx, admin, admin.username, centre)
+  await ctx.command(admin, `/season zone add ${id} outside circle ${radius}`, new RegExp(`^Added zone ${id}: everywhere beyond a circle of radius ${radius} around ${centre.x}, ${centre.z} in `))
+}
+
+/**
+ * Follows the world border a bot's client knows, from the border packets the server sends:
+ * `bot.border` is { x, z, size }. The packet sent at login has gone by when a bot has joined, so
+ * it starts as the world's own border, which scenarios check with /worldborder get.
+ */
+export function trackBorder (bot) {
+  bot.border = { x: 0, z: 0, size: WORLD_BORDER }
+  bot._client.on('initialize_world_border', (p) => { bot.border = { x: p.x, z: p.z, size: Number(p.newDiameter) } })
+  bot._client.on('world_border_center', (p) => { bot.border = { ...bot.border, x: p.x, z: p.z } })
+  bot._client.on('world_border_size', (p) => { bot.border = { ...bot.border, size: Number(p.diameter) } })
+  bot._client.on('world_border_lerp_size', (p) => { bot.border = { ...bot.border, size: Number(p.newDiameter) } })
+}
+
+/** The size of the world's own border, which Seasons never changes. */
+export const WORLD_BORDER = 59999968

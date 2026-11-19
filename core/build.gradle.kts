@@ -9,5 +9,6 @@ dependencies {
     testImplementation(libs.slf4j.api)
     implementation(libs.configurate.yaml)
     implementation(libs.configurate.gson)
+    implementation(libs.snakeyaml)
     implementation(libs.gson)
 }

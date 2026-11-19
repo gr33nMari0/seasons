@@ -84,12 +84,13 @@ final class ZoneMap {
             _ -> {
               List<Live> found = new ArrayList<>();
               for (Live live : zones) {
-                ZoneShape shape = live.zone().shape();
+                // An outside shape doesn't reach a chunk wholly inside its circle or box, so
+                // inside a frontier, where players spend their time, no lookup checks it.
                 if (live.zone().dimension().equals(position.dimension())
-                    && shape.maxX() >= chunkX << 4
-                    && shape.minX() <= (chunkX << 4) + 15
-                    && shape.maxZ() >= chunkZ << 4
-                    && shape.minZ() <= (chunkZ << 4) + 15) {
+                    && live.zone()
+                        .shape()
+                        .reaches(
+                            chunkX << 4, chunkZ << 4, (chunkX << 4) + 15, (chunkZ << 4) + 15)) {
                   found.add(live);
                 }
               }

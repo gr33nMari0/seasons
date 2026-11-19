@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.config.ConfigCommands;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -389,6 +390,7 @@ public final class Seasons implements SeasonsApi {
     nodes.add(
         new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
             .node());
+    nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
     platform.commands().register(built.root(nodes));
     platform
         .commands()
@@ -489,6 +491,12 @@ public final class Seasons implements SeasonsApi {
       public void enteredDimension(PlayerId player, String dimension) {
         first.enteredDimension(player, dimension);
         second.enteredDimension(player, dimension);
+      }
+
+      @Override
+      public void respawned(PlayerId player) {
+        first.respawned(player);
+        second.respawned(player);
       }
 
       @Override

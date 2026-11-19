@@ -11,6 +11,7 @@ import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.BorderSquare;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -194,6 +195,247 @@ class ZonesTest {
         .isInstanceOf(Decision.Deny.class)
         .extracting(d -> Messages.plain(((Decision.Deny) d).message().orElseThrow()))
         .isEqualTo("That portal leads into the base, which is locked until Homecoming.");
+  }
+
+  /**
+   * One zone of a new shape near the spawn: its season file line, a spot on the allowed side of its
+   * edge and one just across it.
+   */
+  private record Shaped(String id, String line, Position allowed, Position across) {}
+
+  private static final List<Shaped> SHAPED =
+      List.of(
+          new Shaped(
+              "frontier",
+              "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } } }\n",
+              Position.of(OVERWORLD, 3090.5, 64, 0.5),
+              Position.of(OVERWORLD, 3110.5, 64, 0.5)),
+          new Shaped(
+              "edge",
+              "  edge: { shape: { outside: { box: { min: [2900, -100], max: [3100, 100] } } } }\n",
+              Position.of(OVERWORLD, 3095.5, 64, 0.5),
+              Position.of(OVERWORLD, 3101.5, 64, 0.5)),
+          new Shaped(
+              "sky",
+              "  sky: { shape: { y-above: 200 } }\n",
+              Position.of(OVERWORLD, 3000.5, 199, 0.5),
+              Position.of(OVERWORLD, 3000.5, 200, 0.5)),
+          new Shaped(
+              "deep",
+              "  deep: { shape: { y-below: 0 } }\n",
+              Position.of(OVERWORLD, 3000.5, 1, 0.5),
+              Position.of(OVERWORLD, 3000.5, 0, 0.5)));
+
+  @Test
+  void everyShapeKeepsTheSameEntryEdgeSweepAndPortalRules() throws IOException {
+    for (Shaped shaped : SHAPED) {
+      writeSeasonFile(shaped.line());
+      assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+      String name = shaped.id();
+      fake.player(pat).position = shaped.allowed();
+      fake.player(pat).actionBars.clear();
+
+      // Entry by any route.
+      assertThat(decide(new Intent.Move(pat.id(), shaped.allowed(), shaped.across())))
+          .as(name)
+          .isInstanceOf(Decision.Deny.class);
+      assertThat(bar(pat)).as(name).containsExactly("The " + name + " is locked until Homecoming.");
+      for (Intent.TeleportKind kind :
+          List.of(
+              Intent.TeleportKind.PEARL, Intent.TeleportKind.CHORUS, Intent.TeleportKind.PORTAL)) {
+        assertThat(decide(new Intent.Teleport(pat.id(), shaped.allowed(), shaped.across(), kind)))
+            .as(name + " " + kind)
+            .isInstanceOf(Decision.Deny.class);
+      }
+      assertThat(decide(new Intent.CreatePortal(pat.id(), shaped.across())))
+          .as(name)
+          .isInstanceOf(Decision.Deny.class);
+      assertThat(decide(new Intent.Move(pat.id(), shaped.allowed(), SPAWN)))
+          .as(name)
+          .isEqualTo(Decision.allow());
+
+      // The edge.
+      assertThat(decide(new Intent.BreakBlock(pat.id(), shaped.across())))
+          .as(name)
+          .isInstanceOf(Decision.Deny.class)
+          .extracting(d -> Messages.plain(((Decision.Deny) d).message().orElseThrow()))
+          .isEqualTo("That's in the " + name + ", which is locked until Homecoming.");
+      assertThat(decide(new Intent.BreakBlock(pat.id(), shaped.allowed())))
+          .as(name)
+          .isEqualTo(Decision.allow());
+      assertThat(guard().allows(List.of(shaped.allowed(), shaped.across()))).as(name).isFalse();
+      assertThat(guard().allows(List.of(shaped.allowed(), SPAWN))).as(name).isTrue();
+
+      // The sweep puts a player found across the edge back where it last saw them.
+      sweepAll();
+      fake.player(pat).position = shaped.across();
+      sweepAll();
+      assertThat(guard().blocks(fake.player(pat).position)).as(name).isFalse();
+    }
+  }
+
+  @Test
+  void zoneCommandsDrawEveryShapeAndRefuseOneThatWouldHoldTheSpawn() throws IOException {
+    TestSource admin = new TestSource(Optional.of(pat.id()));
+    fake.player(pat).position = SPAWN;
+    for (String[] added :
+        List.of(
+            new String[] {
+              "frontier outside circle 100",
+              "Added zone frontier: everywhere beyond a circle of radius 100 around 3000, 0 in"
+                  + " minecraft:overworld, block until Homecoming and off after."
+            },
+            new String[] {
+              "edge outside box 3200 200 2800 -200",
+              "Added zone edge: everywhere beyond a box from 2800, -200 to 3200, 200 in"
+                  + " minecraft:overworld, block until Homecoming and off after."
+            },
+            new String[] {
+              "sky y-above 65",
+              "Added zone sky: everything from y 65 up in minecraft:overworld, block until"
+                  + " Homecoming and off after."
+            },
+            new String[] {
+              "deep y-below 63",
+              "Added zone deep: everything up to y 63 in minecraft:overworld, block until"
+                  + " Homecoming and off after."
+            })) {
+      admin.replies.clear();
+      TestCommands.run(fake.commands.getFirst(), admin, "/season zone add " + added[0]);
+      assertThat(admin.text()).containsExactly(added[1]);
+    }
+    assertThat(Files.readString(dir.resolve("world/seasons/seasons/3.yml")))
+        .contains("y-above: 65\n")
+        .contains("y-below: 63\n");
+    assertThat(guard().blocks(Position.of(OVERWORLD, 3150.5, 64, 0.5))).isTrue();
+    assertThat(guard().blocks(Position.of(OVERWORLD, 3050.5, 64, 0.5))).isFalse();
+
+    String aroundSpawn =
+        "That zone would hold Season 3's spawn at 3000, 64, 0; the spawn must stay outside every"
+            + " zone.";
+    fake.player(pat).position = Position.of(OVERWORLD, 3060.5, 64, 0.5);
+    for (String shape :
+        List.of("outside circle 20", "outside box 3050 -10 3070 10", "y-above 64", "y-below 64")) {
+      admin.replies.clear();
+      TestCommands.run(fake.commands.getFirst(), admin, "/season zone add pen " + shape);
+      assertThat(admin.text()).as(shape).containsExactly(aroundSpawn);
+    }
+    for (String shape :
+        List.of("outside 5", "outside box 1 2 3", "outside square 5", "y-above high", "y-below")) {
+      assertThat(run("/season zone add bad " + shape).text())
+          .as(shape)
+          .singleElement()
+          .asString()
+          .startsWith("Zones are ");
+    }
+    assertThat(run("/season zone add bad outside box").text())
+        .singleElement()
+        .asString()
+        .startsWith("Give both corners: /season zone add bad outside box");
+    assertThat(run("/season zone add bad outside circle 50").text())
+        .containsExactly("Stand at the zone's centre and run this in game.");
+  }
+
+  @Test
+  void theFrontierBorderIsShownAroundABlockingOutsideCircleOnlyWhenTurnedOn() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } },"
+            + " exempt: [{ min: [3150, 0, -5], max: [3160, 100, 5] }] }\n");
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    assertThat(fake.player(pat).borders).as("off by default").isEmpty();
+
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    sweepAll();
+    sweepAll();
+    // The square around the circle (2900 to 3100) and its exemption (to 3161), sent once.
+    BorderSquare square = new BorderSquare(3030.5, 0, 261);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // Another dimension, and the bypass, put back the world's border.
+    fake.player(pat).position = Position.of("minecraft:the_nether", 375.5, 64, 0.5);
+    sweepAll();
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    fake.bypassing.add(pat.id());
+    sweepAll();
+    assertThat(fake.player(pat).borders)
+        .containsExactly(
+            Optional.of(square), Optional.empty(), Optional.of(square), Optional.empty());
+    fake.bypassing.remove(pat.id());
+    sweepAll();
+
+    // Homecoming unlocks the frontier, and the border goes in the next sweep, for everyone.
+    run("/season unlock homecoming");
+    fake.tick();
+    assertThat(fake.player(pat).borders.getLast()).isEmpty();
+  }
+
+  @Test
+  void aTripToAnotherDimensionAndBackBetweenSweepsBringsTheBorderBackAtOnce() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    BorderSquare square = new BorderSquare(3000, 0, 200);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // The game sends the client each world's own border on the way; no sweep sees the trip.
+    fake.player(pat).position = Position.of("minecraft:the_nether", 375.5, 64, 0.5);
+    fake.milestones.enteredDimension(pat.id(), "minecraft:the_nether");
+    fake.player(pat).position = SPAWN;
+    fake.milestones.enteredDimension(pat.id(), "minecraft:overworld");
+
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square), Optional.of(square));
+  }
+
+  @Test
+  void aRespawnInsideTheFrontierBringsTheBorderBackAtOnce() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = Position.of(OVERWORLD, 3020.5, 64, 0.5);
+    sweepAll();
+    BorderSquare square = new BorderSquare(3000, 0, 200);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // Dying and respawning at the spawn, in the same square: the game sends the world's border
+    // with the respawn, and a sweep would see nothing to change.
+    fake.player(pat).position = SPAWN;
+    fake.milestones.respawned(pat.id());
+    sweepAll();
+
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square), Optional.of(square));
+  }
+
+  @Test
+  void aNoBuildOrAnnounceFrontierHasNoBorderSinceItCanBeCrossed() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } }, mode:"
+            + " no-build }\n  edge: { shape: { outside: { box: { min: [2000, -500], max: [4000,"
+            + " 500] } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    assertThat(fake.player(pat).borders).isEmpty();
   }
 
   @Test
