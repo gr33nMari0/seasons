@@ -187,6 +187,28 @@ class ArchivingTest {
   }
 
   @Test
+  void infoGivesTheArchiveStatus() throws IOException {
+    start();
+    PlayerRef alex = withGear("Alex");
+    PlayerRef bob = join("Bob");
+    run("/season init 2");
+    assertThat(info(alex)).noneMatch(line -> line.contains("rchive"));
+    fake.leave(bob);
+
+    run("/season end --now");
+    fake.online.add(bob);
+
+    assertThat(info(alex)).contains("Archived into Season 2.");
+    assertThat(info(bob)).contains("Waiting to be archived into Season 2.");
+  }
+
+  private List<String> info(PlayerRef player) {
+    TestSource source = new TestSource(Optional.of(player.id()));
+    TestCommands.run(fake.commands.getFirst(), source, "/season info");
+    return source.text();
+  }
+
+  @Test
   void archivingAgainTakesNothing() throws IOException {
     start();
     PlayerRef alex = withGear("Alex");

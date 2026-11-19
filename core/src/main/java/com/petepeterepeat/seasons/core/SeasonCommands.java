@@ -298,7 +298,23 @@ final class SeasonCommands {
           cell.map(ref ->
                   messages.get("info.cell", "cell", ref.cell().id(), "gallery", ref.gallery().id()))
               .orElseGet(() -> messages.get("info.no-cell")));
+      archiveStatus(source.player().get(), current).ifPresent(source::reply);
     }
+  }
+
+  /**
+   * "Your archive status" (questions 174): waiting to be archived into a season that ended, or the
+   * last season they are archived into; nothing if they never were.
+   */
+  private Optional<Message> archiveStatus(PlayerId player, SeasonState current) {
+    Optional<PlayerRecord> record = services.players().find(player);
+    if (LoginPlan.decide(record, true, current) instanceof LoginPlan.Plan.Archive waiting) {
+      return Optional.of(
+          messages().get("info.archive-waiting", "season", Integer.toString(waiting.season())));
+    }
+    return record
+        .filter(r -> r.archivedThrough() > 0)
+        .map(r -> messages().get("info.archived", "season", Integer.toString(r.archivedThrough())));
   }
 
   /** How many entries {@code /season audit} shows. */
