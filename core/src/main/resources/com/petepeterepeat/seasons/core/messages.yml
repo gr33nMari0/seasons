@@ -375,8 +375,9 @@ zone:
   added: "<green>Added zone <id>: <shape> in <dimension>, <mode> until Homecoming and <after> after.</green>"
   exists: "<red>There's already a zone called <id>.</red>"
   bad-id: "<red>Zone ids are lower-case letters, digits and dashes, up to 32, and not homecoming.</red>"
-  bad-shape: "<red>Zones are cylinder <radius> [--max-y <y>] [--min-y <y>], centred where you stand, or box <x1> <y1> <z1> <x2> <y2> <z2>.</red>"
+  bad-shape: "<red>Zones are cylinder <radius> [--max-y <y>] [--min-y <y>] or outside circle <radius>, centred where you stand; box <x1> <y1> <z1> <x2> <y2> <z2>; outside box <x1> <z1> <x2> <z2>; y-above <y>; or y-below <y>.</red>"
   box-corners: "<red>Give both corners: /season zone add <id> box <x1> <y1> <z1> <x2> <y2> <z2>. The wand comes in a later version.</red>"
+  outside-corners: "<red>Give both corners: /season zone add <id> outside box <x1> <z1> <x2> <z2>. The wand comes in a later version.</red>"
   player-only: "<red>Stand at the zone's centre and run this in game.</red>"
   around-spawn: "<red>That zone would hold Season <season>'s spawn at <x>, <y>, <z>; the spawn must stay outside every zone.</red>"
   spawn-inside: "<red>Season <season>'s spawn can't be inside zone <zone>; the spawn must stay outside every zone.</red>"
@@ -422,6 +423,10 @@ zone:
     min-y: " from y <y>"
     max-y: " up to y <y>"
     box: "a box from <x1>, <y1>, <z1> to <x2>, <y2>, <z2>"
+    outside-circle: "everywhere beyond a circle of radius <radius> around <x>, <z>"
+    outside-box: "everywhere beyond a box from <x1>, <z1> to <x2>, <z2>"
+    y-above: "everything from y <y> up"
+    y-below: "everything up to y <y>"
 
 config:
   reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml, the season files, the galleries and the waypoints.</green>"
