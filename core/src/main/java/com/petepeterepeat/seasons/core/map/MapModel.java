@@ -48,6 +48,15 @@ public record MapModel(
 
     /** A circle around a centre. */
     record Circle(double centerX, double centerZ, double radius) implements Outline {}
+
+    /**
+     * Everything beyond a rectangle or circle, out to the edge of the world: an {@code outside}
+     * zone. A web map draws it as the world with {@code inside} as a hole.
+     */
+    record Beyond(Outline inside) implements Outline {
+      /** How far the world reaches from 0, 0 along x and z, whatever its border is set to. */
+      public static final double WORLD_EDGE = 29_999_984;
+    }
   }
 
   /**

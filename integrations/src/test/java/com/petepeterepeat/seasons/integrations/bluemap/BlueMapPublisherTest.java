@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.integrations.bluemap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.flowpowered.math.vector.Vector2i;
 import com.petepeterepeat.seasons.core.map.MapModel;
@@ -244,6 +245,34 @@ class BlueMapPublisherTest {
           .isLessThanOrEqualTo(0.5);
     }
     assertThat(BlueMapPublisher.points(1_000_000)).isEqualTo(720);
+  }
+
+  @Test
+  void anOutsideZoneIsTheWorldWithItsInsideAsAHoleAndSitsAtItsFrontier() throws Exception {
+    FakeBlueMap api = blueMap();
+    BlueMapPublisher publisher = publisher();
+    Area frontier =
+        new Area(
+            "zone-frontier",
+            "frontier: locked until Homecoming",
+            OVERWORLD,
+            new Outline.Beyond(new Outline.Circle(18450, -9120, 6000)),
+            List.of(new Outline.Rectangle(-10, -10, 11, 11)),
+            -64,
+            320,
+            Style.LOCKED);
+
+    publisher.publish(new MapModel("Seasons", List.of(), List.of(frontier), List.of()));
+    publisher.flush();
+
+    ExtrudeMarker zone =
+        (ExtrudeMarker) api.maps.get("world").getMarkerSets().get("seasons").get("zone-frontier");
+    assertThat(zone.getShape().getMin().getX()).isEqualTo(-Outline.Beyond.WORLD_EDGE);
+    assertThat(zone.getShape().getMax().getY()).isEqualTo(Outline.Beyond.WORLD_EDGE);
+    assertThat(zone.getHoles()).hasSize(2);
+    assertThat(zone.getHoles().iterator().next().getMin().getX()).isCloseTo(12450, within(1.0));
+    assertThat(zone.getPosition().getX()).isEqualTo(18450);
+    assertThat(zone.getPosition().getZ()).isEqualTo(-9120);
   }
 
   @Test

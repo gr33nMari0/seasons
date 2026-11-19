@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -261,16 +262,27 @@ public final class BlueMapPublisher implements MapPublisher {
 
   private static ExtrudeMarker area(Area area) {
     Color line = colour(area.style(), 1f);
-    return ExtrudeMarker.builder()
-        .label(area.label())
-        .detail(escape(area.label()))
-        .shape(shape(area.outline()), (float) area.minY(), (float) area.maxY())
-        .holes(area.holes().stream().map(BlueMapPublisher::shape).toArray(Shape[]::new))
-        .centerPosition()
-        .lineWidth(2)
-        .lineColor(line)
-        .fillColor(colour(area.style(), 0.15f))
-        .build();
+    ExtrudeMarker.Builder builder =
+        ExtrudeMarker.builder().label(area.label()).detail(escape(area.label()));
+    if (area.outline() instanceof Outline.Beyond beyond) {
+      // The world with the inside as a hole. The marker sits at the inside's centre, where its
+      // label belongs and the hole's points stay precise; the world's far corners needn't be.
+      double[] centre = centre(beyond.inside());
+      Shape[] holes =
+          Stream.concat(Stream.of(beyond.inside()), area.holes().stream())
+              .map(BlueMapPublisher::shape)
+              .toArray(Shape[]::new);
+      builder
+          .shape(world(beyond.inside()), (float) area.minY(), (float) area.maxY())
+          .holes(holes)
+          .position(centre[0], area.minY(), centre[1]);
+    } else {
+      builder
+          .shape(shape(area.outline()), (float) area.minY(), (float) area.maxY())
+          .holes(area.holes().stream().map(BlueMapPublisher::shape).toArray(Shape[]::new))
+          .centerPosition();
+    }
+    return builder.lineWidth(2).lineColor(line).fillColor(colour(area.style(), 0.15f)).build();
   }
 
   private static Color colour(MapModel.Style style, float alpha) {
@@ -286,6 +298,37 @@ public final class BlueMapPublisher implements MapPublisher {
       case Outline.Rectangle r -> Shape.createRect(r.minX(), r.minZ(), r.maxX(), r.maxZ());
       case Outline.Circle c ->
           Shape.createCircle(c.centerX(), c.centerZ(), c.radius(), points(c.radius()));
+      case Outline.Beyond b -> world(b.inside());
+    };
+  }
+
+  /** The world as a square, grown if need be so that {@code inside} lies within it. */
+  static Shape world(Outline inside) {
+    double[] bounds =
+        switch (inside) {
+          case Outline.Rectangle r -> new double[] {r.minX(), r.minZ(), r.maxX(), r.maxZ()};
+          case Outline.Circle c ->
+              new double[] {
+                c.centerX() - c.radius(),
+                c.centerZ() - c.radius(),
+                c.centerX() + c.radius(),
+                c.centerZ() + c.radius()
+              };
+          case Outline.Beyond b -> throw new IllegalArgumentException("nothing is beyond a beyond");
+        };
+    double edge = Outline.Beyond.WORLD_EDGE;
+    for (double bound : bounds) {
+      edge = Math.max(edge, Math.abs(bound) + 1);
+    }
+    return Shape.createRect(-edge, -edge, edge, edge);
+  }
+
+  private static double[] centre(Outline outline) {
+    return switch (outline) {
+      case Outline.Rectangle r ->
+          new double[] {(r.minX() + r.maxX()) / 2, (r.minZ() + r.maxZ()) / 2};
+      case Outline.Circle c -> new double[] {c.centerX(), c.centerZ()};
+      case Outline.Beyond b -> centre(b.inside());
     };
   }
 

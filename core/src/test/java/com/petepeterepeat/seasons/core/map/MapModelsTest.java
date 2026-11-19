@@ -287,6 +287,74 @@ class MapModelsTest {
   }
 
   @Test
+  void anOutsideZoneIsAnAreaToTheWorldsEdgeWithItsInsideAsAHole() {
+    Zone frontier =
+        new Zone(
+            "frontier",
+            OVERWORLD,
+            new ZoneShape.OutsideCircle(3000, 0, 100),
+            ZoneMode.BLOCK,
+            new UnlockCondition.Homecoming(),
+            ZoneMode.NO_BUILD,
+            // One exemption beyond the circle, one across its edge.
+            List.of(
+                ZoneShape.Box.between(3200, 0, 0, 3210, 100, 10),
+                ZoneShape.Box.between(3095, 0, 0, 3105, 100, 10)),
+            Optional.empty());
+    Zone edge = Zone.drawn("edge", OVERWORLD, new ZoneShape.OutsideBox(-500, -500, 500, 500));
+    // The Hall at 0, 0 lies beyond the frontier, and inside the edge's box.
+    Gallery hall =
+        Gallery.create("season-2", 2, OVERWORLD)
+            .withBounds(new Bounds(OVERWORLD, -10, -61, -10, 10, -50, 10));
+
+    MapModel model =
+        build(
+            snapshot(List.of(), List.of(hall), Waypoints.NONE),
+            playing(3),
+            List.of(
+                new Zones.InForce(frontier, ZoneMode.BLOCK),
+                new Zones.InForce(edge, ZoneMode.NO_BUILD)));
+
+    assertThat(model.areas())
+        .containsExactly(
+            new Area(
+                "zone-frontier",
+                "frontier: locked until Homecoming",
+                OVERWORLD,
+                new Outline.Beyond(new Outline.Circle(3000, 0, 100)),
+                List.of(
+                    new Outline.Rectangle(3200, 0, 3211, 11),
+                    new Outline.Rectangle(-10, -10, 11, 11)),
+                -64,
+                320,
+                Style.LOCKED),
+            new Area(
+                "zone-edge",
+                "edge: no building",
+                OVERWORLD,
+                new Outline.Beyond(new Outline.Rectangle(-500, -500, 501, 501)),
+                List.of(),
+                -64,
+                320,
+                Style.NO_BUILD));
+  }
+
+  @Test
+  void heightZonesAreNotShown() {
+    MapModel model =
+        build(
+            snapshot(List.of(), List.of(), Waypoints.NONE),
+            playing(3),
+            List.of(
+                new Zones.InForce(
+                    Zone.drawn("sky", OVERWORLD, new ZoneShape.YAbove(200)), ZoneMode.BLOCK),
+                new Zones.InForce(
+                    Zone.drawn("roof", NETHER, new ZoneShape.YBelow(127)), ZoneMode.BLOCK)));
+
+    assertThat(model.areas()).isEmpty();
+  }
+
+  @Test
   void waypointSetsAreShownByNameAndTheSameFilesMakeAnEqualModel() {
     Waypoints waypoints =
         new Waypoints(

@@ -3,7 +3,8 @@
 // The Seasons marker set on a real BlueMap (docs/adr/0004). Before launch: the next season's spawn
 // candidates, the Hall, the museum, and shared waypoints in sets of their own, but no zone areas,
 // since no zone is in force yet. From launch: the season's spawn and no candidates, and each locked
-// zone as an area on its own dimension's maps, with the Hall cut out of the one around it. At
+// zone as an area on its own dimension's maps, with the Hall cut out of the one around it; an
+// outside zone as the world with its circle cut out, and a height zone not at all. At
 // Homecoming the locked areas go, and a zone that becomes no-build is shown as one. After
 // /bluemap reload, which drops every marker added through BlueMap's API, Seasons publishes them
 // again; /season status counts them. /scenario bluemap reads the marker sets through BlueMap's API.
@@ -20,6 +21,7 @@ const NORTH = { x: 4000, y: FLOOR, z: -2000 }
 const EAST = { x: 6000, y: FLOOR, z: 1000 }
 const TOWER = { x: 100, y: FLOOR, z: 200 }
 const HUB = { x: 150, y: FLOOR, z: 220 }
+const FRONTIER = { x: 5000, y: FLOOR, z: 0 }
 
 export default {
   name: 'm3-bluemap',
@@ -62,6 +64,11 @@ export default {
     await ctx.command(admin, '/season zone after farm no-build', /^Zone farm becomes no-build once it unlocks\.$/)
     await ctx.command(admin, '/execute in minecraft:the_nether run tp SeasonsAdmin 0.5 128 0.5', /^Teleported /)
     await ctx.command(admin, '/season zone add old-nether box -40 0 -40 40 127 40', /^Added zone old-nether: .* in minecraft:the_nether, /)
+    // A frontier around both candidates, with the Hall beyond it, and a sky zone, which no map
+    // shows.
+    await ctx.command(admin, `/execute in minecraft:overworld run tp SeasonsAdmin ${FRONTIER.x + 0.5} ${FRONTIER.y} ${FRONTIER.z + 0.5}`, /^Teleported /)
+    await ctx.command(admin, '/season zone add frontier outside circle 3000', /^Added zone frontier: everywhere beyond a circle /)
+    await ctx.command(admin, '/season zone add sky y-above 300', /^Added zone sky: /)
     await ctx.command(admin, `/execute in minecraft:overworld run tp SeasonsAdmin ${EAST.x + 0.5} ${EAST.y} ${EAST.z + 0.5}`, /^Teleported /)
 
     const before = await ctx.eventually(async () => {
@@ -101,7 +108,8 @@ export default {
       for (const [key, label] of [
         ['seasons/zone-base', 'base: locked until Homecoming'],
         ['seasons/zone-old-world', 'old world: locked until Homecoming'],
-        ['seasons/zone-farm', 'farm: locked until Homecoming']
+        ['seasons/zone-farm', 'farm: locked until Homecoming'],
+        ['seasons/zone-frontier', 'frontier: locked until Homecoming']
       ]) {
         assert(over.get(key)?.label === label, `the overworld maps show ${key} "${label}": ${describe(over)}`)
         assert(over.get(key).type === 'extrude', `${key} is an area`)
@@ -118,6 +126,9 @@ export default {
     assert(oldWorld.minY === -64 && oldWorld.maxY === 320 && oldWorld.points >= 32, `a cylinder with no y limits spans the world's height: ${JSON.stringify(oldWorld)}`)
     const farm = over.get('seasons/zone-farm')
     assert(farm.minY === -64 && farm.maxY === 1 && farm.points === 4 && farm.holes === 0, `a box keeps its corners: ${JSON.stringify(farm)}`)
+    const frontier = over.get('seasons/zone-frontier')
+    assert(frontier.points === 4 && frontier.holes === 2 && frontier.x === FRONTIER.x && frontier.z === FRONTIER.z, `the frontier is the world with its circle and the Hall cut out, placed at its centre: ${JSON.stringify(frontier)}`)
+    assert(!over.has('seasons/zone-sky'), 'a height zone isn\'t shown')
     const oldNether = markersIn(launched, NETHER).get('seasons/zone-old-nether')
     assert(oldNether.minY === 0 && oldNether.maxY === 128, `old-nether stops at the roof: ${JSON.stringify(oldNether)}`)
 
@@ -137,7 +148,7 @@ export default {
       const found = await bluemap(ctx, admin)
       const over = markersIn(found, OVERWORLD)
       assert(over.get('seasons/zone-farm')?.label === 'farm: no building', `the farm is shown as no-build: ${describe(over)}`)
-      for (const key of ['seasons/zone-base', 'seasons/zone-old-world']) {
+      for (const key of ['seasons/zone-base', 'seasons/zone-old-world', 'seasons/zone-frontier']) {
         assert(!over.has(key), `${key} is gone after Homecoming: ${describe(over)}`)
       }
       assert(markersIn(found, NETHER).size === 0, 'old-nether is gone after Homecoming')

@@ -3,7 +3,6 @@ package com.petepeterepeat.seasons.core.map;
 
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
-import com.petepeterepeat.seasons.core.hall.Bounds;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.map.MapModel.Area;
 import com.petepeterepeat.seasons.core.map.MapModel.Outline;
@@ -166,8 +165,8 @@ public final class MapModels {
           case ANNOUNCE -> messages.text("map.announce", "zone", name, "until", until.apply(zone));
         };
     Outline outline;
-    double minY;
-    double maxY;
+    double minY = world.minHeight(zone.dimension());
+    double maxY = world.maxHeight(zone.dimension());
     switch (zone.shape()) {
       case ZoneShape.Box box -> {
         outline = new Outline.Rectangle(box.minX(), box.minZ(), box.maxX() + 1, box.maxZ() + 1);
@@ -176,21 +175,34 @@ public final class MapModels {
       }
       case ZoneShape.Cylinder cylinder -> {
         outline = new Outline.Circle(cylinder.centerX(), cylinder.centerZ(), cylinder.radius());
-        minY = cylinder.minY().orElse(world.minHeight(zone.dimension()));
-        maxY =
-            cylinder.maxY().isPresent()
-                ? cylinder.maxY().getAsInt() + 1
-                : world.maxHeight(zone.dimension());
+        minY = cylinder.minY().orElse((int) minY);
+        maxY = cylinder.maxY().isPresent() ? cylinder.maxY().getAsInt() + 1 : maxY;
+      }
+      case ZoneShape.OutsideCircle c ->
+          outline = new Outline.Beyond(new Outline.Circle(c.centerX(), c.centerZ(), c.radius()));
+      case ZoneShape.OutsideBox b ->
+          outline =
+              new Outline.Beyond(
+                  new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1));
+      // A height zone covers every column, so as an area it would cover the whole map; and Map
+      // Link, which shows areas flat, would show every block of the dimension as locked.
+      case ZoneShape.YAbove _, ZoneShape.YBelow _ -> {
+        return Optional.empty();
       }
     }
     List<Outline> holes = new ArrayList<>();
     for (ZoneShape.Box box : zone.exempt()) {
-      holes.add(new Outline.Rectangle(box.minX(), box.minZ(), box.maxX() + 1, box.maxZ() + 1));
+      if (beyondInside(zone.shape(), box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
+        holes.add(new Outline.Rectangle(box.minX(), box.minZ(), box.maxX() + 1, box.maxZ() + 1));
+      }
     }
     for (Gallery gallery : galleries) {
       gallery
           .bounds()
-          .filter(b -> b.dimension().equals(zone.dimension()) && touches(zone.shape(), b))
+          .filter(b ->
+              b.dimension().equals(zone.dimension())
+                  && zone.shape().reaches(b.minX(), b.minZ(), b.maxX(), b.maxZ())
+                  && beyondInside(zone.shape(), b.minX(), b.minZ(), b.maxX(), b.maxZ()))
           .ifPresent(b ->
               holes.add(new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1)));
     }
@@ -199,21 +211,21 @@ public final class MapModels {
             "zone-" + zone.id(), label, zone.dimension(), outline, holes, minY, maxY, style.get()));
   }
 
-  /** Whether a gallery's footprint reaches into a zone's, across x and z. */
-  private static boolean touches(ZoneShape shape, Bounds bounds) {
-    double minX = bounds.minX();
-    double maxX = bounds.maxX() + 1;
-    double minZ = bounds.minZ();
-    double maxZ = bounds.maxZ() + 1;
+  /**
+   * Whether a rectangle of columns can be a hole in a zone's area: for an outside zone, only if it
+   * lies wholly beyond the zone's inside, since a hole overlapping another (the inside) breaks the
+   * area's shape. The zone is enforced there all the same; the map just doesn't show the cut-out.
+   */
+  private static boolean beyondInside(ZoneShape shape, int minX, int minZ, int maxX, int maxZ) {
     return switch (shape) {
-      case ZoneShape.Box box ->
-          minX < box.maxX() + 1 && maxX > box.minX() && minZ < box.maxZ() + 1 && maxZ > box.minZ();
-      case ZoneShape.Cylinder c -> {
-        // The footprint's point nearest the centre.
-        double x = Math.clamp(c.centerX(), minX, maxX);
-        double z = Math.clamp(c.centerZ(), minZ, maxZ);
-        yield Math.hypot(x - c.centerX(), z - c.centerZ()) < c.radius();
+      case ZoneShape.OutsideCircle c -> {
+        double x = Math.clamp(c.centerX(), minX, maxX + 1.0);
+        double z = Math.clamp(c.centerZ(), minZ, maxZ + 1.0);
+        yield Math.hypot(x - c.centerX(), z - c.centerZ()) >= c.radius();
       }
+      case ZoneShape.OutsideBox b ->
+          maxX < b.minX() || minX > b.maxX() || maxZ < b.minZ() || minZ > b.maxZ();
+      default -> true;
     };
   }
 
