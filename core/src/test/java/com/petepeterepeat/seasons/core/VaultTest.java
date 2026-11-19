@@ -38,6 +38,9 @@ class VaultTest {
   private Seasons seasons;
   private ScenarioHooks hooks;
 
+  /** Set by a crash point: as the server stopping dead, no file work runs after it. */
+  private boolean halted;
+
   private final Webhooks webhooks =
       new Webhooks() {
         @Override
@@ -48,8 +51,10 @@ class VaultTest {
       };
 
   private void start() {
+    halted = false;
     hooks =
         TestHooks.of(() -> {
+          halted = true;
           throw new ArchivingTest.Halted();
         });
     seasons =
@@ -59,7 +64,11 @@ class VaultTest {
             fake.clock,
             webhooks,
             Map.of(),
-            new SerialWriter(Runnable::run),
+            new SerialWriter(task -> {
+              if (!halted) {
+                task.run();
+              }
+            }),
             Optional.of(hooks));
     seasons.start();
   }
@@ -253,6 +262,27 @@ class VaultTest {
     // The emeralds went out of the vault once; the ender chest doesn't bring them back.
     assertThat(fake.player(pat).inventory.enderChest()).allMatch(Optional::isEmpty);
     assertThat(page(pat, 2)).isEmpty();
+  }
+
+  @Test
+  void aWithdrawalThatFailsBeforeTheGivePutsTheItemBackAtOnce() throws IOException {
+    PlayerRef pat = sealedAndLaunched();
+    run("/season unlock homecoming");
+    vault(pat);
+    fake.giveFails = true;
+    int before = fake.sent.size();
+    menu().taken().clicked(0, 0);
+
+    assertThat(said(pat, before)).contains("That didn't work, so it stays in your vault.");
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+    assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
+
+    // Pat plays on and changes their inventory; the next click still works.
+    fake.giveFails = false;
+    fake.player(pat).inventory = FakeItems.gear();
+    menu().taken().clicked(0, 0);
+    assertThat(carried(pat, "minecraft:emerald")).isEqualTo(1);
+    assertThat(page(pat, 2).orElseThrow().getFirst()).isEmpty();
   }
 
   @ParameterizedTest

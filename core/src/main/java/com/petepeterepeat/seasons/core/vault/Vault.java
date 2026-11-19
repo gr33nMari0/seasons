@@ -37,6 +37,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -323,6 +324,7 @@ public final class Vault {
       platform.players().saveData(player);
       String before = ArchiveHash.of(platform.inventories().snapshot(player), false);
       String id = clock.millis() + "-" + counter.incrementAndGet();
+      AtomicBoolean given = new AtomicBoolean();
       var _ =
           journal
               .append(JournalKind.VAULT_WITHDRAW, player, page, id + "/" + before)
@@ -336,11 +338,16 @@ public final class Vault {
                     crash.reached(CrashPoint.VAULT_WITHDRAW_PERSISTED, player);
                     return taken.isEmpty()
                         ? finish(player, page, id)
-                        : give(player, page, id, taken.get());
+                        : give(player, page, id, taken.get(), given);
                   },
                   serverThread)
+              .handle((result, failure) -> failure)
+              .thenCompose(failure ->
+                  failure == null || given.get()
+                      ? CompletableFuture.completedFuture(failure)
+                      : settleFailed(player, page, id).thenApply(settled -> failure))
               .whenCompleteAsync(
-                  (result, failure) -> {
+                  (failure, unsettled) -> {
                     hold.release(player);
                     if (failure != null) {
                       LOG.error("Withdrawing from the vault of {} stopped", player, failure);
@@ -356,11 +363,31 @@ public final class Vault {
     return done;
   }
 
+  /**
+   * A withdrawal that stopped before its item was given, while the server runs on: the item goes
+   * back in the vault now, if it left, and the withdrawal is closed. Left to recovery, it would be
+   * judged by an inventory the player has changed since, and taken as given.
+   */
+  private CompletableFuture<Void> settleFailed(PlayerId player, int page, String id) {
+    return writer
+        .submit(() -> vaults.rollBack(player, id))
+        .thenCompose(back -> finish(player, page, id))
+        .exceptionally(failure -> {
+          LOG.error(
+              "Can't put back withdrawal {} from the vault of {}; recovery will try",
+              id,
+              player,
+              failure);
+          return null;
+        });
+  }
+
   /** On the server thread: gives the item, or puts it back if it won't go. */
-  private CompletableFuture<Void> give(PlayerId player, int page, String id, NeutralItem item) {
-    boolean given =
-        platform.players().find(player).isPresent() && platform.inventories().give(player, item);
-    if (given) {
+  private CompletableFuture<Void> give(
+      PlayerId player, int page, String id, NeutralItem item, AtomicBoolean given) {
+    given.set(
+        platform.players().find(player).isPresent() && platform.inventories().give(player, item));
+    if (given.get()) {
       platform.players().saveData(player);
       crash.reached(CrashPoint.VAULT_WITHDRAW_GIVEN, player);
       return finish(player, page, id)

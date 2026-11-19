@@ -24,6 +24,15 @@ public enum Operation {
    */
   VAULT_WITHDRAW(JournalKind.VAULT_WITHDRAW, JournalKind.VAULT_WITHDRAW_DONE);
 
+  /**
+   * What tells two of this operation for the same player and season apart: a vault withdrawal's id,
+   * the start of each of its entries' payload, since a player makes many withdrawals from one page;
+   * empty for the rest, which run once per player and season.
+   */
+  public String instance(JournalEntry entry) {
+    return this == VAULT_WITHDRAW ? entry.payloadHash().split("/", 2)[0] : "";
+  }
+
   private final JournalKind started;
   private final JournalKind finished;
 

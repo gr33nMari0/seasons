@@ -156,6 +156,9 @@ public final class FakePlatform {
   /** Fireworks set off at positions, such as Homecoming's at the spawn. */
   public final List<Position> fireworks = new ArrayList<>();
 
+  /** Whether giving an item throws, as an unexpected failure part-way through a withdrawal. */
+  public boolean giveFails;
+
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
@@ -514,6 +517,9 @@ public final class FakePlatform {
 
           @Override
           public boolean give(PlayerId player, NeutralItem item) {
+            if (giveFails) {
+              throw new IllegalStateException("give failed");
+            }
             InventorySnapshot was = state(player).inventory;
             List<Optional<NeutralItem>> storage = new ArrayList<>(was.storage());
             int free = storage.indexOf(Optional.<NeutralItem>empty());

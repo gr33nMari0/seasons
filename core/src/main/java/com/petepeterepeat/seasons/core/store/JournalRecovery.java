@@ -48,14 +48,15 @@ public final class JournalRecovery {
 
   /** Every open operation in a list of entries, in the order they started. Pure. */
   public static List<OpenOperation> openOperations(List<JournalEntry> entries) {
-    record Key(Operation operation, Optional<PlayerId> player, int season) {}
+    record Key(Operation operation, Optional<PlayerId> player, int season, String instance) {}
     Map<Key, List<JournalEntry>> open = new LinkedHashMap<>();
     for (JournalEntry entry : entries) {
       Optional<Operation> operation = Operation.of(entry.kind());
       if (operation.isEmpty()) {
         continue;
       }
-      Key key = new Key(operation.get(), entry.player(), entry.season());
+      Key key =
+          new Key(operation.get(), entry.player(), entry.season(), operation.get().instance(entry));
       if (entry.kind() == key.operation().started()) {
         open.remove(key);
         open.put(key, new ArrayList<>(List.of(entry)));
@@ -165,7 +166,8 @@ public final class JournalRecovery {
   private static boolean sameKey(OpenOperation a, OpenOperation b) {
     return a.operation() == b.operation()
         && a.player().equals(b.player())
-        && a.season() == b.season();
+        && a.season() == b.season()
+        && a.instance().equals(b.instance());
   }
 
   private static String describe(OpenOperation operation) {
