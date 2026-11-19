@@ -127,7 +127,7 @@ final class SeasonCommands {
   }
 
   /**
-   * @param more further nodes under {@code /season}, such as the zone commands
+   * @param more further nodes under {@code /season}, such as the spawn and zone commands
    */
   CommandNode root(List<CommandNode> more) {
     CommandNode.Builder root = CommandNode.literal("season");
@@ -162,10 +162,6 @@ final class SeasonCommands {
                 .executes(this::launch)
                 .then(
                     CommandNode.argument("options", ArgumentType.greedy()).executes(this::launch)))
-        .then(
-            CommandNode.literal("spawn")
-                .permission(PERMISSION_ADMIN_SEASON)
-                .then(CommandNode.literal("set").executes(this::setSpawn)))
         .then(
             CommandNode.literal("firsts")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -424,69 +420,6 @@ final class SeasonCommands {
     if (seasons.launch() instanceof Transition.Refused refused) {
       refuse(source, refused);
     }
-  }
-
-  void setSpawn(CommandSource source, Arguments arguments) {
-    Messages messages = messages();
-    if (source.player().isEmpty()) {
-      source.reply(messages.get("spawn.player-only"));
-      return;
-    }
-    if (seasons.state().isEmpty()) {
-      source.reply(messages.get("season.none"));
-      return;
-    }
-    Position at = platform.players().position(source.player().get());
-    int nextSeason = seasons.state().get().season() + 1;
-    Optional<Zone> holding = config.get().season(nextSeason).flatMap(file -> file.zoneHolding(at));
-    if (holding.isPresent()) {
-      source.reply(
-          messages.get(
-              "zone.spawn-inside",
-              "season",
-              Integer.toString(nextSeason),
-              "zone",
-              holding.get().id()));
-      return;
-    }
-    var _ =
-        seasons
-            .setNextSpawn(at)
-            .thenCompose(
-                next -> writer.submit(loader::load).thenApply(result -> Map.entry(next, result)))
-            .whenComplete((done, failure) ->
-                platform
-                    .scheduler()
-                    .runGlobal(() -> {
-                      if (failure != null) {
-                        LOG.error("/season spawn set failed", failure);
-                        source.reply(
-                            messages()
-                                .get(
-                                    "spawn.failed", "error", String.valueOf(failure.getMessage())));
-                        return;
-                      }
-                      done.getValue()
-                          .snapshot()
-                          .ifPresent(snapshot -> {
-                            config.set(snapshot);
-                            seasons.reloaded(snapshot);
-                          });
-                      source.reply(
-                          messages()
-                              .get(
-                                  "spawn.set",
-                                  "season",
-                                  Integer.toString(done.getKey()),
-                                  "x",
-                                  Integer.toString(at.blockX()),
-                                  "y",
-                                  Integer.toString(at.blockY()),
-                                  "z",
-                                  Integer.toString(at.blockZ()),
-                                  "dimension",
-                                  at.dimension()));
-                    }));
   }
 
   void archive(CommandSource source, Arguments arguments) {

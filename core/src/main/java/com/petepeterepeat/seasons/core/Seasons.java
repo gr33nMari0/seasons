@@ -9,6 +9,8 @@ import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
@@ -56,6 +58,7 @@ import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -364,20 +367,13 @@ public final class Seasons implements SeasonsApi {
     platform.events().tripwire(wire);
     platform.events().hall(hallRules);
     platform.events().zones(zoning);
-    platform
-        .commands()
-        .register(
-            built.root(
-                new ZoneCommands(
-                        platform,
-                        config,
-                        loader,
-                        writer,
-                        seasons,
-                        zoning,
-                        audit,
-                        world.resolve("backups").resolve("seasons"))
-                    .nodes()));
+    ConfigEdits edits = new ConfigEdits(platform, config, loader, writer, audit, seasons::reloaded);
+    Path seasonBackups = world.resolve("backups").resolve("seasons");
+    List<CommandNode> nodes = new ArrayList<>();
+    nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
+    nodes.addAll(
+        new ZoneCommands(platform, config, loader, edits, seasons, zoning, seasonBackups).nodes());
+    platform.commands().register(built.root(nodes));
     platform
         .commands()
         .register(
