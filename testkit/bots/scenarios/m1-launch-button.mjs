@@ -40,7 +40,8 @@ export default {
     told = ctx.waitForMessages(sam, /^Only an admin can launch the next season\.$/)
     await use(ctx, admin, 'Sam', BUTTON)
     await told
-    assert(audit(ctx).some((e) => e.action === 'hall-blocked' && e.actor === 'Sam' && e.details.startsWith('launch')), 'the refused press is audited')
+    // The audit log is written on its own thread, so the entry can land just after the message.
+    await ctx.eventually(async () => assert(audit(ctx).some((e) => e.action === 'hall-blocked' && e.actor === 'Sam' && e.details.startsWith('launch')), 'the refused press is audited'))
 
     // One press asks; a second after 10 seconds only asks again.
     told = ctx.waitForMessages(admin, ASK)
