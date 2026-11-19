@@ -5,13 +5,18 @@ import java.util.UUID;
 
 /** What happens to entities marked as registered pets (see {@link Entities#markPet}). */
 public interface PetEvents {
-  /** A pet left the loaded world without being removed for good, as when its chunk unloads. */
+  /**
+   * A pet left the loaded world without dying, as when its chunk unloads or something removes it.
+   * Only travel can tell whether it is still somewhere.
+   */
   void unloaded(UUID pet, PlayerId owner, Position at);
 
+  /** A pet was killed. */
+  void died(UUID pet, PlayerId owner);
+
   /**
-   * A pet was removed from the world for good.
-   *
-   * @param died killed, rather than removed some other way (such as by a command)
+   * A parrot left the world to sit on its owner's shoulder, where it goes wherever they go until it
+   * hops off.
    */
-  void removed(UUID pet, PlayerId owner, boolean died);
+  void onShoulder(UUID pet, PlayerId owner);
 }

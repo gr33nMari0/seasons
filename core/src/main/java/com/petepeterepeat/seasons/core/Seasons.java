@@ -273,7 +273,7 @@ public final class Seasons implements SeasonsApi {
             platform, config, announcer, audit, clock, halls::inHall, entry::spawn, hold::isHeld);
     zones = zoning;
     zoning.bind(seasons);
-    pets.bind(seasons::state);
+    pets.bind(seasons::state, zoning::decide);
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();

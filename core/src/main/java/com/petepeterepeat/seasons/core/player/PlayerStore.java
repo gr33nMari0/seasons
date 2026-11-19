@@ -196,6 +196,9 @@ public final class PlayerStore {
           seen.node("y").set(at.y());
           seen.node("z").set(at.z());
         }
+        if (pet.onShoulder()) {
+          entry.node("onShoulder").set(true);
+        }
       }
       for (PlayerRecord.Notice notice : record.notices()) {
         ConfigurationNode entry = node.node("notices").appendListNode();
@@ -296,7 +299,8 @@ public final class PlayerStore {
                           seen.node("z").getDouble(),
                           0,
                           0)),
-              entry.node("season").getInt()));
+              entry.node("season").getInt(),
+              entry.node("onShoulder").getBoolean(false)));
     }
     return pets;
   }

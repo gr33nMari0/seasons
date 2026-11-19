@@ -7,6 +7,8 @@ import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.event.Decision;
+import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -29,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +69,7 @@ public final class Pets implements PetEvents {
   private final Executor serverThread;
   private final Set<PlayerId> travelling = ConcurrentHashMap.newKeySet();
   private Supplier<Optional<SeasonState>> state = Optional::empty;
+  private Function<Intent, Optional<Decision>> zones = intent -> Optional.empty();
 
   public Pets(
       Platform platform,
@@ -81,9 +85,14 @@ public final class Pets implements PetEvents {
     this.serverThread = platform.scheduler()::runGlobal;
   }
 
-  /** Where the season state comes from, once the lifecycle exists. */
-  public void bind(Supplier<Optional<SeasonState>> state) {
+  /**
+   * Where the season state comes from, once the lifecycle exists, and the zones' say on reaching an
+   * animal, so that none is registered from across a blocked zone's edge.
+   */
+  public void bind(
+      Supplier<Optional<SeasonState>> state, Function<Intent, Optional<Decision>> zones) {
     this.state = state;
+    this.zones = zones;
   }
 
   /** {@code /pet add}, {@code /pet list} and {@code /pet remove <name>}. */
@@ -135,6 +144,13 @@ public final class Pets implements PetEvents {
       source.reply(messages.get("pet.not-yours", "name", called));
       return;
     }
+    // A pet in a locked zone stays there until Homecoming, saddle and armour included.
+    Optional<Decision> zone =
+        zones.apply(new Intent.UseEntity(owner, pet.position(), "minecraft:" + pet.type()));
+    if (zone.isPresent() && zone.get() instanceof Decision.Deny deny) {
+      source.reply(deny.message().orElseGet(() -> messages.get("pet.locked", "name", called)));
+      return;
+    }
     PlayerRecord record = store.getOrCreate(owner, name(owner));
     Optional<PlayerRecord.Pet> already =
         record.pets().stream().filter(p -> p.entity().equals(pet.id())).findFirst();
@@ -155,7 +171,12 @@ public final class Pets implements PetEvents {
     List<PlayerRecord.Pet> pets = new ArrayList<>(record.pets());
     pets.add(
         new PlayerRecord.Pet(
-            pet.id(), pet.type(), name, Optional.of(pet.position()), current.get().season()));
+            pet.id(),
+            pet.type(),
+            name,
+            Optional.of(pet.position()),
+            current.get().season(),
+            false));
     store.put(record.withPets(pets));
     platform.entities().markPet(pet.id(), Optional.of(owner));
     audit.record(name(owner), "pet-register", name(owner), "ok", name + " (" + pet.type() + ")");
@@ -249,7 +270,7 @@ public final class Pets implements PetEvents {
   }
 
   @Override
-  public void removed(UUID pet, PlayerId owner, boolean died) {
+  public void died(UUID pet, PlayerId owner) {
     Optional<PlayerRecord.Pet> registered =
         store
             .find(owner)
@@ -258,14 +279,23 @@ public final class Pets implements PetEvents {
       return;
     }
     drop(owner, pet);
-    String key = died ? "pet.died" : "pet.gone";
-    audit.record(
-        AuditLog.SEASONS,
-        died ? "pet-died" : "pet-gone",
-        name(owner),
-        "dropped",
-        registered.get().name());
-    tell(owner, key, "name", registered.get().name());
+    audit.record(AuditLog.SEASONS, "pet-died", name(owner), "dropped", registered.get().name());
+    tell(owner, "pet.died", "name", registered.get().name());
+  }
+
+  @Override
+  public void onShoulder(UUID pet, PlayerId owner) {
+    store
+        .find(owner)
+        .ifPresent(record -> {
+          List<PlayerRecord.Pet> pets =
+              record.pets().stream()
+                  .map(p -> p.entity().equals(pet) ? p.withOnShoulder() : p)
+                  .toList();
+          if (!pets.equals(record.pets())) {
+            store.put(record.withPets(pets));
+          }
+        });
   }
 
   /**
@@ -355,7 +385,9 @@ public final class Pets implements PetEvents {
         .thenComposeAsync(
             found -> {
               if (found.isEmpty()) {
-                return CompletableFuture.completedFuture(Travel.MISSING);
+                // A parrot on its owner's shoulder is out of the world, and already with them.
+                return CompletableFuture.completedFuture(
+                    pet.onShoulder() ? Travel.CAME : Travel.MISSING);
               }
               PetInfo info = found.get();
               Travel refused =

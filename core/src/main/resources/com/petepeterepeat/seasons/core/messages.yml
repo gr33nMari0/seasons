@@ -450,7 +450,7 @@ pet:
   unknown: "<red>You have no pet called <name>.</red>"
   removed: "<green><name> won't travel.</green>"
   died: "<red>Your pet <name> died, so it won't travel.</red>"
-  gone: "<red>Your pet <name> is gone, so it won't travel.</red>"
+  locked: "<red><name> is in a locked zone, so it can't be registered until Homecoming.</red>"
   came: "<green><name> has come with you.</green>"
   stayed-chest: "<yellow><name> stayed behind because it carries a chest: animals carrying chests can't travel.</yellow>"
   missing: "<yellow><name> couldn't be found, so it stayed behind.</yellow>"

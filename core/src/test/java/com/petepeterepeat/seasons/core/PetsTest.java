@@ -213,18 +213,100 @@ class PetsTest {
             "Your pets (1 of 5):",
             "- Rex (wolf), last seen at 6000, 64, 6000 in minecraft:overworld");
 
-    fake.petEvents.removed(rex.id, pat.id(), true);
+    fake.petEvents.died(rex.id, pat.id());
     assertThat(said(pat)).containsExactly("Your pet Rex died, so it won't travel.");
     assertThat(pet(pat, "/pet list")).containsExactly("You have no pets registered.");
 
     fake.leave(quinn);
-    fake.petEvents.removed(tom.id, quinn.id(), false);
+    fake.petEvents.died(tom.id, quinn.id());
     assertThat(said(quinn)).isEmpty();
     restart();
     join("Quinn");
-    assertThat(said(quinn)).containsExactly("Your pet Tom is gone, so it won't travel.");
+    assertThat(said(quinn)).containsExactly("Your pet Tom died, so it won't travel.");
     join("Quinn");
     assertThat(said(quinn)).hasSize(1);
+  }
+
+  @Test
+  void aParrotOnItsOwnersShoulderStaysRegisteredAndComesWithThem() {
+    start();
+    PlayerRef pat = fake.join("Pat");
+    run("/season init 2");
+    FakePlatform.FakePet polly = animal("parrot", pat);
+    polly.name = Optional.of("Polly");
+    register(pat, polly);
+
+    // It lands on Pat's shoulder: out of the world, but not gone.
+    fake.pets.remove(polly.id);
+    fake.petEvents.onShoulder(polly.id, pat.id());
+    assertThat(said(pat)).doesNotContain("Your pet Polly died, so it won't travel.");
+    assertThat(pet(pat, "/pet list")).first().isEqualTo("Your pets (1 of 5):");
+    fake.leave(pat);
+    restart();
+    join("Pat");
+
+    endAndLaunch();
+
+    assertThat(said(pat)).contains("Polly has come with you.");
+    assertThat(pet(pat, "/pet list")).containsExactly("You have no pets registered.");
+  }
+
+  @Test
+  void aRemovalThatIsntADeathKeepsTheRegistrationUntilTravel() {
+    start();
+    PlayerRef pat = fake.join("Pat");
+    run("/season init 2");
+    FakePlatform.FakePet ghost = animal("wolf", pat);
+    ghost.name = Optional.of("Ghost");
+    register(pat, ghost);
+    FakePlatform.FakePet polly = animal("parrot", pat);
+    polly.name = Optional.of("Polly");
+    register(pat, polly);
+
+    // Removed by a command, then Polly lands on a shoulder, hops off and unloads elsewhere.
+    fake.pets.remove(ghost.id);
+    fake.petEvents.unloaded(ghost.id, pat.id(), beside(2));
+    fake.petEvents.onShoulder(polly.id, pat.id());
+    Position far = Position.of("minecraft:overworld", 6000.5, 64, 6000.5);
+    fake.petEvents.unloaded(polly.id, pat.id(), far);
+    fake.pets.remove(polly.id);
+    assertThat(pet(pat, "/pet list")).first().isEqualTo("Your pets (2 of 5):");
+
+    endAndLaunch();
+
+    // Neither is anywhere: an unload clears the shoulder, so Polly is missing too.
+    assertThat(said(pat))
+        .contains(
+            "Ghost couldn't be found, so it stayed behind.",
+            "Polly couldn't be found, so it stayed behind.");
+  }
+
+  @Test
+  void aPetInsideALockedZoneCantBeRegisteredFromOutsideItsEdge() {
+    start();
+    PlayerRef pat = fake.join("Pat");
+    run("/season init 2");
+    endAndLaunch();
+    // Season 3's Frontier: a zone of radius 3 around the yard, locked until Homecoming.
+    fake.player(pat).position = YARD;
+    TestCommands.run(
+        fake.commands.getFirst(),
+        new TestSource(Optional.of(pat.id())),
+        "/season zone add pen cylinder 3");
+    FakePlatform.FakePet rex = fake.animal("wolf", beside(2), pat);
+    rex.name = Optional.of("Rex");
+    fake.player(pat).position = beside(6);
+    fake.looking.put(pat.id(), rex.id);
+
+    assertThat(pet(pat, "/pet add"))
+        .singleElement()
+        .asString()
+        .startsWith("That's in the pen, which is locked until ");
+    assertThat(rex.marked).isEmpty();
+
+    // A holder of the bypass node may, as they may reach in.
+    fake.bypassing.add(pat.id());
+    assertThat(pet(pat, "/pet add")).first().asString().startsWith("Registered Rex (wolf)");
   }
 
   @Test

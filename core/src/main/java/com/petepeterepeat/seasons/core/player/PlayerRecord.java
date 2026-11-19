@@ -78,11 +78,22 @@ public record PlayerRecord(
    * @param name what its owner calls it in {@code /pet} commands, unique among their pets
    * @param lastSeen where it was registered, or last stood when its chunk unloaded
    * @param season the season it was registered in; it travels when they enter a later one
+   * @param onShoulder a parrot last seen landing on its owner's shoulder, so out of the world but
+   *     with them
    */
   public record Pet(
-      java.util.UUID entity, String type, String name, Optional<Position> lastSeen, int season) {
+      java.util.UUID entity,
+      String type,
+      String name,
+      Optional<Position> lastSeen,
+      int season,
+      boolean onShoulder) {
     public Pet withLastSeen(Position at) {
-      return new Pet(entity, type, name, Optional.of(at), season);
+      return new Pet(entity, type, name, Optional.of(at), season, false);
+    }
+
+    public Pet withOnShoulder() {
+      return new Pet(entity, type, name, lastSeen, season, true);
     }
   }
 

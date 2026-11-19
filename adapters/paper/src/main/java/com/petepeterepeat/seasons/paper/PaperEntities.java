@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Chunk;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
@@ -24,7 +25,9 @@ import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.Enemy;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Parrot;
 import org.bukkit.entity.PigZombie;
+import org.bukkit.entity.Player;
 import org.bukkit.entity.Tameable;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -42,6 +45,9 @@ import org.jspecify.annotations.Nullable;
 final class PaperEntities implements Entities, Listener {
   /** How long {@link #load} waits for a chunk's entities after the chunk itself: five seconds. */
   private static final int ENTITY_WAIT_TICKS = 100;
+
+  /** How near its owner a discarded parrot counts as having landed on their shoulder. */
+  private static final double SHOULDER_REACH = 3;
 
   private final Plugin plugin;
   private final Server server;
@@ -205,8 +211,9 @@ final class PaperEntities implements Entities, Listener {
   }
 
   /**
-   * A registered pet leaving the world: killed, removed for good otherwise, or only unloaded or
-   * changing dimension, which the removal reason tells apart.
+   * A registered pet leaving the world. Only a death is for good: a parrot landing on its owner's
+   * shoulder is discarded too, and comes back when it hops off, and anything else (unloading,
+   * changing dimension, a removal by a command) is left for travel to settle.
    */
   @EventHandler(priority = EventPriority.MONITOR)
   void onRemove(EntityRemoveFromWorldEvent event) {
@@ -217,12 +224,30 @@ final class PaperEntities implements Entities, Listener {
       return;
     }
     RemovalReason reason = entity.getRemovalReason();
-    if (reason == RemovalReason.KILLED || reason == RemovalReason.DISCARDED) {
-      listening.removed(entity.getUniqueId(), owner.get(), reason == RemovalReason.KILLED);
+    if (reason == RemovalReason.KILLED) {
+      listening.died(entity.getUniqueId(), owner.get());
+    } else if (reason == RemovalReason.DISCARDED && onShoulder(entity, owner.get())) {
+      listening.onShoulder(entity.getUniqueId(), owner.get());
     } else {
       listening.unloaded(
           entity.getUniqueId(), owner.get(), PaperPositions.toPosition(entity.getLocation()));
     }
+  }
+
+  /**
+   * Whether a discarded parrot went to its owner's shoulder: the game discards it as it lands, and
+   * a parrot only lands on a player it touches.
+   */
+  private boolean onShoulder(Entity entity, PlayerId owner) {
+    if (!(entity instanceof Parrot)) {
+      return false;
+    }
+    Optional<Location> at =
+        Optional.ofNullable(server.getPlayer(owner.uuid())).map(Player::getLocation);
+    return at.filter(where ->
+            entity.getWorld().equals(where.getWorld())
+                && entity.getLocation().distanceSquared(where) <= SHOULDER_REACH * SHOULDER_REACH)
+        .isPresent();
   }
 
   /** The owner a pet was registered by, from its mark. */
