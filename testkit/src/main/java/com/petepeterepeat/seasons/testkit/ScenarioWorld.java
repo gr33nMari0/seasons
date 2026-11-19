@@ -56,8 +56,8 @@ import org.bukkit.scoreboard.Team;
  * last reset put back as it was generated, in every dimension; and every entity but players
  * removed.
  *
- * <p>Blocks come back from a copy of each chunk taken the moment it was generated, kept on disk in
- * the shard's state folder with the list of chunks loaded since the last reset, so both survive a
+ * <p>Blocks come back from a copy of each chunk taken the first time it loads, kept on disk in the
+ * shard's state folder with the list of chunks loaded since the last reset, so both survive a
  * restart or a halt. After the reset the server is compared with the fingerprint taken at the
  * shard's fresh boot; any difference is a leak, reported by name.
  */
@@ -91,11 +91,13 @@ final class ScenarioWorld implements Listener {
     }
   }
 
-  /** Copies a chunk the moment it is generated, and notes every chunk loaded. */
+  /** Copies a chunk the first time it loads, and notes every chunk loaded. */
   @EventHandler
   void onChunkLoad(ChunkLoadEvent event) {
     Chunk chunk = event.getChunk();
-    if (event.isNewChunk()) {
+    // The first load, not only a new chunk: one at the edge of a loaded area can be generated part
+    // way and saved without a load event, then load from disk later, untouched, as not new.
+    if (!Files.exists(pristineFile(chunk.getWorld(), chunk.getX(), chunk.getZ()))) {
       keepPristine(chunk);
     }
     touch(chunk.getWorld(), chunk.getX(), chunk.getZ());
@@ -241,8 +243,10 @@ final class ScenarioWorld implements Listener {
   private void restoreWorlds(List<Chunk> chunks, List<String> unrestored) {
     Map<String, String> rules = read(state.resolve("rules.txt"));
     for (Chunk chunk : chunks) {
-      if (!restore(chunk.getWorld(), chunk)) {
-        unrestored.add("blocks: chunk " + key(chunk) + " differs from when it was generated");
+      if (!Files.exists(pristineFile(chunk.getWorld(), chunk.getX(), chunk.getZ()))) {
+        unrestored.add("blocks: chunk " + key(chunk) + " has no copy from its first load");
+      } else if (!restore(chunk.getWorld(), chunk)) {
+        unrestored.add("blocks: chunk " + key(chunk) + " differs from its first load");
       }
     }
     for (World world : server.getWorlds()) {
