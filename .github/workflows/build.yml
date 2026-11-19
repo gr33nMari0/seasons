@@ -81,6 +81,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The shard count comes from this list alone (strategy.job-total); the final job checks
+        # that the shards between them ran every scenario.
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
@@ -117,8 +119,8 @@ jobs:
             testkit/build/scenario/*/bundler
           key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
           restore-keys: paper-
-      - name: Scenario shard ${{ matrix.shard }} of 4
-        run: ./gradlew :testkit:scenarioTest -PscenarioShards=4 -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
+      - name: Scenario shard ${{ matrix.shard }} of ${{ strategy.job-total }}
+        run: ./gradlew :testkit:scenarioTest -PscenarioShards=${{ strategy.job-total }} -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
       - if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -128,7 +130,8 @@ jobs:
 
   # The check branch protection requires. It runs whatever happened before it, and passes only if
   # the jars built and every shard passed, or every shard was skipped for a docs-only change: a job
-  # skipped because something it needs failed would otherwise count as passing.
+  # skipped because something it needs failed would otherwise count as passing. After passing
+  # shards, every session of every scenario file must have a passing result in their results.
   build:
     needs: [changes, jars, shard]
     if: always()
@@ -174,7 +177,7 @@ jobs:
           merge-multiple: true
           path: testkit/build/scenario-results
       - if: needs.shard.result == 'success'
-        name: NBT neutrality of every shard's samples and archives, and the run's timings
+        name: Every scenario passed in some shard, NBT neutrality of every shard's samples and archives, and the run's timings
         run: |
-          ./gradlew :testkit:nbtNeutralityTest :testkit:scenarioTimings
+          ./gradlew :testkit:scenarioCoverage :testkit:nbtNeutralityTest :testkit:scenarioTimings
           cat build/reports/scenario-timings.md >> "$GITHUB_STEP_SUMMARY"

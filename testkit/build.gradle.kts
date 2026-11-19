@@ -349,6 +349,45 @@ fun shardFiles(): List<Pair<String, Map<String, Any?>>> =
         .map { "${it.parentFile.parentFile.name}/${it.parentFile.name}" to (JsonSlurper().parse(it) as Map<String, Any?>) }
         .toList()
 
+// Every session of every scenario file passed on every supported version, by the shard results under
+// build/scenario-results, including those downloaded from CI shard jobs. A shard that never ran, or
+// shard counts that don't match, leave scenarios without a result, and this fails.
+val scenarioCoverage = tasks.register("scenarioCoverage") {
+    group = "verification"
+    description = "Checks every session of every scenario passed in the shard results, on every supported version."
+    mustRunAfter(scenarioRuns)
+    outputs.upToDateWhen { false }
+    doLast {
+        val passed = mutableSetOf<String>()
+        val seen = mutableSetOf<String>()
+        for ((name, json) in shardFiles()) {
+            val version = name.substringBefore('/')
+            for (r in json.list("results")) {
+                val key = "$version ${r["name"]} session ${r["session"]}"
+                seen += key
+                if (r["passed"] == true) passed += key
+            }
+        }
+        val problems = minecraftVersions.flatMap { version ->
+            allScenarios.flatMap { s ->
+                (1..s.sessions).mapNotNull { session ->
+                    val key = "$version ${s.name} session $session"
+                    when {
+                        key in passed -> null
+                        key in seen -> "$key failed"
+                        else -> "$key has no result"
+                    }
+                }
+            }
+        }
+        check(problems.isEmpty()) {
+            "${problems.size} scenario session(s) didn't pass:\n" + problems.joinToString("\n") { "  $it" }
+        }
+        val sessions = allScenarios.sumOf { it.sessions }
+        logger.lifecycle("Scenario coverage: all ${allScenarios.size} scenarios ($sessions sessions) passed on ${minecraftVersions.joinToString()}")
+    }
+}
+
 tasks.register("updateScenarioTimings") {
     group = "verification"
     description = "Rewrites scenario-timings.json from the last full scenario run, for balancing shards."
@@ -392,9 +431,10 @@ tasks.register("scenarioTest") {
     group = "verification"
     description = "Runs the acceptance scenarios on every supported version, then the NBT neutrality test."
     dependsOn(scenarioRuns)
-    // The neutrality test needs the archives of the whole suite: a run of some scenarios or of one
-    // shard skips it, and CI runs it once every shard has finished.
+    // The neutrality test needs the archives of the whole suite, and the coverage check every
+    // scenario: a run of some scenarios or of one shard skips both, and CI runs them once every
+    // shard has finished.
     if (scenarioFilter == null && onlyShard == null) {
-        dependsOn(nbtNeutralityTest)
+        dependsOn(nbtNeutralityTest, scenarioCoverage)
     }
 }
