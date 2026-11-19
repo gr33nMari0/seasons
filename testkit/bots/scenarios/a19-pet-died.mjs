@@ -55,12 +55,15 @@ export default {
     await ctx.command(admin, '/kill @e[tag=ghost]', /^Killed /)
     await list(ctx, pat, 2)
 
-    // Polly lands on Pat's shoulder, which takes her out of the world: she hasn't died.
+    // Polly lands on Pat's shoulder, which takes her out of the world: she hasn't died. A parrot
+    // lands only when it flies into its owner, which wandering can take a minute to do, so she is
+    // put on Pat until she does.
     await pet(ctx, admin, 'parrot', 'polly', beside(1, 1), 'Pat', { name: 'Polly' })
     await register(ctx, admin, pat, 'polly', /^Registered Polly /)
     const calm = ctx.quiet(pat, /Polly/)
     await ctx.command(admin, '/data merge entity @e[tag=polly,limit=1] {NoAI:0b}', /^Modified entity data/)
     await ctx.eventually(async () => {
+      await ctx.command(admin, '/tp @e[tag=polly,limit=1] Pat', /^(Teleported Polly to Pat|No entity was found)$/)
       const left = await ctx.entityData(admin, 'Pat', 'ShoulderEntityLeft.id')
       const right = await ctx.entityData(admin, 'Pat', 'ShoulderEntityRight.id')
       assert(left !== null || right !== null, 'Polly sits on Pat\'s shoulder')
