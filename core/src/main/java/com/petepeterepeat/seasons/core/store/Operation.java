@@ -17,7 +17,12 @@ public enum Operation {
   /** {@code /hof import}: one Season 1 cell turned into its owner's record. */
   IMPORT(JournalKind.IMPORT_STARTED, JournalKind.IMPORT_DONE),
   /** {@code /hof import undo}: one imported cell's items put back where they were. */
-  IMPORT_UNDO(JournalKind.IMPORT_UNDO_STARTED, JournalKind.IMPORT_UNDO_DONE);
+  IMPORT_UNDO(JournalKind.IMPORT_UNDO_STARTED, JournalKind.IMPORT_UNDO_DONE),
+  /**
+   * One item taken out of an ender vault: removed from the vault file, then given; the season is
+   * the vault page's, 0 for the Returned page.
+   */
+  VAULT_WITHDRAW(JournalKind.VAULT_WITHDRAW, JournalKind.VAULT_WITHDRAW_DONE);
 
   private final JournalKind started;
   private final JournalKind finished;
@@ -45,7 +50,8 @@ public enum Operation {
       case CURATE_STARTED, CURATE_DONE -> Optional.of(CURATE);
       case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);
       case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
-      case VAULT_WITHDRAW, EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
+      case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
+      case EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
     };
   }
 }

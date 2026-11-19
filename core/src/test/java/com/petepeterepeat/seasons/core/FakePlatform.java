@@ -71,6 +71,12 @@ public final class FakePlatform {
   public com.petepeterepeat.seasons.core.port.@Nullable Milestones milestones;
   public final Map<PlayerId, FakePlayer> players = new HashMap<>();
   public final List<PagedView> opened = new ArrayList<>();
+
+  /** Withdraw-only menus opened, newest last. */
+  public final List<Withdraw> withdraws = new ArrayList<>();
+
+  public record Withdraw(PlayerId viewer, PagedView view, int startPage, Menus.Withdrawal taken) {}
+
   public final List<String> objectives = new ArrayList<>();
   public Position worldSpawn = Position.of("minecraft:overworld", 0, 64, 0);
 
@@ -448,6 +454,20 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean give(PlayerId player, NeutralItem item) {
+            InventorySnapshot was = state(player).inventory;
+            List<Optional<NeutralItem>> storage = new ArrayList<>(was.storage());
+            int free = storage.indexOf(Optional.<NeutralItem>empty());
+            if (free < 0) {
+              return false;
+            }
+            storage.set(free, Optional.of(item));
+            state(player).inventory =
+                new InventorySnapshot(storage, was.armour(), was.offHand(), was.enderChest());
+            return true;
+          }
+
+          @Override
           public void restore(PlayerId player, InventorySnapshot snapshot) {
             state(player).inventory = snapshot;
           }
@@ -574,6 +594,12 @@ public final class FakePlatform {
           @Override
           public void openPaged(PlayerId viewer, PagedView view, int startPage) {
             opened.add(view);
+          }
+
+          @Override
+          public void openWithdraw(
+              PlayerId viewer, PagedView view, int startPage, Menus.Withdrawal taken) {
+            withdraws.add(new Withdraw(viewer, view, startPage, taken));
           }
         };
     Events events =

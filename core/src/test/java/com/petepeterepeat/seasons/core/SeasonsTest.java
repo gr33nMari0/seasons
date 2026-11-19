@@ -134,7 +134,9 @@ class SeasonsTest {
   void registersTheSeasonCommandWithPermissions() {
     start();
 
-    assertThat(fake.commands).extracting(CommandNode::name).containsExactly("season", "hof");
+    assertThat(fake.commands)
+        .extracting(CommandNode::name)
+        .containsExactly("season", "hof", "vault");
     assertThat(fake.commands.getFirst())
         .satisfies(root -> {
           assertThat(root.name()).isEqualTo("season");

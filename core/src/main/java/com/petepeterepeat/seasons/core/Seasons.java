@@ -49,6 +49,7 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.core.vault.Vault;
 import com.petepeterepeat.seasons.core.zone.ZoneCommands;
 import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
@@ -199,6 +200,7 @@ public final class Seasons implements SeasonsApi {
     Optional<Archiver> archiver = Optional.empty();
     Optional<Unarchiver> unarchiver = Optional.empty();
     Optional<JournalRecovery> recovery = Optional.empty();
+    Optional<Vault> vault = Optional.empty();
     RolloverArchiver rollover = refusingArchiver();
     if (journal != null) {
       JournalRecovery replay = new JournalRecovery(journal, serverThread);
@@ -217,6 +219,11 @@ public final class Seasons implements SeasonsApi {
               world);
       replay.register(Operation.IMPORT, importing.recovery());
       replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
+      Vault vaulting =
+          new Vault(
+              platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
+      replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
       archiver = Optional.of(archiving);
@@ -354,6 +361,7 @@ public final class Seasons implements SeasonsApi {
                     platform, config, halls, visiting, renderer, reconciling, importer, players)
                 .root(),
             List.of("halloffame"));
+    vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -363,6 +371,7 @@ public final class Seasons implements SeasonsApi {
               new ScenarioHooks.Wiring(
                   archives,
                   vaults,
+                  vault.orElseThrow(),
                   players,
                   recovery.get(),
                   platform.menus(),
@@ -493,6 +502,11 @@ public final class Seasons implements SeasonsApi {
   @Override
   public String version() {
     return version;
+  }
+
+  /** The season state, once started. */
+  private Optional<SeasonState> state() {
+    return service == null ? Optional.empty() : service.state();
   }
 
   @Override

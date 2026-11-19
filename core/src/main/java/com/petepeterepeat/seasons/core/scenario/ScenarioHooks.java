@@ -14,6 +14,7 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.core.store.nbt.Nbt;
+import com.petepeterepeat.seasons.core.vault.Vault;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +54,7 @@ public final class ScenarioHooks implements CrashPoints {
   public record Wiring(
       ArchiveFiles archives,
       VaultFiles vaults,
+      Vault vault,
       PlayerStore store,
       JournalRecovery recovery,
       Menus menus,
@@ -183,6 +185,11 @@ public final class ScenarioHooks implements CrashPoints {
               first,
               "Record of %s: archivedThrough=%d pending=%d".formatted(name, through, pending));
         });
+  }
+
+  /** Hands an item back to a player on their vault's Returned page. */
+  public CompletableFuture<Void> returnToVault(PlayerId player, NeutralItem item) {
+    return wired().vault().returnItem(player, item, "returned by a scenario");
   }
 
   /** A player's season card as plain lines; empty if they have no archive for the season. */
