@@ -11,7 +11,6 @@ import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
-import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -495,15 +494,14 @@ public final class Zones implements ZoneGuard, Milestones {
   }
 
   /**
-   * Puts a player inside a blocked zone back where they last stood outside, this session or an
-   * earlier one, or at the spawn.
+   * Puts a player inside a blocked zone back where they last stood outside this session, or at the
+   * spawn. One who logs in inside has no such place yet and goes to the spawn, as the spec says,
+   * whatever their record keeps from an earlier session (questions 177).
    */
   private void sendOut(PlayerId player, Zone zone) {
     ZoneMap zones = map();
     Optional<Position> back =
-        Optional.ofNullable(lastValid.get(player))
-            .or(() -> players.find(player).flatMap(PlayerRecord::lastValid))
-            .filter(at -> zones.blocking(at).isEmpty());
+        Optional.ofNullable(lastValid.get(player)).filter(at -> zones.blocking(at).isEmpty());
     Optional<Position> destination = back.or(this::spawn);
     if (destination.isEmpty()) {
       return;

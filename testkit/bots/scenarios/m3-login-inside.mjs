@@ -4,11 +4,11 @@
 // out, is sent to the season spawn and told why. One online when a zone is drawn around them is
 // found by the sweep, with no event to give them away, and put back where it last saw them outside
 // every blocked zone, or at the spawn if that was inside the camp. Where a player last stood outside
-// is kept in their record (questions 177): one who walked into a zone with the bypass, then lost it
-// to a restart, goes back to that spot, not the spawn.
+// is kept in their record (questions 177), but one who logs in inside still goes to the spawn: Rae,
+// who walked into a zone with the bypass and lost it to a restart, included.
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
-import { standAt, waitNear } from '../lib/visits.mjs'
+import { standAt } from '../lib/visits.mjs'
 import { SPAWN, cylinder, forceload, launchFrontier, permit } from '../lib/zones.mjs'
 
 const atSpawn = (at) => Math.abs(at.x - (SPAWN.x + 0.5)) <= 2 && Math.abs(at.z - (SPAWN.z + 0.5)) <= 2
@@ -47,9 +47,8 @@ async function session1 (ctx) {
   await ctx.leave(quinn)
   await cylinder(ctx, admin, 'den', den, 10)
   quinn = await ctx.join('Quinn')
-  // Sent to the spawn, where launch left her and the sweep may last have seen her outside; or, if
-  // it saw her at the den, now inside it, sent there as the fallback. Either way, told why.
-  await ctx.waitForMessages(quinn, /^(The den is locked until Homecoming|You were in the den, which is locked, so you're back at the spawn)\.$/, 15 * SECOND)
+  // Logged in inside: sent to the spawn and told why.
+  await ctx.waitForMessages(quinn, /^You were in the den, which is locked, so you're back at the spawn\.$/, 15 * SECOND)
   await ctx.eventually(async () => assert(atSpawn(await ctx.position(admin, 'Quinn')), 'Quinn is at the spawn'))
 
   // Rae stands by the yard, then walks in with the bypass, which the restart takes away.
@@ -67,6 +66,6 @@ async function session2 (ctx) {
   const admin = await ctx.admin()
   await forceload(ctx, admin, YARD, 40)
   const rae = await ctx.join('Rae')
-  await ctx.waitForMessages(rae, /^The yard is locked until Homecoming\.$/, 15 * SECOND)
-  await waitNear(ctx, admin, 'Rae', { x: BY_THE_YARD.x + 0.5, y: FLOOR, z: BY_THE_YARD.z + 0.5 }, 1)
+  await ctx.waitForMessages(rae, /^You were in the yard, which is locked, so you're back at the spawn\.$/, 15 * SECOND)
+  await ctx.eventually(async () => assert(atSpawn(await ctx.position(admin, 'Rae')), 'Rae is at the spawn, not back by the yard'))
 }

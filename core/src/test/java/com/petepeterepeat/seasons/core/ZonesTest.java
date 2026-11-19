@@ -484,7 +484,7 @@ class ZonesTest {
   }
 
   @Test
-  void aPlayerFoundInsideAfterARestartGoesBackToTheirSavedLastValidPosition() {
+  void theLastValidPositionIsKeptInTheRecordButLoggingInInsideGoesToTheSpawn() throws IOException {
     PlayerRef rae = fake.join("Rae");
     fake.sessions.joined(rae, false);
     fake.player(rae).position = OUTSIDE;
@@ -494,26 +494,19 @@ class ZonesTest {
     sweepAll();
 
     restartWith(rae);
+    String record =
+        Files.readString(dir.resolve("world/seasons/data/players/" + rae.id() + ".json"));
+    assertThat(record).as("kept for the record").contains("lastValid").contains("533.5");
     sweepAll();
 
-    assertThat(fake.player(rae).position).as("not the spawn, nor inside").isEqualTo(OUTSIDE);
-  }
-
-  @Test
-  void aSavedPositionNowInsideAZoneSendsThemToTheSpawn() throws IOException {
-    PlayerRef rae = fake.join("Rae");
-    fake.sessions.joined(rae, false);
-    Position yard = Position.of(OVERWORLD, 1500.5, 64, 1500.5);
-    fake.player(rae).position = yard;
-    sweepAll();
-    writeSeasonFile(
-        "  yard: { dimension: minecraft:overworld, shape: { box: { min: [1490, 0, 1490], max:"
-            + " [1510, 100, 1510] } } }\n");
-
-    restartWith(rae);
-    sweepAll();
-
-    assertThat(fake.player(rae).position).isEqualTo(SPAWN);
+    assertThat(fake.player(rae).position)
+        .as("the spec: logged in inside, to the spawn")
+        .isEqualTo(SPAWN);
+    assertThat(
+            fake.sent.stream()
+                .filter(s -> s.player().equals(rae.id()))
+                .map(s -> Messages.plain(s.message())))
+        .containsExactly("You were in the base, which is locked, so you're back at the spawn.");
   }
 
   @Test
