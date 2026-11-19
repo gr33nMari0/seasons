@@ -43,7 +43,9 @@ export default {
     await ctx.command(admin, '/season config set schema-version 2', /^There's no setting called schema-version\./)
     await ctx.command(admin, '/season config set pets.maxPerPlayer lots', /^pets\.maxPerPlayer wasn't changed: /)
     await ctx.command(admin, '/season config set pets.maxPerPlayer 11', /^pets\.maxPerPlayer wasn't changed: config\.yml, at pets\.maxPerPlayer: must be between 0 and 10, not 11$/)
-    await ctx.command(admin, '/season config set cells.access gate', /^cells\.access wasn't changed: config\.yml, at cells\.access: only open is built yet/)
+    await ctx.command(admin, '/season config set firsts.rareItems [trident, not_an_item]', /^firsts\.rareItems wasn't changed: config\.yml, at firsts\.rareItems: not_an_item isn't an item this server knows$/)
+    await ctx.command(admin, '/season config set cells.gateBlock not_a_block', /^cells\.gateBlock wasn't changed: config\.yml, at cells\.gateBlock: not_a_block isn't an item this server knows$/)
+    await ctx.command(admin, '/season config set launch.requireManual false', /^launch\.requireManual wasn't changed: config\.yml, at launch\.requireManual: only true is built: launch is by \/season launch or the launch button$/)
     assert(ctx.readFile(CONFIG) === written, 'refusals leave config.yml alone')
 
     // A file that lacks the key gets it, under its section, which is made if it's missing.
