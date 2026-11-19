@@ -11,6 +11,7 @@ import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.BorderSquare;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -333,6 +334,62 @@ class ZonesTest {
         .startsWith("Give both corners: /season zone add bad outside box");
     assertThat(run("/season zone add bad outside circle 50").text())
         .containsExactly("Stand at the zone's centre and run this in game.");
+  }
+
+  @Test
+  void theFrontierBorderIsShownAroundABlockingOutsideCircleOnlyWhenTurnedOn() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } },"
+            + " exempt: [{ min: [3150, 0, -5], max: [3160, 100, 5] }] }\n");
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    assertThat(fake.player(pat).borders).as("off by default").isEmpty();
+
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    sweepAll();
+    sweepAll();
+    // The square around the circle (2900 to 3100) and its exemption (to 3161), sent once.
+    BorderSquare square = new BorderSquare(3030.5, 0, 261);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // Another dimension, and the bypass, put back the world's border.
+    fake.player(pat).position = Position.of("minecraft:the_nether", 375.5, 64, 0.5);
+    sweepAll();
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    fake.bypassing.add(pat.id());
+    sweepAll();
+    assertThat(fake.player(pat).borders)
+        .containsExactly(
+            Optional.of(square), Optional.empty(), Optional.of(square), Optional.empty());
+    fake.bypassing.remove(pat.id());
+    sweepAll();
+
+    // Homecoming unlocks the frontier, and the border goes in the next sweep, for everyone.
+    run("/season unlock homecoming");
+    fake.tick();
+    assertThat(fake.player(pat).borders.getLast()).isEmpty();
+  }
+
+  @Test
+  void aNoBuildOrAnnounceFrontierHasNoBorderSinceItCanBeCrossed() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } }, mode:"
+            + " no-build }\n  edge: { shape: { outside: { box: { min: [2000, -500], max: [4000,"
+            + " 500] } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    assertThat(fake.player(pat).borders).isEmpty();
   }
 
   @Test

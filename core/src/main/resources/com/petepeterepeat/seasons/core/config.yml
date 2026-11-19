@@ -63,6 +63,10 @@ hof:
 zones:
   # Also post announce-mode entries ("Peter entered the market") to the Discord webhook.
   announceToDiscord: false
+  # Draw a locked `outside` circle zone as a world border each player inside it sees: the square
+  # around the circle. Visual only: the zone does the locking, and the world's own border is never
+  # changed. Players in the Hall, in another dimension or holding seasons.zone.bypass see none.
+  frontierBorder: false
 
 dragon:
   newEggEachSeason: true

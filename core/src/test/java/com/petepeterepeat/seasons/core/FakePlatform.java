@@ -7,6 +7,7 @@ import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Advancements;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
+import com.petepeterepeat.seasons.core.port.BorderSquare;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.DragonFight;
@@ -204,6 +205,10 @@ public final class FakePlatform {
     public final List<Message> titles = new ArrayList<>();
     public final List<Message> actionBars = new ArrayList<>();
     public int stopped;
+
+    /** Every border this player was sent, in order: empty for the world's own. */
+    public final List<Optional<BorderSquare>> borders = new ArrayList<>();
+
     public java.util.Set<String> carried = new java.util.HashSet<>();
     public Map<String, Long> counts = new HashMap<>();
     public Movement movement = Movement.STILL;
@@ -457,6 +462,11 @@ public final class FakePlatform {
           public void alert(PlayerId id, Message title, Message actionBar) {
             state(id).titles.add(title);
             state(id).actionBars.add(actionBar);
+          }
+
+          @Override
+          public void showBorder(PlayerId id, Optional<BorderSquare> border) {
+            state(id).borders.add(border);
           }
 
           @Override

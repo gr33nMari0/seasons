@@ -107,9 +107,11 @@ public record SeasonsConfig(
    * Zones over the old world; the zones themselves live in each season's file.
    *
    * @param announceToDiscord whether announce-mode entries are posted to Discord too
+   * @param frontierBorder whether players inside a locked {@code outside} circle see a world border
+   *     of their own around it, visual only
    */
   @ConfigSerializable
-  public record Zones(boolean announceToDiscord) {}
+  public record Zones(boolean announceToDiscord, boolean frontierBorder) {}
 
   @ConfigSerializable
   public record Dragon(boolean newEggEachSeason, EggTo eggTo) {}

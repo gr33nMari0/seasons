@@ -101,6 +101,11 @@ public final class Zones implements ZoneGuard, Milestones {
   private long sweeps;
   private final List<ScheduledTask> tasks = new ArrayList<>();
 
+  private final FrontierBorder borders;
+
+  /** The zones the sweep last saw, so a change reaches every player's border at once. */
+  private @Nullable ZoneMap swept;
+
   /**
    * @param exempt where no zone ever applies: the Hall
    * @param seasonSpawn the spawn of a season, if it has one
@@ -124,6 +129,7 @@ public final class Zones implements ZoneGuard, Milestones {
     this.exempt = exempt;
     this.seasonSpawn = seasonSpawn;
     this.held = held;
+    this.borders = new FrontierBorder(platform.players());
   }
 
   /** Connects the season service, once it exists. */
@@ -141,6 +147,7 @@ public final class Zones implements ZoneGuard, Milestones {
     tasks.forEach(ScheduledTask::cancel);
     tasks.clear();
     audit.flushAll();
+    borders.clear();
   }
 
   // What is in force
@@ -418,17 +425,27 @@ public final class Zones implements ZoneGuard, Milestones {
   /**
    * Every 50 ms, a tenth of the players: anyone inside a blocked zone is put back where they last
    * stood outside every blocked zone, or at the season spawn if there is no such place; anyone
-   * outside is remembered there; and entering an announce zone is announced.
+   * outside is remembered there; and entering an announce zone is announced. Each player checked is
+   * sent the frontier border they should see, and everyone is when the zones in force change.
    */
+  @SuppressWarnings("ReferenceEquality")
   void sweep() {
     long slice = sweeps++ % SWEEP_SLICES;
     Set<PlayerId> online = new HashSet<>();
     int index = 0;
     ZoneMap zones = map();
+    boolean changed = zones != swept;
+    swept = zones;
+    boolean border = config.get().config().zones().frontierBorder();
     for (PlayerRef ref : platform.players().online()) {
       PlayerId player = ref.id();
       online.add(player);
-      if (index++ % SWEEP_SLICES != slice || sending.contains(player) || held.test(player)) {
+      boolean due = index++ % SWEEP_SLICES == slice;
+      if (due || changed) {
+        borders.update(
+            player, platform.players().position(player), zones, border, bypasses(player));
+      }
+      if (!due || sending.contains(player) || held.test(player)) {
         continue;
       }
       Position at = platform.players().position(player);
@@ -448,6 +465,7 @@ public final class Zones implements ZoneGuard, Milestones {
     lastValid.keySet().retainAll(online);
     announcedIn.keySet().retainAll(online);
     sending.retainAll(online);
+    borders.retain(online);
   }
 
   /** Puts a player inside a blocked zone back where they last stood outside, or at the spawn. */
