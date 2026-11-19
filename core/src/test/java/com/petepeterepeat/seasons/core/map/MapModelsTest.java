@@ -168,7 +168,8 @@ class MapModelsTest {
             Optional.of(new Bounds(OVERWORLD, 200, -61, 300, 210, -50, 310)),
             Optional.empty(),
             List.of(),
-            List.of());
+            List.of(),
+            Gallery.Settings.NONE);
 
     MapModel model =
         build(

@@ -332,10 +332,10 @@ public final class HallService {
       return owned;
     }
     Optional<PlayerRecord> record = players.find(player);
-    if (record.isEmpty() || !earnsCell(record.get(), season) || !handsOut()) {
+    if (record.isEmpty() || !earnsCell(record.get(), season)) {
       return Optional.empty();
     }
-    List<CellRef> free = freeCells(season);
+    List<CellRef> free = freeCells(season).stream().filter(ref -> handsOut(ref.gallery())).toList();
     if (free.isEmpty()) {
       return Optional.empty();
     }
@@ -347,7 +347,7 @@ public final class HallService {
 
   /** Hands everyone who played a season and has no cell a free one. Returns how many own one. */
   public int assignAll(int season) {
-    if (handsOut()) {
+    if (seasonGalleries(season).stream().anyMatch(this::handsOut)) {
       for (PlayerRecord record : withoutCell(season)) {
         ensureCell(record.id(), season);
       }
@@ -359,15 +359,18 @@ public final class HallService {
             .count();
   }
 
-  private boolean handsOut() {
-    SeasonsConfig.CellAssignment strategy = config.get().config().cells().assignment();
+  /** Whether a gallery hands its cells out by itself: random or ordered assignment. */
+  private boolean handsOut(Gallery gallery) {
+    SeasonsConfig.CellAssignment strategy = gallery.assignment(config.get().config());
     return strategy == SeasonsConfig.CellAssignment.RANDOM
         || strategy == SeasonsConfig.CellAssignment.ORDERED;
   }
 
+  /** The first free cell if its gallery hands cells out in order, else one at random. */
   private CellRef pick(List<CellRef> free) {
-    if (config.get().config().cells().assignment() == SeasonsConfig.CellAssignment.ORDERED) {
-      return free.getFirst();
+    CellRef first = free.getFirst();
+    if (first.gallery().assignment(config.get().config()) == SeasonsConfig.CellAssignment.ORDERED) {
+      return first;
     }
     return free.get(random.nextInt(free.size()));
   }
@@ -457,10 +460,19 @@ public final class HallService {
    * in their cell switch to adventure mode first.
    */
   public CompletableFuture<Void> lockAll(int season) {
-    if (!config.get().config().decorating().lockAtEnd()) {
+    SeasonsConfig settings = config.get().config();
+    List<Gallery> galleries = seasonGalleries(season);
+    boolean any =
+        galleries.isEmpty()
+            ? settings.decorating().lockAtEnd()
+            : galleries.stream().anyMatch(g -> g.lockAtEnd(settings));
+    if (!any) {
       return CompletableFuture.completedFuture(null);
     }
-    decorating.accept(Decorating::lockedAtEnd);
+    // A gallery that doesn't lock at the end keeps the window open for its own cells.
+    if (galleries.stream().allMatch(g -> g.lockAtEnd(settings))) {
+      decorating.accept(Decorating::lockedAtEnd);
+    }
     lockOwnersStandingInCells();
     if (!seasonGalleries(season).isEmpty()) {
       announcer.broadcast("hof.locked", "season", Integer.toString(season));
@@ -474,17 +486,19 @@ public final class HallService {
    */
   public void archived(PlayerId player, int season) {
     Optional<SeasonState> current = state.get();
-    SeasonsConfig.Decorating settings = config.get().config().decorating();
+    SeasonsConfig settings = config.get().config();
+    Optional<CellRef> cell = cellOf(player, season);
     if (current.isEmpty()
         || current.get().season() != season
         || playing(current.get())
-        || !settings.lockAtEnd()
-        || !settings.afterArchive().isPositive()
-        || current.get().decorating().lockAt().containsKey(player)
-        || cellOf(player, season).isEmpty()) {
+        || cell.isEmpty()
+        || !cell.get().gallery().lockAtEnd(settings)
+        || !cell.get().gallery().afterArchive(settings).isPositive()
+        || current.get().decorating().lockAt().containsKey(player)) {
       return;
     }
-    Instant until = clock.instant().plus(settings.afterArchive());
+    Duration afterArchive = cell.get().gallery().afterArchive(settings);
+    Instant until = clock.instant().plus(afterArchive);
     decorating.accept(d -> d.withLockAt(player, until));
     platform
         .players()
@@ -494,7 +508,7 @@ public final class HallService {
                 .get(
                     "decorate.after-archive",
                     "when",
-                    HumanTime.duration(messages(), settings.afterArchive())));
+                    HumanTime.duration(messages(), afterArchive)));
   }
 
   /**
@@ -526,7 +540,7 @@ public final class HallService {
     if (current.phase() instanceof Phase.Intermission
         || current.phase() instanceof Phase.Archiving) {
       return window.afterArchive(player, clock.instant())
-          || (!config.get().config().decorating().lockAtEnd() && window.open());
+          || (!ref.gallery().lockAtEnd(config.get().config()) && window.open());
     }
     return false;
   }
@@ -709,7 +723,7 @@ public final class HallService {
   private void handOutLate(PlayerId player, SeasonState current) {
     if (playing(current)
         && current.decorating().open()
-        && handsOut()
+        && seasonGalleries(current.season()).stream().anyMatch(this::handsOut)
         && cellOf(player, current.season()).isEmpty()
         && players.find(player).map(r -> earnsCell(r, current.season())).orElse(false)) {
       ensureCell(player, current.season());

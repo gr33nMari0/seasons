@@ -4,6 +4,8 @@ package com.petepeterepeat.seasons.core.hall;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
+import com.petepeterepeat.seasons.core.config.Durations;
+import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.AtomicFiles;
@@ -11,7 +13,9 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +43,10 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
  * bounds: { min: [20, -61, 20], max: [44, -50, 30] }
  * entry: { pos: [21, -60, 21], yaw: 0 }
  * exits: [[21, -60, 20]]
+ * assignment: claim                 # optional, as cells.assignment in config.yml
+ * access: gate                      # optional, as cells.access
+ * renderer: armour-stand            # optional: mannequin (the default) or armour-stand
+ * decorating: { lockAtEnd: true, afterArchive: 15m }   # optional, as decorating in config.yml
  * cells:
  *   c1:
  *     bounds: { min: [20, -61, 22], max: [24, -55, 30] }
@@ -112,7 +120,67 @@ public final class GalleryFiles {
       String cellId = String.valueOf(entry2.getKey());
       cells.add(cell(cellId, entry2.getValue(), dimension, "cells." + cellId));
     }
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells);
+    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, settings(node));
+  }
+
+  private static Gallery.Settings settings(ConfigurationNode node) throws Invalid {
+    Optional<SeasonsConfig.CellAssignment> assignment =
+        constant(node.node("assignment"), SeasonsConfig.CellAssignment.class, "assignment");
+    Optional<SeasonsConfig.CellAccess> access =
+        constant(node.node("access"), SeasonsConfig.CellAccess.class, "access");
+    Optional<FigureRenderer> renderer = Optional.empty();
+    if (!node.node("renderer").virtual()) {
+      String name = node.node("renderer").getString("");
+      renderer =
+          Optional.of(
+              FigureRenderer.of(name)
+                  .orElseThrow(() ->
+                      new Invalid("renderer", "is mannequin or armour-stand, not '" + name + "'")));
+    }
+    ConfigurationNode decorating = node.node("decorating");
+    Optional<Boolean> lockAtEnd = Optional.empty();
+    if (!decorating.node("lockAtEnd").virtual()) {
+      if (!(decorating.node("lockAtEnd").raw() instanceof Boolean value)) {
+        throw new Invalid("decorating.lockAtEnd", "is true or false");
+      }
+      lockAtEnd = Optional.of(value);
+    }
+    Optional<Duration> afterArchive = Optional.empty();
+    if (!decorating.node("afterArchive").virtual()) {
+      String text = String.valueOf(decorating.node("afterArchive").raw());
+      try {
+        afterArchive = Optional.of(Durations.parse(text));
+      } catch (IllegalArgumentException e) {
+        throw new Invalid("decorating.afterArchive", String.valueOf(e.getMessage()));
+      }
+    }
+    return new Gallery.Settings(assignment, access, renderer, lockAtEnd, afterArchive);
+  }
+
+  /** An enum written in lower case with dashes, such as {@code archive-and-reset}. */
+  private static <E extends Enum<E>> Optional<E> constant(
+      ConfigurationNode node, Class<E> type, String path) throws Invalid {
+    if (node.virtual()) {
+      return Optional.empty();
+    }
+    String name = node.getString("");
+    for (E constant : type.getEnumConstants()) {
+      if (dashed(constant).equals(name)) {
+        return Optional.of(constant);
+      }
+    }
+    throw new Invalid(
+        path,
+        "is one of "
+            + String.join(
+                ", ", Arrays.stream(type.getEnumConstants()).map(GalleryFiles::dashed).toList())
+            + ", not '"
+            + name
+            + "'");
+  }
+
+  private static String dashed(Enum<?> constant) {
+    return constant.name().toLowerCase(Locale.ROOT).replace('_', '-');
   }
 
   private static Cell cell(String id, ConfigurationNode node, String dimension, String path)
@@ -209,6 +277,22 @@ public final class GalleryFiles {
     }
     for (Position exit : gallery.exits()) {
       setXyz(node.node("exits").appendListNode(), exit);
+    }
+    Gallery.Settings settings = gallery.settings();
+    if (settings.assignment().isPresent()) {
+      node.node("assignment").set(dashed(settings.assignment().get()));
+    }
+    if (settings.access().isPresent()) {
+      node.node("access").set(dashed(settings.access().get()));
+    }
+    if (settings.renderer().isPresent()) {
+      node.node("renderer").set(settings.renderer().get().id());
+    }
+    if (settings.lockAtEnd().isPresent()) {
+      node.node("decorating", "lockAtEnd").set(settings.lockAtEnd().get());
+    }
+    if (settings.afterArchive().isPresent()) {
+      node.node("decorating", "afterArchive").set(Durations.format(settings.afterArchive().get()));
     }
     node.node("cells").raw(new java.util.LinkedHashMap<>());
     for (Cell cell : gallery.cells()) {
