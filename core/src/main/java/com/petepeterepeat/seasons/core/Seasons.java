@@ -494,6 +494,12 @@ public final class Seasons implements SeasonsApi {
       }
 
       @Override
+      public void respawned(PlayerId player) {
+        first.respawned(player);
+        second.respawned(player);
+      }
+
+      @Override
       public void dragonKilled() {
         first.dragonKilled();
         second.dragonKilled();

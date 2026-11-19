@@ -3,8 +3,9 @@
 // visual only. Off by default; /season config set zones.frontierBorder true turns it on, and a
 // player inside the circle is sent a border, the square around the circle, while the world's own
 // border never changes. A visit to the Hall at 0, 0, beyond the frontier, takes it away and
-// /hof leave brings it back; so do the Nether and the way back. A holder of seasons.zone.bypass
-// never has one, and Homecoming takes it away. The bots read the border packets their client gets.
+// /hof leave brings it back; so do the Nether and the way back, and dying and respawning inside
+// the circle. A holder of seasons.zone.bypass never has one, and Homecoming takes it away. The
+// bots read the border packets their client gets.
 import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { bed, hallToVisit, hof, standAt } from '../lib/visits.mjs'
@@ -49,6 +50,25 @@ export default {
     await world(pat, 'in the Hall')
     await hof(ctx, pat, '/hof leave', /^Back where you left\.$/)
     await frontier('back from the Hall')
+
+    // Dying and respawning at the world spawn, inside the circle, brings it back too: the game
+    // sends the world's border with the respawn. Pat dies away from the spawn once the arrival
+    // immunity from /hof leave has run out, and before any change of dimension, after which the
+    // game holds a player invulnerable until their client has caught up.
+    await standAt(ctx, admin, 'Pat', { x: SPAWN.x + 20, y: FLOOR, z: SPAWN.z })
+    await frontier('before dying')
+    await ctx.advance(admin, 6_000)
+    const died = new Promise((resolve) => pat.once('death', resolve))
+    const respawned = new Promise((resolve) => pat._client.once('respawn', resolve))
+    await ctx.command(admin, '/kill Pat', /^Killed Pat/)
+    await died
+    await respawned
+    await ctx.eventually(async () => {
+      const at = await ctx.position(admin, 'Pat')
+      assert(Math.abs(at.x - SPAWN.x) <= 12 && Math.abs(at.z - SPAWN.z) <= 12, `Pat respawned at the spawn, not ${JSON.stringify(at)}`)
+    }, 20_000)
+    await ctx.sync(admin, [pat], 20)
+    await frontier('after dying and respawning')
 
     // Another dimension takes it away; the frontier brings it back.
     await ctx.command(admin, '/execute in minecraft:the_nether run tp Pat 0.5 128 0.5', /^Teleported /)

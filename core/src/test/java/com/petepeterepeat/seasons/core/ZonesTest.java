@@ -400,6 +400,29 @@ class ZonesTest {
   }
 
   @Test
+  void aRespawnInsideTheFrontierBringsTheBorderBackAtOnce() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = Position.of(OVERWORLD, 3020.5, 64, 0.5);
+    sweepAll();
+    BorderSquare square = new BorderSquare(3000, 0, 200);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // Dying and respawning at the spawn, in the same square: the game sends the world's border
+    // with the respawn, and a sweep would see nothing to change.
+    fake.player(pat).position = SPAWN;
+    fake.milestones.respawned(pat.id());
+    sweepAll();
+
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square), Optional.of(square));
+  }
+
+  @Test
   void aNoBuildOrAnnounceFrontierHasNoBorderSinceItCanBeCrossed() throws IOException {
     writeSeasonFile(
         "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } }, mode:"

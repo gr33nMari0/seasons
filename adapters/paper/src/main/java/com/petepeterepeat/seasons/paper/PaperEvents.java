@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
@@ -203,6 +204,15 @@ final class PaperEvents implements Events, Listener {
     if (listening != null) {
       Player player = event.getPlayer();
       listening.enteredDimension(id(player), player.getWorld().getKey().asString());
+    }
+  }
+
+  /** After a respawn, once the game has sent the client the world there, its border included. */
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onPostRespawn(PlayerPostRespawnEvent event) {
+    Milestones listening = milestones;
+    if (listening != null) {
+      listening.respawned(id(event.getPlayer()));
     }
   }
 
