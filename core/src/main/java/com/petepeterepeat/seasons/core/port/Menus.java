@@ -20,4 +20,23 @@ public interface Menus {
 
   /** Opens a view-only menu with pages, starting on one of them (0-based). */
   void openPaged(PlayerId viewer, PagedView view, int startPage);
+
+  /**
+   * Opens a menu with pages, starting on one of them (0-based), where a left click or shift click
+   * on an item asks {@code taken} to withdraw it. The menu itself still moves nothing: every click
+   * is refused and the client resynced, so only the core's transaction gives anything.
+   */
+  void openWithdraw(PlayerId viewer, PagedView view, int startPage, Withdrawal taken);
+
+  /** A click asking to withdraw the item in one slot of one page. */
+  @FunctionalInterface
+  interface Withdrawal {
+    /**
+     * Asks for one item.
+     *
+     * @param page the page shown (0-based)
+     * @param slot the slot on that page (0-based, below {@link PagedView#PAGE_SIZE})
+     */
+    void clicked(int page, int slot);
+  }
 }

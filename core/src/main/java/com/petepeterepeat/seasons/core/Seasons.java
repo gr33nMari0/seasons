@@ -27,6 +27,7 @@ import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
+import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -49,6 +50,7 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.core.vault.Vault;
 import com.petepeterepeat.seasons.core.zone.ZoneCommands;
 import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
@@ -94,6 +96,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
   private @Nullable FirstsTracker firsts;
+  private @Nullable Pets pets;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -169,7 +172,18 @@ public final class Seasons implements SeasonsApi {
     Announcer announcer =
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
     CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
-    SeasonEntry entry = new SeasonEntry(platform, config, players, immunity, clock);
+    Pets pets = new Pets(platform, config, players, audit, Optional.ofNullable(journal));
+    this.pets = pets;
+    SeasonEntry entry =
+        new SeasonEntry(
+            platform,
+            config,
+            players,
+            immunity,
+            clock,
+            player -> {
+              var _ = pets.travel(player);
+            });
     HallService halls =
         new HallService(
             platform,
@@ -199,6 +213,7 @@ public final class Seasons implements SeasonsApi {
     Optional<Archiver> archiver = Optional.empty();
     Optional<Unarchiver> unarchiver = Optional.empty();
     Optional<JournalRecovery> recovery = Optional.empty();
+    Optional<Vault> vault = Optional.empty();
     RolloverArchiver rollover = refusingArchiver();
     if (journal != null) {
       JournalRecovery replay = new JournalRecovery(journal, serverThread);
@@ -217,6 +232,11 @@ public final class Seasons implements SeasonsApi {
               world);
       replay.register(Operation.IMPORT, importing.recovery());
       replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
+      Vault vaulting =
+          new Vault(
+              platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
+      replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
       archiver = Optional.of(archiving);
@@ -253,6 +273,7 @@ public final class Seasons implements SeasonsApi {
             platform, config, announcer, audit, clock, halls::inHall, entry::spawn, hold::isHeld);
     zones = zoning;
     zoning.bind(seasons);
+    pets.bind(seasons::state, zoning::decide);
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
@@ -275,7 +296,8 @@ public final class Seasons implements SeasonsApi {
                 hold,
                 entry,
                 platform.scheduler(),
-                clock));
+                clock,
+                pets::loggedIn));
     Tripwire wire =
         new Tripwire(platform.players(), platform.inventories(), platform.scheduler(), audit);
     tripwire = wire;
@@ -313,7 +335,16 @@ public final class Seasons implements SeasonsApi {
             journalError,
             startupProblems,
             new SeasonCommands.Services(
-                archiver, unarchiver, recovery, players, furthest, login, archives, vaults, halls));
+                archiver,
+                unarchiver,
+                recovery,
+                players,
+                furthest,
+                login,
+                archives,
+                vaults,
+                halls,
+                pets::waiting));
     commands = built;
     platform
         .events()
@@ -354,6 +385,9 @@ public final class Seasons implements SeasonsApi {
                     platform, config, halls, visiting, renderer, reconciling, importer, players)
                 .root(),
             List.of("halloffame"));
+    vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
+    platform.commands().register(pets.command(), List.of());
+    platform.events().pets(pets);
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -363,6 +397,7 @@ public final class Seasons implements SeasonsApi {
               new ScenarioHooks.Wiring(
                   archives,
                   vaults,
+                  vault.orElseThrow(),
                   players,
                   recovery.get(),
                   platform.menus(),
@@ -480,6 +515,9 @@ public final class Seasons implements SeasonsApi {
     if (firsts != null) {
       firsts.stop();
     }
+    if (pets != null) {
+      pets.stop();
+    }
     if (flusher != null) {
       flusher.cancel();
     }
@@ -493,6 +531,11 @@ public final class Seasons implements SeasonsApi {
   @Override
   public String version() {
     return version;
+  }
+
+  /** The season state, once started. */
+  private Optional<SeasonState> state() {
+    return service == null ? Optional.empty() : service.state();
   }
 
   @Override

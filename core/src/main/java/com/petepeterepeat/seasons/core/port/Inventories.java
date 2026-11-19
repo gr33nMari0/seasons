@@ -29,6 +29,14 @@ public interface Inventories {
    */
   void clear(PlayerId player, boolean enderChest);
 
+  /**
+   * Gives an online player a whole stack in their main inventory, or nothing at all if it doesn't
+   * fit: never part of it, and nothing is dropped. Call on the player's thread.
+   *
+   * @return whether it was given
+   */
+  boolean give(PlayerId player, NeutralItem item);
+
   /** Puts a snapshot back into the player's slots, replacing what is there. */
   void restore(PlayerId player, InventorySnapshot snapshot);
 

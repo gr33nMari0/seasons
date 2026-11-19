@@ -28,4 +28,7 @@ public interface Events {
 
   /** Sets the zones' say on changes nobody in particular makes. Until set, nothing is guarded. */
   void zones(ZoneGuard guard);
+
+  /** Sets who hears about registered pets unloading or being removed. */
+  void pets(PetEvents pets);
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.testkit;
 
+import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.scenario.CrashPoint;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
@@ -35,11 +36,14 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Boat;
+import org.bukkit.entity.ChestedHorse;
 import org.bukkit.entity.EnderPearl;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TNTPrimed;
+import org.bukkit.entity.Tameable;
 import org.bukkit.entity.boat.OakBoat;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -125,6 +129,13 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code vault-return <player> <item> <count>} hands a stack back to the player on their
+ *       vault's Returned page, as a curator's return or an undelivered dragon egg will
+ *   <li>{@code tame <tag> <player>} tames the entity with a scoreboard tag to a player
+ *   <li>{@code chest <tag> <on|off>} puts a chest on a donkey, mule or llama, or takes it off
+ *   <li>{@code leash <tag> <holder tag>} puts an animal on a lead held by another entity
+ *   <li>{@code forget-pet <tag>} takes Seasons' mark off a registered pet, so it can go unnoticed,
+ *       as when its chunks are regenerated
  *   <li>{@code reset} resets a shared scenario server to a fresh boot and reports any leak; the
  *       runner asks for this itself between scenarios, so this is for trying it by hand
  *   <li>{@code clock [+<duration>]} prints Seasons' time, after moving it forward by a duration
@@ -244,6 +255,11 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "vault-return" -> vaultReturn(sender, hooks, args);
+        case "tame" -> tame(sender, args);
+        case "chest" -> chest(sender, args);
+        case "leash" -> leash(sender, args);
+        case "forget-pet" -> forgetPet(sender, args);
         case "reset" -> {
           var _ =
               reset
@@ -266,7 +282,8 @@ final class ScenarioCommands implements BasicCommand, Listener {
             sender.sendMessage(
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
-                    + "|portal-pair|bucket|ignite|permit|reset|clock|sync ...");
+                    + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
+                    + "|reset|clock|sync ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
@@ -847,6 +864,104 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     player.addAttachment(plugin, args[2], true);
     sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  private void vaultReturn(CommandSender sender, ScenarioHooks hooks, String[] args) {
+    Material material = Material.matchMaterial(args[2]);
+    if (material == null || !material.isItem()) {
+      sender.sendMessage("Can't return " + args[2]);
+      return;
+    }
+    int count = Integer.parseInt(args[3]);
+    ItemStack stack = ItemStack.of(material, count);
+    var _ =
+        hooks
+            .returnToVault(id(args[1]), new NeutralItem(stack.serializeAsBytes()))
+            .whenComplete((done, failure) ->
+                plugin
+                    .getServer()
+                    .getGlobalRegionScheduler()
+                    .execute(
+                        plugin,
+                        () ->
+                            sender.sendMessage(
+                                failure != null
+                                    ? "Returning failed: " + failure
+                                    : "Returned "
+                                        + count
+                                        + " × "
+                                        + material.getKey()
+                                        + " to "
+                                        + args[1]
+                                        + "'s vault")));
+  }
+
+  /** The one entity with a scoreboard tag, found as a command's selector finds it. */
+  private Optional<Entity> tagged(String tag) {
+    return plugin
+        .getServer()
+        .selectEntities(plugin.getServer().getConsoleSender(), "@e[tag=" + tag + ",limit=1]")
+        .stream()
+        .findFirst();
+  }
+
+  private void tame(CommandSender sender, String[] args) {
+    Optional<Entity> found = tagged(args[1]);
+    Player owner = plugin.getServer().getPlayerExact(args[2]);
+    if (found.isEmpty() || !(found.get() instanceof Tameable animal) || owner == null) {
+      sender.sendMessage(
+          "Can't tame "
+              + args[1]
+              + " to "
+              + args[2]
+              + ": "
+              + (found.isEmpty()
+                  ? "no such entity"
+                  : owner == null ? "owner offline" : "untameable"));
+      return;
+    }
+    animal.setTamed(true);
+    animal.setOwner(owner);
+    sender.sendMessage("Tamed " + args[1] + " to " + args[2]);
+  }
+
+  private void chest(CommandSender sender, String[] args) {
+    Optional<Entity> found = tagged(args[1]);
+    if (found.isEmpty() || !(found.get() instanceof ChestedHorse animal)) {
+      sender.sendMessage("Can't put a chest on " + args[1]);
+      return;
+    }
+    boolean on = args[2].equals("on");
+    animal.setCarryingChest(on);
+    sender.sendMessage((on ? "Put a chest on " : "Took the chest off ") + args[1]);
+  }
+
+  private void leash(CommandSender sender, String[] args) {
+    Optional<Entity> found = tagged(args[1]);
+    Optional<Entity> holder = tagged(args[2]);
+    if (found.isEmpty()
+        || !(found.get() instanceof LivingEntity animal)
+        || holder.isEmpty()
+        || !animal.setLeashHolder(holder.get())) {
+      sender.sendMessage("Can't leash " + args[1] + " to " + args[2]);
+      return;
+    }
+    sender.sendMessage("Leashed " + args[1] + " to " + args[2]);
+  }
+
+  /**
+   * Takes Seasons' mark off a registered pet, so its going is never noticed: a stand-in for a pet
+   * removed while Seasons wasn't watching, such as when its chunks are regenerated.
+   */
+  private void forgetPet(CommandSender sender, String[] args) {
+    Optional<Entity> found = tagged(args[1]);
+    NamespacedKey key = NamespacedKey.fromString("seasons:pet");
+    if (found.isEmpty() || key == null) {
+      sender.sendMessage("Can't forget " + args[1]);
+      return;
+    }
+    found.get().getPersistentDataContainer().remove(key);
+    sender.sendMessage("Forgot " + args[1]);
   }
 
   /** {@code +30s}, {@code +10m}, {@code +2h}, {@code +7d} or {@code +1500ms}. */

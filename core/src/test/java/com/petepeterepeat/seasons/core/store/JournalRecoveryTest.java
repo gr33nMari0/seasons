@@ -6,6 +6,8 @@ import static com.petepeterepeat.seasons.core.store.JournalKind.ARCHIVE_STARTED;
 import static com.petepeterepeat.seasons.core.store.JournalKind.CURATE_STARTED;
 import static com.petepeterepeat.seasons.core.store.JournalKind.EGG_DELIVERED;
 import static com.petepeterepeat.seasons.core.store.JournalKind.VAULT_SEALED;
+import static com.petepeterepeat.seasons.core.store.JournalKind.VAULT_WITHDRAW;
+import static com.petepeterepeat.seasons.core.store.JournalKind.VAULT_WITHDRAW_DONE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -66,6 +68,27 @@ class JournalRecoveryTest {
                 entry(3, ARCHIVE_STARTED, ALEX, 3)));
 
     assertThat(open).singleElement().extracting(OpenOperation::season).isEqualTo(3);
+  }
+
+  @Test
+  void vaultWithdrawalsFromOnePageAreToldApartByTheirIds() {
+    List<OpenOperation> open =
+        JournalRecovery.openOperations(
+            List.of(
+                new JournalEntry(
+                    1, CLOCK.instant(), VAULT_WITHDRAW, Optional.of(ALEX), 2, "w1/before"),
+                new JournalEntry(
+                    2, CLOCK.instant(), VAULT_WITHDRAW, Optional.of(ALEX), 2, "w2/before"),
+                new JournalEntry(
+                    3, CLOCK.instant(), VAULT_WITHDRAW_DONE, Optional.of(ALEX), 2, "w2")));
+
+    // The second withdrawal's start and finish leave the first one open.
+    assertThat(open)
+        .singleElement()
+        .satisfies(op -> {
+          assertThat(op.operation()).isEqualTo(Operation.VAULT_WITHDRAW);
+          assertThat(op.instance()).isEqualTo("w1");
+        });
   }
 
   @Test

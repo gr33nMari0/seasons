@@ -38,6 +38,7 @@ public final class LoginService implements Sessions {
   private final ArchiveHold hold;
   private final SeasonEntry entry;
   private final Clock clock;
+  private final java.util.function.Consumer<PlayerId> settled;
   private final Executor serverThread;
   private final Map<PlayerId, Instant> joinedAt = new ConcurrentHashMap<>();
 
@@ -49,8 +50,10 @@ public final class LoginService implements Sessions {
       ArchiveHold hold,
       SeasonEntry entry,
       Scheduler scheduler,
-      Clock clock) {
+      Clock clock,
+      java.util.function.Consumer<PlayerId> settled) {
     this.state = state;
+    this.settled = settled;
     this.store = store;
     this.recovery = recovery;
     this.archiver = archiver;
@@ -88,7 +91,10 @@ public final class LoginService implements Sessions {
               LOG.error("Login catch-up for {} stopped", player.name(), e);
               return null;
             })
-            .whenComplete((done, failure) -> hold.releaseArriving(player.id()));
+            .whenComplete((done, failure) -> {
+              hold.releaseArriving(player.id());
+              serverThread.execute(() -> settled.accept(player.id()));
+            });
   }
 
   @Override

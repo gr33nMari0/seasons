@@ -155,6 +155,9 @@ export class ScenarioContext {
       bot.once('error', (err) => fail(err.message))
     })
     this.log(`${username} spawned at ${bot.entity.position}`)
+    // Why a bot drops out part-way, for the server log.
+    bot.on('kicked', (reason) => this.log(`${username} was kicked: ${JSON.stringify(reason)}`))
+    bot.on('error', (err) => this.log(`${username} hit an error: ${err?.stack ?? err}`))
     return bot
   }
 

@@ -350,7 +350,7 @@ public final class ArchiveFiles {
     return slots;
   }
 
-  private static Map<String, Object> item(NeutralItem item) {
+  static Map<String, Object> item(NeutralItem item) {
     try {
       return Nbt.read(item.nbt());
     } catch (IOException e) {

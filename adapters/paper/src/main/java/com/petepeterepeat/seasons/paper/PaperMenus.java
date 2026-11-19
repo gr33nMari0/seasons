@@ -27,9 +27,10 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * View-only menus: every click and drag is refused, then the client is resynced. Every item shown
- * is a throwaway copy tagged {@code seasons:archived}, which the tripwire deletes wherever else it
- * turns up.
+ * View-only and withdraw-only menus: every click and drag is refused, then the client is resynced;
+ * in a withdraw-only menu a left or shift click on an item then asks the core to withdraw it. Every
+ * item shown is a throwaway copy tagged {@code seasons:archived}, which the tripwire deletes
+ * wherever else it turns up.
  */
 final class PaperMenus implements Menus, Listener {
   private static final int ROW = 9;
@@ -82,6 +83,18 @@ final class PaperMenus implements Menus, Listener {
     player.openInventory(inventory);
   }
 
+  @Override
+  public void openWithdraw(PlayerId viewer, PagedView view, int startPage, Withdrawal taken) {
+    Player player =
+        players.player(viewer).orElseThrow(() -> new IllegalStateException(viewer + " is offline"));
+    PagedHolder holder = new PagedHolder(view);
+    holder.taken = taken;
+    Inventory inventory = server.createInventory(holder, MAX_SLOTS, text.render(view.title()));
+    holder.inventory = inventory;
+    show(holder, Math.max(0, Math.min(startPage, view.pages().size() - 1)));
+    player.openInventory(inventory);
+  }
+
   @EventHandler(priority = EventPriority.LOWEST)
   void onClick(InventoryClickEvent event) {
     if (!isViewOnly(event.getView().getTopInventory())) {
@@ -96,6 +109,15 @@ final class PaperMenus implements Menus, Listener {
         show(paged, paged.page - 1);
       } else if (raw == NEXT && paged.page < paged.view.pages().size() - 1) {
         show(paged, paged.page + 1);
+      } else if (paged.taken != null
+          && raw >= 0
+          && raw < PagedView.PAGE_SIZE
+          && (event.getClick() == ClickType.LEFT || event.getClick() == ClickType.SHIFT_LEFT)
+          && shows(paged, raw)) {
+        // Asked only after the refusal: the core withdraws from its own record, never this menu.
+        resync(event.getWhoClicked());
+        paged.taken.clicked(paged.page, raw);
+        return;
       }
     }
     resync(event.getWhoClicked());
@@ -122,6 +144,11 @@ final class PaperMenus implements Menus, Listener {
     if (isViewOnly(event.getSource()) || isViewOnly(event.getDestination())) {
       event.setCancelled(true);
     }
+  }
+
+  private static boolean shows(PagedHolder holder, int slot) {
+    ItemStack shown = holder.getInventory().getItem(slot);
+    return shown != null && !shown.isEmpty();
   }
 
   static boolean isViewOnly(Inventory inventory) {
@@ -174,6 +201,10 @@ final class PaperMenus implements Menus, Listener {
   static final class PagedHolder implements InventoryHolder {
     private final PagedView view;
     private int page;
+
+    /** Who hears about clicks on items, in a withdraw-only menu; null in a view-only one. */
+    private @org.jspecify.annotations.Nullable Withdrawal taken;
+
     private @org.jspecify.annotations.Nullable Inventory inventory;
 
     PagedHolder(PagedView view) {

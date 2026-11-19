@@ -182,6 +182,29 @@ public final class PlayerStore {
         at.node("pitch").set(back.at().pitch());
         at.node("gameMode").set(back.mode().name().toLowerCase(java.util.Locale.ROOT));
       }
+      for (PlayerRecord.Pet pet : record.pets()) {
+        ConfigurationNode entry = node.node("pets").appendListNode();
+        entry.node("entity").set(pet.entity().toString());
+        entry.node("type").set(pet.type());
+        entry.node("name").set(pet.name());
+        entry.node("season").set(pet.season());
+        if (pet.lastSeen().isPresent()) {
+          Position at = pet.lastSeen().get();
+          ConfigurationNode seen = entry.node("lastSeen");
+          seen.node("dimension").set(at.dimension());
+          seen.node("x").set(at.x());
+          seen.node("y").set(at.y());
+          seen.node("z").set(at.z());
+        }
+        if (pet.onShoulder()) {
+          entry.node("onShoulder").set(true);
+        }
+      }
+      for (PlayerRecord.Notice notice : record.notices()) {
+        ConfigurationNode entry = node.node("notices").appendListNode();
+        entry.node("key").set(notice.key());
+        entry.node("placeholders").setList(String.class, notice.placeholders());
+      }
       StringWriter out = new StringWriter();
       GsonConfigurationLoader.builder()
           .indent(2)
@@ -252,7 +275,46 @@ public final class PlayerStore {
         pendingDisplays,
         destination.virtual() ? OptionalInt.empty() : OptionalInt.of(destination.getInt()),
         node.node("hallAdventure").getBoolean(false),
-        hallReturn(node.node("hallReturn")));
+        hallReturn(node.node("hallReturn")),
+        pets(node.node("pets")),
+        notices(node.node("notices")));
+  }
+
+  private static List<PlayerRecord.Pet> pets(ConfigurationNode node) {
+    List<PlayerRecord.Pet> pets = new java.util.ArrayList<>();
+    for (ConfigurationNode entry : node.childrenList()) {
+      ConfigurationNode seen = entry.node("lastSeen");
+      pets.add(
+          new PlayerRecord.Pet(
+              UUID.fromString(entry.node("entity").getString("")),
+              entry.node("type").getString(""),
+              entry.node("name").getString(""),
+              seen.virtual()
+                  ? Optional.empty()
+                  : Optional.of(
+                      new Position(
+                          seen.node("dimension").getString(FurthestBlock.OVERWORLD),
+                          seen.node("x").getDouble(),
+                          seen.node("y").getDouble(),
+                          seen.node("z").getDouble(),
+                          0,
+                          0)),
+              entry.node("season").getInt(),
+              entry.node("onShoulder").getBoolean(false)));
+    }
+    return pets;
+  }
+
+  private static List<PlayerRecord.Notice> notices(ConfigurationNode node)
+      throws SerializationException {
+    List<PlayerRecord.Notice> notices = new java.util.ArrayList<>();
+    for (ConfigurationNode entry : node.childrenList()) {
+      notices.add(
+          new PlayerRecord.Notice(
+              entry.node("key").getString(""),
+              entry.node("placeholders").getList(String.class, List.of())));
+    }
+    return notices;
   }
 
   private static Optional<PlayerRecord.HallReturn> hallReturn(ConfigurationNode node) {

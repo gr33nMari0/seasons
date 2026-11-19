@@ -48,6 +48,29 @@ final class PaperInventories implements Inventories {
         encode(player.getEnderChest().getContents()));
   }
 
+  /** Checks the room first, so the stack goes in whole or not at all; nothing is dropped. */
+  @Override
+  public boolean give(PlayerId id, NeutralItem item) {
+    Player player = online(id);
+    PlayerInventory inventory = player.getInventory();
+    ItemStack stack = codec.decode(item);
+    int room = 0;
+    for (ItemStack slot : inventory.getStorageContents()) {
+      if (slot == null || slot.isEmpty()) {
+        room += stack.getMaxStackSize();
+      } else if (slot.isSimilar(stack)) {
+        room += Math.max(0, slot.getMaxStackSize() - slot.getAmount());
+      }
+      if (room >= stack.getAmount()) {
+        break;
+      }
+    }
+    if (room < stack.getAmount()) {
+      return false;
+    }
+    return inventory.addItem(stack).isEmpty();
+  }
+
   /**
    * Cursor and crafting-grid items go into free inventory slots first. Whatever doesn't fit stays
    * where it is, so a crash or a failed write never loses it, and the menu stays open, because

@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -29,6 +30,9 @@ import java.util.Set;
  *     puts survival back; kept here so a restart doesn't strand them in adventure
  * @param hallReturn where a visitor to the Hall goes back to, and in which game mode; kept here so
  *     it survives logging out and restarts
+ * @param pets pets registered to travel with them, in the order registered
+ * @param notices messages waiting for their next login, such as a pet that died while they were
+ *     away
  */
 public record PlayerRecord(
     PlayerId id,
@@ -41,8 +45,12 @@ public record PlayerRecord(
     Set<Integer> pendingDisplays,
     OptionalInt pendingDestination,
     boolean hallAdventure,
-    Optional<HallReturn> hallReturn) {
+    Optional<HallReturn> hallReturn,
+    List<Pet> pets,
+    List<Notice> notices) {
   public PlayerRecord {
+    pets = List.copyOf(pets);
+    notices = List.copyOf(notices);
     seasons = Map.copyOf(seasons);
     baselines = Map.copyOf(baselines);
     furthest = Map.copyOf(furthest);
@@ -63,6 +71,43 @@ public record PlayerRecord(
    */
   public record HallReturn(Position at, GameMode mode) {}
 
+  /**
+   * A tamed animal registered to travel with its owner to the next season's spawn.
+   *
+   * @param type the entity type's id without its namespace, such as {@code wolf}
+   * @param name what its owner calls it in {@code /pet} commands, unique among their pets
+   * @param lastSeen where it was registered, or last stood when its chunk unloaded
+   * @param season the season it was registered in; it travels when they enter a later one
+   * @param onShoulder a parrot last seen landing on its owner's shoulder, so out of the world but
+   *     with them
+   */
+  public record Pet(
+      java.util.UUID entity,
+      String type,
+      String name,
+      Optional<Position> lastSeen,
+      int season,
+      boolean onShoulder) {
+    public Pet withLastSeen(Position at) {
+      return new Pet(entity, type, name, Optional.of(at), season, false);
+    }
+
+    public Pet withOnShoulder() {
+      return new Pet(entity, type, name, lastSeen, season, true);
+    }
+  }
+
+  /**
+   * A message for a player's next login.
+   *
+   * @param placeholders alternating placeholder names and values
+   */
+  public record Notice(String key, List<String> placeholders) {
+    public Notice {
+      placeholders = List.copyOf(placeholders);
+    }
+  }
+
   public static PlayerRecord create(PlayerId id, String name) {
     return new PlayerRecord(
         id,
@@ -75,7 +120,9 @@ public record PlayerRecord(
         Set.of(),
         OptionalInt.empty(),
         false,
-        Optional.empty());
+        Optional.empty(),
+        List.of(),
+        List.of());
   }
 
   public boolean played(int season) {
@@ -94,7 +141,9 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   /** Marks the season played and adds online time to it. */
@@ -117,7 +166,9 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   /** Archived into a season; a saved Hall return is dropped, since it belongs to that season. */
@@ -135,7 +186,9 @@ public record PlayerRecord(
         displays,
         OptionalInt.of(season),
         hallAdventure,
-        Optional.empty());
+        Optional.empty(),
+        pets,
+        notices);
   }
 
   /**
@@ -161,7 +214,9 @@ public record PlayerRecord(
         displays,
         destination,
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   public PlayerRecord withDisplaysRendered(int season) {
@@ -178,7 +233,9 @@ public record PlayerRecord(
         displays,
         pendingDestination,
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   public PlayerRecord withDestinationReached() {
@@ -193,7 +250,9 @@ public record PlayerRecord(
         pendingDisplays,
         OptionalInt.empty(),
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   /** Brought into a season, with the statistics it starts from; a saved Hall return is dropped. */
@@ -211,7 +270,9 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         hallAdventure,
-        Optional.empty());
+        Optional.empty(),
+        pets,
+        notices);
   }
 
   public FurthestBlock furthest(int season) {
@@ -232,7 +293,9 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         hallAdventure,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   public PlayerRecord withHallAdventure(boolean switched) {
@@ -247,7 +310,9 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         switched,
-        hallReturn);
+        hallReturn,
+        pets,
+        notices);
   }
 
   public PlayerRecord withHallReturn(Optional<HallReturn> next) {
@@ -262,6 +327,42 @@ public record PlayerRecord(
         pendingDisplays,
         pendingDestination,
         hallAdventure,
+        next,
+        pets,
+        notices);
+  }
+
+  public PlayerRecord withPets(List<Pet> next) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        hallAdventure,
+        hallReturn,
+        next,
+        notices);
+  }
+
+  public PlayerRecord withNotices(List<Notice> next) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        hallAdventure,
+        hallReturn,
+        pets,
         next);
   }
 

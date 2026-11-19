@@ -105,10 +105,24 @@ public final class Unarchiver {
   public CompletableFuture<Outcome> unarchive(
       PlayerRef player, int season, boolean force, String actor) {
     PlayerId id = player.id();
+    // Held before the vault page is read, so no withdrawal can change the page or the inventory
+    // between the read and the restore.
+    if (!hold.hold(id)) {
+      return CompletableFuture.completedFuture(new Outcome.Busy());
+    }
+    return held(player, season, force, actor)
+        .whenCompleteAsync((outcome, failure) -> hold.release(id), serverThread);
+  }
+
+  /** {@link #unarchive}, with the player held throughout. */
+  private CompletableFuture<Outcome> held(
+      PlayerRef player, int season, boolean force, String actor) {
+    PlayerId id = player.id();
     return writer
-        .submit(() -> archives.read(id, season))
+        .submit(() -> read(id, season))
         .thenComposeAsync(
-            read -> {
+            stored -> {
+              Optional<ArchiveRecord> read = stored.archive();
               if (read.isEmpty()) {
                 return done(new Outcome.NoArchive());
               }
@@ -122,12 +136,9 @@ public final class Unarchiver {
                 return done(new Outcome.Imported());
               }
               InventorySnapshot live = platform.inventories().snapshot(id);
-              Plan plan = plan(archive, live);
+              Plan plan = plan(archive, live, stored.vaultPage());
               if (!plan.displaced().isEmpty() && plan.displacedFromPlayer() && !force) {
                 return done(new Outcome.NotEmpty());
-              }
-              if (!hold.hold(id)) {
-                return done(new Outcome.Busy());
               }
               int dataVersion = platform.inventories().dataVersion();
               Instant now = clock.instant();
@@ -152,7 +163,6 @@ public final class Unarchiver {
                       serverThread)
                   .handleAsync(
                       (file, failure) -> {
-                        hold.release(id);
                         if (failure != null) {
                           String reason = Archiver.reason(failure);
                           audit.record(actor, "unarchive", player.name(), "failed", reason);
@@ -193,9 +203,10 @@ public final class Unarchiver {
     }
     String expected = operation.steps().getFirst().payloadHash();
     return writer
-        .submit(() -> archives.read(id, season))
+        .submit(() -> read(id, season))
         .thenComposeAsync(
-            read -> {
+            stored -> {
+              Optional<ArchiveRecord> read = stored.archive();
               if (read.isEmpty()) {
                 // Moved aside already: only the record and the finish entry are left.
                 return finishRecord(id, season).thenApply(done -> RecoveryOutcome.finished());
@@ -211,7 +222,7 @@ public final class Unarchiver {
                   return CompletableFuture.completedFuture(
                       RecoveryOutcome.failed("the live inventory is neither restored nor empty"));
                 }
-                restore(id, archive, plan(archive, live));
+                restore(id, archive, plan(archive, live, stored.vaultPage()));
               }
               return complete(archive, clock.instant())
                   .thenApply(done -> RecoveryOutcome.finished());
@@ -228,14 +239,18 @@ public final class Unarchiver {
     platform.players().saveData(id);
   }
 
-  /** The archive moved aside, the vault page withdrawn, the record updated, then the journal. */
+  /**
+   * The vault page removed, the archive moved aside, the record updated, then the journal. The page
+   * goes first: once the archive is aside recovery only finishes the record, so a page left behind
+   * would hold what the player was just given.
+   */
   private CompletableFuture<Void> complete(ArchiveRecord archive, Instant at) {
     PlayerId id = archive.player();
     int season = archive.season();
     return writer
         .submit(() -> {
-          archives.moveAside(id, season, "unarchived-" + at.toEpochMilli());
           vaults.remove(id, season);
+          archives.moveAside(id, season, "unarchived-" + at.toEpochMilli());
           return Boolean.TRUE;
         })
         .thenComposeAsync(moved -> finishRecord(id, season), serverThread)
@@ -250,12 +265,28 @@ public final class Unarchiver {
         .thenApply(entry -> null);
   }
 
+  /** An archive and its vault page, as read together on the writer thread. */
+  private record Stored(
+      Optional<ArchiveRecord> archive, Optional<List<Optional<NeutralItem>>> vaultPage) {}
+
+  private Stored read(PlayerId id, int season) throws java.io.IOException {
+    return new Stored(archives.read(id, season), vaults.page(id, season));
+  }
+
   /**
    * What the player will carry, and what has to make way: their current items if the slots are
-   * taken, and archived overflow that finds no free slot.
+   * taken, and archived overflow that finds no free slot. A sealed ender chest comes back as its
+   * vault page is now, not as it was archived, so nothing withdrawn since comes back twice.
    */
-  private static Plan plan(ArchiveRecord archive, InventorySnapshot live) {
+  private static Plan plan(
+      ArchiveRecord archive,
+      InventorySnapshot live,
+      Optional<List<Optional<NeutralItem>>> vaultPage) {
     boolean restoresEnder = archive.enderChestPolicy() != EnderChestPolicy.KEEP;
+    List<Optional<NeutralItem>> ender =
+        archive.enderChestPolicy() == EnderChestPolicy.VAULT
+            ? sized(vaultPage.orElse(List.of()), archive.inventory().enderChest().size())
+            : archive.inventory().enderChest();
     List<Optional<NeutralItem>> storage = new ArrayList<>(archive.inventory().storage());
     List<Optional<NeutralItem>> leftover = new ArrayList<>();
     for (Optional<NeutralItem> item : archive.overflow()) {
@@ -274,7 +305,7 @@ public final class Unarchiver {
             storage,
             archive.inventory().armour(),
             archive.inventory().offHand(),
-            restoresEnder ? archive.inventory().enderChest() : live.enderChest());
+            restoresEnder ? ender : live.enderChest());
     List<NeutralItem> displaced = new ArrayList<>();
     boolean fromPlayer = !ArchiveHash.isEmpty(live, restoresEnder);
     if (fromPlayer) {
@@ -330,6 +361,16 @@ public final class Unarchiver {
         platform.players().position(archive.player()),
         Optional.empty(),
         "displaced");
+  }
+
+  /** Slots padded with empties, or cut, to a size. */
+  private static List<Optional<NeutralItem>> sized(List<Optional<NeutralItem>> slots, int size) {
+    List<Optional<NeutralItem>> out =
+        new ArrayList<>(slots.subList(0, Math.min(size, slots.size())));
+    while (out.size() < size) {
+      out.add(Optional.empty());
+    }
+    return out;
   }
 
   /** How many items a stack holds, read from its vanilla {@code count}. */

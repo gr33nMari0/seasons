@@ -17,7 +17,21 @@ public enum Operation {
   /** {@code /hof import}: one Season 1 cell turned into its owner's record. */
   IMPORT(JournalKind.IMPORT_STARTED, JournalKind.IMPORT_DONE),
   /** {@code /hof import undo}: one imported cell's items put back where they were. */
-  IMPORT_UNDO(JournalKind.IMPORT_UNDO_STARTED, JournalKind.IMPORT_UNDO_DONE);
+  IMPORT_UNDO(JournalKind.IMPORT_UNDO_STARTED, JournalKind.IMPORT_UNDO_DONE),
+  /**
+   * One item taken out of an ender vault: removed from the vault file, then given; the season is
+   * the vault page's, 0 for the Returned page.
+   */
+  VAULT_WITHDRAW(JournalKind.VAULT_WITHDRAW, JournalKind.VAULT_WITHDRAW_DONE);
+
+  /**
+   * What tells two of this operation for the same player and season apart: a vault withdrawal's id,
+   * the start of each of its entries' payload, since a player makes many withdrawals from one page;
+   * empty for the rest, which run once per player and season.
+   */
+  public String instance(JournalEntry entry) {
+    return this == VAULT_WITHDRAW ? entry.payloadHash().split("/", 2)[0] : "";
+  }
 
   private final JournalKind started;
   private final JournalKind finished;
@@ -45,7 +59,8 @@ public enum Operation {
       case CURATE_STARTED, CURATE_DONE -> Optional.of(CURATE);
       case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);
       case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
-      case VAULT_WITHDRAW, EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
+      case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
+      case EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
     };
   }
 }

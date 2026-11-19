@@ -35,7 +35,8 @@ export default {
       const title = waitForTitle(pat, /Homecoming/)
       const broadcast = ctx.waitForMessages(pat, /^Homecoming! The old world is open/)
       await ctx.command(admin, '/season unlock homecoming', /^Homecoming! Every zone is now in its after-unlock mode\.$/)
-      assert(await ctx.holds(admin, 'entity @e[type=minecraft:firework_rocket]'), 'Homecoming fireworks are in the air')
+      // The fanfare follows once season.json is on disk, a moment after the reply (questions 105).
+      await ctx.eventually(async () => assert(await ctx.holds(admin, 'entity @e[type=minecraft:firework_rocket]'), 'Homecoming fireworks are in the air'))
       await title
       await broadcast
       await discord.waitFor(/^Homecoming! The old world is open/)
