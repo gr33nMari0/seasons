@@ -116,10 +116,19 @@ export function audit (ctx) {
     .map((line) => JSON.parse(line))
 }
 
-/** Unloads the chunks of a forceloaded box and loads them again, firing the chunk load events. */
+/**
+ * Unloads the chunks of a forceloaded box and loads them again, firing the chunk load events. A
+ * chunk stops counting as loaded before its entities unload; with entities in the box, it waits for
+ * them to go too, or loading it again would keep the same entities and fire no events for them.
+ */
 export async function reloadChunks (ctx, admin, from, to, probe) {
+  const box = `@e[type=!minecraft:player,x=${from.x},y=-64,z=${from.z},dx=${to.x - from.x},dy=384,dz=${to.z - from.z}]`
+  const hadEntities = await ctx.holds(admin, `entity ${box}`)
   await ctx.command(admin, `/forceload remove ${from.x} ${from.z} ${to.x} ${to.z}`, /^(Unmarked|No chunks were removed)/)
   await ctx.eventually(async () => assert(!await ctx.holds(admin, `loaded ${probe.x} ${probe.y} ${probe.z}`), 'the chunk unloaded'), 30_000)
+  if (hadEntities) {
+    await ctx.eventually(async () => assert(!await ctx.holds(admin, `entity ${box}`), 'the entities in the box unloaded'), 30_000)
+  }
   await ctx.command(admin, `/forceload add ${from.x} ${from.z} ${to.x} ${to.z}`, /^(Marked|No chunks were marked)/)
   await ctx.eventually(async () => assert(await ctx.holds(admin, `loaded ${probe.x} ${probe.y} ${probe.z}`), 'the chunk loaded again'), 30_000)
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A46 (second half). /season launch before decorating.afterArchive runs out locks the cell at once.
 import { assert } from '../lib/context.mjs'
-import { buildGallery, cellOf, place } from '../lib/hall.mjs'
+import { buildGallery, cellOf, inside, place } from '../lib/hall.mjs'
 
 export default {
   name: 'a46-launch-locks',
@@ -18,6 +18,9 @@ export default {
     // 15 minutes by default: still open.
     await ctx.eventually(async () => assert(await place(ctx, admin, 'Owner', { x: cell.x0 + 1, y: -60, z: cell.z0 + 4 }), 'the owner can still build'))
 
+    // Archiving sends the admin to their own cell too; that teleport lands first.
+    const adminCell = await cellOf(ctx, admin, 'season-2', cells, 'SeasonsAdmin')
+    await ctx.eventually(async () => assert(inside(adminCell, await ctx.position(admin, 'SeasonsAdmin')), 'the admin is in their cell'))
     await ctx.command(admin, '/tp SeasonsAdmin 300 -60 300', /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 300, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now /)
