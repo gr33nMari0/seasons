@@ -35,6 +35,9 @@ export default {
     assert(await ctx.holds(admin, `entity @e[type=minecraft:mannequin,x=${cell.figure.x},y=${cell.figure.y},z=${cell.figure.z},dx=0,dy=1,dz=0]`), 'Early\'s figure stands in their cell')
 
     // After launch: a late joiner goes straight to the new spawn.
+    // Archiving sent the admin to their own cell too; that teleport lands first.
+    const adminCell = await cellOf(ctx, admin, 'season-2', cells, 'SeasonsAdmin')
+    await ctx.eventually(async () => assert(inside(adminCell, await ctx.position(admin, 'SeasonsAdmin')), 'the admin is in their cell'))
     await ctx.command(admin, '/tp SeasonsAdmin 500 -60 300', /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 500, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 500, -60, 300 in minecraft:overworld\.$/)
