@@ -178,7 +178,8 @@ class ConfigCommandsTest {
     assertThat(run("/season reload")).noneMatch(line -> line.contains(URL));
 
     String refused =
-        "Webhook URLs live in secrets.yml or the environment; Seasons never shows or sets them.";
+        "Webhook URLs live in secrets.yml or the environment; Seasons never shows or sets them."
+            + " If you typed one here, it is now in the server log; rotate it.";
     for (String command :
         List.of(
             "/season config get discordWebhook",

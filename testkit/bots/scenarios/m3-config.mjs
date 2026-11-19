@@ -12,7 +12,7 @@ import { assert } from '../lib/context.mjs'
 
 const CONFIG = 'plugins/Seasons/config.yml'
 const AUDIT = () => `world/dimensions/minecraft/overworld/seasons/audit/${new Date().toISOString().slice(0, 7)}.jsonl`
-const SECRET = /^Webhook URLs live in secrets\.yml or the environment; Seasons never shows or sets them\.$/
+const SECRET = /^Webhook URLs live in secrets\.yml or the environment; Seasons never shows or sets them\. If you typed one here, it is now in the server log; rotate it\.$/
 
 export default {
   name: 'm3-config',

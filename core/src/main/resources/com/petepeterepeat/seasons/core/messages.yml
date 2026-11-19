@@ -445,7 +445,7 @@ config:
   section: "<gold><path>:</gold>"
   unknown: "<red>There's no setting called <path>. Settings are the keys of config.yml, such as hof.entry.cooldown.</red>"
   is-section: "<red><path> is a section: set one of its keys, such as <example>.</red>"
-  secret: "<red>Webhook URLs live in secrets.yml or the environment; Seasons never shows or sets them.</red>"
+  secret: "<red>Webhook URLs live in secrets.yml or the environment; Seasons never shows or sets them. If you typed one here, it is now in the server log; rotate it.</red>"
   already: "<gray><path> is already <value>.</gray>"
   set: "<green>Set <path> to <value> in config.yml (it was <before>).</green>"
   not-set: "<red><path> wasn't changed: <error></red>"
