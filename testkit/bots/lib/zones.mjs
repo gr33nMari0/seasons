@@ -44,11 +44,22 @@ export async function endSeason2 (ctx, admin) {
   await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now /)
 }
 
-/** Draws a cylinder zone standing at its centre, then keeps its chunks loaded. */
+/**
+ * Draws a cylinder zone standing at its centre, then keeps its chunks loaded. A zone that blocks
+ * at once has the admin inside it, so this waits until Seasons has sent them out: the zone sweep's
+ * teleport would otherwise land after the scenario's next move and undo it.
+ */
 export async function cylinder (ctx, admin, id, centre, radius, options = '') {
   await forceload(ctx, admin, centre, radius + 16)
   await standAt(ctx, admin, admin.username, centre)
   await ctx.command(admin, `/season zone add ${id} cylinder ${radius}${options ? ' ' + options : ''}`, new RegExp(`^Added zone ${id}: `))
+  const { [id]: line } = await zoneList(ctx, admin, [id])
+  if (line.endsWith('now block.')) {
+    await ctx.eventually(async () => {
+      const at = await ctx.position(admin, admin.username)
+      assert(Math.hypot(Math.floor(at.x) - centre.x, Math.floor(at.z) - centre.z) > radius, `${admin.username} is out of the ${id}, at ${JSON.stringify(at)}`)
+    })
+  }
 }
 
 /** Draws the base zone. */
