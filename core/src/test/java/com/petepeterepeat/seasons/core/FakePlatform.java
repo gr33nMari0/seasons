@@ -642,6 +642,16 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean isItem(String id) {
+            return !id.contains("not_");
+          }
+
+          @Override
+          public boolean isBlock(String id) {
+            return !id.contains("not_");
+          }
+
+          @Override
           public boolean isLoaded(Position position) {
             return true;
           }

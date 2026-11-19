@@ -70,6 +70,8 @@ public final class ConfigLoader {
   private final Path markersFile;
   private final Map<String, String> environment;
   private final Predicate<String> dimensionExists;
+  private final Predicate<String> isItem;
+  private final Predicate<String> isBlock;
 
   /**
    * A loader that takes every dimension id as one the server has.
@@ -93,6 +95,22 @@ public final class ConfigLoader {
       Path worldDataDirectory,
       Map<String, String> environment,
       Predicate<String> dimensionExists) {
+    this(configDirectory, worldDataDirectory, environment, dimensionExists, id -> true, id -> true);
+  }
+
+  /**
+   * @param isItem whether the server knows an item, such as {@code minecraft:trident}
+   * @param isBlock whether the server knows a block, such as {@code minecraft:iron_bars}
+   */
+  public ConfigLoader(
+      Path configDirectory,
+      Path worldDataDirectory,
+      Map<String, String> environment,
+      Predicate<String> dimensionExists,
+      Predicate<String> isItem,
+      Predicate<String> isBlock) {
+    this.isItem = isItem;
+    this.isBlock = isBlock;
     this.configDirectory = configDirectory;
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
@@ -328,6 +346,7 @@ public final class ConfigLoader {
       node.mergeFrom(defaults);
       SeasonsConfig config = map(node);
       validate(config, problems);
+      checkNames(config, problems);
       settings.putAll(settings(node, defaults));
       return config;
     } catch (ParsingException e) {
@@ -635,12 +654,51 @@ public final class ConfigLoader {
                 CONFIG, "schedule.reminders", "every reminder must be longer than 0"));
       }
     }
+    if (!config.launch().requireManual()) {
+      // Nothing launches by itself (questions 176).
+      problems.add(
+          ConfigProblem.atPath(
+              CONFIG,
+              "launch.requireManual",
+              "only true is built: launch is by /season launch or the launch button"));
+    }
     int pets = config.pets().maxPerPlayer();
     if (pets < 0 || pets > 10) {
       problems.add(
           ConfigProblem.atPath(
               CONFIG, "pets.maxPerPlayer", "must be between 0 and 10, not " + pets));
     }
+  }
+
+  /**
+   * "Item groups name known items" (questions 175): every rare item and cell container is an item
+   * the server knows, and the gate block a block. Ids without a namespace are Minecraft's.
+   */
+  private void checkNames(SeasonsConfig config, List<ConfigProblem> problems) {
+    for (String item : config.firsts().rareItems()) {
+      if (!isItem.test(namespaced(item))) {
+        problems.add(
+            ConfigProblem.atPath(
+                CONFIG, "firsts.rareItems", item + " isn't an item this server knows"));
+      }
+    }
+    for (String item : config.cells().containers()) {
+      if (!isItem.test(namespaced(item))) {
+        problems.add(
+            ConfigProblem.atPath(
+                CONFIG, "cells.containers", item + " isn't an item this server knows"));
+      }
+    }
+    String gate = config.cells().gateBlock();
+    if (!isBlock.test(namespaced(gate))) {
+      problems.add(
+          ConfigProblem.atPath(
+              CONFIG, "cells.gateBlock", gate + " isn't a block this server knows"));
+    }
+  }
+
+  private static String namespaced(String id) {
+    return id.indexOf(':') < 0 ? "minecraft:" + id : id;
   }
 
   private static boolean checkSchema(

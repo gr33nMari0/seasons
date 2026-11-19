@@ -162,7 +162,9 @@ public final class Seasons implements SeasonsApi {
             platform.storage().configDirectory(),
             world,
             environment,
-            platform.world()::dimensionExists);
+            platform.world()::dimensionExists,
+            platform.world()::isItem,
+            platform.world()::isBlock);
     List<ConfigProblem> startupProblems = loadConfig(loader);
 
     Journal journal = null;

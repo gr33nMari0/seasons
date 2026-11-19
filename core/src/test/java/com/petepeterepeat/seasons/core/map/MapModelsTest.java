@@ -58,6 +58,16 @@ class MapModelsTest {
         }
 
         @Override
+        public boolean isItem(String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean isBlock(String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
         public void setBlocks(List<Position> blocks, String type) {
           throw new UnsupportedOperationException();
         }

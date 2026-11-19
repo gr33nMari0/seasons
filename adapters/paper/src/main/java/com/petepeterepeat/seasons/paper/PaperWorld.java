@@ -60,6 +60,18 @@ final class PaperWorld implements World {
   }
 
   @Override
+  public boolean isItem(String id) {
+    Material material = Material.matchMaterial(id);
+    return material != null && material.isItem();
+  }
+
+  @Override
+  public boolean isBlock(String id) {
+    Material material = Material.matchMaterial(id);
+    return material != null && material.isBlock();
+  }
+
+  @Override
   public boolean isLoaded(Position position) {
     Optional<org.bukkit.World> world = PaperPositions.world(position.dimension());
     int x = position.blockX() >> 4;

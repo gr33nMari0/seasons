@@ -97,6 +97,54 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void unknownItemsAreProblemsWithTheirPath() throws IOException {
+    write(
+        "config.yml",
+        """
+        schema-version: 1
+        firsts:
+          rareItems: [trident, minecraft:not_a_thing]
+        cells:
+          containers: [chest, not_a_box]
+          gateBlock: not_a_block
+        """);
+
+    ConfigLoader.Result result =
+        new ConfigLoader(
+                configDir(),
+                worldDir(),
+                Map.of(),
+                dimension -> true,
+                id -> !id.contains("not_"),
+                id -> !id.contains("not_"))
+            .load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .extracting(ConfigProblem::path, ConfigProblem::message)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("firsts.rareItems"),
+                "minecraft:not_a_thing isn't an item this server knows"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("cells.containers"), "not_a_box isn't an item this server knows"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("cells.gateBlock"), "not_a_block isn't a block this server knows"));
+  }
+
+  @Test
+  void requireManualFalseIsRefused() throws IOException {
+    write("config.yml", "schema-version: 1\nlaunch:\n  requireManual: false\n");
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .singleElement()
+        .satisfies(problem -> assertThat(problem.message()).startsWith("only true is built"));
+  }
+
+  @Test
   void aSyntaxErrorReportsFileLineAndColumn() throws IOException {
     write("config.yml", "schema-version: 1\nschedule:\n  endCountdown: 3m\n  reminders: [7d, 1d\n");
 

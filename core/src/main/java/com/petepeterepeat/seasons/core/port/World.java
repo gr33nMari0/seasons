@@ -22,6 +22,12 @@ public interface World {
    */
   void setBlocks(List<Position> blocks, String type);
 
+  /** Whether the game knows an item, such as {@code minecraft:trident}. */
+  boolean isItem(String id);
+
+  /** Whether the game knows a block, such as {@code minecraft:iron_bars}. */
+  boolean isBlock(String id);
+
   /** Whether the chunk holding a position is loaded, entities included. Never loads it. */
   boolean isLoaded(Position position);
 
