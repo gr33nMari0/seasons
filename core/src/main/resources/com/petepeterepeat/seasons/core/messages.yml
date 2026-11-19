@@ -51,6 +51,7 @@ status:
   no-furthest: "<gray>No block placed yet this season.</gray>"
   recovery-failed: "<red>Recovery of <name>'s Season <season> archive stopped: <reason>. Fix it, then run /season reprocess <name>.</red>"
   gallery-left-out: "<red>Gallery <gallery> couldn't be loaded at startup, so it is left out, and /season end and /season launch are refused until it is fixed and /season reload succeeds:</red> <problem>"
+  markers-left-out: "<red>markers.yml couldn't be loaded at startup, so it is left out and no shared waypoints are shown until it is fixed and /season reload succeeds:</red> <problem>"
 
 info:
   season: "<gray>Season</gray> <white><season></white>"
@@ -455,6 +456,7 @@ marker:
   bad-set: "<red>Waypoint sets are lower-case letters, digits and dashes, up to 32, such as megaprojects.</red>"
   bad-name: "<red>Waypoint names are 1 to 64 characters.</red>"
   player-only: "<red>Stand where the waypoint goes and run this in game.</red>"
+  left-out: "<red>markers.yml failed to load at startup, so the waypoints can't be changed by command. Fix the file and run /season reload.</red>"
   failed: "<red>The waypoint wasn't saved: <error>. See the server log.</red>"
 
 vault:

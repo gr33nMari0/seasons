@@ -385,6 +385,41 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void aBrokenMarkersFileIsLeftOutAtStartupButStopsAReload() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        zones:
+          base: { dimension: minecraft:overworld, shape: { cylinder: { center: [500, 500], radius: 30 } } }
+        """);
+    Files.writeString(
+        worldDir().resolve("markers.yml"),
+        "schema-version: 1\nsets:\n  hubs: { Hub: { pos: [1, 2] } }\n");
+
+    ConfigLoader.Result startup = loader(Map.of()).loadAtStartup();
+
+    ConfigSnapshot snapshot = startup.snapshot().orElseThrow();
+    assertThat(snapshot.season(3).orElseThrow().zones()).containsOnlyKeys("base");
+    assertThat(snapshot.waypoints().sets()).isEmpty();
+    assertThat(snapshot.markersLeftOut())
+        .singleElement()
+        .satisfies(problem -> {
+          assertThat(problem.file()).isEqualTo("markers.yml");
+          assertThat(problem.path()).contains("sets.hubs.Hub");
+        });
+    assertThat(startup.problems()).isEmpty();
+
+    ConfigLoader.Result reload = loader(Map.of()).load();
+    assertThat(reload.snapshot()).isEmpty();
+    assertThat(reload.problems())
+        .singleElement()
+        .satisfies(problem -> assertThat(problem.file()).isEqualTo("markers.yml"));
+  }
+
+  @Test
   void aZoneInADimensionTheServerDoesntHaveIsAProblem() throws IOException {
     Files.createDirectories(worldDir().resolve("seasons"));
     Files.writeString(

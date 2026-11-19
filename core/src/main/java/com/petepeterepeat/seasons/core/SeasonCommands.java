@@ -245,6 +245,9 @@ final class SeasonCommands {
         source.reply(galleryLeftOut(messages, gallery.getKey(), problem));
       }
     }
+    for (ConfigProblem problem : config.get().markersLeftOut()) {
+      source.reply(markersLeftOut(messages, problem));
+    }
     for (ConfigProblem problem : startupProblems) {
       source.reply(messages.get("status.config-problem", "problem", problem.describe(messages)));
     }
@@ -318,6 +321,11 @@ final class SeasonCommands {
   static Message galleryLeftOut(Messages messages, String gallery, ConfigProblem problem) {
     return messages.get(
         "status.gallery-left-out", "gallery", gallery, "problem", problem.describe(messages));
+  }
+
+  /** markers.yml left out at startup, for /season status and admins as they join. */
+  static Message markersLeftOut(Messages messages, ConfigProblem problem) {
+    return messages.get("status.markers-left-out", "problem", problem.describe(messages));
   }
 
   void decorateOpen(CommandSource source, Arguments arguments) {

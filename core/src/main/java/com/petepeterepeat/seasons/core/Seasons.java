@@ -425,7 +425,7 @@ public final class Seasons implements SeasonsApi {
 
   /**
    * Joins and leaves go to login catch-up, if the journal could be opened; admins who join are also
-   * told about any gallery left out at startup.
+   * told about any gallery, or markers.yml, left out at startup.
    */
   private Sessions sessions(Optional<LoginService> login) {
     return new Sessions() {
@@ -440,13 +440,13 @@ public final class Seasons implements SeasonsApi {
         // A moment after the join messages, so it isn't lost among them.
         platform
             .scheduler()
-            .runGlobalLater(LEFT_OUT_NOTICE_DELAY, () -> tellAboutLeftOutGalleries(player));
+            .runGlobalLater(LEFT_OUT_NOTICE_DELAY, () -> tellAboutLeftOutFiles(player));
       }
 
-      private void tellAboutLeftOutGalleries(PlayerRef player) {
+      private void tellAboutLeftOutFiles(PlayerRef player) {
         ConfigSnapshot snapshot = config.get();
         if (platform.players().find(player.id()).isPresent()
-            && snapshot.anyGalleryLeftOut()
+            && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
           snapshot
               .galleriesLeftOut()
@@ -458,6 +458,14 @@ public final class Seasons implements SeasonsApi {
                               player.id(),
                               SeasonCommands.galleryLeftOut(
                                   snapshot.messages(), gallery, problem))));
+          snapshot
+              .markersLeftOut()
+              .forEach(problem ->
+                  platform
+                      .players()
+                      .sendMessage(
+                          player.id(),
+                          SeasonCommands.markersLeftOut(snapshot.messages(), problem)));
         }
       }
 
@@ -630,6 +638,15 @@ public final class Seasons implements SeasonsApi {
                           + " /season end and /season launch are refused until then: {}",
                       gallery,
                       problem)));
+      result
+          .snapshot()
+          .get()
+          .markersLeftOut()
+          .forEach(problem ->
+              LOG.error(
+                  "markers.yml is left out, so no shared waypoints are shown, until it is fixed"
+                      + " and /season reload succeeds: {}",
+                  problem));
       return List.of();
     }
     for (ConfigProblem problem : result.problems()) {

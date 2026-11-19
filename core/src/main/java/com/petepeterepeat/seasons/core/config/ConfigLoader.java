@@ -153,13 +153,14 @@ public final class ConfigLoader {
   /**
    * Reads and validates every file at startup, when there is no previous config to keep. A gallery
    * file with problems is left out, with its problems in {@link ConfigSnapshot#galleriesLeftOut},
-   * so it can't take every other file down with it. Any other problem and nothing loads.
+   * and so is a markers.yml with problems ({@link ConfigSnapshot#markersLeftOut}), so neither can
+   * take every other file down with it, the zones included. Any other problem and nothing loads.
    */
   public Result loadAtStartup() {
     return load(true);
   }
 
-  private Result load(boolean leaveOutBrokenGalleries) {
+  private Result load(boolean atStartup) {
     List<ConfigProblem> problems = new ArrayList<>();
     List<String> warnings = new ArrayList<>();
 
@@ -167,10 +168,13 @@ public final class ConfigLoader {
     Messages messages = loadMessages(problems);
     Secrets secrets = loadSecrets(problems);
     Map<Integer, SeasonFile> seasons = loadSeasons(problems, warnings);
-    Waypoints waypoints = loadWaypoints(problems);
+    List<ConfigProblem> markersLeftOut = new ArrayList<>();
+    Waypoints waypoints = loadWaypoints(markersLeftOut);
     Map<String, List<ConfigProblem>> leftOut = new HashMap<>();
     Map<String, Gallery> galleries = loadGalleries(leftOut);
-    if (!leaveOutBrokenGalleries) {
+    if (!atStartup) {
+      problems.addAll(markersLeftOut);
+      markersLeftOut.clear();
       leftOut.values().forEach(problems::addAll);
       leftOut.clear();
     }
@@ -180,7 +184,8 @@ public final class ConfigLoader {
     }
     return new Result(
         Optional.of(
-            new ConfigSnapshot(config, messages, secrets, seasons, galleries, leftOut, waypoints)),
+            new ConfigSnapshot(
+                config, messages, secrets, seasons, galleries, leftOut, waypoints, markersLeftOut)),
         problems,
         warnings);
   }

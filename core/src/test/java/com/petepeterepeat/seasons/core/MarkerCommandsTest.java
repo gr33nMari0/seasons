@@ -175,6 +175,55 @@ class MarkerCommandsTest {
             "markers.yml sets.megaprojects.Hub", "markers.yml sets.megaprojects.tower");
   }
 
+  @Test
+  void aBrokenMarkersFileIsLeftOutAtStartupAndNothingElse() throws IOException {
+    Path seasonFile = dir.resolve("world/seasons/seasons/2.yml");
+    Files.createDirectories(seasonFile.getParent());
+    Files.writeString(
+        seasonFile,
+        """
+        schema-version: 1
+        season: 2
+        zones:
+          base: { dimension: minecraft:overworld, shape: { cylinder: { center: [500, 500], radius: 30 } } }
+        """,
+        UTF_8);
+    Path markers = dir.resolve("world/seasons/markers.yml");
+    Files.writeString(
+        markers,
+        "schema-version: 1\nsets:\n  hubs: { Hub: { pos: [1, 2, 3] }, HUB: { pos: [4, 5, 6] } }\n",
+        UTF_8);
+    start(MapPublisher.NONE);
+    run("/season init 2");
+
+    assertThat(run("/season zone list"))
+        .as("the season files loaded")
+        .first()
+        .asString()
+        .isEqualTo("Season 2's zones:");
+    assertThat(run("/season status"))
+        .anyMatch(line ->
+            line.startsWith(
+                    "markers.yml couldn't be loaded at startup, so it is left out and no shared"
+                        + " waypoints are shown")
+                && line.contains("markers.yml, at sets.hubs.HUB:"))
+        .noneMatch(line -> line.startsWith("Config problem at startup"));
+    String leftOut =
+        "markers.yml failed to load at startup, so the waypoints can't be changed by command."
+            + " Fix the file and run /season reload.";
+    assertThat(runAsAlex("/season marker add hubs Spawn")).containsExactly(leftOut);
+    assertThat(run("/season marker remove hubs Hub")).containsExactly(leftOut);
+
+    // A reload swaps every file in or none, so it fails until markers.yml is fixed.
+    assertThat(run("/season reload")).first().asString().startsWith("Reload failed");
+    Files.writeString(
+        markers, "schema-version: 1\nsets:\n  hubs: { Hub: { pos: [1, 2, 3] } }\n", UTF_8);
+    assertThat(run("/season reload")).first().asString().startsWith("Reloaded ");
+    assertThat(run("/season status")).noneMatch(line -> line.startsWith("markers.yml"));
+    assertThat(run("/season marker remove hubs Hub"))
+        .containsExactly("Removed waypoint Hub from hubs.");
+  }
+
   /** A publisher that says it has published to so many maps, and publishes nothing. */
   private static MapPublisher publishedTo(int maps) {
     return new MapPublisher() {

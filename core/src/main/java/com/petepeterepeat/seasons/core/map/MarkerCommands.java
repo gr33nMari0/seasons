@@ -80,6 +80,9 @@ public final class MarkerCommands {
       source.reply(messages.get("marker.player-only"));
       return;
     }
+    if (leftOut(source)) {
+      return;
+    }
     if (!Waypoints.SET.matcher(set).matches()) {
       source.reply(messages.get("marker.bad-set"));
       return;
@@ -126,6 +129,9 @@ public final class MarkerCommands {
   void remove(CommandSource source, Arguments arguments) {
     String set = arguments.string("set");
     String name = arguments.string("name").strip();
+    if (leftOut(source)) {
+      return;
+    }
     Optional<Waypoint> found = config.get().waypoints().find(set, name);
     if (found.isEmpty()) {
       source.reply(messages().get("marker.unknown", "set", set, "name", name));
@@ -140,6 +146,18 @@ public final class MarkerCommands {
         () -> WaypointFiles.remove(loader.markersFile(), backups, set, waypoint.name()),
         "marker.failed",
         () -> source.reply(messages().get("marker.removed", "set", set, "name", waypoint.name())));
+  }
+
+  /**
+   * Refuses an edit while markers.yml is left out after failing to load at startup: the waypoints
+   * aren't known, and the file is the admin's to fix.
+   */
+  private boolean leftOut(CommandSource source) {
+    if (config.get().markersLeftOut().isEmpty()) {
+      return false;
+    }
+    source.reply(messages().get("marker.left-out"));
+    return true;
   }
 
   /** A waypoint as the audit log names it. */
