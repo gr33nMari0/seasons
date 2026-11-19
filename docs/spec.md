@@ -530,7 +530,7 @@ Every integration is optional and loads only when its plugin or setting is prese
 | Live player positions | Nothing | BlueMap's own settings: `hide-vanished: true` and `hide-sneaking: true`, so players disappear from the map while invisible or sneaking |
 | BlueMapPlayerControl (optional plugin) | Nothing | Each player can hide themselves from the map with `/bmpc hide` |
 | Shared waypoints | `/season marker add <set> <name>` saves the op's position as a BlueMap point, such as the hub or a megaproject | Server-wide waypoints; personal ones stay in Xaero |
-| [Map Link](https://github.com/thebuildcraft/MapLink) (formerly Remote Player Waypoints for Xaero's Map) | Nothing server-side | A client mod: it reads BlueMap's players, markers and areas from BlueMap's public web map into Xaero's maps, so everything above appears for anyone running it |
+| [Map Link](https://modrinth.com/project/maplink) | Nothing server-side | A client mod: it reads BlueMap's players, markers and areas into Xaero's maps, so everything above appears for anyone running it |
 | Xaero's Minimap and World Map | Nothing | Client-side personal waypoints; players can start a "Season 3" set |
 | Discord | Outbound webhooks only, no bot: reminders, season end, awards, season firsts, the dragon slayer, launch, Homecoming, announce-mode zone entries | A second admin webhook receives alerts (tripwire hits, reconcile repairs, recovery runs). URLs come from the secrets file or environment. |
 | Chat bridges (DiscordSRV and similar) | Nothing | Game broadcasts already appear in their relay |
@@ -1708,7 +1708,7 @@ Player feedback so far. Q numbers refer to the questionnaire.
 - [Minecraft biome updates 2026](https://minecraft.how/blog/post/minecraft-biome-updates-2026), minecraft.how
 - [Minecraft 26.1](https://patchbot.io/games/minecraft/articles/59-minecraft-261), Patchbot
 - [MCA Selector chunk filter](https://github.com/Querz/mcaselector/wiki/Chunk-Filter)
-- [Map Link](https://github.com/thebuildcraft/MapLink) (formerly Remote Player Waypoints for Xaero's Map), GitHub, and [on Modrinth](https://modrinth.com/project/maplink)
+- [Map Link](https://modrinth.com/project/maplink), Modrinth
 - [Configurate](https://github.com/SpongePowered/Configurate)
 - [Paper plugins](https://docs.papermc.io/paper/dev/getting-started/paper-plugins/) and [project setup](https://docs.papermc.io/paper/dev/project-setup/), Paper docs
 - [The future of Paper: hard fork](https://papermc.io/news/the-future-of-paper-hard-fork), PaperMC
