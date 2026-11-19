@@ -11,6 +11,8 @@ import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.player.PlayerRecord;
+import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.Milestones;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -102,6 +104,7 @@ public final class Zones implements ZoneGuard, Milestones {
   private final List<ScheduledTask> tasks = new ArrayList<>();
 
   private final FrontierBorder borders;
+  private final PlayerStore players;
 
   /** The zones the sweep last saw, so a change reaches every player's border at once. */
   private @Nullable ZoneMap swept;
@@ -110,6 +113,7 @@ public final class Zones implements ZoneGuard, Milestones {
    * @param exempt where no zone ever applies: the Hall
    * @param seasonSpawn the spawn of a season, if it has one
    * @param held players Seasons is archiving or catching up, whom the sweep leaves alone
+   * @param players where each player's last valid position is kept between sessions
    */
   public Zones(
       Platform platform,
@@ -119,7 +123,9 @@ public final class Zones implements ZoneGuard, Milestones {
       Clock clock,
       Predicate<Position> exempt,
       IntFunction<Optional<Position>> seasonSpawn,
-      Predicate<PlayerId> held) {
+      Predicate<PlayerId> held,
+      PlayerStore players) {
+    this.players = players;
     this.platform = platform;
     this.config = config;
     this.announcer = announcer;
@@ -146,6 +152,7 @@ public final class Zones implements ZoneGuard, Milestones {
   public void stop() {
     tasks.forEach(ScheduledTask::cancel);
     tasks.clear();
+    lastValid.forEach(this::remember);
     audit.flushAll();
     borders.clear();
   }
@@ -455,24 +462,48 @@ public final class Zones implements ZoneGuard, Milestones {
         sendOut(player, here.get().zone());
         continue;
       }
-      lastValid.put(player, at);
+      // A bypass holder inside a blocked zone isn't somewhere to send them back to.
+      if (zones.blocking(at).isEmpty()) {
+        lastValid.put(player, at);
+      }
       if (here.isPresent() && here.get().now() == ZoneMode.ANNOUNCE) {
         entered(player, here.get().zone());
       } else {
         announcedIn.remove(player);
       }
     }
+    lastValid.forEach((player, at) -> {
+      if (!online.contains(player)) {
+        remember(player, at);
+      }
+    });
     lastValid.keySet().retainAll(online);
     announcedIn.keySet().retainAll(online);
     sending.retainAll(online);
     borders.retain(online);
   }
 
-  /** Puts a player inside a blocked zone back where they last stood outside, or at the spawn. */
+  /**
+   * Keeps where a player last stood outside every blocked zone in their record, as they leave and
+   * as Seasons stops, so it outlasts the session (questions 177).
+   */
+  private void remember(PlayerId player, Position at) {
+    players
+        .find(player)
+        .filter(record -> !record.lastValid().equals(Optional.of(at)))
+        .ifPresent(record -> players.put(record.withLastValid(Optional.of(at))));
+  }
+
+  /**
+   * Puts a player inside a blocked zone back where they last stood outside, this session or an
+   * earlier one, or at the spawn.
+   */
   private void sendOut(PlayerId player, Zone zone) {
     ZoneMap zones = map();
     Optional<Position> back =
-        Optional.ofNullable(lastValid.get(player)).filter(at -> zones.blocking(at).isEmpty());
+        Optional.ofNullable(lastValid.get(player))
+            .or(() -> players.find(player).flatMap(PlayerRecord::lastValid))
+            .filter(at -> zones.blocking(at).isEmpty());
     Optional<Position> destination = back.or(this::spawn);
     if (destination.isEmpty()) {
       return;

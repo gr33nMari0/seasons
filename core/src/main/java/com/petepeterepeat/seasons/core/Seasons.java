@@ -292,7 +292,15 @@ public final class Seasons implements SeasonsApi {
     service = seasons;
     Zones zoning =
         new Zones(
-            platform, config, announcer, audit, clock, halls::inHall, entry::spawn, hold::isHeld);
+            platform,
+            config,
+            announcer,
+            audit,
+            clock,
+            halls::inHall,
+            entry::spawn,
+            hold::isHeld,
+            players);
     zones = zoning;
     zoning.bind(seasons);
     pets.bind(seasons::state, zoning::decide);

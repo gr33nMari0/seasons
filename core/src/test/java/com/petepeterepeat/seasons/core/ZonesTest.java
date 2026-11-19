@@ -474,6 +474,48 @@ class ZonesTest {
     assertThat(bar(pat)).containsExactly("The base is locked until Homecoming.");
   }
 
+  private void restartWith(PlayerRef player) {
+    seasons.stop();
+    FakePlatform before = fake;
+    fake = new FakePlatform();
+    fake.players.putAll(before.players);
+    start();
+    fake.online.add(player);
+  }
+
+  @Test
+  void aPlayerFoundInsideAfterARestartGoesBackToTheirSavedLastValidPosition() {
+    PlayerRef rae = fake.join("Rae");
+    fake.sessions.joined(rae, false);
+    fake.player(rae).position = OUTSIDE;
+    sweepAll();
+    fake.bypassing.add(rae.id());
+    fake.player(rae).position = INSIDE;
+    sweepAll();
+
+    restartWith(rae);
+    sweepAll();
+
+    assertThat(fake.player(rae).position).as("not the spawn, nor inside").isEqualTo(OUTSIDE);
+  }
+
+  @Test
+  void aSavedPositionNowInsideAZoneSendsThemToTheSpawn() throws IOException {
+    PlayerRef rae = fake.join("Rae");
+    fake.sessions.joined(rae, false);
+    Position yard = Position.of(OVERWORLD, 1500.5, 64, 1500.5);
+    fake.player(rae).position = yard;
+    sweepAll();
+    writeSeasonFile(
+        "  yard: { dimension: minecraft:overworld, shape: { box: { min: [1490, 0, 1490], max:"
+            + " [1510, 100, 1510] } } }\n");
+
+    restartWith(rae);
+    sweepAll();
+
+    assertThat(fake.player(rae).position).isEqualTo(SPAWN);
+  }
+
   @Test
   void aPlayerFoundInsideWithNowhereOutsideToGoIsSentToTheSpawn() {
     PlayerRef quinn = fake.join("Quinn");

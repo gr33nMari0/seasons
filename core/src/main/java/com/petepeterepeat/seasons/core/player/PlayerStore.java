@@ -171,6 +171,16 @@ public final class PlayerStore {
       if (record.hallAdventure()) {
         node.node("hallAdventure").set(true);
       }
+      if (record.lastValid().isPresent()) {
+        Position valid = record.lastValid().get();
+        ConfigurationNode at = node.node("lastValid");
+        at.node("dimension").set(valid.dimension());
+        at.node("x").set(valid.x());
+        at.node("y").set(valid.y());
+        at.node("z").set(valid.z());
+        at.node("yaw").set(valid.yaw());
+        at.node("pitch").set(valid.pitch());
+      }
       if (record.hallReturn().isPresent()) {
         PlayerRecord.HallReturn back = record.hallReturn().get();
         ConfigurationNode at = node.node("hallReturn");
@@ -277,7 +287,8 @@ public final class PlayerStore {
         node.node("hallAdventure").getBoolean(false),
         hallReturn(node.node("hallReturn")),
         pets(node.node("pets")),
-        notices(node.node("notices")));
+        notices(node.node("notices")),
+        position(node.node("lastValid")));
   }
 
   private static List<PlayerRecord.Pet> pets(ConfigurationNode node) {
@@ -315,6 +326,20 @@ public final class PlayerStore {
               entry.node("placeholders").getList(String.class, List.of())));
     }
     return notices;
+  }
+
+  private static Optional<Position> position(ConfigurationNode node) {
+    if (node.virtual()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new Position(
+            node.node("dimension").getString(FurthestBlock.OVERWORLD),
+            node.node("x").getDouble(),
+            node.node("y").getDouble(),
+            node.node("z").getDouble(),
+            node.node("yaw").getFloat(),
+            node.node("pitch").getFloat()));
   }
 
   private static Optional<PlayerRecord.HallReturn> hallReturn(ConfigurationNode node) {

@@ -11,7 +11,6 @@ import { FLOOR } from '../lib/hall.mjs'
 import { standAt, waitNear } from '../lib/visits.mjs'
 import { SPAWN, cylinder, forceload, launchFrontier, permit } from '../lib/zones.mjs'
 
-const SENT = /^You were in the (camp|den), which is locked, so you're back at the spawn\.$/
 const atSpawn = (at) => Math.abs(at.x - (SPAWN.x + 0.5)) <= 2 && Math.abs(at.z - (SPAWN.z + 0.5)) <= 2
 const YARD = { x: 800, y: FLOOR, z: 800 }
 const BY_THE_YARD = { x: YARD.x + 20, y: FLOOR, z: YARD.z }
@@ -48,7 +47,9 @@ async function session1 (ctx) {
   await ctx.leave(quinn)
   await cylinder(ctx, admin, 'den', den, 10)
   quinn = await ctx.join('Quinn')
-  await ctx.waitForMessages(quinn, SENT, 15 * SECOND)
+  // Sent to the spawn, where launch left her and the sweep may last have seen her outside; or, if
+  // it saw her at the den, now inside it, sent there as the fallback. Either way, told why.
+  await ctx.waitForMessages(quinn, /^(The den is locked until Homecoming|You were in the den, which is locked, so you're back at the spawn)\.$/, 15 * SECOND)
   await ctx.eventually(async () => assert(atSpawn(await ctx.position(admin, 'Quinn')), 'Quinn is at the spawn'))
 
   // Rae stands by the yard, then walks in with the bypass, which the restart takes away.
