@@ -58,6 +58,26 @@ class MapModelsTest {
         }
 
         @Override
+        public boolean isItem(String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean isGateBlock(String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean holdsContents(Position position) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setBlocks(List<Position> blocks, String type) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
         public boolean isLoaded(Position position) {
           throw new UnsupportedOperationException();
         }
@@ -168,7 +188,9 @@ class MapModelsTest {
             Optional.of(new Bounds(OVERWORLD, 200, -61, 300, 210, -50, 310)),
             Optional.empty(),
             List.of(),
-            List.of());
+            List.of(),
+            Gallery.Settings.NONE,
+            Optional.empty());
 
     MapModel model =
         build(

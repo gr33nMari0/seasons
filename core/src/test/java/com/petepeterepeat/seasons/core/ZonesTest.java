@@ -474,6 +474,41 @@ class ZonesTest {
     assertThat(bar(pat)).containsExactly("The base is locked until Homecoming.");
   }
 
+  private void restartWith(PlayerRef player) {
+    seasons.stop();
+    FakePlatform before = fake;
+    fake = new FakePlatform();
+    fake.players.putAll(before.players);
+    start();
+    fake.online.add(player);
+  }
+
+  @Test
+  void theLastValidPositionIsKeptInTheRecordButLoggingInInsideGoesToTheSpawn() throws IOException {
+    PlayerRef rae = fake.join("Rae");
+    fake.sessions.joined(rae, false);
+    fake.player(rae).position = OUTSIDE;
+    sweepAll();
+    fake.bypassing.add(rae.id());
+    fake.player(rae).position = INSIDE;
+    sweepAll();
+
+    restartWith(rae);
+    String record =
+        Files.readString(dir.resolve("world/seasons/data/players/" + rae.id() + ".json"));
+    assertThat(record).as("kept for the record").contains("lastValid").contains("533.5");
+    sweepAll();
+
+    assertThat(fake.player(rae).position)
+        .as("the spec: logged in inside, to the spawn")
+        .isEqualTo(SPAWN);
+    assertThat(
+            fake.sent.stream()
+                .filter(s -> s.player().equals(rae.id()))
+                .map(s -> Messages.plain(s.message())))
+        .containsExactly("You were in the base, which is locked, so you're back at the spawn.");
+  }
+
   @Test
   void aPlayerFoundInsideWithNowhereOutsideToGoIsSentToTheSpawn() {
     PlayerRef quinn = fake.join("Quinn");

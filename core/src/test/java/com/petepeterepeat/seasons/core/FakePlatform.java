@@ -149,7 +149,15 @@ public final class FakePlatform {
    * @param equipment a figure's; empty for others
    */
   public record Drawn(
-      String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {}
+      String tag,
+      Position at,
+      List<Optional<NeutralItem>> equipment,
+      String kind,
+      Optional<Figure> figure) {
+    public Drawn(String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {
+      this(tag, at, equipment, kind, Optional.empty());
+    }
+  }
 
   public @Nullable HallGuard guard;
   public com.petepeterepeat.seasons.core.port.@Nullable ZoneGuard zoneGuard;
@@ -163,11 +171,29 @@ public final class FakePlatform {
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
+  /** Who lacks the admin nodes everyone else holds. */
+  public final Set<PlayerId> withoutAdmin = new java.util.HashSet<>();
+
   public static List<Integer> key(Position at) {
     return List.of(at.blockX(), at.blockY(), at.blockZ());
   }
 
   public static final BlockInfo STONE = new BlockInfo("minecraft:stone", true, false, false);
+  public static final BlockInfo CHEST = new BlockInfo("minecraft:chest", true, false, false);
+
+  /** Blocks that can't stand as a gate: liquids, air, falling blocks, block entities. */
+  static final java.util.Set<String> UNSTEADY =
+      java.util.Set.of(
+          "minecraft:lava",
+          "minecraft:water",
+          "minecraft:air",
+          "minecraft:sand",
+          "minecraft:chest");
+
+  /** Blocks with contents of their own. */
+  static final java.util.Set<String> CONTENTS =
+      java.util.Set.of("minecraft:chest", "minecraft:barrel", "minecraft:decorated_pot");
+
   public static final BlockInfo LAVA = new BlockInfo("minecraft:lava", false, true, false);
   public static final BlockInfo BED = new BlockInfo("minecraft:straw_bed", true, false, true);
   public static final BlockInfo MAGMA = new BlockInfo("minecraft:magma_block", true, false, false);
@@ -622,6 +648,30 @@ public final class FakePlatform {
           }
 
           @Override
+          public void setBlocks(List<Position> positions, String type) {
+            boolean air = type.equals("minecraft:air");
+            for (Position at : positions) {
+              setBlock(
+                  at.blockX(), at.blockY(), at.blockZ(), new BlockInfo(type, !air, air, false));
+            }
+          }
+
+          @Override
+          public boolean isItem(String id) {
+            return !id.contains("not_");
+          }
+
+          @Override
+          public boolean isGateBlock(String id) {
+            return !id.contains("not_") && !UNSTEADY.contains(id);
+          }
+
+          @Override
+          public boolean holdsContents(Position position) {
+            return CONTENTS.contains(blockAt(position).type());
+          }
+
+          @Override
           public boolean isLoaded(Position position) {
             return true;
           }
@@ -775,7 +825,9 @@ public final class FakePlatform {
 
           @Override
           public java.util.UUID spawnFigure(Figure figure) {
-            return add(new Drawn(figure.tag(), figure.at(), figure.equipment(), "figure"));
+            return add(
+                new Drawn(
+                    figure.tag(), figure.at(), figure.equipment(), "figure", Optional.of(figure)));
           }
 
           @Override
@@ -800,6 +852,16 @@ public final class FakePlatform {
                 .filter(e -> within(e.getValue().at(), min, max))
                 .map(e -> new Displays.Shown(e.getKey(), e.getValue().tag(), e.getValue().at()))
                 .toList();
+          }
+
+          @Override
+          public boolean drawnAs(java.util.UUID figure, Figure.Kind kind, Optional<String> pose) {
+            Drawn shown = displays.get(figure);
+            return shown != null
+                && shown
+                    .figure()
+                    .map(f -> f.kind() == kind && f.pose().equals(pose))
+                    .orElse(kind == Figure.Kind.MANNEQUIN && pose.isEmpty());
           }
 
           @Override
@@ -902,7 +964,9 @@ public final class FakePlatform {
         menus,
         (root, aliases) -> commands.add(root),
         // Everyone holds every node except the bypass nodes, which only those a test names get.
-        (player, node) -> !node.endsWith(".bypass") || bypassing.contains(player),
+        (player, node) ->
+            (!node.endsWith(".bypass") || bypassing.contains(player))
+                && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player)),
         events,
         scheduler,
         dragon,

@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchivePages;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.event.Decision;
@@ -21,6 +22,7 @@ import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.season.Decorating;
 import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.Phase;
+import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.nio.file.Path;
@@ -72,6 +74,7 @@ public final class HallService {
   private final PlayerStore players;
   private final ArchiveFiles archives;
   private final Announcer announcer;
+  private final AuditLog audit;
   private final RandomGenerator random;
   private final Map<PlayerId, SwapRequest> swaps = new HashMap<>();
 
@@ -79,6 +82,14 @@ public final class HallService {
   private final Set<PlayerId> switchedWithoutRecord = new HashSet<>();
 
   private Supplier<Optional<SeasonState>> state = Optional::empty;
+  private Consumer<PlayerId> launch = player -> {};
+
+  /** When each admin last pressed a launch button, for the second press that launches. */
+  private final Map<PlayerId, Instant> launchPresses = new HashMap<>();
+
+  /** How long after a first press on the launch button a second one launches. */
+  public static final Duration LAUNCH_CONFIRM = Duration.ofSeconds(10);
+
   private Consumer<UnaryOperator<Decorating>> decorating = change -> {};
   private Instant lastTick;
   private @Nullable ScheduledTask sweeper;
@@ -108,6 +119,7 @@ public final class HallService {
       PlayerStore players,
       ArchiveFiles archives,
       Announcer announcer,
+      AuditLog audit,
       RandomGenerator random) {
     this.platform = platform;
     this.config = config;
@@ -118,6 +130,7 @@ public final class HallService {
     this.players = players;
     this.archives = archives;
     this.announcer = announcer;
+    this.audit = audit;
     this.random = random;
     this.lastTick = clock.instant();
   }
@@ -131,6 +144,11 @@ public final class HallService {
       Supplier<Optional<SeasonState>> state, Consumer<UnaryOperator<Decorating>> decorating) {
     this.state = state;
     this.decorating = decorating;
+  }
+
+  /** Connects the launch button to {@code /season launch}, run as the player who pressed it. */
+  public void bindLaunch(Consumer<PlayerId> launch) {
+    this.launch = launch;
   }
 
   /** Starts the game-mode sweep and the decorating clock. */
@@ -250,6 +268,38 @@ public final class HallService {
     return galleries().stream().anyMatch(g -> g.contains(position));
   }
 
+  /**
+   * Whether a player may be inside a cell now: anyone may, unless its gallery's access is {@code
+   * bounds}, where only its owner may while they may decorate it, and bypass holders (questions
+   * 168).
+   */
+  public boolean mayBeIn(PlayerId player, CellRef ref) {
+    return ref.gallery().access(config.get().config()) != SeasonsConfig.CellAccess.BOUNDS
+        || canDecorate(player, ref)
+        || platform.permissions().has(player, BYPASS);
+  }
+
+  /** Whether a position is in the gate plane of a cell in a {@code gate} gallery. */
+  public boolean inGate(Position position) {
+    SeasonsConfig settings = config.get().config();
+    return cellAt(position).stream()
+        .anyMatch(ref ->
+            ref.gallery().access(settings) == SeasonsConfig.CellAccess.GATE
+                && ref.cell().gate().map(plane -> plane.contains(position)).orElse(false));
+  }
+
+  /** Where a player stands in a gallery outside its cells: its entry, else the Hall's. */
+  public Optional<Position> galleryEntry(Gallery gallery) {
+    return gallery
+        .entry()
+        .or(() ->
+            galleries().stream()
+                .filter(g -> g.kind() == Gallery.Kind.SEASON && g.entry().isPresent())
+                .max(Comparator.comparingInt(Gallery::season))
+                .flatMap(Gallery::entry))
+        .map(HallService::standOn);
+  }
+
   /** Where to send a player to their cell: its entry anchor, else in front of its figure. */
   public Optional<Position> arrival(CellRef ref) {
     Optional<Anchor> entry = ref.cell().anchor(AnchorType.ENTRY);
@@ -332,10 +382,10 @@ public final class HallService {
       return owned;
     }
     Optional<PlayerRecord> record = players.find(player);
-    if (record.isEmpty() || !earnsCell(record.get(), season) || !handsOut()) {
+    if (record.isEmpty() || !earnsCell(record.get(), season)) {
       return Optional.empty();
     }
-    List<CellRef> free = freeCells(season);
+    List<CellRef> free = freeCells(season).stream().filter(ref -> handsOut(ref.gallery())).toList();
     if (free.isEmpty()) {
       return Optional.empty();
     }
@@ -347,7 +397,7 @@ public final class HallService {
 
   /** Hands everyone who played a season and has no cell a free one. Returns how many own one. */
   public int assignAll(int season) {
-    if (handsOut()) {
+    if (seasonGalleries(season).stream().anyMatch(this::handsOut)) {
       for (PlayerRecord record : withoutCell(season)) {
         ensureCell(record.id(), season);
       }
@@ -359,15 +409,117 @@ public final class HallService {
             .count();
   }
 
-  private boolean handsOut() {
-    SeasonsConfig.CellAssignment strategy = config.get().config().cells().assignment();
+  /** Whether a gallery's cells are claimed with {@code /hof claim}. */
+  private boolean claims(Gallery gallery) {
+    return gallery.assignment(config.get().config()) == SeasonsConfig.CellAssignment.CLAIM;
+  }
+
+  /** The free cells of a season's {@code claim} galleries. */
+  private List<CellRef> claimable(int season) {
+    return freeCells(season).stream().filter(ref -> claims(ref.gallery())).toList();
+  }
+
+  /**
+   * A player archived without a cell who could have claimed one gets a free one at random, so
+   * nobody who played goes without displays while a cell is free (questions 167).
+   */
+  private Optional<CellRef> unclaimed(PlayerId player, int season) {
+    List<CellRef> free = claimable(season);
+    if (free.isEmpty() || !players.find(player).map(r -> earnsCell(r, season)).orElse(false)) {
+      return Optional.empty();
+    }
+    CellRef assigned = assign(free.get(random.nextInt(free.size())), season, Optional.of(player));
+    tell(player, season, assigned);
+    return Optional.of(assigned);
+  }
+
+  /** What {@code /hof claim} came to. */
+  public sealed interface ClaimResult {
+    record Refused(String messageKey, List<String> placeholders) implements ClaimResult {}
+
+    record Claimed(CellRef cell) implements ClaimResult {}
+
+    /** No cell named and none where they stand: the free cells to choose from. */
+    record Free(List<CellRef> cells) implements ClaimResult {}
+  }
+
+  private static ClaimResult refusedClaim(String key, String... placeholders) {
+    return new ClaimResult.Refused(key, List.of(placeholders));
+  }
+
+  /**
+   * {@code /hof claim [cell]}: a free cell of a {@code claim} gallery, during the window, for a
+   * player who played the season and has none. Without a cell, the one they stand in.
+   */
+  public ClaimResult claim(PlayerId player, Optional<String> name) {
+    Optional<SeasonState> found = state.get();
+    if (found.isEmpty() || !playing(found.get()) || !found.get().decorating().open()) {
+      return refusedClaim("hof.claim.closed");
+    }
+    int season = found.get().season();
+    Optional<CellRef> mine = cellOf(player, season);
+    if (mine.isPresent()) {
+      return refusedClaim("hof.claim.already", "cell", mine.get().cell().id());
+    }
+    if (!players.find(player).map(r -> earnsCell(r, season)).orElse(false)) {
+      return refusedClaim("hof.claim.not-played", "season", Integer.toString(season));
+    }
+    List<CellRef> free = claimable(season);
+    CellRef chosen;
+    if (name.isEmpty()) {
+      Optional<CellRef> here =
+          cellAt(platform.players().position(player))
+              .filter(ref -> free.stream().anyMatch(f -> f.key().equals(ref.key())));
+      if (here.isEmpty()) {
+        return free.isEmpty() ? refusedClaim("hof.claim.none-free") : new ClaimResult.Free(free);
+      }
+      chosen = here.get();
+    } else {
+      String cell = name.get();
+      CellRef ref;
+      switch (resolve(cell)) {
+        case Resolved.Found(CellRef named) -> ref = named;
+        case Resolved.Ambiguous() -> {
+          return refusedClaim("hof.ambiguous-cell", "cell", cell);
+        }
+        case Resolved.NotFound() -> {
+          return refusedClaim("hof.no-cell", "cell", cell);
+        }
+      }
+      if (ref.gallery().kind() != Gallery.Kind.SEASON || ref.gallery().season() != season) {
+        return refusedClaim(
+            "hof.claim.other-season", "cell", cell, "season", Integer.toString(season));
+      }
+      if (!claims(ref.gallery())) {
+        return refusedClaim("hof.claim.not-claimed", "gallery", ref.gallery().id());
+      }
+      if (!isFree(ref.cell(), season)) {
+        return refusedClaim("hof.claim.taken", "cell", ref.cell().id());
+      }
+      chosen = ref;
+    }
+    CellRef claimed = assign(chosen, season, Optional.of(player));
+    audit.record(
+        platform.players().knownName(player).orElse(player.toString()),
+        "claim",
+        claimed.key(),
+        "claimed",
+        "Season " + season);
+    return new ClaimResult.Claimed(claimed);
+  }
+
+  /** Whether a gallery hands its cells out by itself: random or ordered assignment. */
+  private boolean handsOut(Gallery gallery) {
+    SeasonsConfig.CellAssignment strategy = gallery.assignment(config.get().config());
     return strategy == SeasonsConfig.CellAssignment.RANDOM
         || strategy == SeasonsConfig.CellAssignment.ORDERED;
   }
 
+  /** The first free cell if its gallery hands cells out in order, else one at random. */
   private CellRef pick(List<CellRef> free) {
-    if (config.get().config().cells().assignment() == SeasonsConfig.CellAssignment.ORDERED) {
-      return free.getFirst();
+    CellRef first = free.getFirst();
+    if (first.gallery().assignment(config.get().config()) == SeasonsConfig.CellAssignment.ORDERED) {
+      return first;
     }
     return free.get(random.nextInt(free.size()));
   }
@@ -419,6 +571,17 @@ public final class HallService {
     decorating.accept(d -> d.opened(now));
     int season = current.get().season();
     int owners = assignAll(season);
+    if (seasonGalleries(season).stream().anyMatch(this::claims)) {
+      for (PlayerRecord record : withoutCell(season)) {
+        if (platform.players().find(record.id()).isPresent()) {
+          platform
+              .players()
+              .sendMessage(
+                  record.id(),
+                  messages().get("hof.claim.open", "season", Integer.toString(season)));
+        }
+      }
+    }
     return new OpenResult.Opened(owners);
   }
 
@@ -457,10 +620,19 @@ public final class HallService {
    * in their cell switch to adventure mode first.
    */
   public CompletableFuture<Void> lockAll(int season) {
-    if (!config.get().config().decorating().lockAtEnd()) {
+    SeasonsConfig settings = config.get().config();
+    List<Gallery> galleries = seasonGalleries(season);
+    boolean any =
+        galleries.isEmpty()
+            ? settings.decorating().lockAtEnd()
+            : galleries.stream().anyMatch(g -> g.lockAtEnd(settings));
+    if (!any) {
       return CompletableFuture.completedFuture(null);
     }
-    decorating.accept(Decorating::lockedAtEnd);
+    // A gallery that doesn't lock at the end keeps the window open for its own cells.
+    if (galleries.stream().allMatch(g -> g.lockAtEnd(settings))) {
+      decorating.accept(Decorating::lockedAtEnd);
+    }
     lockOwnersStandingInCells();
     if (!seasonGalleries(season).isEmpty()) {
       announcer.broadcast("hof.locked", "season", Integer.toString(season));
@@ -474,17 +646,19 @@ public final class HallService {
    */
   public void archived(PlayerId player, int season) {
     Optional<SeasonState> current = state.get();
-    SeasonsConfig.Decorating settings = config.get().config().decorating();
+    SeasonsConfig settings = config.get().config();
+    Optional<CellRef> cell = cellOf(player, season);
     if (current.isEmpty()
         || current.get().season() != season
         || playing(current.get())
-        || !settings.lockAtEnd()
-        || !settings.afterArchive().isPositive()
-        || current.get().decorating().lockAt().containsKey(player)
-        || cellOf(player, season).isEmpty()) {
+        || cell.isEmpty()
+        || !cell.get().gallery().lockAtEnd(settings)
+        || !cell.get().gallery().afterArchive(settings).isPositive()
+        || current.get().decorating().lockAt().containsKey(player)) {
       return;
     }
-    Instant until = clock.instant().plus(settings.afterArchive());
+    Duration afterArchive = cell.get().gallery().afterArchive(settings);
+    Instant until = clock.instant().plus(afterArchive);
     decorating.accept(d -> d.withLockAt(player, until));
     platform
         .players()
@@ -494,7 +668,7 @@ public final class HallService {
                 .get(
                     "decorate.after-archive",
                     "when",
-                    HumanTime.duration(messages(), settings.afterArchive())));
+                    HumanTime.duration(messages(), afterArchive)));
   }
 
   /**
@@ -526,7 +700,7 @@ public final class HallService {
     if (current.phase() instanceof Phase.Intermission
         || current.phase() instanceof Phase.Archiving) {
       return window.afterArchive(player, clock.instant())
-          || (!config.get().config().decorating().lockAtEnd() && window.open());
+          || (!ref.gallery().lockAtEnd(config.get().config()) && window.open());
     }
     return false;
   }
@@ -709,7 +883,7 @@ public final class HallService {
   private void handOutLate(PlayerId player, SeasonState current) {
     if (playing(current)
         && current.decorating().open()
-        && handsOut()
+        && seasonGalleries(current.season()).stream().anyMatch(this::handsOut)
         && cellOf(player, current.season()).isEmpty()
         && players.find(player).map(r -> earnsCell(r, current.season())).orElse(false)) {
       ensureCell(player, current.season());
@@ -729,6 +903,15 @@ public final class HallService {
   }
 
   private Optional<Decision> useBlock(Intent.UseBlock use) {
+    for (Gallery gallery : galleries()) {
+      if (gallery.launch().filter(at -> sameBlock(at, use.block())).isPresent()) {
+        if (use.mainHand()) {
+          pressLaunch(use.player(), use.block());
+        }
+        // Whatever it is, Seasons decides what it does: no redstone signal.
+        return Optional.of(new Decision.Deny(Optional.empty()));
+      }
+    }
     for (Gallery gallery : galleries()) {
       if (!gallery.contains(use.block()) && gallery.bounds().isPresent()) {
         continue;
@@ -753,6 +936,49 @@ public final class HallService {
       }
     }
     return Optional.empty();
+  }
+
+  private static boolean sameBlock(Position a, Position b) {
+    return a.dimension().equals(b.dimension())
+        && a.blockX() == b.blockX()
+        && a.blockY() == b.blockY()
+        && a.blockZ() == b.blockZ();
+  }
+
+  /**
+   * The launch button (questions 172): only for {@code seasons.admin.season}; during the
+   * Intermission the first press asks, and a second within {@link #LAUNCH_CONFIRM} launches.
+   * Otherwise it runs {@code /season launch}, which says why it can't.
+   */
+  private void pressLaunch(PlayerId player, Position at) {
+    if (!platform.permissions().has(player, SeasonService.ADMIN_PERMISSION)) {
+      audit.record(
+          platform.players().knownName(player).orElse(player.toString()),
+          HallAudit.BLOCKED,
+          "hall",
+          "denied",
+          "launch at " + at.blockX() + ", " + at.blockY() + ", " + at.blockZ());
+      platform.players().sendMessage(player, messages().get("hof.launch.admins-only"));
+      return;
+    }
+    Optional<SeasonState> current = state.get();
+    if (current.isEmpty() || !(current.get().phase() instanceof Phase.Intermission)) {
+      launch.accept(player);
+      return;
+    }
+    Instant now = clock.instant();
+    Instant first = launchPresses.remove(player);
+    if (first != null && now.isBefore(first.plus(LAUNCH_CONFIRM))) {
+      launch.accept(player);
+      return;
+    }
+    launchPresses.put(player, now);
+    platform
+        .players()
+        .sendMessage(
+            player,
+            messages()
+                .get("hof.launch.again", "season", Integer.toString(current.get().season() + 1)));
   }
 
   private Optional<Decision> useDisplay(Intent.UseDisplay use) {
@@ -861,11 +1087,15 @@ public final class HallService {
     return new CellDirectory() {
       @Override
       public Optional<Position> cell(PlayerId player, int season) {
-        Optional<Position> arrival = ensureCell(player, season).flatMap(HallService.this::arrival);
-        if (arrival.isPresent()) {
-          archived(player, season);
+        Optional<CellRef> cell = ensureCell(player, season).or(() -> unclaimed(player, season));
+        Optional<Position> arrival = cell.flatMap(HallService.this::arrival);
+        if (arrival.isEmpty()) {
+          return arrival;
         }
-        return arrival;
+        archived(player, season);
+        // In a bounds gallery an owner whose cell is locked waits outside it.
+        CellRef ref = cell.get();
+        return mayBeIn(player, ref) ? arrival : galleryEntry(ref.gallery()).or(() -> arrival);
       }
     };
   }

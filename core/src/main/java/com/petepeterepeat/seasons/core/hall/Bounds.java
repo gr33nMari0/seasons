@@ -58,6 +58,24 @@ public record Bounds(String dimension, int minX, int minY, int minZ, int maxX, i
         && other.maxZ >= minZ;
   }
 
+  /** Every block inside, as positions. */
+  public java.util.List<Position> blocks() {
+    java.util.List<Position> out = new java.util.ArrayList<>();
+    for (int x = minX; x <= maxX; x++) {
+      for (int y = minY; y <= maxY; y++) {
+        for (int z = minZ; z <= maxZ; z++) {
+          out.add(Position.of(dimension, x, y, z));
+        }
+      }
+    }
+    return out;
+  }
+
+  /** How many blocks it holds. */
+  public long volume() {
+    return (long) (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+  }
+
   /** The minimum corner, as a position. */
   public Position min() {
     return Position.of(dimension, minX, minY, minZ);

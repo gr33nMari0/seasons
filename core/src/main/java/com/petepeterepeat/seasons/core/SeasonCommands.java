@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
@@ -99,7 +100,8 @@ final class SeasonCommands {
       VaultFiles vaults,
       HallService hall,
       java.util.function.LongSupplier petsWaiting,
-      java.util.function.Supplier<MapPublisher.Status> map) {}
+      java.util.function.Supplier<MapPublisher.Status> map,
+      AuditLog audit) {}
 
   SeasonCommands(
       Platform platform,
@@ -164,6 +166,11 @@ final class SeasonCommands {
                 .executes(this::launch)
                 .then(
                     CommandNode.argument("options", ArgumentType.greedy()).executes(this::launch)))
+        .then(
+            CommandNode.literal("audit")
+                .permission(PERMISSION_ADMIN_CONFIG)
+                .executes(this::audit)
+                .then(CommandNode.argument("player", ArgumentType.word()).executes(this::audit)))
         .then(
             CommandNode.literal("firsts")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -291,6 +298,81 @@ final class SeasonCommands {
           cell.map(ref ->
                   messages.get("info.cell", "cell", ref.cell().id(), "gallery", ref.gallery().id()))
               .orElseGet(() -> messages.get("info.no-cell")));
+      archiveStatus(source.player().get(), current).ifPresent(source::reply);
+    }
+  }
+
+  /**
+   * "Your archive status" (questions 174): waiting to be archived into a season that ended, or the
+   * last season they are archived into; nothing if they never were.
+   */
+  private Optional<Message> archiveStatus(PlayerId player, SeasonState current) {
+    Optional<PlayerRecord> record = services.players().find(player);
+    if (LoginPlan.decide(record, true, current) instanceof LoginPlan.Plan.Archive waiting) {
+      return Optional.of(
+          messages().get("info.archive-waiting", "season", Integer.toString(waiting.season())));
+    }
+    return record
+        .filter(r -> r.archivedThrough() > 0)
+        .map(r -> messages().get("info.archived", "season", Integer.toString(r.archivedThrough())));
+  }
+
+  /** How many entries {@code /season audit} shows. */
+  static final int AUDIT_LINES = 10;
+
+  private static final java.time.format.DateTimeFormatter AUDIT_TIME =
+      java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm");
+
+  /** {@code /season audit [player]}: the last entries of the audit log (questions 173). */
+  void audit(CommandSource source, Arguments arguments) {
+    Optional<String> player = arguments.optionalString("player");
+    var _ =
+        services
+            .audit()
+            .recent(player, AUDIT_LINES)
+            .whenComplete((entries, failure) ->
+                platform.scheduler().runGlobal(() -> showAudit(source, player, entries, failure)));
+  }
+
+  private void showAudit(
+      CommandSource source,
+      Optional<String> player,
+      java.util.@org.jspecify.annotations.Nullable List<AuditLog.Entry> entries,
+      @org.jspecify.annotations.Nullable Throwable failure) {
+    Messages messages = messages();
+    if (failure != null || entries == null) {
+      LOG.error("Can't read the audit log", failure);
+      source.reply(messages.get("audit.failed", "error", String.valueOf(failure)));
+      return;
+    }
+    if (entries.isEmpty()) {
+      source.reply(
+          player
+              .map(name -> messages.get("audit.none-player", "name", name))
+              .orElseGet(() -> messages.get("audit.none")));
+      return;
+    }
+    String count = Integer.toString(entries.size());
+    source.reply(
+        player
+            .map(name -> messages.get("audit.header-player", "count", count, "name", name))
+            .orElseGet(() -> messages.get("audit.header", "count", count)));
+    for (AuditLog.Entry entry : entries) {
+      source.reply(
+          messages.get(
+              "audit.line",
+              "time",
+              AUDIT_TIME.format(entry.time().atZone(ZoneId.systemDefault())),
+              "actor",
+              entry.actor(),
+              "action",
+              entry.action(),
+              "target",
+              entry.target(),
+              "result",
+              entry.result(),
+              "details",
+              entry.details()));
     }
   }
 

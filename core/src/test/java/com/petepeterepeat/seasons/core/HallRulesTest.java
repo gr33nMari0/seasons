@@ -394,6 +394,24 @@ class HallRulesTest {
   }
 
   @Test
+  void aGallerysOwnAfterArchiveDecidesItsOwnersTime() throws IOException {
+    Path file = dir.resolve("world/seasons/galleries/season-2.yml");
+    Files.writeString(
+        file, Files.readString(file).replace("cells:", "decorating: { afterArchive: 2m }\ncells:"));
+    run("/season reload");
+    run("/season end --now");
+    fake.player(alex).position = IN_C1;
+    assertThat(decide(new Intent.PlaceBlock(alex.id(), IN_C1, "minecraft:stone")))
+        .isEqualTo(Decision.allow());
+
+    fake.runFor(Duration.ofMinutes(3));
+
+    assertThat(text(decide(new Intent.PlaceBlock(alex.id(), IN_C1, "minecraft:stone"))))
+        .as("2 minutes, not config.yml's 15")
+        .isEqualTo("You can't build here.");
+  }
+
+  @Test
   void aDoubleChestNeverReachesAcrossACellOrTheHallsEdge() {
     Optional<NeutralItem> diamonds = Optional.of(FakeItems.item("minecraft:diamond", 3));
     container(IN_C1, CHEST, diamonds);

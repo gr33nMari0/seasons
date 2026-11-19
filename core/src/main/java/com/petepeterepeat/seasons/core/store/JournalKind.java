@@ -17,5 +17,7 @@ public enum JournalKind {
   IMPORT_UNDO_STARTED,
   IMPORT_UNDO_DONE,
   EGG_DELIVERED,
-  PET_TRAVELLED
+  PET_TRAVELLED,
+  /** A cell's gate plane set open or shut (questions 169). Needs no recovery. */
+  GATE_SET
 }

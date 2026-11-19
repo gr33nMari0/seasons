@@ -38,6 +38,9 @@ public interface Displays {
    */
   boolean wears(UUID figure, List<Optional<NeutralItem>> equipment);
 
+  /** Whether a figure is drawn as this kind, in this pose (empty for standing). */
+  boolean drawnAs(UUID figure, Figure.Kind kind, Optional<String> pose);
+
   /**
    * Removes every display between two corners whose tag starts with a prefix. The chunks must be
    * loaded.

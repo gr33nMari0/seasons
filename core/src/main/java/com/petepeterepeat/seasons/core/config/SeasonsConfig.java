@@ -51,7 +51,11 @@ public record SeasonsConfig(
 
   @ConfigSerializable
   public record Cells(
-      CellAssignment assignment, Duration minPlaytime, CellAccess access, List<String> containers) {
+      CellAssignment assignment,
+      Duration minPlaytime,
+      CellAccess access,
+      List<String> containers,
+      String gateBlock) {
     public Cells {
       containers = List.copyOf(containers);
     }

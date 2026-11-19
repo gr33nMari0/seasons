@@ -9,7 +9,9 @@ import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigCommands;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
@@ -20,6 +22,7 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
@@ -33,6 +36,7 @@ import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.map.MapService;
 import com.petepeterepeat.seasons.core.map.MarkerCommands;
+import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -113,6 +117,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable HallService hallService;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
+  private @Nullable Gates gates;
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
   private @Nullable MapService map;
@@ -157,7 +162,9 @@ public final class Seasons implements SeasonsApi {
             platform.storage().configDirectory(),
             world,
             environment,
-            platform.world()::dimensionExists);
+            platform.world()::dimensionExists,
+            platform.world()::isItem,
+            platform.world()::isGateBlock);
     List<ConfigProblem> startupProblems = loadConfig(loader);
 
     Journal journal = null;
@@ -208,18 +215,19 @@ public final class Seasons implements SeasonsApi {
             players,
             archives,
             announcer,
+            audit,
             RandomGenerator.getDefault());
     hallService = halls;
+    HallAudit hallAudit = new HallAudit(audit, clock);
     HallVisits visiting =
-        new HallVisits(platform, config, halls, players, immunity, clock, entry::spawn);
+        new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
     Reconciler reconciling =
         new Reconciler(platform, halls, renderer, archives, writer, audit, nanoTime);
     reconciler = reconciling;
-    HallRules hallRules =
-        new HallRules(platform, config, halls, new HallAudit(audit, clock), reconciling);
+    HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
     Optional<HallImporter> importer = Optional.empty();
 
@@ -256,6 +264,7 @@ public final class Seasons implements SeasonsApi {
       unarchiver = Optional.of(unarchiving);
       recovery = Optional.of(replay);
       rollover = archiving;
+      gates = new Gates(platform, config, halls, journal, audit, crash, announcer);
     }
 
     LaunchSequence launch =
@@ -283,13 +292,24 @@ public final class Seasons implements SeasonsApi {
     service = seasons;
     Zones zoning =
         new Zones(
-            platform, config, announcer, audit, clock, halls::inHall, entry::spawn, hold::isHeld);
+            platform,
+            config,
+            announcer,
+            audit,
+            clock,
+            halls::inHall,
+            entry::spawn,
+            hold::isHeld,
+            players);
     zones = zoning;
     zoning.bind(seasons);
     pets.bind(seasons::state, zoning::decide);
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
+    if (gates != null) {
+      gates.start();
+    }
     visiting.bind(seasons::state);
     visiting.start();
     reconciling.start();
@@ -361,8 +381,23 @@ public final class Seasons implements SeasonsApi {
                 vaults,
                 halls,
                 pets::waiting,
-                maps::status));
+                maps::status,
+                audit));
     commands = built;
+    halls.bindLaunch(player ->
+        built.launch(
+            new CommandSource() {
+              @Override
+              public Optional<PlayerId> player() {
+                return Optional.of(player);
+              }
+
+              @Override
+              public void reply(Message message) {
+                platform.players().sendMessage(player, message);
+              }
+            },
+            Arguments.NONE));
     platform
         .events()
         .handle(
@@ -530,6 +565,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (reconciler != null) {
       reconciler.stop();
+    }
+    if (gates != null) {
+      gates.stop();
     }
     if (rules != null) {
       rules.stop();

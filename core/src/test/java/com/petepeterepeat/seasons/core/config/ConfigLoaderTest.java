@@ -84,15 +84,66 @@ class ConfigLoaderTest {
   }
 
   @Test
-  void accessModesNotBuiltYetAreRefused() throws IOException {
-    write("config.yml", "schema-version: 1\ncells:\n  access: bounds\n");
+  void everyAccessModeLoads() throws IOException {
+    for (String access : List.of("open", "bounds", "gate")) {
+      write("config.yml", "schema-version: 1\ncells:\n  access: " + access + "\n");
+
+      ConfigLoader.Result result = loader(Map.of()).load();
+
+      assertThat(result.problems()).as(access).isEmpty();
+      assertThat(result.snapshot().orElseThrow().config().cells().access().name())
+          .isEqualToIgnoringCase(access);
+    }
+  }
+
+  @Test
+  void unknownItemsAreProblemsWithTheirPath() throws IOException {
+    write(
+        "config.yml",
+        """
+        schema-version: 1
+        firsts:
+          rareItems: [trident, minecraft:not_a_thing]
+        cells:
+          containers: [chest, not_a_box]
+          gateBlock: lava
+        """);
+
+    ConfigLoader.Result result =
+        new ConfigLoader(
+                configDir(),
+                worldDir(),
+                Map.of(),
+                dimension -> true,
+                id -> !id.contains("not_"),
+                id -> !id.equals("minecraft:lava"))
+            .load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .extracting(ConfigProblem::path, ConfigProblem::message)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("firsts.rareItems"),
+                "minecraft:not_a_thing isn't an item this server knows"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("cells.containers"), "not_a_box isn't an item this server knows"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("cells.gateBlock"),
+                "lava can't be a gate: it must be a solid block that doesn't fall and holds"
+                    + " nothing"));
+  }
+
+  @Test
+  void requireManualFalseIsRefused() throws IOException {
+    write("config.yml", "schema-version: 1\nlaunch:\n  requireManual: false\n");
 
     ConfigLoader.Result result = loader(Map.of()).load();
 
     assertThat(result.snapshot()).isEmpty();
     assertThat(result.problems())
         .singleElement()
-        .satisfies(problem -> assertThat(problem.message()).startsWith("only open is built yet"));
+        .satisfies(problem -> assertThat(problem.message()).startsWith("only true is built"));
   }
 
   @Test

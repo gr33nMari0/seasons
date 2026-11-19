@@ -61,6 +61,8 @@ info:
   no-cell: "<gray>Your cell: none yet</gray>"
   cell: "<gray>Your cell:</gray> <white><cell></white> <gray>in</gray> <white><gallery></white>"
   no-season: "<gray>No season is recorded yet.</gray>"
+  archived: "<gray>Archived into Season <season>.</gray>"
+  archive-waiting: "<gray>Waiting to be archived into Season <season>.</gray>"
 
 init:
   done: "<green>Recorded Season <season> as the season in progress.</green>"
@@ -228,6 +230,9 @@ hof:
     cells-outside: "<red>Cell <cell> would end up outside gallery <gallery>.</red>"
     entry: "<green>Gallery <gallery>'s entry is now at <x>, <y>, <z>.</green>"
     exit: "<green>Added an exit to gallery <gallery> at <x>, <y>, <z>.</green>"
+    launch: "<green>Gallery <gallery>'s launch button is now at <x>, <y>, <z>.</green>"
+    no-launch: "<green>Gallery <gallery> has no launch button now.</green>"
+    launch-outside: "<red>The launch button must sit inside gallery <gallery>.</red>"
     info: "<gold>Gallery <gallery></gold> <gray>(Season <season>): <cells> cells, <free> free</gray>"
     info-cell: "Cell <cell>: <owner>"
     free: "free"
@@ -250,6 +255,25 @@ hof:
     info-owner: "owner <name>"
     info-free: "free"
     info-none: "none"
+    closed: "<red>Only its owner goes into that cell, while decorating it.</red>"
+    moved-out: "<yellow>Only its owner can be in that cell, while decorating it, so you're at the gallery entry.</yellow>"
+    gate-shut: "<yellow>The cell's gate shut, so you're at the gallery entry.</yellow>"
+  gate:
+    contents: "<red>The gate of cell <cell> is left as it is: the block at <x>, <y>, <z> in its plane holds something, such as a container or sign. Move it out of the gate's plane.</red>"
+    unsteady: "<red>The gate of cell <cell> doesn't stay set (at <x>, <y>, <z>), so Seasons has stopped setting it. Find what changes it, then run /season reload.</red>"
+  launch:
+    admins-only: "<red>Only an admin can launch the next season.</red>"
+    again: "<gold>Press the launch button again within 10 seconds to launch Season <season>.</gold>"
+  claim:
+    open: "<gold>Claim your Hall of Fame cell for Season <season> with /hof claim [cell].</gold>"
+    closed: "<red>Cells can only be claimed while the decorating window is open.</red>"
+    already: "<red>You already have a cell, <cell>. Swap it with /hof swap instead.</red>"
+    not-played: "<red>You haven't played Season <season> yet.</red>"
+    none-free: "<red>No cell is free to claim.</red>"
+    free: "<gray>Free cells: <cells>. Claim one with /hof claim [cell].</gray>"
+    other-season: "<red><cell> isn't a cell of Season <season>.</red>"
+    not-claimed: "<red>Cells in <gallery> aren't claimed: they're handed out.</red>"
+    taken: "<red><cell> is taken.</red>"
   swap:
     closed: "<red>Cells can only be swapped while the decorating window is open.</red>"
     self: "<red>You can't swap with yourself.</red>"
@@ -322,6 +346,14 @@ hof:
     undone: "<green>Put back <count> cell of <gallery>.</green>"
     undone-many: "<green>Put back <count> cells of <gallery>.</green>"
     undo-stopped: "<red>Undoing the import of cell <cell> stopped: <reason>.</red>"
+
+audit:
+  header: "<gold>The last <count> audit entries:</gold>"
+  header-player: "<gold>The last <count> audit entries for <name>:</gold>"
+  none: "<gray>No audit entries.</gray>"
+  none-player: "<gray>No audit entries for <name>.</gray>"
+  line: "<gray><time></gray> <actor> <action> <target> (<result>): <details>"
+  failed: "<red>The audit log can't be read: <error>. See the server log.</red>"
 
 firsts:
   announce: "<gold>Season first!</gold> <yellow><name></yellow> <what>."

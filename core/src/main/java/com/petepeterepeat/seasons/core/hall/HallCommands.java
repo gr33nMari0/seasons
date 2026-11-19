@@ -36,6 +36,9 @@ public final class HallCommands {
   /** Permission for {@code /hof swap}. */
   public static final String PERMISSION_SWAP = "seasons.hof.swap";
 
+  /** {@code /hof claim}. */
+  public static final String PERMISSION_CLAIM = "seasons.hof.claim";
+
   private static final Pattern WORDS = Pattern.compile("\\s+");
 
   /** Splits on runs of whitespace, dropping empty words. */
@@ -124,6 +127,14 @@ public final class HallCommands {
                                     CommandNode.argument("at", ArgumentType.greedy())
                                         .executes(this::galleryExit))))
                 .then(
+                    CommandNode.literal("launch")
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::galleryLaunch)
+                                .then(
+                                    CommandNode.argument("at", ArgumentType.greedy())
+                                        .executes(this::galleryLaunch))))
+                .then(
                     CommandNode.literal("info")
                         .then(
                             CommandNode.argument("gallery", ArgumentType.word())
@@ -188,6 +199,11 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
                                 .executes(this::cellInfo))))
+        .then(
+            CommandNode.literal("claim")
+                .permission(PERMISSION_CLAIM)
+                .executes(this::claim)
+                .then(CommandNode.argument("cell", ArgumentType.id()).executes(this::claim)))
         .then(
             CommandNode.literal("swap")
                 .permission(PERMISSION_SWAP)
@@ -325,6 +341,34 @@ public final class HallCommands {
         source,
         hall.save(found.get().withExit(at.get())),
         messages().get("hof.gallery.exit", place("gallery", found.get().id(), at.get())));
+  }
+
+  /** {@code /hof gallery launch <gallery> [at|none]}: sets or removes the launch button. */
+  void galleryLaunch(CommandSource source, Arguments arguments) {
+    Optional<Gallery> found = gallery(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Gallery gallery = found.get();
+    if (arguments.optionalString("at").map(String::trim).filter("none"::equals).isPresent()) {
+      saved(
+          source,
+          hall.save(gallery.withLaunch(Optional.empty())),
+          messages().get("hof.gallery.no-launch", "gallery", gallery.id()));
+      return;
+    }
+    Optional<Position> at = position(source, arguments.optionalString("at"), gallery.dimension());
+    if (at.isEmpty()) {
+      return;
+    }
+    if (!gallery.contains(at.get())) {
+      source.reply(messages().get("hof.gallery.launch-outside", "gallery", gallery.id()));
+      return;
+    }
+    saved(
+        source,
+        hall.save(gallery.withLaunch(at)),
+        messages().get("hof.gallery.launch", place("gallery", gallery.id(), at.get())));
   }
 
   void galleryInfo(CommandSource source, Arguments arguments) {
@@ -644,6 +688,37 @@ public final class HallCommands {
                 messages()
                     .get("hof.swap.done", "name", askerName, "cell", swapped.theirs().cell().id()));
       }
+    }
+  }
+
+  void claim(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    switch (hall.claim(source.player().get(), arguments.optionalString("cell"))) {
+      case HallService.ClaimResult.Refused refused ->
+          source.reply(
+              messages().get(refused.messageKey(), refused.placeholders().toArray(String[]::new)));
+      case HallService.ClaimResult.Claimed claimed ->
+          source.reply(
+              messages()
+                  .get(
+                      "hof.assigned",
+                      "season",
+                      Integer.toString(claimed.cell().gallery().season()),
+                      "cell",
+                      claimed.cell().cell().id(),
+                      "gallery",
+                      claimed.cell().gallery().id()));
+      case HallService.ClaimResult.Free free ->
+          source.reply(
+              messages()
+                  .get(
+                      "hof.claim.free",
+                      "cells",
+                      String.join(
+                          ", ", free.cells().stream().map(ref -> ref.cell().id()).toList())));
     }
   }
 

@@ -33,6 +33,7 @@ import java.util.Set;
  * @param pets pets registered to travel with them, in the order registered
  * @param notices messages waiting for their next login, such as a pet that died while they were
  *     away
+ * @param lastValid where they last stood outside every blocked zone (questions 177)
  */
 public record PlayerRecord(
     PlayerId id,
@@ -47,7 +48,8 @@ public record PlayerRecord(
     boolean hallAdventure,
     Optional<HallReturn> hallReturn,
     List<Pet> pets,
-    List<Notice> notices) {
+    List<Notice> notices,
+    Optional<Position> lastValid) {
   public PlayerRecord {
     pets = List.copyOf(pets);
     notices = List.copyOf(notices);
@@ -122,7 +124,30 @@ public record PlayerRecord(
         false,
         Optional.empty(),
         List.of(),
-        List.of());
+        List.of(),
+        Optional.empty());
+  }
+
+  /**
+   * Where the player last stood outside every blocked zone, kept so a restart or a relog doesn't
+   * lose it (questions 177).
+   */
+  public PlayerRecord withLastValid(Optional<Position> next) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        hallAdventure,
+        hallReturn,
+        pets,
+        notices,
+        next);
   }
 
   public boolean played(int season) {
@@ -143,7 +168,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   /** Marks the season played and adds online time to it. */
@@ -168,7 +194,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   /** Archived into a season; a saved Hall return is dropped, since it belongs to that season. */
@@ -188,7 +215,8 @@ public record PlayerRecord(
         hallAdventure,
         Optional.empty(),
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   /**
@@ -216,7 +244,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withDisplaysRendered(int season) {
@@ -235,7 +264,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withDestinationReached() {
@@ -252,7 +282,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   /** Brought into a season, with the statistics it starts from; a saved Hall return is dropped. */
@@ -272,7 +303,8 @@ public record PlayerRecord(
         hallAdventure,
         Optional.empty(),
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public FurthestBlock furthest(int season) {
@@ -295,7 +327,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withHallAdventure(boolean switched) {
@@ -312,7 +345,8 @@ public record PlayerRecord(
         switched,
         hallReturn,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withHallReturn(Optional<HallReturn> next) {
@@ -329,7 +363,8 @@ public record PlayerRecord(
         hallAdventure,
         next,
         pets,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withPets(List<Pet> next) {
@@ -346,7 +381,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         next,
-        notices);
+        notices,
+        lastValid);
   }
 
   public PlayerRecord withNotices(List<Notice> next) {
@@ -363,7 +399,8 @@ public record PlayerRecord(
         hallAdventure,
         hallReturn,
         pets,
-        next);
+        next,
+        lastValid);
   }
 
   public Optional<Map<String, Long>> baseline(int season) {

@@ -43,8 +43,15 @@ export default {
     await ctx.command(admin, '/season config set schema-version 2', /^There's no setting called schema-version\./)
     await ctx.command(admin, '/season config set pets.maxPerPlayer lots', /^pets\.maxPerPlayer wasn't changed: /)
     await ctx.command(admin, '/season config set pets.maxPerPlayer 11', /^pets\.maxPerPlayer wasn't changed: config\.yml, at pets\.maxPerPlayer: must be between 0 and 10, not 11$/)
-    await ctx.command(admin, '/season config set cells.access gate', /^cells\.access wasn't changed: config\.yml, at cells\.access: only open is built yet/)
+    await ctx.command(admin, '/season config set firsts.rareItems [trident, not_an_item]', /^firsts\.rareItems wasn't changed: config\.yml, at firsts\.rareItems: not_an_item isn't an item this server knows$/)
+    for (const block of ['not_a_block', 'lava', 'air', 'sand', 'chest', 'torch']) {
+      await ctx.command(admin, `/season config set cells.gateBlock ${block}`, new RegExp(`^cells\\.gateBlock wasn't changed: config\\.yml, at cells\\.gateBlock: ${block} can't be a gate: it must be a solid block that doesn't fall and holds nothing$`))
+    }
+    await ctx.command(admin, '/season config set launch.requireManual false', /^launch\.requireManual wasn't changed: config\.yml, at launch\.requireManual: only true is built: launch is by \/season launch or the launch button$/)
     assert(ctx.readFile(CONFIG) === written, 'refusals leave config.yml alone')
+    // A pane or bars can be a gate.
+    await ctx.command(admin, '/season config set cells.gateBlock glass_pane', /^Set cells\.gateBlock to glass_pane in config\.yml \(it was iron_bars\)\.$/)
+    await ctx.command(admin, '/season config set cells.gateBlock iron_bars', /^Set cells\.gateBlock to iron_bars in config\.yml \(it was glass_pane\)\.$/)
 
     // A file that lacks the key gets it, under its section, which is made if it's missing.
     const trimmed = 'schema-version: 1\n# Our settings.\nschedule:\n  endCountdown: 2m   # short\n'

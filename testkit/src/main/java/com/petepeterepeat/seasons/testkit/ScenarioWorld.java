@@ -242,6 +242,7 @@ final class ScenarioWorld implements Listener {
 
   private void restoreWorlds(List<Chunk> chunks, List<String> unrestored) {
     Map<String, String> rules = read(state.resolve("rules.txt"));
+    boolean savedDiffer = !lasting(worldRules()).equals(lasting(rules));
     for (Chunk chunk : chunks) {
       if (!Files.exists(pristineFile(chunk.getWorld(), chunk.getX(), chunk.getZ()))) {
         unrestored.add("blocks: chunk " + key(chunk) + " has no copy from its first load");
@@ -255,12 +256,34 @@ final class ScenarioWorld implements Listener {
       world.removePluginChunkTickets(plugin);
       putBackRules(world, rules);
     }
+    if (savedDiffer) {
+      // A scenario that halts the server dead restarts from disk, so the worlds' own data (spawn,
+      // game rules, border, difficulty) must be put back there too, not only in memory.
+      server.getWorlds().forEach(World::save);
+    }
     touched.clear();
     try {
       Files.deleteIfExists(touchedLog);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
+  }
+
+  /**
+   * The rules a scenario changes on purpose (spawn, game rules, border, difficulty), leaving out
+   * time and weather, which move by themselves.
+   */
+  private static Map<String, String> lasting(Map<String, String> rules) {
+    Map<String, String> kept = new java.util.TreeMap<>();
+    rules.forEach((key, value) -> {
+      if (key.endsWith(".spawn")
+          || key.contains(".rule.")
+          || key.endsWith(".border")
+          || key.endsWith(".difficulty")) {
+        kept.put(key, value);
+      }
+    });
+    return kept;
   }
 
   private static void removeEntities(World world) {

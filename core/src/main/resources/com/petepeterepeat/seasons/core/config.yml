@@ -32,6 +32,9 @@ cells:
   access: open                   # open, bounds, gate
   # Containers owners may place in their cell during decorating; view-only after the lock.
   containers: [chest, barrel, shulker_box, decorated_pot]
+  # With access: gate, what a cell's gate plane is while the cell is locked; air while its owner
+  # may decorate it.
+  gateBlock: iron_bars
 
 decorating:
   # The decorating window opens this long before the planned end (or with /season decorate open).
