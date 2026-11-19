@@ -4,7 +4,7 @@
 // registered, pets.maxPerPlayer, names from the type for unnamed pets, /pet list and /pet remove,
 // and registration closing when the season ends.
 import { assert } from '../lib/context.mjs'
-import { YARD, chest, list, pet, register, summon } from '../lib/pets.mjs'
+import { YARD, asPlayer, chest, list, pet, register, summon } from '../lib/pets.mjs'
 import { standAt } from '../lib/visits.mjs'
 import { endSeason2 } from '../lib/zones.mjs'
 
@@ -55,13 +55,13 @@ export default {
     assert(lines.some((line) => /^- Rex \(wolf\), last seen at 202, -60, 200 in minecraft:overworld$/.test(line)), `Rex is listed where it was registered: ${JSON.stringify(lines)}`)
     assert(lines.some((line) => /^- Daisy \(donkey\)/.test(line)) && lines.some((line) => /^- Wolf \(wolf\)/.test(line)), `Daisy and Wolf are listed: ${JSON.stringify(lines)}`)
 
-    await ctx.command(pat, '/pet remove Nobody', /^You have no pet called Nobody\.$/)
-    await ctx.command(pat, '/pet remove Daisy', /^Daisy won't travel\.$/)
+    await asPlayer(ctx, pat, '/pet remove Nobody', /^You have no pet called Nobody\.$/)
+    await asPlayer(ctx, pat, '/pet remove Daisy', /^Daisy won't travel\.$/)
     // With room again, a second unnamed wolf is Wolf 2, since Wolf is taken.
     await register(ctx, admin, pat, 'pup2', /^Registered Wolf 2 \(wolf\) to travel with you to the next season's spawn \(3 of 3\)\.$/)
     lines = await list(ctx, pat, 3)
     assert(!lines.some((line) => /^- Daisy /.test(line)), `Daisy is gone: ${JSON.stringify(lines)}`)
-    await ctx.command(pat, '/pet remove Wolf 2', /^Wolf 2 won't travel\.$/)
+    await asPlayer(ctx, pat, '/pet remove Wolf 2', /^Wolf 2 won't travel\.$/)
     await list(ctx, pat, 2)
 
     // Registration closes when the season ends; the list stays.

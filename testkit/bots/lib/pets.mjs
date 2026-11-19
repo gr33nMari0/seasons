@@ -5,6 +5,17 @@ import { assert } from './context.mjs'
 import { FLOOR } from './hall.mjs'
 import { forceload } from './zones.mjs'
 
+/**
+ * Runs a command as a player bot, then lets 15 ticks pass. The game kicks a player who isn't an op
+ * for chat spam when commands come faster than one a second on average, and /pet scenarios send
+ * many.
+ */
+export async function asPlayer (ctx, bot, command, expect) {
+  const reply = await ctx.command(bot, command, expect)
+  await ctx.sync(ctx.adminBot, [bot], 15)
+  return reply
+}
+
 /** Where owners stand to register their pets, well away from the spawn and the zones. */
 export const YARD = { x: 200, y: FLOOR, z: 200 }
 
@@ -18,6 +29,8 @@ export const FAR = { x: 6000, y: FLOOR, z: 6000 }
 export async function summon (ctx, admin, type, tag, at, { name, nbt = '' } = {}) {
   const named = name ? `,CustomName:"${name}"` : ''
   await ctx.command(admin, `/summon minecraft:${type} ${at.x + 0.5} ${at.y} ${at.z + 0.5} {Tags:["${tag}"],NoAI:1b,PersistenceRequired:1b${named}${nbt ? ',' + nbt : ''}}`, /^Summoned new /)
+  // A summoned entity can take a few ticks to be found by selectors.
+  await ctx.eventually(async () => assert(await ctx.holds(admin, `entity @e[tag=${tag}]`), `${tag} is there`))
 }
 
 /** Tames a tagged animal to a player, as the game does when they tame it. */
@@ -39,22 +52,25 @@ export async function pet (ctx, admin, type, tag, at, owner, options = {}) {
 /**
  * Stands a player at `from` looking at a tagged entity, then runs /pet add as them and resolves
  * with the reply matching `expect`. Bots send no movement, so the server keeps the rotation the
- * teleport gave them.
+ * teleport gave them. /tp ... facing aims from the feet, so the aim is taken from the eyes with
+ * /execute instead.
  */
 export async function register (ctx, admin, bot, tag, expect, from = YARD) {
-  await ctx.command(admin, `/tp ${bot.username} ${from.x + 0.5} ${from.y} ${from.z + 0.5} facing entity @e[tag=${tag},limit=1] eyes`, /^Teleported /)
+  const name = bot.username
+  await ctx.command(admin, `/tp ${name} ${from.x + 0.5} ${from.y} ${from.z + 0.5}`, /^Teleported /)
+  await ctx.command(admin, `/execute as ${name} at @s anchored eyes facing entity @e[tag=${tag},limit=1] eyes run tp @s ~ ~ ~ ~ ~`, /^Teleported /)
   await ctx.sync(admin, [bot], 2)
-  return ctx.command(bot, '/pet add', expect)
+  return asPlayer(ctx, bot, '/pet add', expect)
 }
 
 /** The lines /pet list answers a player with: the header, then one line per pet. */
 export async function list (ctx, bot, count) {
   if (count === 0) {
-    await ctx.command(bot, '/pet list', /^You have no pets registered\.$/)
+    await asPlayer(ctx, bot, '/pet list', /^You have no pets registered\.$/)
     return []
   }
   const header = new RegExp(`^Your pets \\(${count} of \\d+\\):$`)
-  const lines = await ctx.command(bot, '/pet list', [header, ...Array.from({ length: count }, () => /^- /)])
+  const lines = await asPlayer(ctx, bot, '/pet list', [header, ...Array.from({ length: count }, () => /^- /)])
   return lines.slice(1)
 }
 
