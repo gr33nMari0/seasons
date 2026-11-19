@@ -635,13 +635,11 @@ public final class ConfigLoader {
                 CONFIG, "schedule.reminders", "every reminder must be longer than 0"));
       }
     }
-    if (config.cells().access() != SeasonsConfig.CellAccess.OPEN) {
-      // Running them as open would leave cells open that the server thinks are closed.
+    if (config.cells().access() == SeasonsConfig.CellAccess.GATE) {
+      // Running it as open would leave cells open that the server thinks are closed.
       problems.add(
           ConfigProblem.atPath(
-              CONFIG,
-              "cells.access",
-              "only open is built yet; bounds and gate come in a later version"));
+              CONFIG, "cells.access", "only open and bounds are built yet; gate comes later"));
     }
     int pets = config.pets().maxPerPlayer();
     if (pets < 0 || pets > 10) {

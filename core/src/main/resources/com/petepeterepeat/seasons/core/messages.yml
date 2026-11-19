@@ -250,6 +250,8 @@ hof:
     info-owner: "owner <name>"
     info-free: "free"
     info-none: "none"
+    closed: "<red>Only its owner goes into that cell, while decorating it.</red>"
+    moved-out: "<yellow>Only its owner can be in that cell, while decorating it, so you're at the gallery entry.</yellow>"
   swap:
     closed: "<red>Cells can only be swapped while the decorating window is open.</red>"
     self: "<red>You can't swap with yourself.</red>"

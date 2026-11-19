@@ -61,6 +61,7 @@ public final class HallVisits {
   private final Platform platform;
   private final ConfigHolder config;
   private final HallService halls;
+  private final HallAudit audit;
   private final PlayerStore players;
   private final Immunity immunity;
   private final Clock clock;
@@ -96,6 +97,7 @@ public final class HallVisits {
       Platform platform,
       ConfigHolder config,
       HallService halls,
+      HallAudit audit,
       PlayerStore players,
       Immunity immunity,
       Clock clock,
@@ -103,6 +105,7 @@ public final class HallVisits {
     this.platform = platform;
     this.config = config;
     this.halls = halls;
+    this.audit = audit;
     this.players = players;
     this.immunity = immunity;
     this.clock = clock;
@@ -274,6 +277,11 @@ public final class HallVisits {
     Optional<Position> arrival = cell.flatMap(halls::arrival);
     if (arrival.isEmpty()) {
       tell(player, "hof.visit.no-cell", "name", text);
+      return arrival;
+    }
+    // A bounds cell's entry anchor is inside it, where visitors may not go (questions 168).
+    if (cell.get().gallery().access(config.get().config()) == SeasonsConfig.CellAccess.BOUNDS) {
+      return halls.galleryEntry(cell.get().gallery()).or(() -> arrival);
     }
     return arrival;
   }
@@ -522,6 +530,10 @@ public final class HallVisits {
       }
       return none();
     }
+    Optional<Decision> closed = closedCell(player, teleport.from(), teleport.to());
+    if (closed.isPresent()) {
+      return closed;
+    }
     if ((!fromIn && !toIn) || bypasses(player)) {
       return none();
     }
@@ -543,6 +555,10 @@ public final class HallVisits {
 
   private Optional<Decision> moved(Intent.Move move) {
     PlayerId player = move.player();
+    Optional<Decision> closed = closedCell(player, move.from(), move.to());
+    if (closed.isPresent()) {
+      return closed;
+    }
     boolean fromIn = halls.inHall(move.from());
     boolean toIn = halls.inHall(move.to());
     if (fromIn == toIn || bypasses(player)) {
@@ -558,6 +574,24 @@ public final class HallVisits {
     }
     enteredOtherwise(player, move.from());
     return none();
+  }
+
+  /**
+   * Going into a {@code bounds} cell the player may not be in, from outside it, by any route but
+   * Seasons' own: refused and audited (questions 168).
+   */
+  private Optional<Decision> closedCell(PlayerId player, Position from, Position to) {
+    Optional<HallService.CellRef> into = halls.cellAt(to);
+    if (into.isEmpty() || into.get().cell().contains(from) || halls.mayBeIn(player, into.get())) {
+      return none();
+    }
+    audit.record(
+        platform.players().knownName(player).orElse(player.toString()),
+        HallAudit.BLOCKED,
+        into.get().key(),
+        "enter",
+        to.blockX() + ", " + to.blockY() + ", " + to.blockZ());
+    return Optional.of(Decision.deny(message("hof.cell.closed")));
   }
 
   /**
@@ -614,12 +648,28 @@ public final class HallVisits {
         leftHall(player);
       } else if (in && onExit(at) && !bypasses(player)) {
         savedReturn(player).ifPresent(back -> returnTo(player, back, "hof.leave.returned"));
+      } else if (in) {
+        moveOutOfClosedCell(player, at);
       }
     }
     inside.retainAll(online);
     known.retainAll(online);
     lastOutside.keySet().retainAll(online);
     moving.retainAll(online);
+  }
+
+  /**
+   * A player found in a {@code bounds} cell they may not be in, such as an owner whose time ran
+   * out, goes to the gallery's entry.
+   */
+  private void moveOutOfClosedCell(PlayerId player, Position at) {
+    Optional<HallService.CellRef> in = halls.cellAt(at);
+    if (in.isEmpty() || halls.mayBeIn(player, in.get())) {
+      return;
+    }
+    halls
+        .galleryEntry(in.get().gallery())
+        .ifPresent(entry -> moveTo(player, entry, "hof.cell.moved-out"));
   }
 
   /** Puts a player who rode into the Hall back where they stood outside it, off their mount. */

@@ -210,16 +210,16 @@ public final class Seasons implements SeasonsApi {
             announcer,
             RandomGenerator.getDefault());
     hallService = halls;
+    HallAudit hallAudit = new HallAudit(audit, clock);
     HallVisits visiting =
-        new HallVisits(platform, config, halls, players, immunity, clock, entry::spawn);
+        new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
     Reconciler reconciling =
         new Reconciler(platform, halls, renderer, archives, writer, audit, nanoTime);
     reconciler = reconciling;
-    HallRules hallRules =
-        new HallRules(platform, config, halls, new HallAudit(audit, clock), reconciling);
+    HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
     Optional<HallImporter> importer = Optional.empty();
 

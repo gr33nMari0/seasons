@@ -250,6 +250,29 @@ public final class HallService {
     return galleries().stream().anyMatch(g -> g.contains(position));
   }
 
+  /**
+   * Whether a player may be inside a cell now: anyone may, unless its gallery's access is {@code
+   * bounds}, where only its owner may while they may decorate it, and bypass holders (questions
+   * 168).
+   */
+  public boolean mayBeIn(PlayerId player, CellRef ref) {
+    return ref.gallery().access(config.get().config()) != SeasonsConfig.CellAccess.BOUNDS
+        || canDecorate(player, ref)
+        || platform.permissions().has(player, BYPASS);
+  }
+
+  /** Where a player stands in a gallery outside its cells: its entry, else the Hall's. */
+  public Optional<Position> galleryEntry(Gallery gallery) {
+    return gallery
+        .entry()
+        .or(() ->
+            galleries().stream()
+                .filter(g -> g.kind() == Gallery.Kind.SEASON && g.entry().isPresent())
+                .max(Comparator.comparingInt(Gallery::season))
+                .flatMap(Gallery::entry))
+        .map(HallService::standOn);
+  }
+
   /** Where to send a player to their cell: its entry anchor, else in front of its figure. */
   public Optional<Position> arrival(CellRef ref) {
     Optional<Anchor> entry = ref.cell().anchor(AnchorType.ENTRY);
@@ -875,11 +898,15 @@ public final class HallService {
     return new CellDirectory() {
       @Override
       public Optional<Position> cell(PlayerId player, int season) {
-        Optional<Position> arrival = ensureCell(player, season).flatMap(HallService.this::arrival);
-        if (arrival.isPresent()) {
-          archived(player, season);
+        Optional<CellRef> cell = ensureCell(player, season);
+        Optional<Position> arrival = cell.flatMap(HallService.this::arrival);
+        if (arrival.isEmpty()) {
+          return arrival;
         }
-        return arrival;
+        archived(player, season);
+        // In a bounds gallery an owner whose cell is locked waits outside it.
+        CellRef ref = cell.get();
+        return mayBeIn(player, ref) ? arrival : galleryEntry(ref.gallery()).or(() -> arrival);
       }
     };
   }

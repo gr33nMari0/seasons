@@ -457,6 +457,76 @@ class HallVisitsTest {
     assertThat(sam).isNotNull();
   }
 
+  private static final Position CORRIDOR = Position.of(OVERWORLD, 2.5, 64, 2.5);
+
+  /** Makes the gallery's access bounds, by hand edit and reload, and gives Alex cell c1. */
+  private void boundsGallery() throws IOException {
+    Path file = dir.resolve("world/seasons/galleries/season-2.yml");
+    Files.writeString(file, Files.readString(file).replace("cells:", "access: bounds\ncells:"));
+    run("/season reload");
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell assign c1 Alex");
+  }
+
+  @Test
+  void aBoundsCellRefusesEveryoneButItsDecoratingOwner() throws IOException {
+    boundsGallery();
+    PlayerRef sam = join("Sam");
+    fake.player(sam).position = CORRIDOR;
+
+    assertThat(decide(new Intent.Move(sam.id(), CORRIDOR, INSIDE)))
+        .isInstanceOfSatisfying(
+            Decision.Deny.class,
+            deny ->
+                assertThat(deny.message().map(Messages::plain))
+                    .contains("Only its owner goes into that cell, while decorating it."));
+    assertThat(decide(new Intent.Teleport(sam.id(), CORRIDOR, INSIDE, Intent.TeleportKind.OTHER)))
+        .isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.Move(alex.id(), CORRIDOR, INSIDE)))
+        .as("the owner, before the window opens")
+        .isNotEqualTo(Decision.allow());
+    assertThat(decide(new Intent.Move(sam.id(), CORRIDOR, Position.of(OVERWORLD, 3.5, 64, 2.5))))
+        .as("the corridor is open")
+        .isEqualTo(Decision.allow());
+
+    run("/season decorate open");
+    assertThat(decide(new Intent.Move(alex.id(), CORRIDOR, INSIDE))).isEqualTo(Decision.allow());
+    assertThat(
+            decide(new Intent.Teleport(alex.id(), CORRIDOR, INSIDE, Intent.TeleportKind.SEASONS)))
+        .isEqualTo(Decision.allow());
+    assertThat(decide(new Intent.Move(sam.id(), CORRIDOR, INSIDE))).isNotEqualTo(Decision.allow());
+    fake.bypassing.add(sam.id());
+    assertThat(decide(new Intent.Move(sam.id(), CORRIDOR, INSIDE))).isEqualTo(Decision.allow());
+  }
+
+  @Test
+  void theSweepMovesAnyoneInsideABoundsCellToTheGalleryEntry() throws IOException {
+    boundsGallery();
+    run("/season decorate open");
+    fake.player(alex).position = INSIDE;
+    fake.tick();
+    assertThat(at(alex)).as("decorating their own cell").isEqualTo(INSIDE);
+
+    run("/season decorate close");
+    fake.tick();
+
+    assertThat(at(alex)).isEqualTo(ENTRY);
+    assertThat(lastHeard(alex))
+        .isEqualTo(
+            "Only its owner can be in that cell, while decorating it, so you're at the gallery"
+                + " entry.");
+  }
+
+  @Test
+  void hofToAPlayerInABoundsGalleryLandsAtTheGalleryEntry() throws IOException {
+    boundsGallery();
+    PlayerRef sam = join("Sam");
+    fake.player(sam).position = HOME;
+
+    hof(sam, "/hof Alex");
+
+    assertThat(at(sam)).isEqualTo(ENTRY);
+  }
+
   private void writeGallery() throws IOException {
     Path galleries = dir.resolve("world/seasons/galleries");
     Files.createDirectories(galleries);

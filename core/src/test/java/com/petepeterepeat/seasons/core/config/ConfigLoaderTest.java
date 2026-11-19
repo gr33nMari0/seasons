@@ -85,14 +85,15 @@ class ConfigLoaderTest {
 
   @Test
   void accessModesNotBuiltYetAreRefused() throws IOException {
-    write("config.yml", "schema-version: 1\ncells:\n  access: bounds\n");
+    write("config.yml", "schema-version: 1\ncells:\n  access: gate\n");
 
     ConfigLoader.Result result = loader(Map.of()).load();
 
     assertThat(result.snapshot()).isEmpty();
     assertThat(result.problems())
         .singleElement()
-        .satisfies(problem -> assertThat(problem.message()).startsWith("only open is built yet"));
+        .satisfies(problem ->
+            assertThat(problem.message()).startsWith("only open and bounds are built yet"));
   }
 
   @Test
