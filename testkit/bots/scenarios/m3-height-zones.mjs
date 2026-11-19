@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // `y-above` and `y-below` keep the rules of every other shape (A30, A35, A32). In the overworld a
-// sky zone from y -50 up and a floor zone from y -62 down: every route up into the sky is refused
-// and the player put back; nothing in either is built on or broken from outside; water poured
-// above a hole flows down into the hole as far as the floor zone and no further. In the Nether the
-// roof is left open with `y-below 127` in place of a cylinder's --max-y: walking and building at
-// y 128, refused below.
+// sky zone from y -50 up and a floor zone from y -62 down: every route up into the sky (walking,
+// an elytra, riding, chorus fruit, a portal) and a pearl down into the floor zone are refused and
+// the player put back; nothing in either is built on or broken from outside; water poured above a
+// hole flows down into the hole as far as the floor zone and no further. In the Nether the roof
+// is left open with `y-below 127` in place of a cylinder's --max-y: walking and building at y 128,
+// refused below.
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
-import { middle, move, near, standAt } from '../lib/visits.mjs'
+import { middle, move, near, pearl, standAt } from '../lib/visits.mjs'
 import { EDGE, LOCKED, SPAWN, breakBlock, chorus, forceload, launchFrontier, place, portal, ride } from '../lib/zones.mjs'
 
 const SKY = -50
@@ -31,7 +32,8 @@ export default {
     const up = { x: SPAWN.x + 14, y: SKY + 3, z: SPAWN.z }
     const routes = [
       ['walking', () => move(ctx, admin, 'Pat', middle(up), 'walk')],
-      ['flying', () => move(ctx, admin, 'Pat', middle(up), 'fly')],
+      // 'fly' is an elytra flight: the test plugin puts one on and sets the player gliding.
+      ['an elytra', () => move(ctx, admin, 'Pat', middle(up), 'fly')],
       ['riding', () => ride(ctx, admin, 'Pat', middle(up))],
       ['chorus fruit', () => chorus(ctx, admin, 'Pat', middle(up))],
       ['a portal', () => portal(ctx, admin, 'Pat', 'minecraft:overworld', middle(up))]
@@ -45,7 +47,20 @@ export default {
       const at = await ctx.position(admin, 'Pat')
       assert(at.y < SKY && near(at, middle(from), 2), `${route}: Pat is back below the sky, at ${JSON.stringify(at)}`)
       assert(await ctx.entityData(admin, 'Pat', 'RootVehicle') === null, `${route}: not riding anything`)
+      assert(await ctx.entityData(admin, 'Pat', 'FallFlying') !== '1b', `${route}: not gliding`)
     }
+    // A pearl can't climb into the sky (a thrown pearl rises a block or two), so it goes the other
+    // way: thrown into a pit dug through the floor zone, it lands there and the trip is refused.
+    await ctx.command(admin, `/fill ${from.x + 2} ${DEEP - 1} ${from.z - 3} ${from.x + 9} ${FLOOR - 1} ${from.z + 3} minecraft:air`, /^Successfully filled /)
+    await standAt(ctx, admin, 'Pat', from)
+    const pearled = ctx.waitForMessages(pat, LOCKED('deep'), 10 * SECOND, 'the pearl refusal')
+    await pearl(ctx, admin, 'Pat', { x: from.x + 4, y: DEEP, z: from.z })
+    await pearled
+    await ctx.sync(admin, [pat], 20)
+    const landed = await ctx.position(admin, 'Pat')
+    assert(landed.y > DEEP && near(landed, middle(from), 2), `a pearl: Pat is back above the floor zone, at ${JSON.stringify(landed)}`)
+    await ctx.command(admin, `/fill ${from.x + 2} ${DEEP - 1} ${from.z - 3} ${from.x + 9} ${FLOOR - 1} ${from.z + 3} minecraft:dirt`, /^Successfully filled /)
+
     // Just under it, a player is free.
     const notStopped = ctx.quiet(pat, LOCKED('sky'))
     await move(ctx, admin, 'Pat', middle({ ...from, y: SKY - 2 }), 'fly')

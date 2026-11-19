@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // An `outside` zone keeps the rules of every other shape (A30, A35): a frontier circle around the
 // spawn, where everything beyond the circle is locked. Every route across its edge is refused and
-// the player put back; nothing beyond it is touched from inside, and water doesn't flow across,
-// with a control that does flow inside; a long flight inside the circle isn't stopped; a player
-// who logs in beyond it is sent to the spawn. An `outside box` around it locks what lies beyond
+// the player put back; nothing beyond it is broken, built on, opened or bucketed from inside, and
+// water doesn't flow across, with a control that does flow inside; a long flight inside the circle
+// isn't stopped; a player who logs in beyond it is sent to the spawn. An `outside box` around it locks what lies beyond
 // the box once the circle is unlocked on its own, and Homecoming opens both (A33).
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { middle, move, near, standAt } from '../lib/visits.mjs'
-import { EDGE, LOCKED, SPAWN, breakBlock, expectEveryRouteRefused, forceload, inCircle, launchFrontier, outsideCircle, place } from '../lib/zones.mjs'
+import { openContainer } from '../lib/protection.mjs'
+import { EDGE, LOCKED, SPAWN, breakBlock, bucket, expectEveryRouteRefused, forceload, inCircle, launchFrontier, outsideCircle, place } from '../lib/zones.mjs'
 
 const RADIUS = 40
 const inside = (at) => inCircle(SPAWN, RADIUS, at)
@@ -46,12 +47,15 @@ export default {
     const is = (x, y, z, block) => ctx.holds(admin, `block ${x} ${y} ${z} ${block}`)
     const x = SPAWN.x
     await setblock(x + 41, FLOOR, 0, 'minecraft:stone')
+    await setblock(x + 41, FLOOR, -2, 'minecraft:chest[facing=west]{Items:[{Slot:0b,id:"minecraft:diamond",count:5}]}')
     await standAt(ctx, admin, 'Pat', { x: x + 39, y: FLOOR, z: 0 })
-    const told = ctx.waitForMessages(pat, [EDGE('frontier'), EDGE('frontier')], 10 * SECOND)
+    const told = ctx.waitForMessages(pat, [EDGE('frontier'), EDGE('frontier'), EDGE('frontier'), EDGE('frontier')], 10 * SECOND)
     assert(!await breakBlock(ctx, admin, 'Pat', { x: x + 41, y: FLOOR, z: 0 }), 'breaking beyond the edge is refused')
     assert(!await place(ctx, admin, 'Pat', { x: x + 41, y: FLOOR, z: 1 }, 'minecraft:stone'), 'placing beyond the edge is refused')
+    assert(await openContainer(ctx, admin, 'Pat', { x: x + 41, y: FLOOR, z: -2 }) === 'nothing', 'the chest beyond the edge doesn\'t open')
+    assert(!await bucket(ctx, admin, 'Pat', { x: x + 41, y: FLOOR, z: 3 }, 'water'), 'a bucket beyond the edge is refused')
     await told
-    assert(await is(x + 41, FLOOR, 0, 'minecraft:stone') && await is(x + 41, FLOOR, 1, 'minecraft:air'), 'nothing beyond changed')
+    assert(await is(x + 41, FLOOR, 0, 'minecraft:stone') && await is(x + 41, FLOOR, 1, 'minecraft:air') && await is(x + 41, FLOOR, 3, 'minecraft:air'), 'nothing beyond changed')
     assert(await place(ctx, admin, 'Pat', { x: x + 38, y: FLOOR, z: 2 }, 'minecraft:stone'), 'placing inside is fine')
 
     // Water just inside the edge spreads inside, and not across it.
