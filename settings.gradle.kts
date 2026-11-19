@@ -4,6 +4,9 @@ rootProject.name = "seasons"
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        // The portal answers for plugins' own dependencies by proxying Maven Central, and that
+        // proxy sometimes answers 404 (a CI shard failed so); Central itself is the fallback.
+        mavenCentral()
     }
 }
 
