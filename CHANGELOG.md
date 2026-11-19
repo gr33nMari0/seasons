@@ -4,7 +4,18 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] - 2026-11-20
+
 ### Added
+
+- Finishing M0 to M3 (#19). A gallery file may set its own `assignment`, `access`, `renderer` and `decorating` (`lockAtEnd`, `afterArchive`); whatever it leaves out comes from `config.yml`.
+- Access mode `bounds`: only a cell's owner, while they may decorate it, goes into the cell, by any route; anyone else found inside goes to the gallery's entry, and `/hof <player>` lands there. Refusals are audited.
+- Access mode `gate`: a cell's two gate anchors mark a plane that is `cells.gateBlock` (default `iron_bars`) while the cell is locked and air while its owner may decorate it, each change journalled (`GATE_SET`) first. A gate is never set over a block with contents or over an anchor, and one that doesn't stay set is left alone and admins are told.
+- `/hof claim [cell]` and `claim` assignment: during the window, a player who played the season claims a free cell by name or by standing in it; anyone who never claims gets a free cell when archived. Claims are audited.
+- The armour-stand figure (`renderer: armour-stand`, or a platform without mannequins): arms, every slot locked, the player's head in the archived skin, the helmet on a trophy anchor. A cell may set its figure's `pose`.
+- The launch button: `/hof gallery launch <gallery> [at|none]`; an admin presses it twice within 10 seconds during the Intermission to launch.
+- `/season audit [player]` shows the last 10 audit entries; `/season info` shows the player's archive status.
+- `config.yml` must name items the server knows, and a gate block that is solid, doesn't fall and holds nothing.
 
 - More zone shapes (M3 part 4): `outside` (everything beyond a circle or a box, at every height), `y-above` and `y-below` (everything from a height up, or up to it, across the whole dimension), in season files and by `/season zone add <id> outside circle <radius>` (centred where the admin stands), `outside box <x1> <z1> <x2> <z2>`, `y-above <y>` and `y-below <y>`. They keep every rule box and cylinder zones have: entry by any route, the edge, the sweep and portals. The spawn and every spawn candidate must sit outside every zone, which for an `outside` zone means inside its circle or box. Season files naming these shapes are no longer refused.
 - On BlueMap an `outside` zone is shown as a ring around its circle or box, reaching `max(2 × radius, 5000)` blocks beyond it, with the circle or box cut out; `y-above` and `y-below` zones aren't shown, since they would cover the whole map. Map Link copies BlueMap's areas onto Xaero's maps, but leaves out any larger than its `maxChunkArea` (questions 164).
@@ -74,4 +85,5 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 - A zone, spawn, spawn candidate or waypoint edit by command that doesn't take (the files then fail to load, say because of another file's unreloaded hand edit) puts its file back as it was, so it never takes effect later unaudited, and the admin hears the reason worded as `/season reload` words it.
 - `/season unarchive` restores a sealed ender chest from its vault page as it is now, so nothing withdrawn since comes back twice, and holds the player from before it reads the page, so no withdrawal can slip in between.
-- `cells.access` values `bounds` and `gate` are refused on load until they are built, rather than running as `open`.
+- `launch.requireManual: false` is refused on load, since nothing launches by itself: launch is by `/season launch` or the launch button.
+- A player who logs in inside a blocked zone goes to the season spawn; where they last stood outside every blocked zone is kept in their record.
