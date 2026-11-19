@@ -144,6 +144,9 @@ import org.bukkit.util.Vector;
  *   <li>{@code sync <id> [ticks] [player...]} answers {@code Synced <id>} once the current tick (or
  *       that many more) has finished, to the sender and to each player named, so anything sent to
  *       them before has arrived when they read it
+ *   <li>{@code bluemap} prints every marker in Seasons' marker sets on every BlueMap map, read
+ *       through BlueMap's API, on a scenario server that has BlueMap (docs/adr/0004); see {@link
+ *       ScenarioBlueMap}
  * </ul>
  */
 final class ScenarioCommands implements BasicCommand, Listener {
@@ -278,12 +281,20 @@ final class ScenarioCommands implements BasicCommand, Listener {
               "Clock " + now + " offset " + Duration.between(Instant.now(), now).toMillis());
         }
         case "sync" -> sync(sender, args);
+        case "bluemap" -> {
+          // BlueMap's classes are there only when it is installed.
+          if (plugin.getServer().getPluginManager().getPlugin("BlueMap") == null) {
+            sender.sendMessage(ScenarioBlueMap.OFF);
+          } else {
+            ScenarioBlueMap.print(sender, plugin.getServer());
+          }
+        }
         default ->
             sender.sendMessage(
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
                     + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
-                    + "|reset|clock|sync ...");
+                    + "|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);

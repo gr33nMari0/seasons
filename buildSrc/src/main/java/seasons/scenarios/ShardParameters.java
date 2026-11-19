@@ -5,6 +5,7 @@ import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.ListProperty;
+import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.workers.WorkParameters;
 
@@ -20,6 +21,15 @@ public interface ShardParameters extends WorkParameters {
 
   ConfigurableFileCollection getPluginJars();
 
+  /**
+   * Plugins only the scenarios that ask for them get ({@code // @plugins <name>}), by name: the
+   * path of each one's jar (docs/adr/0004).
+   */
+  MapProperty<String, String> getOptionalPlugins();
+
+  /** Where optional plugins keep what they download, between runs. */
+  DirectoryProperty getPluginData();
+
   /** The shard's own server folder. */
   DirectoryProperty getRunDirectory();
 
@@ -33,7 +43,10 @@ public interface ShardParameters extends WorkParameters {
   /** JVM arguments every boot gets, before the per-boot ones. */
   ListProperty<String> getJvmArgs();
 
-  /** The steps in order, each {@code name:session:sessions:isolated}. */
+  /**
+   * The steps in order, each {@code name:session:sessions:isolated:plugins}, the optional plugins
+   * joined by {@code +}.
+   */
   ListProperty<String> getSteps();
 
   /** False runs every scenario on a fresh server, as {@code -PscenarioIsolation=fresh}. */
