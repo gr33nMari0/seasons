@@ -38,7 +38,10 @@ export default {
     await pet(ctx, admin, 'cat', 'boaty', beside(0, -2), 'Pat', { name: 'Boaty' })
     await register(ctx, admin, pat, 'boaty', /^Registered Boaty /)
     await summon(ctx, admin, 'oak_boat', 'boat', beside(0, -3))
-    await ctx.command(admin, '/ride @e[tag=boaty,limit=1] mount @e[tag=boat,limit=1]', /started riding/)
+    // A boat summoned beside an animal can pick it up by itself, which is as good.
+    await ctx.command(admin, '/ride @e[tag=boaty,limit=1] mount @e[tag=boat,limit=1]', /(started riding|is already riding)/)
+    const seated = await ctx.command(admin, '/execute as @e[tag=boat,limit=1] on passengers if entity @s[tag=boaty]', /^Test (passed|failed)/)
+    assert(seated.startsWith('Test passed'), 'Boaty sits in the boat')
 
     // Inside sits in the base, which launch locks.
     await drawBase(ctx, admin)
