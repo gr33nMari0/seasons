@@ -6,6 +6,7 @@
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, buildGallery, use } from '../lib/hall.mjs'
 import { audit } from '../lib/protection.mjs'
+import { permit } from '../lib/zones.mjs'
 
 const BUTTON = { x: 30, y: FLOOR, z: 21 }
 const SPAWN = { x: 2000, y: FLOOR, z: -1500 }
@@ -28,9 +29,12 @@ export default {
 
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
     await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
+    // Between seasons the Hall sends anyone who leaves it back to its entry; the admin holds the
+    // bypass to stand outside and set the spawn.
+    await permit(ctx, admin, 'SeasonsAdmin', 'seasons.hof.bypass')
     await ctx.command(admin, `/tp SeasonsAdmin ${SPAWN.x} ${SPAWN.y} ${SPAWN.z}`, /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === SPAWN.x, 'admin moved'))
-    await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now /)
+    await ctx.command(admin, '/season spawn set', new RegExp(`^Season 3's spawn is now ${SPAWN.x}, ${SPAWN.y}, ${SPAWN.z} `))
 
     // Not an admin: refused and audited.
     told = ctx.waitForMessages(sam, /^Only an admin can launch the next season\.$/)
