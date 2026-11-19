@@ -17,3 +17,4 @@ M3 part 3 publishes a `Seasons` marker set to BlueMap through its API, and publi
 - `m3-bluemap` checks the marker set on a real BlueMap, its reload included. Every other scenario runs without BlueMap, so the suite as a whole shows Seasons runs without it.
 - That scenario downloads the game's client jar from Mojang the first time it runs on a machine (each CI shard job that gets it), so it needs network access to Mojang as well as to Modrinth.
 - A BlueMap update is a version bump in `libs.versions.toml`; `m3-bluemap` fails if the API it bundles lacks a call Seasons makes.
+- Map Link (thebuildcraft/MapLink), the client mod that puts BlueMap's markers on players' Xaero maps, reads them from BlueMap's web map (`maps/<map>/live/markers.json`), not its API. The scenario server runs BlueMap with no web server, so `m3-bluemap` shows what BlueMap holds, not what its web map serves; what Map Link then draws, and its `maxChunkArea` limit, are in `docs/questions.md` 164.
