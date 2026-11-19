@@ -9,7 +9,6 @@ import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
-import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.ProgressBar;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
@@ -257,23 +256,6 @@ public final class SeasonService {
       launchAfterSave();
     }
     return transition;
-  }
-
-  /**
-   * {@code /season spawn set}: the next season's spawn, written to its season file. Completes with
-   * that season's number once the file is on disk.
-   */
-  public CompletableFuture<Integer> setNextSpawn(Position spawn) {
-    if (state.isEmpty()) {
-      return CompletableFuture.failedFuture(new IllegalStateException("no season is recorded"));
-    }
-    int next = state.get().season() + 1;
-    Path file = seasonFile(next);
-    Path backups = backupsDirectory.resolve("seasons");
-    return writer.submit(() -> {
-      SeasonFiles.writeSpawn(file, backups, next, spawn);
-      return next;
-    });
   }
 
   /** {@code /season cancel}. */

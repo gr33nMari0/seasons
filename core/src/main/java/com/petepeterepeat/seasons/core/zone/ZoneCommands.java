@@ -1,35 +1,31 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.zone;
 
-import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.SeasonFiles;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
-import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.Transition;
-import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * {@code /season zone}, {@code /season unlock} and {@code /season lock}. Zone edits go to the
- * season file zone commands edit (see {@link Zones#editingSeason}), then every file is loaded again
- * so the edit is in force at once, as {@code /season spawn set} does. Every edit that takes is
- * audited as a config change: the path, the old value, the new one and who.
+ * season file zone commands edit (see {@link Zones#editingSeason}) through {@link ConfigEdits}, so
+ * the edit is in force at once and audited as a config change: the path, the old value, the new one
+ * and who.
  */
 public final class ZoneCommands {
   /** Permission for the zone commands, with the other config commands. */
@@ -38,16 +34,14 @@ public final class ZoneCommands {
   /** Permission for unlocking and locking, with the other season commands. */
   public static final String PERMISSION_SEASON = "seasons.admin.season";
 
-  private static final Logger LOG = LoggerFactory.getLogger(ZoneCommands.class);
   private static final String OVERWORLD = "minecraft:overworld";
 
   private final Platform platform;
   private final ConfigHolder config;
   private final ConfigLoader loader;
-  private final SerialWriter writer;
+  private final ConfigEdits edits;
   private final SeasonService seasons;
   private final Zones zones;
-  private final AuditLog audit;
   private final Path backups;
 
   /**
@@ -57,18 +51,16 @@ public final class ZoneCommands {
       Platform platform,
       ConfigHolder config,
       ConfigLoader loader,
-      SerialWriter writer,
+      ConfigEdits edits,
       SeasonService seasons,
       Zones zones,
-      AuditLog audit,
       Path backups) {
     this.platform = platform;
     this.config = config;
     this.loader = loader;
-    this.writer = writer;
+    this.edits = edits;
     this.seasons = seasons;
     this.zones = zones;
-    this.audit = audit;
     this.backups = backups;
   }
 
@@ -165,6 +157,25 @@ public final class ZoneCommands {
               "zone.around-spawn",
               "season",
               Integer.toString(season.getAsInt()),
+              "x",
+              Integer.toString(at.blockX()),
+              "y",
+              Integer.toString(at.blockY()),
+              "z",
+              Integer.toString(at.blockZ())));
+      return;
+    }
+    Optional<Map.Entry<String, Position>> candidate =
+        file(season.getAsInt()).flatMap(f -> f.candidateIn(zone));
+    if (candidate.isPresent()) {
+      Position at = candidate.get().getValue();
+      source.reply(
+          messages.get(
+              "zone.around-candidate",
+              "season",
+              Integer.toString(season.getAsInt()),
+              "name",
+              candidate.get().getKey(),
               "x",
               Integer.toString(at.blockX()),
               "y",
@@ -409,55 +420,24 @@ public final class ZoneCommands {
   private record Change(String path, String before, String after) {}
 
   /** The value of a key that isn't there, before an add or after a remove. */
-  private static final String NONE = "none";
+  private static final String NONE = ConfigEdits.NONE;
 
-  /**
-   * Writes a season file on the writer thread, loads every file again and swaps them in, then
-   * audits the change.
-   */
+  /** Writes a season file, then loads every file again and swaps them in, and audits the change. */
   private void edit(CommandSource source, int season, Change change, FileEdit edit, Runnable done) {
     Path file = loader.seasonFile(season);
-    var _ =
-        writer
-            .submit(() -> {
-              edit.apply(file);
-              return loader.load();
-            })
-            .whenComplete((result, failure) ->
-                platform
-                    .scheduler()
-                    .runGlobal(() -> {
-                      if (failure != null || result.snapshot().isEmpty()) {
-                        String error =
-                            failure != null
-                                ? String.valueOf(failure.getMessage())
-                                : result.problems().stream()
-                                    .map(Object::toString)
-                                    .findFirst()
-                                    .orElse("?");
-                        LOG.error("A zone edit to {} failed: {}", file, error, failure);
-                        source.reply(messages().get("zone.failed", "error", error));
-                        return;
-                      }
-                      config.set(result.snapshot().get());
-                      seasons.reloaded(result.snapshot().get());
-                      audit.record(
-                          actor(source),
-                          "config",
-                          "seasons/" + season + ".yml " + change.path(),
-                          "ok",
-                          change.before() + " -> " + change.after());
-                      done.run();
-                    }));
+    edits.edit(
+        source,
+        new ConfigEdits.Change(
+            "seasons/" + season + ".yml " + change.path(), change.before(), change.after()),
+        file,
+        () -> edit.apply(file),
+        "zone.failed",
+        done);
   }
 
   /** Who ran a command, as the audit log names them. */
   private String actor(CommandSource source) {
-    return source
-        .player()
-        .flatMap(id -> platform.players().find(id))
-        .map(PlayerRef::name)
-        .orElse(messages().text("config.console-name"));
+    return edits.actor(source);
   }
 
   /** A zone in one line, for the audit log. */

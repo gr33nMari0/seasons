@@ -42,12 +42,16 @@ status:
   unreadable: "<red>season.json can't be read: <error></red>"
   capabilities-ok: "<green>The <platform> adapter supports everything Seasons uses.</green>"
   capability-gap: "<yellow>Not available on <platform>: <capability></yellow>"
+  map-none: "<gray>BlueMap isn't installed, so no map markers are published.</gray>"
+  map-waiting: "<yellow>BlueMap is installed but hasn't started yet; the map markers go up once it has.</yellow>"
+  map-published: "<gray>BlueMap: <markers> markers on <maps> maps.</gray>"
   players: "<gray>Players: <archived> archived into Season <season>, <waiting> still to archive at login</gray>"
   pets: "<gray>Pets: <count> waiting to travel</gray>"
   furthest: "<gray>Furthest block from 0,0 this season: <distance> blocks, by <name> at <x>, <z></gray>"
   no-furthest: "<gray>No block placed yet this season.</gray>"
   recovery-failed: "<red>Recovery of <name>'s Season <season> archive stopped: <reason>. Fix it, then run /season reprocess <name>.</red>"
   gallery-left-out: "<red>Gallery <gallery> couldn't be loaded at startup, so it is left out, and /season end and /season launch are refused until it is fixed and /season reload succeeds:</red> <problem>"
+  markers-left-out: "<red>markers.yml couldn't be loaded at startup, so it is left out and no shared waypoints are shown until it is fixed and /season reload succeeds:</red> <problem>"
 
 info:
   season: "<gray>Season</gray> <white><season></white>"
@@ -96,6 +100,7 @@ end:
     no-players: "<gray>Nobody is online to archive; players catch up when they next log in.</gray>"
     next: "<gray>Then Season <season> would move to the Intermission.</gray>"
     spawn-in-zone: "<red>Season <next>'s spawn at <x>, <y>, <z> is inside zone <zone>. /season launch is refused until it moves.</red>"
+    spawn-far: "<yellow>Season <next>'s spawn at <x>, <y>, <z> is <distance> blocks from 0, 0, beyond 24,000: strongholds may be out of reach.</yellow>"
     refused: "<red>/season end would be refused:</red> <reason>"
 
 cancel:
@@ -124,8 +129,24 @@ launch:
 
 spawn:
   set: "<green>Season <season>'s spawn is now <x>, <y>, <z> in <dimension>.</green>"
-  player-only: "<red>Stand where the spawn should be and run this in game.</red>"
+  set-candidate: "<green>Season <season>'s spawn is now candidate <name>: <x>, <y>, <z> in <dimension>.</green>"
+  player-only: "<red>Stand where the spawn should be and run this in game, or name a spawn candidate.</red>"
   failed: "<red>The spawn wasn't saved: <error>. See the server log.</red>"
+  far: "<yellow>That's <distance> blocks from 0, 0, beyond 24,000: strongholds may be out of reach.</yellow>"
+  candidate:
+    added: "<green>Added spawn candidate <name> for Season <season> at <x>, <y>, <z> in <dimension>.</green>"
+    removed: "<green>Removed spawn candidate <name> from Season <season>.</green>"
+    exists: "<red>Season <season> already has a spawn candidate called <name>.</red>"
+    unknown: "<red>Season <season> has no spawn candidate called <name>.</red>"
+    bad-name: "<red>Candidate names are lower-case letters, digits and dashes, up to 32, such as north-mesa.</red>"
+    player-only: "<red>Stand where the candidate is and run this in game.</red>"
+    inside: "<red>Season <season>'s spawn candidates can't be inside zone <zone>; every candidate must stay outside every zone.</red>"
+    none: "<gray>Season <season> has no spawn candidates yet. Stand at one and run /season spawn candidate add with its name.</gray>"
+    header: "<gold>Season <season>'s spawn candidates:</gold>"
+    line: "<gray>- <name>: <x>, <y>, <z> in <dimension>, <distance> blocks from 0, 0<notes></gray>"
+    the-spawn: " (the spawn)"
+    beyond: " (beyond 24,000)"
+    failed: "<red>The spawn candidate wasn't saved: <error>. See the server log.</red>"
 
 archive:
   done: "<gold>Your Season <season> is archived in the Hall of Fame.</gold>"
@@ -359,6 +380,7 @@ zone:
   player-only: "<red>Stand at the zone's centre and run this in game.</red>"
   around-spawn: "<red>That zone would hold Season <season>'s spawn at <x>, <y>, <z>; the spawn must stay outside every zone.</red>"
   spawn-inside: "<red>Season <season>'s spawn can't be inside zone <zone>; the spawn must stay outside every zone.</red>"
+  around-candidate: "<red>That zone would hold Season <season>'s spawn candidate <name> at <x>, <y>, <z>; every candidate must stay outside every zone.</red>"
   unknown: "<red>There's no zone called <id>.</red>"
   bad-mode: "<red>A zone's mode is off, announce, block or no-build.</red>"
   bad-after: "<red>A zone becomes off or no-build once it unlocks.</red>"
@@ -402,7 +424,7 @@ zone:
     box: "a box from <x1>, <y1>, <z1> to <x2>, <y2>, <z2>"
 
 config:
-  reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml, the season files and the galleries.</green>"
+  reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml, the season files, the galleries and the waypoints.</green>"
   reload-failed: "<red>Reload failed. The previous config stays live.</red>"
   reload-failed-by: "<red><name> ran /season reload and it failed. The previous config stays live.</red>"
   reload-error: "<red>Reload failed: <error>. See the server log.</red>"
@@ -413,6 +435,29 @@ config:
   problem-line: "<red><file>, line <line>, column <column>:</red> <message>"
   problem-path: "<red><file>, at <path>:</red> <message>"
   problem-file: "<red><file>:</red> <message>"
+
+# Labels on the web map, such as BlueMap: plain text, with any formatting tags left out.
+map:
+  set: "Seasons"
+  spawn: "Season <season> spawn"
+  candidate: "Spawn candidate: <name>"
+  hall: "Hall of Fame"
+  museum: "Museum"
+  locked: "<zone>: locked until <until>"
+  no-build: "<zone>: no building"
+  announce: "<zone>: entries announced until <until>"
+
+marker:
+  added: "<green>Added waypoint <name> to <set> at <x>, <y>, <z> in <dimension>.</green>"
+  no-map: "<gray>BlueMap isn't installed, so it shows once BlueMap is.</gray>"
+  removed: "<green>Removed waypoint <name> from <set>.</green>"
+  exists: "<red><set> already has a waypoint called <name>.</red>"
+  unknown: "<red><set> has no waypoint called <name>.</red>"
+  bad-set: "<red>Waypoint sets are lower-case letters, digits and dashes, up to 32, such as megaprojects.</red>"
+  bad-name: "<red>Waypoint names are 1 to 64 characters.</red>"
+  player-only: "<red>Stand where the waypoint goes and run this in game.</red>"
+  left-out: "<red>markers.yml failed to load at startup, so the waypoints can't be changed by command. Fix the file and run /season reload.</red>"
+  failed: "<red>The waypoint wasn't saved: <error>. See the server log.</red>"
 
 vault:
   player-only: "<red>Only players have an ender vault.</red>"

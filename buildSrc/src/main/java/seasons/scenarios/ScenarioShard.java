@@ -36,11 +36,22 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
   private static final Duration PER_STEP = Duration.ofMinutes(3);
   private static final Duration HALT_RESULTS = Duration.ofSeconds(60);
 
-  private record Step(String name, int session, int sessions, boolean isolated) {
+  /**
+   * @param plugins the optional plugins its server gets as well ({@code // @plugins}); a scenario
+   *     with any is isolated
+   */
+  private record Step(
+      String name, int session, int sessions, boolean isolated, List<String> plugins) {
     static Step parse(String text) {
       String[] parts = text.split(":", -1);
+      List<String> plugins =
+          parts.length > 4 && !parts[4].isEmpty() ? List.of(parts[4].split("\\+")) : List.of();
       return new Step(
-          parts[0], Integer.parseInt(parts[1]), Integer.parseInt(parts[2]), parts[3].equals("1"));
+          parts[0],
+          Integer.parseInt(parts[1]),
+          Integer.parseInt(parts[2]),
+          parts[3].equals("1"),
+          plugins);
     }
 
     String label() {
@@ -218,6 +229,17 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
     for (File plugin : p.getPluginJars().getFiles()) {
       command.add("-add-plugin=" + plugin.getAbsolutePath());
     }
+    List<String> optional = segment.getFirst().plugins();
+    for (String name : optional) {
+      String jar = p.getOptionalPlugins().get().get(name);
+      if (jar == null) {
+        throw new IllegalStateException("No jar for the optional plugin " + name);
+      }
+      command.add("-add-plugin=" + jar);
+    }
+    if (optional.contains("bluemap")) {
+      configureBlueMap(run, p.getPluginData().get().getAsFile().toPath().resolve("bluemap"));
+    }
     LOG.info("[shard {}] {}", shard, String.join(" ", command));
     Duration limit = BOOT_ALLOWANCE.plus(PER_STEP.multipliedBy(segment.size()));
     try {
@@ -285,6 +307,38 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
     }
   }
 
+  /**
+   * BlueMap's settings for a scenario server (docs/adr/0004): it may download the game's client
+   * jar, which it needs before its API starts, into a folder kept between runs; no web server or
+   * web app, which the scenarios don't use and which would clash between shards; no metrics, no
+   * skin downloads; one render thread.
+   */
+  private static void configureBlueMap(Path run, Path data) {
+    Path config = run.resolve("plugins/BlueMap");
+    deleteTree(config);
+    deleteTree(run.resolve("bluemap"));
+    mkdirs(config);
+    mkdirs(data);
+    try {
+      Files.writeString(
+          config.resolve("core.conf"),
+          """
+          # Written by the scenario shard; never ships.
+          accept-download: true
+          data: "%s"
+          render-thread-count: 1
+          scan-for-mod-resources: false
+          metrics: false
+          """
+              .formatted(data.toAbsolutePath().toString().replace("\\", "/")));
+      Files.writeString(config.resolve("webserver.conf"), "enabled: false\n");
+      Files.writeString(config.resolve("webapp.conf"), "enabled: false\n");
+      Files.writeString(config.resolve("plugin.conf"), "skin-download: false\n");
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
   /** A fresh world and fresh Seasons files; Paper's own files and caches are kept. */
   private static void wipeWorld(Path run, Path state) {
     if (Files.isDirectory(run)) {
@@ -305,6 +359,9 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
       }
     }
     deleteTree(run.resolve("plugins/Seasons"));
+    // An optional plugin's files, which the next boot may not have it for.
+    deleteTree(run.resolve("plugins/BlueMap"));
+    deleteTree(run.resolve("bluemap"));
     deleteTree(state);
   }
 

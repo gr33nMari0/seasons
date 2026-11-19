@@ -21,6 +21,7 @@ base.archivesName = "seasons-testkit"
 dependencies {
     compileOnly(libs.paper.api)
     compileOnly(project(":adapters:paper", "shadowRuntimeElements"))
+    compileOnly(libs.bluemap.api)
     testImplementation("org.junit.jupiter:junit-jupiter-params")
 }
 
@@ -51,11 +52,13 @@ val installBots = tasks.register<Exec>("installBots") {
 
 // The scenarios, from their files. Header lines: "// @sessions <n>" restarts the server between
 // sessions on the same world; "// @isolated <reason>" gives the scenario a fresh server of its own
-// instead of sharing one (docs/adr/0003).
-data class Scenario(val name: String, val sessions: Int, val isolated: Boolean)
+// instead of sharing one (docs/adr/0003); "// @plugins <name>..." gives it a fresh server of its
+// own with those plugins installed as well, from optionalPlugins below (docs/adr/0004).
+data class Scenario(val name: String, val sessions: Int, val isolated: Boolean, val plugins: List<String>)
 
 val sessionsHeader = Regex("""^// @sessions (\d+)$""", RegexOption.MULTILINE)
 val isolatedHeader = Regex("""^// @isolated \S.*$""", RegexOption.MULTILINE)
+val pluginsHeader = Regex("""^// @plugins (\S.*)$""", RegexOption.MULTILINE)
 val allScenarios =
     botsDir.dir("scenarios").asFile
         .listFiles { f -> f.name.endsWith(".mjs") }!!
@@ -63,7 +66,8 @@ val allScenarios =
         .map { f ->
             val text = f.readText()
             val sessions = sessionsHeader.find(text)?.groupValues?.get(1)?.toInt() ?: 1
-            Scenario(f.nameWithoutExtension, sessions, isolatedHeader.containsMatchIn(text))
+            val plugins = pluginsHeader.find(text)?.groupValues?.get(1)?.trim()?.split(Regex("\\s+")) ?: emptyList()
+            Scenario(f.nameWithoutExtension, sessions, isolatedHeader.containsMatchIn(text) || plugins.isNotEmpty(), plugins)
         }
 
 // -Pscenarios=a33-homecoming,m3-* runs just those; * matches anything.
@@ -138,6 +142,24 @@ val scenarioPaper = tasks.register<RunServer>("scenarioPaper") {
     }
 }
 
+// Plugins a scenario asks for with "// @plugins <name>", installed only on its own server and
+// downloaded only when a selected scenario asks for them (docs/adr/0004).
+val optionalPlugins = mapOf(
+    "bluemap" to tasks.register<RunServer>("scenarioBlueMap") {
+        group = "verification"
+        description = "Runs a plain Paper server with BlueMap; the scenarios that ask for BlueMap use its jar."
+        minecraftVersion(minecraftVersions.last())
+        runDirectory(layout.buildDirectory.dir("scenario/bluemap").get().asFile)
+        downloadPlugins {
+            modrinth("bluemap", libs.versions.bluemap.plugin.get())
+        }
+    },
+)
+check(allScenarios.all { s -> optionalPlugins.keys.containsAll(s.plugins) }) {
+    "A scenario asks for a plugin optionalPlugins doesn't have: " +
+        allScenarios.filterNot { s -> optionalPlugins.keys.containsAll(s.plugins) }.joinToString { "${it.name} ${it.plugins}" }
+}
+
 // Webhook URLs must be https, in tests too. The scenario servers trust a self-signed certificate
 // made here, and the bot runner serves the webhook receiver with it.
 val tlsDir = layout.buildDirectory.dir("scenario-tls")
@@ -209,6 +231,12 @@ val scenarioRuns = minecraftVersions.map { version ->
                 .resolveBuild(progress, version, DownloadsAPIService.Build.Latest)
             val template = scenarioPaper.get()
             val via = template.downloadPlugins.downloads.map { template.pluginDownloadService.get().resolvePlugin(progress, it) }
+            val optional = optionalPlugins
+                .filterKeys { name -> selectedScenarios.any { name in it.plugins } }
+                .mapValues { (_, task) ->
+                    val t = task.get()
+                    t.downloadPlugins.downloads.map { t.pluginDownloadService.get().resolvePlugin(progress, it) }.single().toString()
+                }
             val java = javaLauncher.get().executablePath.asFile.path
             // Paperclip unpacks Paper and its libraries once, into a folder every shard shares.
             val bundler = bundlerDir.get().asFile
@@ -236,6 +264,9 @@ val scenarioRuns = minecraftVersions.map { version ->
                     this.java.set(java)
                     this.paperJar.set(paperJar.toFile())
                     this.pluginJars.from(pluginJars, via.map { it.toFile() })
+                    this.optionalPlugins.set(optional)
+                    // Kept between runs, such as the game's client jar BlueMap downloads.
+                    pluginData.set(layout.buildDirectory.dir("scenario/$version/plugin-data"))
                     runDirectory.set(layout.buildDirectory.dir("scenario/$version/shard-$k"))
                     outputDirectory.set(File(out, "shard-$k"))
                     serverPort.set(25700 + 10 * k)
@@ -261,7 +292,7 @@ val scenarioRuns = minecraftVersions.map { version ->
                     )
                     steps.set(
                         shards[k - 1].flatMap { s ->
-                            (1..s.sessions).map { "${s.name}:$it:${s.sessions}:${if (s.isolated) 1 else 0}" }
+                            (1..s.sessions).map { "${s.name}:$it:${s.sessions}:${if (s.isolated) 1 else 0}:${s.plugins.joinToString("+")}" }
                         },
                     )
                 }

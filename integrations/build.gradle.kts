@@ -7,4 +7,5 @@ dependencies {
     implementation(project(":core"))
     compileOnly(libs.bluemap.api)
     testImplementation(libs.slf4j.api)
+    testImplementation(libs.bluemap.api)
 }

@@ -253,6 +253,173 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void spawnCandidatesLoadAndOneInsideAZoneIsAWarning() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        spawnCandidates:
+          north-mesa: { pos: [3200, 80, -20100] }
+          east-jungle: { dimension: minecraft:overworld, pos: [19400, 70, 4100], yaw: 90 }
+          stray: { pos: [3005, -60, 0] }
+        zones:
+          pen: { dimension: minecraft:overworld, shape: { cylinder: { center: [3000, 0], radius: 20 } } }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.snapshot().get().season(3).orElseThrow().spawnCandidates())
+        .containsOnlyKeys("east-jungle", "north-mesa", "stray")
+        .containsEntry(
+            "north-mesa",
+            new com.petepeterepeat.seasons.core.port.Position(
+                "minecraft:overworld", 3200, 80, -20100, 0f, 0f));
+    assertThat(result.warnings())
+        .containsExactly(
+            "seasons/3.yml: Season 3's spawn candidate stray at 3005, -60, 0 is inside zone pen;"
+                + " every candidate must stay outside every zone");
+  }
+
+  @Test
+  void aSpawnBeyond24000BlocksFromTheOriginIsAWarning() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        "schema-version: 1\nseason: 3\nspawn: { pos: [25000, -60, 0] }\n");
+    Files.writeString(
+        worldDir().resolve("seasons/4.yml"),
+        "schema-version: 1\nseason: 4\nspawn: { pos: [16970, 70, 16970] }\n");
+    Files.writeString(
+        worldDir().resolve("seasons/5.yml"),
+        """
+        schema-version: 1
+        season: 5
+        spawn: { dimension: minecraft:the_nether, pos: [25000, 70, 0] }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.warnings())
+        .as("only the overworld's strongholds count, and 16970, 16970 is within 24,000")
+        .containsExactly(
+            "seasons/3.yml: Season 3's spawn at 25000, -60, 0 is 25000 blocks from 0, 0, beyond"
+                + " 24,000; strongholds may be out of reach");
+  }
+
+  @Test
+  void aCandidateWithABadNamePositionOrDimensionIsAProblem() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    ConfigLoader server =
+        new ConfigLoader(
+            configDir(), worldDir(), Map.of(), dimension -> !dimension.endsWith("the_neter"));
+    for (String candidate :
+        List.of(
+            "North_Mesa: { pos: [1, 2, 3] }",
+            "north-mesa: { pos: [1, 2] }",
+            "north-mesa: {}",
+            "north-mesa: { dimension: minecraft:the_neter, pos: [1, 2, 3] }")) {
+      Files.writeString(
+          worldDir().resolve("seasons/3.yml"),
+          "schema-version: 1\nseason: 3\nspawnCandidates:\n  " + candidate + "\n");
+      assertThat(server.load().problems())
+          .as(candidate)
+          .singleElement()
+          .satisfies(problem -> {
+            assertThat(problem.file()).isEqualTo("seasons/3.yml");
+            assertThat(problem.path().orElseThrow()).startsWith("spawnCandidates.");
+          });
+    }
+  }
+
+  @Test
+  void waypointsLoadFromMarkersYmlAndABrokenOneIsAProblem() throws IOException {
+    Files.createDirectories(worldDir());
+    Files.writeString(
+        worldDir().resolve("markers.yml"),
+        """
+        schema-version: 1
+        sets:
+          megaprojects:
+            Peter's Tower: { dimension: minecraft:overworld, pos: [100, 64, -200] }
+            "<red>Hub</red>": { pos: [0, 70, 0] }
+          farms:
+            Iron Farm: { dimension: minecraft:the_nether, pos: [10, 70, -20] }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    var waypoints = result.snapshot().orElseThrow().waypoints();
+    assertThat(waypoints.sets()).containsOnlyKeys("farms", "megaprojects");
+    assertThat(waypoints.sets().get("megaprojects"))
+        .extracting(w -> w.name())
+        .containsExactly("<red>Hub</red>", "Peter's Tower");
+    assertThat(waypoints.find("megaprojects", "PETER'S TOWER").orElseThrow().at())
+        .isEqualTo(
+            new com.petepeterepeat.seasons.core.port.Position(
+                "minecraft:overworld", 100, 64, -200, 0f, 0f));
+
+    ConfigLoader server =
+        new ConfigLoader(
+            configDir(), worldDir(), Map.of(), dimension -> !dimension.endsWith("the_neter"));
+    for (String broken :
+        List.of(
+            "Mega_Projects: { Hub: { pos: [1, 2, 3] } }",
+            "hubs: { Half: { pos: [1, 2] } }",
+            "hubs: { Hub: { pos: [1, 2, 3] }, HUB: { pos: [4, 5, 6] } }",
+            "hubs: { Hub: { dimension: minecraft:the_neter, pos: [1, 2, 3] } }",
+            "hubs: { \"" + "x".repeat(65) + "\": { pos: [1, 2, 3] } }")) {
+      Files.writeString(
+          worldDir().resolve("markers.yml"), "schema-version: 1\nsets:\n  " + broken + "\n");
+      assertThat(server.load().problems())
+          .as(broken)
+          .singleElement()
+          .satisfies(problem -> {
+            assertThat(problem.file()).isEqualTo("markers.yml");
+            assertThat(problem.path().orElseThrow()).startsWith("sets.");
+          });
+    }
+  }
+
+  @Test
+  void aBrokenMarkersFileIsLeftOutAtStartupButStopsAReload() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        zones:
+          base: { dimension: minecraft:overworld, shape: { cylinder: { center: [500, 500], radius: 30 } } }
+        """);
+    Files.writeString(
+        worldDir().resolve("markers.yml"),
+        "schema-version: 1\nsets:\n  hubs: { Hub: { pos: [1, 2] } }\n");
+
+    ConfigLoader.Result startup = loader(Map.of()).loadAtStartup();
+
+    ConfigSnapshot snapshot = startup.snapshot().orElseThrow();
+    assertThat(snapshot.season(3).orElseThrow().zones()).containsOnlyKeys("base");
+    assertThat(snapshot.waypoints().sets()).isEmpty();
+    assertThat(snapshot.markersLeftOut())
+        .singleElement()
+        .satisfies(problem -> {
+          assertThat(problem.file()).isEqualTo("markers.yml");
+          assertThat(problem.path()).contains("sets.hubs.Hub");
+        });
+    assertThat(startup.problems()).isEmpty();
+
+    ConfigLoader.Result reload = loader(Map.of()).load();
+    assertThat(reload.snapshot()).isEmpty();
+    assertThat(reload.problems())
+        .singleElement()
+        .satisfies(problem -> assertThat(problem.file()).isEqualTo("markers.yml"));
+  }
+
+  @Test
   void aZoneInADimensionTheServerDoesntHaveIsAProblem() throws IOException {
     Files.createDirectories(worldDir().resolve("seasons"));
     Files.writeString(

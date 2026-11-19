@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
@@ -108,6 +109,7 @@ class ZonesTest {
             "1.2.3",
             fake.clock,
             webhooks,
+            MapPublisher.NONE,
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.empty());
@@ -442,6 +444,36 @@ class ZonesTest {
         .containsExactly("There's already a zone called tower.");
     assertThat(run("/season zone remove tower").text()).containsExactly("Removed zone tower.");
     assertThat(guard().blocks(Position.of(OVERWORLD, 205, 64, 200))).isFalse();
+  }
+
+  @Test
+  void aZoneEditThatDoesntTakeIsPutBackAndNotAudited() throws IOException {
+    Path file = dir.resolve("world/seasons/seasons/3.yml");
+    String before = Files.readString(file, UTF_8);
+    // A hand edit gone wrong in another file, not reloaded yet: the load after the edit fails.
+    Path config = dir.resolve("plugins/Seasons/config.yml");
+    String good = Files.readString(config, UTF_8);
+    Files.writeString(config, "schedule: [nonsense\n", UTF_8);
+
+    TestSource admin = new TestSource(Optional.of(pat.id()));
+    fake.player(pat).position = Position.of(OVERWORLD, 200.5, 64, 200.5);
+    TestCommands.run(fake.commands.getFirst(), admin, "/season zone add tower cylinder 12");
+    assertThat(admin.text())
+        .singleElement()
+        .asString()
+        .startsWith("The zone wasn't saved: config.yml, line ");
+    assertThat(run("/season zone remove base").text())
+        .singleElement()
+        .asString()
+        .startsWith("The zone wasn't saved: config.yml, line ");
+    assertThat(Files.readString(file, UTF_8)).as("Season 3's file is as it was").isEqualTo(before);
+    assertThat(audited("config")).isEmpty();
+
+    // Fixing the other file brings in neither edit.
+    Files.writeString(config, good, UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded ");
+    assertThat(guard().blocks(Position.of(OVERWORLD, 205, 64, 200))).isFalse();
+    assertThat(guard().blocks(INSIDE)).isTrue();
   }
 
   @Test

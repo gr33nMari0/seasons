@@ -12,6 +12,7 @@ import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig.EnderChestPolicy;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Capabilities;
@@ -77,6 +78,7 @@ class ArchivingTest {
             "1.2.3",
             fake.clock,
             webhooks,
+            MapPublisher.NONE,
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.of(hooks));

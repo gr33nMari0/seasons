@@ -18,6 +18,12 @@ public interface World {
   /** Whether the chunk holding a position is loaded, entities included. Never loads it. */
   boolean isLoaded(Position position);
 
+  /** The lowest y a block can have in a dimension, such as -64 in the overworld. */
+  int minHeight(String dimension);
+
+  /** One above the highest y a block can have in a dimension, such as 320 in the overworld. */
+  int maxHeight(String dimension);
+
   /** Loads (and generates if needed) the chunk holding a position without stalling the tick. */
   CompletableFuture<Void> loadChunk(Position position);
 }

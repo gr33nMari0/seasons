@@ -9,6 +9,8 @@ import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
@@ -27,6 +29,9 @@ import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
+import com.petepeterepeat.seasons.core.map.MapService;
+import com.petepeterepeat.seasons.core.map.MarkerCommands;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -56,6 +61,7 @@ import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -86,6 +92,7 @@ public final class Seasons implements SeasonsApi {
   private final String version;
   private final Clock clock;
   private final Webhooks webhooks;
+  private final MapPublisher maps;
   private final Map<String, String> environment;
   private final SerialWriter writer;
   private final Optional<ScenarioHooks> hooks;
@@ -107,10 +114,13 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Reconciler reconciler;
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
+  private @Nullable MapService map;
   private @Nullable RolloverArchiver archiverForTests;
   private LongSupplier nanoTime = System::nanoTime;
 
   /**
+   * @param maps publishes the map to a web map such as BlueMap, or {@link MapPublisher#NONE};
+   *     Seasons closes it at {@link #stop}
    * @param environment environment variables, for the webhook overrides
    * @param writer the file writer thread; Seasons closes it at {@link #stop}
    * @param hooks the scenario hooks, only on a scenario server (docs/adr/0003)
@@ -120,6 +130,7 @@ public final class Seasons implements SeasonsApi {
       String version,
       Clock clock,
       Webhooks webhooks,
+      MapPublisher maps,
       Map<String, String> environment,
       SerialWriter writer,
       Optional<ScenarioHooks> hooks) {
@@ -127,6 +138,7 @@ public final class Seasons implements SeasonsApi {
     this.version = version;
     this.clock = clock;
     this.webhooks = webhooks;
+    this.maps = maps;
     this.environment = Map.copyOf(environment);
     this.writer = writer;
     this.hooks = hooks;
@@ -282,6 +294,9 @@ public final class Seasons implements SeasonsApi {
     reconciling.start();
     hallRules.start();
     zoning.start();
+    MapService mapping = new MapService(platform, config, seasons::state, zoning, maps);
+    map = mapping;
+    mapping.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -344,7 +359,8 @@ public final class Seasons implements SeasonsApi {
                 archives,
                 vaults,
                 halls,
-                pets::waiting));
+                pets::waiting,
+                maps::status));
     commands = built;
     platform
         .events()
@@ -364,20 +380,16 @@ public final class Seasons implements SeasonsApi {
     platform.events().tripwire(wire);
     platform.events().hall(hallRules);
     platform.events().zones(zoning);
-    platform
-        .commands()
-        .register(
-            built.root(
-                new ZoneCommands(
-                        platform,
-                        config,
-                        loader,
-                        writer,
-                        seasons,
-                        zoning,
-                        audit,
-                        world.resolve("backups").resolve("seasons"))
-                    .nodes()));
+    ConfigEdits edits = new ConfigEdits(platform, config, loader, writer, audit, seasons::reloaded);
+    Path seasonBackups = world.resolve("backups").resolve("seasons");
+    List<CommandNode> nodes = new ArrayList<>();
+    nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
+    nodes.addAll(
+        new ZoneCommands(platform, config, loader, edits, seasons, zoning, seasonBackups).nodes());
+    nodes.add(
+        new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
+            .node());
+    platform.commands().register(built.root(nodes));
     platform
         .commands()
         .register(
@@ -413,7 +425,7 @@ public final class Seasons implements SeasonsApi {
 
   /**
    * Joins and leaves go to login catch-up, if the journal could be opened; admins who join are also
-   * told about any gallery left out at startup.
+   * told about any gallery, or markers.yml, left out at startup.
    */
   private Sessions sessions(Optional<LoginService> login) {
     return new Sessions() {
@@ -428,13 +440,13 @@ public final class Seasons implements SeasonsApi {
         // A moment after the join messages, so it isn't lost among them.
         platform
             .scheduler()
-            .runGlobalLater(LEFT_OUT_NOTICE_DELAY, () -> tellAboutLeftOutGalleries(player));
+            .runGlobalLater(LEFT_OUT_NOTICE_DELAY, () -> tellAboutLeftOutFiles(player));
       }
 
-      private void tellAboutLeftOutGalleries(PlayerRef player) {
+      private void tellAboutLeftOutFiles(PlayerRef player) {
         ConfigSnapshot snapshot = config.get();
         if (platform.players().find(player.id()).isPresent()
-            && snapshot.anyGalleryLeftOut()
+            && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
           snapshot
               .galleriesLeftOut()
@@ -446,6 +458,14 @@ public final class Seasons implements SeasonsApi {
                               player.id(),
                               SeasonCommands.galleryLeftOut(
                                   snapshot.messages(), gallery, problem))));
+          snapshot
+              .markersLeftOut()
+              .forEach(problem ->
+                  platform
+                      .players()
+                      .sendMessage(
+                          player.id(),
+                          SeasonCommands.markersLeftOut(snapshot.messages(), problem)));
         }
       }
 
@@ -512,6 +532,9 @@ public final class Seasons implements SeasonsApi {
     if (zones != null) {
       zones.stop();
     }
+    if (map != null) {
+      map.stop();
+    }
     if (firsts != null) {
       firsts.stop();
     }
@@ -526,6 +549,7 @@ public final class Seasons implements SeasonsApi {
     }
     writer.close();
     webhooks.close();
+    maps.close();
   }
 
   @Override
@@ -614,6 +638,15 @@ public final class Seasons implements SeasonsApi {
                           + " /season end and /season launch are refused until then: {}",
                       gallery,
                       problem)));
+      result
+          .snapshot()
+          .get()
+          .markersLeftOut()
+          .forEach(problem ->
+              LOG.error(
+                  "markers.yml is left out, so no shared waypoints are shown, until it is fixed"
+                      + " and /season reload succeeds: {}",
+                  problem));
       return List.of();
     }
     for (ConfigProblem problem : result.problems()) {

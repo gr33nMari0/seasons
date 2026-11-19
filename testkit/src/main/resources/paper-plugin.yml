@@ -13,3 +13,8 @@ dependencies:
     SeasonsWeb:
       load: BEFORE
       required: false
+    # Only on the scenario servers that ask for it (docs/adr/0004), for /scenario bluemap.
+    BlueMap:
+      load: BEFORE
+      required: false
+      join-classpath: true

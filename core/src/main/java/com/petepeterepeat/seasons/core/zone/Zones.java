@@ -230,6 +230,17 @@ public final class Zones implements ZoneGuard, Milestones {
     return map().find(id).map(ZoneMap.Live::now).orElse(ZoneMode.OFF);
   }
 
+  /** A zone in force, with what it stops now. */
+  public record InForce(Zone zone, ZoneMode now) {}
+
+  /** Every zone in force now, by id, with what it stops: none before launch or between seasons. */
+  public List<InForce> inForce() {
+    return map().zones().stream()
+        .map(live -> new InForce(live.zone(), live.now()))
+        .sorted(java.util.Comparator.comparing(z -> z.zone().id()))
+        .toList();
+  }
+
   // The world's side
 
   @Override

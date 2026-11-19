@@ -8,6 +8,7 @@ import com.google.gson.JsonParser;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Capabilities;
@@ -84,6 +85,7 @@ class HallRulesTest {
             "1.2.3",
             fake.clock,
             webhooks,
+            MapPublisher.NONE,
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.empty());

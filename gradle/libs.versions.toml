@@ -7,6 +7,9 @@ configurate = "4.2.0"
 gson = "2.15.0"
 bstats = "3.2.1"
 bluemap = "2.8.2"
+# Test servers only: BlueMap on the scenario server that asks for it (docs/adr/0004). The API it
+# bundles must have every call integrations/bluemap makes.
+bluemap-plugin = "5.29-paper"
 slf4j = "2.0.20"
 jspecify = "1.0.1"
 errorprone = "2.52.0"

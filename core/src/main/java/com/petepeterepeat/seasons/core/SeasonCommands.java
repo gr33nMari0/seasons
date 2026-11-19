@@ -22,6 +22,7 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
@@ -97,7 +98,8 @@ final class SeasonCommands {
       ArchiveFiles archives,
       VaultFiles vaults,
       HallService hall,
-      java.util.function.LongSupplier petsWaiting) {}
+      java.util.function.LongSupplier petsWaiting,
+      java.util.function.Supplier<MapPublisher.Status> map) {}
 
   SeasonCommands(
       Platform platform,
@@ -127,7 +129,7 @@ final class SeasonCommands {
   }
 
   /**
-   * @param more further nodes under {@code /season}, such as the zone commands
+   * @param more further nodes under {@code /season}, such as the spawn and zone commands
    */
   CommandNode root(List<CommandNode> more) {
     CommandNode.Builder root = CommandNode.literal("season");
@@ -162,10 +164,6 @@ final class SeasonCommands {
                 .executes(this::launch)
                 .then(
                     CommandNode.argument("options", ArgumentType.greedy()).executes(this::launch)))
-        .then(
-            CommandNode.literal("spawn")
-                .permission(PERMISSION_ADMIN_SEASON)
-                .then(CommandNode.literal("set").executes(this::setSpawn)))
         .then(
             CommandNode.literal("firsts")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -247,12 +245,11 @@ final class SeasonCommands {
         source.reply(galleryLeftOut(messages, gallery.getKey(), problem));
       }
     }
+    for (ConfigProblem problem : config.get().markersLeftOut()) {
+      source.reply(markersLeftOut(messages, problem));
+    }
     for (ConfigProblem problem : startupProblems) {
-      source.reply(
-          messages.get(
-              "status.config-problem",
-              "problem",
-              messages.text(problemKey(problem), problemPlaceholders(problem))));
+      source.reply(messages.get("status.config-problem", "problem", problem.describe(messages)));
     }
     var gaps = platform.capabilities().gaps();
     if (gaps.isEmpty()) {
@@ -262,6 +259,18 @@ final class SeasonCommands {
       source.reply(
           messages.get("status.capability-gap", "platform", name, "capability", gap.name()));
     }
+    source.reply(
+        switch (services.map().get()) {
+          case MapPublisher.Status.NotInstalled _ -> messages.get("status.map-none");
+          case MapPublisher.Status.Waiting _ -> messages.get("status.map-waiting");
+          case MapPublisher.Status.Published published ->
+              messages.get(
+                  "status.map-published",
+                  "markers",
+                  Integer.toString(published.markers()),
+                  "maps",
+                  Integer.toString(published.maps()));
+        });
   }
 
   void info(CommandSource source, Arguments arguments) {
@@ -311,11 +320,12 @@ final class SeasonCommands {
   /** A gallery left out at startup, for /season status and admins as they join. */
   static Message galleryLeftOut(Messages messages, String gallery, ConfigProblem problem) {
     return messages.get(
-        "status.gallery-left-out",
-        "gallery",
-        gallery,
-        "problem",
-        messages.text(problemKey(problem), problemPlaceholders(problem)));
+        "status.gallery-left-out", "gallery", gallery, "problem", problem.describe(messages));
+  }
+
+  /** markers.yml left out at startup, for /season status and admins as they join. */
+  static Message markersLeftOut(Messages messages, ConfigProblem problem) {
+    return messages.get("status.markers-left-out", "problem", problem.describe(messages));
   }
 
   void decorateOpen(CommandSource source, Arguments arguments) {
@@ -424,69 +434,6 @@ final class SeasonCommands {
     if (seasons.launch() instanceof Transition.Refused refused) {
       refuse(source, refused);
     }
-  }
-
-  void setSpawn(CommandSource source, Arguments arguments) {
-    Messages messages = messages();
-    if (source.player().isEmpty()) {
-      source.reply(messages.get("spawn.player-only"));
-      return;
-    }
-    if (seasons.state().isEmpty()) {
-      source.reply(messages.get("season.none"));
-      return;
-    }
-    Position at = platform.players().position(source.player().get());
-    int nextSeason = seasons.state().get().season() + 1;
-    Optional<Zone> holding = config.get().season(nextSeason).flatMap(file -> file.zoneHolding(at));
-    if (holding.isPresent()) {
-      source.reply(
-          messages.get(
-              "zone.spawn-inside",
-              "season",
-              Integer.toString(nextSeason),
-              "zone",
-              holding.get().id()));
-      return;
-    }
-    var _ =
-        seasons
-            .setNextSpawn(at)
-            .thenCompose(
-                next -> writer.submit(loader::load).thenApply(result -> Map.entry(next, result)))
-            .whenComplete((done, failure) ->
-                platform
-                    .scheduler()
-                    .runGlobal(() -> {
-                      if (failure != null) {
-                        LOG.error("/season spawn set failed", failure);
-                        source.reply(
-                            messages()
-                                .get(
-                                    "spawn.failed", "error", String.valueOf(failure.getMessage())));
-                        return;
-                      }
-                      done.getValue()
-                          .snapshot()
-                          .ifPresent(snapshot -> {
-                            config.set(snapshot);
-                            seasons.reloaded(snapshot);
-                          });
-                      source.reply(
-                          messages()
-                              .get(
-                                  "spawn.set",
-                                  "season",
-                                  Integer.toString(done.getKey()),
-                                  "x",
-                                  Integer.toString(at.blockX()),
-                                  "y",
-                                  Integer.toString(at.blockY()),
-                                  "z",
-                                  Integer.toString(at.blockZ()),
-                                  "dimension",
-                                  at.dimension()));
-                    }));
   }
 
   void archive(CommandSource source, Arguments arguments) {
@@ -780,7 +727,7 @@ final class SeasonCommands {
           messages.get("config.reload-error", "error", String.valueOf(failure.getMessage())));
     } else if (result != null) {
       for (ConfigProblem problem : result.problems()) {
-        details.add(messages.get(problemKey(problem), problemPlaceholders(problem)));
+        details.add(messages.get(problem.messageKey(), problem.placeholders()));
       }
     }
     source.reply(messages.get("config.reload-failed"));
@@ -873,10 +820,30 @@ final class SeasonCommands {
     }
   }
 
-  /** A next spawn inside one of the next season's zones, which launch would refuse. */
+  /**
+   * A next spawn inside one of the next season's zones, which launch would refuse, or beyond the
+   * strongholds' reach, which it wouldn't.
+   */
   private void spawnDryRun(CommandSource source, Messages messages) {
     int next = seasons.state().map(SeasonState::season).orElse(0) + 1;
     Optional<SeasonFile> file = config.get().season(next);
+    Optional<Position> far = file.flatMap(SeasonFile::spawn).filter(SeasonFile::beyondStrongholds);
+    if (far.isPresent()) {
+      Position spawn = far.get();
+      source.reply(
+          messages.get(
+              "end.dry-run.spawn-far",
+              "next",
+              Integer.toString(next),
+              "x",
+              Integer.toString(spawn.blockX()),
+              "y",
+              Integer.toString(spawn.blockY()),
+              "z",
+              Integer.toString(spawn.blockZ()),
+              "distance",
+              Long.toString(SeasonFile.distanceFromOrigin(spawn))));
+    }
     Optional<Zone> holding = file.flatMap(SeasonFile::zoneHoldingSpawn);
     if (holding.isEmpty()) {
       return;
@@ -1045,32 +1012,8 @@ final class SeasonCommands {
   private void problems(CommandSource source, List<ConfigProblem> problems) {
     Messages messages = messages();
     for (ConfigProblem problem : problems) {
-      source.reply(messages.get(problemKey(problem), problemPlaceholders(problem)));
+      source.reply(messages.get(problem.messageKey(), problem.placeholders()));
     }
-  }
-
-  private static String problemKey(ConfigProblem problem) {
-    if (problem.line().isPresent()) {
-      return "config.problem-line";
-    }
-    return problem.path().isPresent() ? "config.problem-path" : "config.problem-file";
-  }
-
-  private static String[] problemPlaceholders(ConfigProblem problem) {
-    if (problem.line().isPresent()) {
-      return new String[] {
-        "file", problem.file(),
-        "line", Integer.toString(problem.line().get().line()),
-        "column", Integer.toString(problem.line().get().column()),
-        "message", problem.message()
-      };
-    }
-    if (problem.path().isPresent()) {
-      return new String[] {
-        "file", problem.file(), "path", problem.path().get(), "message", problem.message()
-      };
-    }
-    return new String[] {"file", problem.file(), "message", problem.message()};
   }
 
   private void reply(CommandSource source, Transition transition, String doneKey) {

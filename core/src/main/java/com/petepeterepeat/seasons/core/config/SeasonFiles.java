@@ -46,23 +46,43 @@ public final class SeasonFiles {
                 .set(plannedEnd.map(ZonedTimes::format).orElse(null)));
   }
 
-  /**
-   * Sets {@code spawn}. Whole-block positions are written as the block's centre, which is where a
-   * player stands.
-   */
+  /** Sets {@code spawn}. */
   public static void writeSpawn(Path file, Path backupDir, int season, Position spawn)
+      throws IOException {
+    edit(file, backupDir, season, node -> writePosition(node.node("spawn"), spawn));
+  }
+
+  /** Adds a spawn candidate, written as the spawn is, or replaces the one with its name. */
+  public static void writeCandidate(Path file, Path backupDir, int season, String name, Position at)
+      throws IOException {
+    edit(file, backupDir, season, node -> writePosition(node.node("spawnCandidates", name), at));
+  }
+
+  /** Removes the spawn candidate with a name from the file. */
+  public static void removeCandidate(Path file, Path backupDir, int season, String name)
       throws IOException {
     edit(
         file,
         backupDir,
         season,
         node -> {
-          ConfigurationNode at = node.node("spawn");
-          at.node("dimension").set(spawn.dimension());
-          at.node("pos")
-              .setList(Integer.class, List.of(spawn.blockX(), spawn.blockY(), spawn.blockZ()));
-          at.node("yaw").set(Math.round(spawn.yaw()));
+          ConfigurationNode candidates = node.node("spawnCandidates");
+          candidates.removeChild(name);
+          if (candidates.empty()) {
+            node.removeChild("spawnCandidates");
+          }
         });
+  }
+
+  /**
+   * A position as {@code { dimension, pos: [x, y, z], yaw }}, in whole blocks: a block's position
+   * is where a player standing on it is.
+   */
+  static void writePosition(ConfigurationNode at, Position position) throws IOException {
+    at.node("dimension").set(position.dimension());
+    at.node("pos")
+        .setList(Integer.class, List.of(position.blockX(), position.blockY(), position.blockZ()));
+    at.node("yaw").set(Math.round(position.yaw()));
   }
 
   /** Adds a zone to the file, or replaces the one with its id. */

@@ -123,6 +123,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             getPluginMeta().getVersion(),
             clock,
             new DiscordWebhooks(),
+            PaperMaps.publisher(getServer(), getSLF4JLogger()),
             System.getenv(),
             new SerialWriter(),
             hooks);

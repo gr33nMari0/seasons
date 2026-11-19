@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core.config;
 
 import com.petepeterepeat.seasons.core.hall.Gallery;
+import com.petepeterepeat.seasons.core.map.Waypoints;
 import com.petepeterepeat.seasons.core.message.Messages;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +19,10 @@ import java.util.TreeMap;
  * @param galleriesLeftOut gallery files that couldn't be loaded at startup and were left out, by
  *     gallery id, with their problems. A reload never leaves anything out: it swaps in every file
  *     or none, so a successful one clears this.
+ * @param waypoints the shared waypoints, from markers.yml
+ * @param markersLeftOut markers.yml's problems if it couldn't be loaded at startup and was left
+ *     out, so the waypoints are none; empty otherwise. As with galleries, a reload never leaves it
+ *     out.
  */
 public record ConfigSnapshot(
     SeasonsConfig config,
@@ -25,11 +30,35 @@ public record ConfigSnapshot(
     Secrets secrets,
     Map<Integer, SeasonFile> seasons,
     Map<String, Gallery> galleries,
-    Map<String, List<ConfigProblem>> galleriesLeftOut) {
+    Map<String, List<ConfigProblem>> galleriesLeftOut,
+    Waypoints waypoints,
+    List<ConfigProblem> markersLeftOut) {
   public ConfigSnapshot {
     seasons = Map.copyOf(seasons);
     galleries = java.util.Collections.unmodifiableMap(new TreeMap<>(galleries));
     galleriesLeftOut = java.util.Collections.unmodifiableMap(new TreeMap<>(galleriesLeftOut));
+    markersLeftOut = List.copyOf(markersLeftOut);
+  }
+
+  public ConfigSnapshot(
+      SeasonsConfig config,
+      Messages messages,
+      Secrets secrets,
+      Map<Integer, SeasonFile> seasons,
+      Map<String, Gallery> galleries,
+      Map<String, List<ConfigProblem>> galleriesLeftOut,
+      Waypoints waypoints) {
+    this(config, messages, secrets, seasons, galleries, galleriesLeftOut, waypoints, List.of());
+  }
+
+  public ConfigSnapshot(
+      SeasonsConfig config,
+      Messages messages,
+      Secrets secrets,
+      Map<Integer, SeasonFile> seasons,
+      Map<String, Gallery> galleries,
+      Map<String, List<ConfigProblem>> galleriesLeftOut) {
+    this(config, messages, secrets, seasons, galleries, galleriesLeftOut, Waypoints.NONE);
   }
 
   public ConfigSnapshot(
@@ -68,6 +97,7 @@ public record ConfigSnapshot(
   public ConfigSnapshot withGallery(Gallery gallery) {
     Map<String, Gallery> next = new TreeMap<>(galleries);
     next.put(gallery.id(), gallery);
-    return new ConfigSnapshot(config, messages, secrets, seasons, next, galleriesLeftOut);
+    return new ConfigSnapshot(
+        config, messages, secrets, seasons, next, galleriesLeftOut, waypoints, markersLeftOut);
   }
 }

@@ -81,6 +81,17 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `Tameable#isTamed`, `#getOwnerUniqueId`, `ChestedHorse#isCarryingChest`, `Entity#getType().getKey()`, `#customName`, Adventure `PlainTextComponentSerializer`, `Entity#getPersistentDataContainer` with `PersistentDataType.STRING`, `NamespacedKey(Plugin, "pet")` | `PaperEntities` | What an animal is, who owns it, whether it carries a chest; the `seasons:pet` mark on registered pets |
 | `EntitiesUnloadEvent#getEntities`, `EntityRemoveFromWorldEvent`, `Entity#getRemovalReason`, `RemovalReason` (`KILLED` as a death, `DISCARDED`, the rest as unloads), `Parrot`, `Server#getPlayer(UUID)`, `Entity#getWorld`, `Location#getWorld`, `#distanceSquared` | `PaperEntities` | A registered pet's last known position, telling a death from an unload (26.3), and a parrot landing on its owner's shoulder |
 | `World#getChunkAtAsync(int, int)`, `Chunk#addPluginChunkTicket`, `#removePluginChunkTicket`, `#isEntitiesLoaded`, `Server#getGlobalRegionScheduler`, `GlobalRegionScheduler#runDelayed`, `Server#getEntity`, `LivingEntity#isLeashed`, `#setLeashHolder(null)`, `Entity#leaveVehicle`, `#eject`, `#teleportAsync(Location, TeleportCause.PLUGIN)` | `PaperEntities` | Pet travel: loading the chunk at the last known position without stalling the tick, then unleashing, dismounting and moving the pet |
+| `PluginManager#getPlugin` | `PaperMaps` | Publishing to BlueMap only when it is installed (BlueMap's classes are on the classpath only then) |
+| `World#getMinHeight`, `#getMaxHeight` | `PaperWorld` | A zone with no y limits drawn on the map from the bottom to the top of its dimension |
+
+## BlueMap (`integrations`, only when BlueMap is installed)
+
+Not Paper API, but checked the same way against each BlueMap release: `bluemap-api` is pinned in `gradle/libs.versions.toml`, and `m3-bluemap` runs it on a real BlueMap (ADR 0004).
+
+| API | Used in | For |
+| --- | --- | --- |
+| `BlueMapAPI.onEnable`, `.onDisable`, `.unregisterListener`, `#getWorld(Object)` with Paper's `World`, `#getMaps`, `BlueMapWorld#getMaps`, `BlueMapMap#getMarkerSets` | `BlueMapPublisher` | Publishing to every map of each world, again after each reload |
+| `MarkerSet.builder()` (`#label`, `#toggleable`), `MarkerSet#put`, `#getMarkers`, `POIMarker.builder()` (`#label`, `#detail`, `#position(double, double, double)`, `#defaultIcon`), `ExtrudeMarker.builder()` (`#label`, `#detail`, `#shape`, `#holes`, `#centerPosition`, `#lineWidth`, `#lineColor`, `#fillColor`), `Shape.createRect`, `Shape.createCircle`, `Color(int, int, int, float)` | `BlueMapPublisher` | The Seasons marker set and the waypoint sets |
 
 ## Seasons Web (`web`)
 
@@ -109,3 +120,4 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `ItemStack.of`, `#addUnsafeEnchantment`, `#editMeta`, `ItemMeta#customName`, `BlockStateMeta#getBlockState`, `#setBlockState`, `ShulkerBox#getInventory` | Item samples for the NBT neutrality test |
 | `Material#matchMaterial`, `#isItem`, `ItemStack.of(Material, int)`, `#serializeAsBytes` | `/scenario vault-return`: an item handed back on a player's Returned vault page (A36) |
 | `Server#selectEntities`, `#getConsoleSender`, `Tameable#setTamed`, `#setOwner`, `ChestedHorse#setCarryingChest`, `LivingEntity#setLeashHolder(Entity)`, `NamespacedKey.fromString`, `PersistentDataContainer#remove` | `/scenario tame`, `chest`, `leash` and `forget-pet` (A16 to A19) |
+| `PluginManager#getPlugin`, `Server#getWorlds`, `World#getKey`; BlueMap's `BlueMapAPI.getInstance`, `#getWorld(Object)`, `BlueMapWorld#getMaps`, `BlueMapMap#getId`, `#getMarkerSets`, `MarkerSet#getLabel`, `#getMarkers`, `Marker#getType`, `#getLabel`, `#getPosition`, `ExtrudeMarker#getShapeMinY`, `#getShapeMaxY`, `#getShape`, `#getHoles`, `ShapeMarker#getShapeY`, `Shape#getPointCount` | `/scenario bluemap`: Seasons' marker sets as BlueMap holds them, on the scenario server that has BlueMap (ADR 0004) |

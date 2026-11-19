@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.petepeterepeat.seasons.core.announce.Webhooks;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
@@ -51,6 +52,7 @@ class FirstsAndCardTest {
             "1.2.3",
             fake.clock,
             webhooks,
+            MapPublisher.NONE,
             Map.of("SEASONS_DISCORD_WEBHOOK", "https://discord.example/hook"),
             new SerialWriter(Runnable::run),
             Optional.of(hooks));
