@@ -119,11 +119,14 @@ export async function turnTo (ctx, bot, button, name) {
 
 /**
  * Left-clicks an item on the page shown to take it, and resolves once the player carries `count`
- * of it in all.
+ * of it in all and the vault has opened again, so the next click lands in the new menu.
  */
 export async function take (ctx, admin, bot, item, count) {
-  const slot = slotOf(bot.currentWindow, item)
-  assert(slot >= 0, `the page shows ${item}: ${JSON.stringify(snapshot(bot.currentWindow).view)}`)
+  const window = bot.currentWindow
+  const slot = slotOf(window, item)
+  assert(slot >= 0, `the page shows ${item}: ${JSON.stringify(snapshot(window).view)}`)
+  const reopened = new Promise((resolve) => bot.once('windowOpen', resolve))
   await bot.clickWindow(slot, 0, 0)
   await ctx.eventually(async () => assert(await carried(ctx, admin, bot.username, item) === count, `${bot.username} carries ${count} ${item}`))
+  await reopened
 }
