@@ -7,6 +7,9 @@ import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -16,6 +19,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,6 +61,64 @@ public final class AuditLog {
    */
   public void record(String actor, String action, String target, String result, String details) {
     var _ = append(actor, action, target, result, details);
+  }
+
+  /** One entry as it was written. */
+  public record Entry(
+      Instant time, String actor, String action, String target, String result, String details) {}
+
+  /**
+   * The last {@code count} entries of this month's and last month's files, oldest first, read on
+   * the writer thread after every entry already appended; with a player, only the entries whose
+   * actor or target is that name or UUID, ignoring case. A line that can't be read is skipped.
+   */
+  public CompletableFuture<List<Entry>> recent(Optional<String> player, int count) {
+    Instant now = clock.instant();
+    Instant lastMonth = now.atZone(ZoneOffset.UTC).minusMonths(1).toInstant();
+    List<Path> files =
+        List.of(
+            directory.resolve(MONTH.format(lastMonth) + ".jsonl"),
+            directory.resolve(MONTH.format(now) + ".jsonl"));
+    return writer.submit(() -> {
+      List<Entry> found = new ArrayList<>();
+      for (Path file : files) {
+        if (!Files.exists(file)) {
+          continue;
+        }
+        for (String line : Files.readAllLines(file, UTF_8)) {
+          entry(line)
+              .filter(e ->
+                  player.isEmpty()
+                      || e.actor().equalsIgnoreCase(player.get())
+                      || e.target().equalsIgnoreCase(player.get()))
+              .ifPresent(found::add);
+        }
+      }
+      return List.copyOf(found.subList(Math.max(0, found.size() - count), found.size()));
+    });
+  }
+
+  private static final List<String> FIELDS =
+      List.of("time", "actor", "action", "target", "result", "details");
+
+  private static Optional<Entry> entry(String line) {
+    try {
+      if (!(JsonParser.parseString(line) instanceof JsonObject json)
+          || !FIELDS.stream().allMatch(field -> json.get(field) instanceof JsonPrimitive)) {
+        return Optional.empty();
+      }
+      return Optional.of(
+          new Entry(
+              Instant.parse(json.get("time").getAsString()),
+              json.get("actor").getAsString(),
+              json.get("action").getAsString(),
+              json.get("target").getAsString(),
+              json.get("result").getAsString(),
+              json.get("details").getAsString()));
+    } catch (JsonParseException | java.time.format.DateTimeParseException e) {
+      // A line cut short by a crash, or written by hand.
+      return Optional.empty();
+    }
   }
 
   /** As {@link #record}, completing once the entry is on disk. Never completes exceptionally. */

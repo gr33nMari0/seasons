@@ -371,7 +371,8 @@ public final class Seasons implements SeasonsApi {
                 vaults,
                 halls,
                 pets::waiting,
-                maps::status));
+                maps::status,
+                audit));
     commands = built;
     halls.bindLaunch(player ->
         built.launch(

@@ -342,6 +342,14 @@ hof:
     undone-many: "<green>Put back <count> cells of <gallery>.</green>"
     undo-stopped: "<red>Undoing the import of cell <cell> stopped: <reason>.</red>"
 
+audit:
+  header: "<gold>The last <count> audit entries:</gold>"
+  header-player: "<gold>The last <count> audit entries for <name>:</gold>"
+  none: "<gray>No audit entries.</gray>"
+  none-player: "<gray>No audit entries for <name>.</gray>"
+  line: "<gray><time></gray> <actor> <action> <target> (<result>): <details>"
+  failed: "<red>The audit log can't be read: <error>. See the server log.</red>"
+
 firsts:
   announce: "<gold>Season first!</gold> <yellow><name></yellow> <what>."
   discord: "Season first! <name> <what>."
