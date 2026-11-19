@@ -30,6 +30,7 @@ import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
+import com.petepeterepeat.seasons.core.map.MapService;
 import com.petepeterepeat.seasons.core.map.MarkerCommands;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
@@ -113,6 +114,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Reconciler reconciler;
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
+  private @Nullable MapService map;
   private @Nullable RolloverArchiver archiverForTests;
   private LongSupplier nanoTime = System::nanoTime;
 
@@ -292,6 +294,9 @@ public final class Seasons implements SeasonsApi {
     reconciling.start();
     hallRules.start();
     zoning.start();
+    MapService mapping = new MapService(platform, config, seasons::state, zoning, maps);
+    map = mapping;
+    mapping.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -518,6 +523,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (zones != null) {
       zones.stop();
+    }
+    if (map != null) {
+      map.stop();
     }
     if (firsts != null) {
       firsts.stop();

@@ -617,6 +617,16 @@ public final class FakePlatform {
           }
 
           @Override
+          public int minHeight(String dimension) {
+            return dimension.equals("minecraft:overworld") ? -64 : 0;
+          }
+
+          @Override
+          public int maxHeight(String dimension) {
+            return dimension.equals("minecraft:overworld") ? 320 : 256;
+          }
+
+          @Override
           public CompletableFuture<Void> loadChunk(Position position) {
             return CompletableFuture.completedFuture(null);
           }

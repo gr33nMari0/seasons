@@ -55,6 +55,16 @@ final class PaperWorld implements World {
   }
 
   @Override
+  public int minHeight(String dimension) {
+    return world(dimension).getMinHeight();
+  }
+
+  @Override
+  public int maxHeight(String dimension) {
+    return world(dimension).getMaxHeight();
+  }
+
+  @Override
   public CompletableFuture<Void> loadChunk(Position position) {
     return world(position.dimension())
         .getChunkAtAsync(position.blockX() >> 4, position.blockZ() >> 4, true)

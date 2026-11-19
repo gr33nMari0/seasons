@@ -435,6 +435,17 @@ config:
   problem-path: "<red><file>, at <path>:</red> <message>"
   problem-file: "<red><file>:</red> <message>"
 
+# Labels on the web map, such as BlueMap: plain text, with any formatting tags left out.
+map:
+  set: "Seasons"
+  spawn: "Season <season> spawn"
+  candidate: "Spawn candidate: <name>"
+  hall: "Hall of Fame"
+  museum: "Museum"
+  locked: "<zone>: locked until <until>"
+  no-build: "<zone>: no building"
+  announce: "<zone>: entries announced until <until>"
+
 marker:
   added: "<green>Added waypoint <name> to <set> at <x>, <y>, <z> in <dimension>.</green>"
   no-map: "<gray>BlueMap isn't installed, so it shows once BlueMap is.</gray>"
