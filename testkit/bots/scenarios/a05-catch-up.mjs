@@ -38,6 +38,9 @@ export default {
     // Archiving sent the admin to their own cell too; that teleport lands first.
     const adminCell = await cellOf(ctx, admin, 'season-2', cells, 'SeasonsAdmin')
     await ctx.eventually(async () => assert(inside(adminCell, await ctx.position(admin, 'SeasonsAdmin')), 'the admin is in their cell'))
+    // Between seasons Seasons puts anyone who leaves the Hall back at its entry, ops included;
+    // the admin holds seasons.hof.bypass to stand outside and set the spawn.
+    await ctx.command(admin, '/scenario permit SeasonsAdmin seasons.hof.bypass', /^Permitted /)
     await ctx.command(admin, '/tp SeasonsAdmin 500 -60 300', /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 500, 'admin moved'))
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 500, -60, 300 in minecraft:overworld\.$/)
