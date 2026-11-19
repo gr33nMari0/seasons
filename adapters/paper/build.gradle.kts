@@ -36,6 +36,7 @@ tasks.shadowJar {
     relocate("io.leangen.geantyref", "$shaded.geantyref")
     relocate("net.kyori.option", "$shaded.option")
     relocate("com.google.gson", "$shaded.gson")
+    relocate("org.yaml.snakeyaml", "$shaded.snakeyaml")
     // Gson's compile-time annotations are not needed at run time.
     dependencies { exclude(dependency("com.google.errorprone:error_prone_annotations")) }
     exclude("META-INF/maven/**", "META-INF/versions/*/module-info.class", "module-info.class")

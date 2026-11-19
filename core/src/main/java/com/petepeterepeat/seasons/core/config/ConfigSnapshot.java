@@ -23,6 +23,9 @@ import java.util.TreeMap;
  * @param markersLeftOut markers.yml's problems if it couldn't be loaded at startup and was left
  *     out, so the waypoints are none; empty otherwise. As with galleries, a reload never leaves it
  *     out.
+ * @param settings every setting config.yml has, by key path such as {@code hof.entry.cooldown},
+ *     with its value in force as the file (or the bundled default) writes it; only keys the bundled
+ *     file lists, so nothing else in config.yml is ever shown
  */
 public record ConfigSnapshot(
     SeasonsConfig config,
@@ -32,12 +35,35 @@ public record ConfigSnapshot(
     Map<String, Gallery> galleries,
     Map<String, List<ConfigProblem>> galleriesLeftOut,
     Waypoints waypoints,
-    List<ConfigProblem> markersLeftOut) {
+    List<ConfigProblem> markersLeftOut,
+    Map<String, String> settings) {
   public ConfigSnapshot {
     seasons = Map.copyOf(seasons);
     galleries = java.util.Collections.unmodifiableMap(new TreeMap<>(galleries));
     galleriesLeftOut = java.util.Collections.unmodifiableMap(new TreeMap<>(galleriesLeftOut));
     markersLeftOut = List.copyOf(markersLeftOut);
+    settings = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(settings));
+  }
+
+  public ConfigSnapshot(
+      SeasonsConfig config,
+      Messages messages,
+      Secrets secrets,
+      Map<Integer, SeasonFile> seasons,
+      Map<String, Gallery> galleries,
+      Map<String, List<ConfigProblem>> galleriesLeftOut,
+      Waypoints waypoints,
+      List<ConfigProblem> markersLeftOut) {
+    this(
+        config,
+        messages,
+        secrets,
+        seasons,
+        galleries,
+        galleriesLeftOut,
+        waypoints,
+        markersLeftOut,
+        Map.of());
   }
 
   public ConfigSnapshot(
@@ -98,6 +124,14 @@ public record ConfigSnapshot(
     Map<String, Gallery> next = new TreeMap<>(galleries);
     next.put(gallery.id(), gallery);
     return new ConfigSnapshot(
-        config, messages, secrets, seasons, next, galleriesLeftOut, waypoints, markersLeftOut);
+        config,
+        messages,
+        secrets,
+        seasons,
+        next,
+        galleriesLeftOut,
+        waypoints,
+        markersLeftOut,
+        settings);
   }
 }
