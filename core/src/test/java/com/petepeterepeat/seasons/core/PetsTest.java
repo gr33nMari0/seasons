@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -50,6 +51,7 @@ class PetsTest {
             "1.2.3",
             fake.clock,
             webhooks,
+            MapPublisher.NONE,
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.empty());

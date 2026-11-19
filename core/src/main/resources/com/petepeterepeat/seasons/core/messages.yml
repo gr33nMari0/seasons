@@ -42,6 +42,9 @@ status:
   unreadable: "<red>season.json can't be read: <error></red>"
   capabilities-ok: "<green>The <platform> adapter supports everything Seasons uses.</green>"
   capability-gap: "<yellow>Not available on <platform>: <capability></yellow>"
+  map-none: "<gray>BlueMap isn't installed, so no map markers are published.</gray>"
+  map-waiting: "<yellow>BlueMap is installed but hasn't started yet; the map markers go up once it has.</yellow>"
+  map-published: "<gray>BlueMap: <markers> markers on <maps> maps.</gray>"
   players: "<gray>Players: <archived> archived into Season <season>, <waiting> still to archive at login</gray>"
   pets: "<gray>Pets: <count> waiting to travel</gray>"
   furthest: "<gray>Furthest block from 0,0 this season: <distance> blocks, by <name> at <x>, <z></gray>"
@@ -420,7 +423,7 @@ zone:
     box: "a box from <x1>, <y1>, <z1> to <x2>, <y2>, <z2>"
 
 config:
-  reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml, the season files and the galleries.</green>"
+  reloaded: "<green>Reloaded config.yml, messages.yml, secrets.yml, the season files, the galleries and the waypoints.</green>"
   reload-failed: "<red>Reload failed. The previous config stays live.</red>"
   reload-failed-by: "<red><name> ran /season reload and it failed. The previous config stays live.</red>"
   reload-error: "<red>Reload failed: <error>. See the server log.</red>"
@@ -431,6 +434,17 @@ config:
   problem-line: "<red><file>, line <line>, column <column>:</red> <message>"
   problem-path: "<red><file>, at <path>:</red> <message>"
   problem-file: "<red><file>:</red> <message>"
+
+marker:
+  added: "<green>Added waypoint <name> to <set> at <x>, <y>, <z> in <dimension>.</green>"
+  no-map: "<gray>BlueMap isn't installed, so it shows once BlueMap is.</gray>"
+  removed: "<green>Removed waypoint <name> from <set>.</green>"
+  exists: "<red><set> already has a waypoint called <name>.</red>"
+  unknown: "<red><set> has no waypoint called <name>.</red>"
+  bad-set: "<red>Waypoint sets are lower-case letters, digits and dashes, up to 32, such as megaprojects.</red>"
+  bad-name: "<red>Waypoint names are 1 to 64 characters.</red>"
+  player-only: "<red>Stand where the waypoint goes and run this in game.</red>"
+  failed: "<red>The waypoint wasn't saved: <error>. See the server log.</red>"
 
 vault:
   player-only: "<red>Only players have an ender vault.</red>"

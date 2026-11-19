@@ -117,8 +117,8 @@ final class SpawnCommands {
         source,
         new ConfigEdits.Change(
             "seasons/" + season + ".yml spawn",
-            file.flatMap(SeasonFile::spawn).map(SpawnCommands::describe).orElse(ConfigEdits.NONE),
-            describe(at)),
+            file.flatMap(SeasonFile::spawn).map(ConfigEdits::describe).orElse(ConfigEdits.NONE),
+            ConfigEdits.describe(at)),
         () -> SeasonFiles.writeSpawn(loader.seasonFile(season), backups, season, at),
         "spawn.failed",
         () -> {
@@ -170,7 +170,9 @@ final class SpawnCommands {
     edits.edit(
         source,
         new ConfigEdits.Change(
-            "seasons/" + season + ".yml spawnCandidates." + name, ConfigEdits.NONE, describe(at)),
+            "seasons/" + season + ".yml spawnCandidates." + name,
+            ConfigEdits.NONE,
+            ConfigEdits.describe(at)),
         () -> SeasonFiles.writeCandidate(loader.seasonFile(season), backups, season, name, at),
         "spawn.candidate.failed",
         () -> {
@@ -201,7 +203,7 @@ final class SpawnCommands {
         source,
         new ConfigEdits.Change(
             "seasons/" + season + ".yml spawnCandidates." + name,
-            describe(at.get()),
+            ConfigEdits.describe(at.get()),
             ConfigEdits.NONE),
         () -> SeasonFiles.removeCandidate(loader.seasonFile(season), backups, season, name),
         "spawn.candidate.failed",
@@ -307,11 +309,6 @@ final class SpawnCommands {
         && a.blockX() == b.blockX()
         && a.blockY() == b.blockY()
         && a.blockZ() == b.blockZ();
-  }
-
-  /** A position as the audit log writes it: {@code 3000, 64, 0 in minecraft:overworld}. */
-  static String describe(Position at) {
-    return at.blockX() + ", " + at.blockY() + ", " + at.blockZ() + " in " + at.dimension();
   }
 
   private Messages messages() {

@@ -29,6 +29,8 @@ import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
+import com.petepeterepeat.seasons.core.map.MarkerCommands;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -89,6 +91,7 @@ public final class Seasons implements SeasonsApi {
   private final String version;
   private final Clock clock;
   private final Webhooks webhooks;
+  private final MapPublisher maps;
   private final Map<String, String> environment;
   private final SerialWriter writer;
   private final Optional<ScenarioHooks> hooks;
@@ -114,6 +117,8 @@ public final class Seasons implements SeasonsApi {
   private LongSupplier nanoTime = System::nanoTime;
 
   /**
+   * @param maps publishes the map to a web map such as BlueMap, or {@link MapPublisher#NONE};
+   *     Seasons closes it at {@link #stop}
    * @param environment environment variables, for the webhook overrides
    * @param writer the file writer thread; Seasons closes it at {@link #stop}
    * @param hooks the scenario hooks, only on a scenario server (docs/adr/0003)
@@ -123,6 +128,7 @@ public final class Seasons implements SeasonsApi {
       String version,
       Clock clock,
       Webhooks webhooks,
+      MapPublisher maps,
       Map<String, String> environment,
       SerialWriter writer,
       Optional<ScenarioHooks> hooks) {
@@ -130,6 +136,7 @@ public final class Seasons implements SeasonsApi {
     this.version = version;
     this.clock = clock;
     this.webhooks = webhooks;
+    this.maps = maps;
     this.environment = Map.copyOf(environment);
     this.writer = writer;
     this.hooks = hooks;
@@ -347,7 +354,8 @@ public final class Seasons implements SeasonsApi {
                 archives,
                 vaults,
                 halls,
-                pets::waiting));
+                pets::waiting,
+                maps::status));
     commands = built;
     platform
         .events()
@@ -373,6 +381,9 @@ public final class Seasons implements SeasonsApi {
     nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
     nodes.addAll(
         new ZoneCommands(platform, config, loader, edits, seasons, zoning, seasonBackups).nodes());
+    nodes.add(
+        new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
+            .node());
     platform.commands().register(built.root(nodes));
     platform
         .commands()
@@ -522,6 +533,7 @@ public final class Seasons implements SeasonsApi {
     }
     writer.close();
     webhooks.close();
+    maps.close();
   }
 
   @Override

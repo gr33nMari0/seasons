@@ -5,6 +5,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.petepeterepeat.seasons.core.announce.Webhooks;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -44,6 +45,7 @@ class SpawnCommandsTest {
             "1.2.3",
             fake.clock,
             Webhooks.NONE,
+            MapPublisher.NONE,
             Map.of(),
             new SerialWriter(Runnable::run),
             Optional.empty());

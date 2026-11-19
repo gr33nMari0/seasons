@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.Seasons;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -123,6 +124,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             getPluginMeta().getVersion(),
             clock,
             new DiscordWebhooks(),
+            MapPublisher.NONE,
             System.getenv(),
             new SerialWriter(),
             hooks);

@@ -22,6 +22,7 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
@@ -97,7 +98,8 @@ final class SeasonCommands {
       ArchiveFiles archives,
       VaultFiles vaults,
       HallService hall,
-      java.util.function.LongSupplier petsWaiting) {}
+      java.util.function.LongSupplier petsWaiting,
+      java.util.function.Supplier<MapPublisher.Status> map) {}
 
   SeasonCommands(
       Platform platform,
@@ -258,6 +260,18 @@ final class SeasonCommands {
       source.reply(
           messages.get("status.capability-gap", "platform", name, "capability", gap.name()));
     }
+    source.reply(
+        switch (services.map().get()) {
+          case MapPublisher.Status.NotInstalled _ -> messages.get("status.map-none");
+          case MapPublisher.Status.Waiting _ -> messages.get("status.map-waiting");
+          case MapPublisher.Status.Published published ->
+              messages.get(
+                  "status.map-published",
+                  "markers",
+                  Integer.toString(published.markers()),
+                  "maps",
+                  Integer.toString(published.maps()));
+        });
   }
 
   void info(CommandSource source, Arguments arguments) {

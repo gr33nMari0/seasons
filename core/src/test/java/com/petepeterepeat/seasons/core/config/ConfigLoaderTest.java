@@ -336,6 +336,55 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void waypointsLoadFromMarkersYmlAndABrokenOneIsAProblem() throws IOException {
+    Files.createDirectories(worldDir());
+    Files.writeString(
+        worldDir().resolve("markers.yml"),
+        """
+        schema-version: 1
+        sets:
+          megaprojects:
+            Peter's Tower: { dimension: minecraft:overworld, pos: [100, 64, -200] }
+            "<red>Hub</red>": { pos: [0, 70, 0] }
+          farms:
+            Iron Farm: { dimension: minecraft:the_nether, pos: [10, 70, -20] }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    var waypoints = result.snapshot().orElseThrow().waypoints();
+    assertThat(waypoints.sets()).containsOnlyKeys("farms", "megaprojects");
+    assertThat(waypoints.sets().get("megaprojects"))
+        .extracting(w -> w.name())
+        .containsExactly("<red>Hub</red>", "Peter's Tower");
+    assertThat(waypoints.find("megaprojects", "PETER'S TOWER").orElseThrow().at())
+        .isEqualTo(
+            new com.petepeterepeat.seasons.core.port.Position(
+                "minecraft:overworld", 100, 64, -200, 0f, 0f));
+
+    ConfigLoader server =
+        new ConfigLoader(
+            configDir(), worldDir(), Map.of(), dimension -> !dimension.endsWith("the_neter"));
+    for (String broken :
+        List.of(
+            "Mega_Projects: { Hub: { pos: [1, 2, 3] } }",
+            "hubs: { Half: { pos: [1, 2] } }",
+            "hubs: { Hub: { pos: [1, 2, 3] }, HUB: { pos: [4, 5, 6] } }",
+            "hubs: { Hub: { dimension: minecraft:the_neter, pos: [1, 2, 3] } }",
+            "hubs: { \"" + "x".repeat(65) + "\": { pos: [1, 2, 3] } }")) {
+      Files.writeString(
+          worldDir().resolve("markers.yml"), "schema-version: 1\nsets:\n  " + broken + "\n");
+      assertThat(server.load().problems())
+          .as(broken)
+          .singleElement()
+          .satisfies(problem -> {
+            assertThat(problem.file()).isEqualTo("markers.yml");
+            assertThat(problem.path().orElseThrow()).startsWith("sets.");
+          });
+    }
+  }
+
+  @Test
   void aZoneInADimensionTheServerDoesntHaveIsAProblem() throws IOException {
     Files.createDirectories(worldDir().resolve("seasons"));
     Files.writeString(

@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.util.function.Consumer;
@@ -101,6 +102,11 @@ public final class ConfigEdits {
                           change.before() + " -> " + change.after());
                       done.run();
                     }));
+  }
+
+  /** A position as the audit log writes it: {@code 3000, 64, 0 in minecraft:overworld}. */
+  public static String describe(Position at) {
+    return at.blockX() + ", " + at.blockY() + ", " + at.blockZ() + " in " + at.dimension();
   }
 
   /** Who ran a command, as the audit log names them. */

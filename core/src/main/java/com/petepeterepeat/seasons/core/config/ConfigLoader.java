@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core.config;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.GalleryFiles;
 import com.petepeterepeat.seasons.core.hall.GalleryRules;
+import com.petepeterepeat.seasons.core.map.Waypoints;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.zone.UnlockCondition;
@@ -49,6 +50,7 @@ public final class ConfigLoader {
   public static final String CONFIG = "config.yml";
   public static final String MESSAGES = "messages.yml";
   public static final String SECRETS = "secrets.yml";
+  public static final String MARKERS = "markers.yml";
   private static final String SECRETS_TEMPLATE = "secrets.template.yml";
   public static final String DISCORD_WEBHOOK_ENV = "SEASONS_DISCORD_WEBHOOK";
   public static final String ADMIN_WEBHOOK_ENV = "SEASONS_ADMIN_WEBHOOK";
@@ -64,6 +66,7 @@ public final class ConfigLoader {
   private final Path configDirectory;
   private final Path seasonsDirectory;
   private final Path galleriesDirectory;
+  private final Path markersFile;
   private final Map<String, String> environment;
   private final Predicate<String> dimensionExists;
 
@@ -92,6 +95,7 @@ public final class ConfigLoader {
     this.configDirectory = configDirectory;
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
+    this.markersFile = worldDataDirectory.resolve(MARKERS);
     this.environment = Map.copyOf(environment);
     this.dimensionExists = dimensionExists;
   }
@@ -118,6 +122,11 @@ public final class ConfigLoader {
   /** {@code <world>/seasons/seasons/<n>.yml}. */
   public Path seasonFile(int season) {
     return seasonsDirectory.resolve(season + ".yml");
+  }
+
+  /** {@code <world>/seasons/markers.yml}, the shared waypoints. */
+  public Path markersFile() {
+    return markersFile;
   }
 
   /** Writes the bundled config.yml, messages.yml and secrets.yml where a server has none. */
@@ -158,6 +167,7 @@ public final class ConfigLoader {
     Messages messages = loadMessages(problems);
     Secrets secrets = loadSecrets(problems);
     Map<Integer, SeasonFile> seasons = loadSeasons(problems, warnings);
+    Waypoints waypoints = loadWaypoints(problems);
     Map<String, List<ConfigProblem>> leftOut = new HashMap<>();
     Map<String, Gallery> galleries = loadGalleries(leftOut);
     if (!leaveOutBrokenGalleries) {
@@ -169,7 +179,8 @@ public final class ConfigLoader {
       return new Result(Optional.empty(), problems, warnings);
     }
     return new Result(
-        Optional.of(new ConfigSnapshot(config, messages, secrets, seasons, galleries, leftOut)),
+        Optional.of(
+            new ConfigSnapshot(config, messages, secrets, seasons, galleries, leftOut, waypoints)),
         problems,
         warnings);
   }
@@ -247,6 +258,26 @@ public final class ConfigLoader {
       }
       galleries.remove(id);
     }
+  }
+
+  /** The shared waypoints, or none if the server has no markers.yml yet. */
+  private Waypoints loadWaypoints(List<ConfigProblem> problems) {
+    if (Files.notExists(markersFile)) {
+      return Waypoints.NONE;
+    }
+    try {
+      ConfigurationNode node = yaml(markersFile).load();
+      if (checkSchema(MARKERS, node, problems)) {
+        return WaypointFiles.read(node, dimensionExists);
+      }
+    } catch (WaypointFiles.Invalid e) {
+      problems.add(ConfigProblem.atPath(MARKERS, e.path(), Objects.requireNonNull(e.getMessage())));
+    } catch (ParsingException e) {
+      problems.add(syntax(MARKERS, e));
+    } catch (IOException e) {
+      problems.add(ConfigProblem.inFile(MARKERS, String.valueOf(e.getMessage())));
+    }
+    return Waypoints.NONE;
   }
 
   private @Nullable SeasonsConfig loadConfig(List<ConfigProblem> problems, List<String> warnings) {
