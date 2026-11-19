@@ -42,6 +42,9 @@ export default {
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 3000, -60, 0 in minecraft:overworld\.$/)
     await ctx.command(admin, '/season zone add pen cylinder 20', /^That zone would hold Season 3's spawn at 3000, -60, 0; the spawn must stay outside every zone\.$/)
     await standAt(ctx, admin, 'SeasonsAdmin', { x: SPAWN.x + 100, y: FLOOR, z: SPAWN.z })
+    // For an outside zone, outside the zone is inside its circle: one drawn away from the spawn
+    // would hold it.
+    await ctx.command(admin, '/season zone add beyond outside circle 20', /^That zone would hold Season 3's spawn at 3000, -60, 0; the spawn must stay outside every zone\.$/)
     await ctx.command(admin, '/season zone add fold cylinder 20', /^Added zone fold: /)
     await standAt(ctx, admin, 'SeasonsAdmin', { x: SPAWN.x + 105, y: FLOOR, z: SPAWN.z })
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn can't be inside zone fold; the spawn must stay outside every zone\.$/)
