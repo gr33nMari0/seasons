@@ -127,7 +127,7 @@ export default {
     const farm = over.get('seasons/zone-farm')
     assert(farm.minY === -64 && farm.maxY === 1 && farm.points === 4 && farm.holes === 0, `a box keeps its corners: ${JSON.stringify(farm)}`)
     const frontier = over.get('seasons/zone-frontier')
-    assert(frontier.points === 4 && frontier.holes === 2 && frontier.x === FRONTIER.x && frontier.z === FRONTIER.z, `the frontier is the world with its circle and the Hall cut out, placed at its centre: ${JSON.stringify(frontier)}`)
+    assert(frontier.points === 4 && frontier.holes === 3 && frontier.x === FRONTIER.x && frontier.z === FRONTIER.z, `the frontier is the world with its circle, the Hall and the museum cut out, placed at its centre: ${JSON.stringify(frontier)}`)
     assert(!over.has('seasons/zone-sky'), 'a height zone isn\'t shown')
     const oldNether = markersIn(launched, NETHER).get('seasons/zone-old-nether')
     assert(oldNether.minY === 0 && oldNether.maxY === 128, `old-nether stops at the roof: ${JSON.stringify(oldNether)}`)

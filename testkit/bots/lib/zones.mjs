@@ -241,10 +241,11 @@ export async function outsideCircle (ctx, admin, id, centre, radius) {
 
 /**
  * Follows the world border a bot's client knows, from the border packets the server sends:
- * `bot.border` is { x, z, size }, and starts as whatever the server sent at login.
+ * `bot.border` is { x, z, size }. The packet sent at login has gone by when a bot has joined, so
+ * it starts as the world's own border, which scenarios check with /worldborder get.
  */
 export function trackBorder (bot) {
-  bot.border = { x: 0, z: 0, size: undefined }
+  bot.border = { x: 0, z: 0, size: WORLD_BORDER }
   bot._client.on('initialize_world_border', (p) => { bot.border = { x: p.x, z: p.z, size: Number(p.newDiameter) } })
   bot._client.on('world_border_center', (p) => { bot.border = { ...bot.border, x: p.x, z: p.z } })
   bot._client.on('world_border_size', (p) => { bot.border = { ...bot.border, size: Number(p.diameter) } })

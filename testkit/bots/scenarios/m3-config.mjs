@@ -93,6 +93,6 @@ export default {
     assert(!/pets\.maxPerPlayer","result":"ok","details":"3 -> 4"/.test(audit), 'the set that was put back isn\'t audited')
 
     // Only config admins.
-    await ctx.command(pat, '/season config get pets.enabled', /^(Unknown or incomplete command|I'm sorry, but you do not have permission)/)
+    await ctx.command(pat, '/season config get pets.enabled', /^(Unknown or incomplete command|Incorrect argument for command)/)
   }
 }

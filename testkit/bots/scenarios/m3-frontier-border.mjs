@@ -8,7 +8,7 @@
 import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { bed, hallToVisit, hof, standAt } from '../lib/visits.mjs'
-import { SPAWN, WORLD_BORDER, endSeason2, outsideCircle, permit, trackBorder } from '../lib/zones.mjs'
+import { SPAWN, WORLD_BORDER, forceload, outsideCircle, permit, trackBorder } from '../lib/zones.mjs'
 
 const RADIUS = 60
 
@@ -19,7 +19,12 @@ export default {
     const pat = await ctx.join('Pat')
     trackBorder(pat)
     await hallToVisit(ctx, admin)
-    await endSeason2(ctx, admin)
+    // The spawn is set before the end: with a gallery, everyone waits in their cell until launch.
+    await forceload(ctx, admin, SPAWN, 8)
+    await standAt(ctx, admin, 'SeasonsAdmin', SPAWN)
+    await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 3000, -60, 0 /)
+    await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
+    await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     await outsideCircle(ctx, admin, 'frontier', SPAWN, RADIUS)
     await standAt(ctx, admin, 'Pat', SPAWN)
