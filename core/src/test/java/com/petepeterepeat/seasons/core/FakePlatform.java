@@ -149,7 +149,15 @@ public final class FakePlatform {
    * @param equipment a figure's; empty for others
    */
   public record Drawn(
-      String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {}
+      String tag,
+      Position at,
+      List<Optional<NeutralItem>> equipment,
+      String kind,
+      Optional<Figure> figure) {
+    public Drawn(String tag, Position at, List<Optional<NeutralItem>> equipment, String kind) {
+      this(tag, at, equipment, kind, Optional.empty());
+    }
+  }
 
   public @Nullable HallGuard guard;
   public com.petepeterepeat.seasons.core.port.@Nullable ZoneGuard zoneGuard;
@@ -784,7 +792,9 @@ public final class FakePlatform {
 
           @Override
           public java.util.UUID spawnFigure(Figure figure) {
-            return add(new Drawn(figure.tag(), figure.at(), figure.equipment(), "figure"));
+            return add(
+                new Drawn(
+                    figure.tag(), figure.at(), figure.equipment(), "figure", Optional.of(figure)));
           }
 
           @Override
@@ -809,6 +819,16 @@ public final class FakePlatform {
                 .filter(e -> within(e.getValue().at(), min, max))
                 .map(e -> new Displays.Shown(e.getKey(), e.getValue().tag(), e.getValue().at()))
                 .toList();
+          }
+
+          @Override
+          public boolean drawnAs(java.util.UUID figure, Figure.Kind kind, Optional<String> pose) {
+            Drawn shown = displays.get(figure);
+            return shown != null
+                && shown
+                    .figure()
+                    .map(f -> f.kind() == kind && f.pose().equals(pose))
+                    .orElse(kind == Figure.Kind.MANNEQUIN && pose.isEmpty());
           }
 
           @Override

@@ -131,4 +131,20 @@ class GalleryFilesTest {
         .extracting(e -> ((GalleryFiles.Invalid) e).path())
         .isEqualTo("decorating.afterArchive");
   }
+
+  @Test
+  void aCellsPoseReadsAndABadOneSaysWhere() throws Exception {
+    Gallery read =
+        GalleryFiles.read("season-2", yaml("season: 2\ncells:\n  c1:\n    pose: crouching\n"));
+    assertThat(read.cell("c1").orElseThrow().pose()).contains("crouching");
+
+    Path file = dir.resolve("posed.yml");
+    GalleryFiles.write(file, dir.resolve("backups"), read);
+    assertThat(java.nio.file.Files.readString(file)).contains("pose: crouching");
+
+    assertThatThrownBy(() ->
+            GalleryFiles.read("season-2", yaml("season: 2\ncells:\n  c1:\n    pose: dabbing\n")))
+        .extracting(e -> ((GalleryFiles.Invalid) e).path())
+        .isEqualTo("cells.c1.pose");
+  }
 }

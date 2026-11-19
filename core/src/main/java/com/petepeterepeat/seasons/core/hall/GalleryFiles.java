@@ -218,7 +218,16 @@ public final class GalleryFiles {
         throw new Invalid(where, "owners are season: player UUID");
       }
     }
-    return new Cell(id, bounds, anchors, owners, node.node("imported").getBoolean(false));
+    Optional<String> pose = Optional.empty();
+    if (!node.node("pose").virtual()) {
+      String name = node.node("pose").getString("");
+      if (!Cell.POSES.contains(name)) {
+        throw new Invalid(
+            path + ".pose", "is one of " + String.join(", ", Cell.POSES) + ", not '" + name + "'");
+      }
+      pose = name.equals("standing") ? Optional.empty() : Optional.of(name);
+    }
+    return new Cell(id, bounds, anchors, owners, node.node("imported").getBoolean(false), pose);
   }
 
   private static Optional<Bounds> bounds(ConfigurationNode node, String dimension, String path)
@@ -302,6 +311,9 @@ public final class GalleryFiles {
       }
       if (cell.imported()) {
         at.node("imported").set(true);
+      }
+      if (cell.pose().isPresent()) {
+        at.node("pose").set(cell.pose().get());
       }
       for (Anchor anchor : cell.anchors()) {
         ConfigurationNode a = at.node("anchors").appendListNode();

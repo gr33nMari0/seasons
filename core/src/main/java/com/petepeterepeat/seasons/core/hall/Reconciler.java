@@ -243,6 +243,12 @@ public final class Reconciler {
         repaired(ref, "drew the missing " + kind(planned.tag()));
         repairs++;
       } else if (planned instanceof HallRenderer.Planned.Shape shape
+          && !displays.drawnAs(match.id(), shape.figure().kind(), shape.figure().pose())) {
+        displays.remove(match.id());
+        renderer.spawn(planned);
+        repaired(ref, "drew the figure again as its gallery and cell now say");
+        repairs++;
+      } else if (planned instanceof HallRenderer.Planned.Shape shape
           && !displays.wears(match.id(), shape.figure().equipment())) {
         displays.remove(match.id());
         renderer.spawn(planned);

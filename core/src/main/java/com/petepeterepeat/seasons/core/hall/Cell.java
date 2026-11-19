@@ -15,20 +15,26 @@ import java.util.Optional;
  * @param bounds the cell's area; owners decorate inside it
  * @param owners the owner for each season, by season number
  * @param imported whether {@code /hof import} filled it from a hand-built cell
+ * @param pose the figure's pose, one of {@link #POSES}; empty for standing (questions 171)
  */
 public record Cell(
     String id,
     Optional<Bounds> bounds,
     List<Anchor> anchors,
     Map<Integer, PlayerId> owners,
-    boolean imported) {
+    boolean imported,
+    Optional<String> pose) {
+  /** The poses a mannequin keeps. */
+  public static final List<String> POSES =
+      List.of("standing", "crouching", "swimming", "fall-flying", "sleeping");
+
   public Cell {
     anchors = List.copyOf(anchors);
     owners = Map.copyOf(owners);
   }
 
   public static Cell create(String id) {
-    return new Cell(id, Optional.empty(), List.of(), Map.of(), false);
+    return new Cell(id, Optional.empty(), List.of(), Map.of(), false, Optional.empty());
   }
 
   public Optional<PlayerId> owner(int season) {
@@ -65,7 +71,7 @@ public record Cell(
   }
 
   public Cell withBounds(Bounds next) {
-    return new Cell(id, Optional.of(next), anchors, owners, imported);
+    return new Cell(id, Optional.of(next), anchors, owners, imported, pose);
   }
 
   /**
@@ -80,26 +86,30 @@ public record Cell(
       next.remove(same.getFirst());
     }
     next.add(anchor);
-    return new Cell(id, bounds, next, owners, imported);
+    return new Cell(id, bounds, next, owners, imported, pose);
   }
 
   public Cell withoutAnchors(AnchorType type) {
     List<Anchor> next = new ArrayList<>(anchors);
     next.removeIf(a -> a.type() == type);
-    return new Cell(id, bounds, next, owners, imported);
+    return new Cell(id, bounds, next, owners, imported, pose);
   }
 
   public Cell withAnchors(List<Anchor> next) {
-    return new Cell(id, bounds, next, owners, imported);
+    return new Cell(id, bounds, next, owners, imported, pose);
   }
 
   public Cell withOwner(int season, Optional<PlayerId> owner) {
     Map<Integer, PlayerId> next = new HashMap<>(owners);
     owner.ifPresentOrElse(o -> next.put(season, o), () -> next.remove(season));
-    return new Cell(id, bounds, anchors, next, imported);
+    return new Cell(id, bounds, anchors, next, imported, pose);
+  }
+
+  public Cell withPose(Optional<String> next) {
+    return new Cell(id, bounds, anchors, owners, imported, next);
   }
 
   public Cell withImported(boolean value) {
-    return new Cell(id, bounds, anchors, owners, value);
+    return new Cell(id, bounds, anchors, owners, value, pose);
   }
 }

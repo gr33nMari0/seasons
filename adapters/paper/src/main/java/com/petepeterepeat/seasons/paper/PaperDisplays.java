@@ -7,20 +7,24 @@ import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.Figure;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Position;
+import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ResolvableProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
 import org.bukkit.World;
+import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mannequin;
+import org.bukkit.entity.Pose;
 import org.bukkit.entity.TextDisplay;
 import org.bukkit.inventory.EntityEquipment;
 import org.bukkit.inventory.EquipmentSlot;
@@ -29,9 +33,9 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.BoundingBox;
 
 /**
- * Seasons' own entities: text and item displays, and mannequin figures. Each carries its tag under
- * {@code seasons:display}, so redraws find it and {@link PaperEvents} cancels every interaction
- * with it. Items they show are throwaway copies tagged {@code seasons:archived}.
+ * Seasons' own entities: text and item displays, and mannequin or armour-stand figures. Each
+ * carries its tag under {@code seasons:display}, so redraws find it and {@link PaperEvents} cancels
+ * every interaction with it. Items they show are throwaway copies tagged {@code seasons:archived}.
  */
 final class PaperDisplays implements Displays {
   private static final List<EquipmentSlot> FIGURE_SLOTS =
@@ -86,6 +90,9 @@ final class PaperDisplays implements Displays {
   @Override
   public UUID spawnFigure(Figure figure) {
     Location location = PaperPositions.toLocation(figure.at());
+    if (figure.kind() == Figure.Kind.ARMOUR_STAND) {
+      return spawnStand(location, figure);
+    }
     Mannequin mannequin =
         location
             .getWorld()
@@ -102,6 +109,7 @@ final class PaperDisplays implements Displays {
                   spawned.setSilent(true);
                   spawned.setAI(false);
                   spawned.setCollidable(false);
+                  spawned.setPose(pose(figure.pose()), true);
                   EntityEquipment equipment = spawned.getEquipment();
                   for (int i = 0; i < FIGURE_SLOTS.size() && i < figure.equipment().size(); i++) {
                     EquipmentSlot slot = FIGURE_SLOTS.get(i);
@@ -110,6 +118,71 @@ final class PaperDisplays implements Displays {
                   tag(spawned, figure.tag());
                 });
     return mannequin.getUniqueId();
+  }
+
+  /**
+   * The fallback figure: an armour stand with arms, every slot locked, wearing a player head in the
+   * archived skin (questions 170).
+   */
+  private UUID spawnStand(Location location, Figure figure) {
+    ArmorStand stand =
+        location
+            .getWorld()
+            .spawn(
+                location,
+                ArmorStand.class,
+                spawned -> {
+                  spawned.customName(text.render(figure.name()).compact());
+                  spawned.setCustomNameVisible(true);
+                  spawned.setArms(true);
+                  spawned.setInvulnerable(true);
+                  spawned.setGravity(false);
+                  spawned.setSilent(true);
+                  for (EquipmentSlot slot : FIGURE_SLOTS) {
+                    for (ArmorStand.LockType lock : ArmorStand.LockType.values()) {
+                      spawned.addEquipmentLock(slot, lock);
+                    }
+                  }
+                  EntityEquipment equipment = spawned.getEquipment();
+                  for (int i = 1; i < FIGURE_SLOTS.size() && i < figure.equipment().size(); i++) {
+                    equipment.setItem(FIGURE_SLOTS.get(i), copy(figure.equipment().get(i)));
+                  }
+                  equipment.setItem(EquipmentSlot.HEAD, head(figure));
+                  tag(spawned, figure.tag());
+                });
+    return stand.getUniqueId();
+  }
+
+  /** A player head in the figure's skin, tagged like an archived copy. */
+  private ItemStack head(Figure figure) {
+    ItemStack head = ItemStack.of(Material.PLAYER_HEAD);
+    figure
+        .skin()
+        .ifPresent(skin -> head.setData(DataComponentTypes.PROFILE, profile(figure, skin)));
+    head.editPersistentDataContainer(
+        data -> data.set(archivedKey, PersistentDataType.BOOLEAN, true));
+    return head;
+  }
+
+  /** A pose by its name in gallery files: empty is standing, {@code crouching} is sneaking. */
+  private static Pose pose(Optional<String> name) {
+    return switch (name.orElse("standing")) {
+      case "crouching" -> Pose.SNEAKING;
+      case "swimming" -> Pose.SWIMMING;
+      case "fall-flying" -> Pose.FALL_FLYING;
+      case "sleeping" -> Pose.SLEEPING;
+      default -> Pose.STANDING;
+    };
+  }
+
+  @Override
+  public boolean drawnAs(UUID figure, Figure.Kind kind, Optional<String> pose) {
+    return switch (server.getEntity(figure)) {
+      case ArmorStand _ -> kind == Figure.Kind.ARMOUR_STAND;
+      case Mannequin mannequin ->
+          kind == Figure.Kind.MANNEQUIN && mannequin.getPose() == pose(pose);
+      case null, default -> false;
+    };
   }
 
   private static ResolvableProfile profile(
@@ -191,6 +264,10 @@ final class PaperDisplays implements Displays {
       return false;
     }
     for (int i = 0; i < FIGURE_SLOTS.size(); i++) {
+      if (living instanceof ArmorStand && FIGURE_SLOTS.get(i) == EquipmentSlot.HEAD) {
+        // Its own player head, made from the skin, not archived gear.
+        continue;
+      }
       ItemStack expected = copy(i < equipment.size() ? equipment.get(i) : Optional.empty());
       ItemStack actual = worn.getItem(FIGURE_SLOTS.get(i));
       if (expected.isEmpty() != actual.isEmpty()

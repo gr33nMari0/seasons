@@ -7,6 +7,7 @@ import com.petepeterepeat.seasons.core.archive.ImportedCell;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.Figure;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -134,6 +135,16 @@ public final class HallRenderer implements DisplayRenderer {
     Messages messages = config.get().messages();
     String seasonText = Integer.toString(season);
     List<Planned> planned = new ArrayList<>();
+    boolean stand =
+        ref.gallery().renderer() == FigureRenderer.ARMOUR_STAND
+            || !platform.capabilities().has(Capability.MANNEQUINS);
+    List<Optional<NeutralItem>> equipment = new ArrayList<>(archive.figureEquipment());
+    // An armour stand wears the player's head; its helmet goes on a trophy anchor (questions 170).
+    Optional<NeutralItem> helmet = Optional.empty();
+    if (stand && !equipment.isEmpty()) {
+      helmet = equipment.getFirst();
+      equipment.set(0, Optional.empty());
+    }
     ref.cell()
         .anchor(AnchorType.FIGURE)
         .ifPresent(anchor ->
@@ -144,8 +155,28 @@ public final class HallRenderer implements DisplayRenderer {
                         messages.get(
                             "hof.figure-name", "name", archive.name(), "season", seasonText),
                         archive.skin(),
-                        archive.figureEquipment(),
-                        new DisplayTag(gallery, cell, season, DisplayTag.FIGURE).toString()))));
+                        equipment,
+                        new DisplayTag(gallery, cell, season, DisplayTag.FIGURE).toString(),
+                        stand ? Figure.Kind.ARMOUR_STAND : Figure.Kind.MANNEQUIN,
+                        stand ? Optional.empty() : ref.cell().pose()))));
+    if (helmet.isPresent()) {
+      List<Position> frames =
+          archive
+              .imported()
+              .map(i -> i.frames().stream().map(ImportedCell.Frame::at).toList())
+              .orElse(List.of());
+      Optional<Anchor> free =
+          ref.cell().anchors(AnchorType.TROPHY).stream()
+              .filter(trophy -> frames.stream().noneMatch(trophy::isAt))
+              .findFirst();
+      NeutralItem worn = helmet.get();
+      free.ifPresent(trophy ->
+          planned.add(
+              new Planned.Item(
+                  above(trophy.at(), 0.5),
+                  worn,
+                  new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString())));
+    }
     ref.cell()
         .anchor(AnchorType.PLAQUE)
         .ifPresent(anchor ->
