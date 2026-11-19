@@ -64,6 +64,9 @@ import org.bukkit.scoreboard.Team;
 final class ScenarioWorld implements Listener {
   private static final String SEASONS = "Seasons";
 
+  /** How long a reset waits for the chunks it loaded to load their entities: five seconds. */
+  private static final int ENTITY_LOAD_TICKS = 100;
+
   private final Plugin plugin;
   private final Server server;
   private final Path state;
@@ -130,25 +133,85 @@ final class ScenarioWorld implements Listener {
         100,
         () -> {
           try {
-            beforeSeasons.run();
-            List<String> unrestored = new ArrayList<>();
-            // The world is put back while Seasons is stopped: loading a chunk to restore it can
-            // still reach Seasons (the tripwire scans what a chunk holds), and whatever that
-            // writes goes with Seasons' files.
-            hooks.reset(() -> {
-              clearScoreboard();
-              restoreWorlds(unrestored);
-              clearServerLists();
-              deletePlayerFiles();
-            });
-            List<String> leaks = new ArrayList<>(unrestored);
-            leaks.addAll(differences(read(state.resolve("baseline.txt")), fingerprint(hooks)));
-            done.complete(leaks);
+            List<Chunk> chunks = loadTouched();
+            whenEntitiesLoaded(
+                chunks, ENTITY_LOAD_TICKS, () -> finish(hooks, beforeSeasons, chunks, done));
           } catch (RuntimeException e) {
             done.completeExceptionally(e);
           }
         });
     return done;
+  }
+
+  private void finish(
+      ScenarioHooks hooks,
+      Runnable beforeSeasons,
+      List<Chunk> chunks,
+      CompletableFuture<List<String>> done) {
+    try {
+      beforeSeasons.run();
+      List<String> unrestored = new ArrayList<>();
+      for (Chunk chunk : chunks) {
+        if (!chunk.isEntitiesLoaded()) {
+          unrestored.add("entities: chunk " + key(chunk) + " never loaded its entities");
+        }
+      }
+      // The world is put back while Seasons is stopped: loading a chunk to restore it can still
+      // reach Seasons (the tripwire scans what a chunk holds), and whatever that writes goes with
+      // Seasons' files.
+      hooks.reset(() -> {
+        clearScoreboard();
+        restoreWorlds(chunks, unrestored);
+        clearServerLists();
+        deletePlayerFiles();
+      });
+      List<String> leaks = new ArrayList<>(unrestored);
+      leaks.addAll(differences(read(state.resolve("baseline.txt")), fingerprint(hooks)));
+      done.complete(leaks);
+    } catch (RuntimeException e) {
+      done.completeExceptionally(e);
+    }
+  }
+
+  /**
+   * Loads every chunk loaded since the last reset, and every chunk loaded now, holding each with a
+   * ticket of this plugin's until the reset has put it back.
+   */
+  private List<Chunk> loadTouched() {
+    List<Chunk> chunks = new ArrayList<>();
+    for (World world : server.getWorlds()) {
+      Set<String> keys = new LinkedHashSet<>();
+      String prefix = world.getKey() + " ";
+      touched.stream().filter(t -> t.startsWith(prefix)).forEach(keys::add);
+      for (Chunk chunk : world.getLoadedChunks()) {
+        keys.add(key(chunk));
+      }
+      for (String key : keys) {
+        String[] parts = key.split(" ", -1);
+        Chunk chunk = world.getChunkAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+        chunk.addPluginChunkTicket(plugin);
+        chunks.add(chunk);
+      }
+    }
+    return chunks;
+  }
+
+  /**
+   * Runs {@code then} once every chunk has loaded its entities, which Paper does after the chunk
+   * itself, or after {@code ticksLeft} ticks; the reset reports a chunk still without them.
+   */
+  private void whenEntitiesLoaded(List<Chunk> chunks, int ticksLeft, Runnable then) {
+    if (ticksLeft <= 0 || chunks.stream().allMatch(Chunk::isEntitiesLoaded)) {
+      then.run();
+      return;
+    }
+    server
+        .getGlobalRegionScheduler()
+        .runDelayed(plugin, task -> whenEntitiesLoaded(chunks, ticksLeft - 1, then), 1);
+  }
+
+  private static String key(Chunk chunk) {
+    return chunk.getWorld().getKey() + " " + chunk.getX() + " " + chunk.getZ();
   }
 
   private void whenEveryoneLeft(int ticksLeft, Runnable then) {
@@ -175,25 +238,17 @@ final class ScenarioWorld implements Listener {
     board.getTeams().forEach(Team::unregister);
   }
 
-  private void restoreWorlds(List<String> unrestored) {
+  private void restoreWorlds(List<Chunk> chunks, List<String> unrestored) {
     Map<String, String> rules = read(state.resolve("rules.txt"));
+    for (Chunk chunk : chunks) {
+      if (!restore(chunk.getWorld(), chunk)) {
+        unrestored.add("blocks: chunk " + key(chunk) + " differs from when it was generated");
+      }
+    }
     for (World world : server.getWorlds()) {
       world.getForceLoadedChunks().forEach(c -> c.setForceLoaded(false));
-      world.removePluginChunkTickets(plugin);
-      Set<String> chunks = new LinkedHashSet<>();
-      String prefix = world.getKey() + " ";
-      touched.stream().filter(t -> t.startsWith(prefix)).forEach(chunks::add);
-      for (Chunk chunk : world.getLoadedChunks()) {
-        chunks.add(prefix + chunk.getX() + " " + chunk.getZ());
-      }
-      for (String key : chunks) {
-        String[] parts = key.split(" ", -1);
-        Chunk chunk = world.getChunkAt(Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
-        if (!restore(world, chunk)) {
-          unrestored.add("blocks: chunk " + key + " differs from when it was generated");
-        }
-      }
       removeEntities(world);
+      world.removePluginChunkTickets(plugin);
       putBackRules(world, rules);
     }
     touched.clear();

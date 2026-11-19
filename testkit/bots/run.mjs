@@ -97,6 +97,7 @@ for (const { name, session } of steps) {
     serverDir: values['server-dir'],
     tls: values.tls,
     webhookPort: Number(values['webhook-port']),
+    control: request,
     log
   })
   const body = scenario.sessions ? scenario.sessions[session - 1] : scenario.run

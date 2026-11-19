@@ -81,12 +81,10 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
   public void onEnable() {
     enabledAt = System.currentTimeMillis();
     getServer().getPluginManager().registerEvents(this, this);
-    if (shared) {
-      ScenarioWorld resettable =
-          new ScenarioWorld(this, Path.of(property("seasons.scenario.state")));
-      getServer().getPluginManager().registerEvents(resettable, this);
-      world = resettable;
-    }
+    // Every scenario server can reset; only a shared one does so between scenarios by itself.
+    ScenarioWorld resettable = new ScenarioWorld(this, Path.of(property("seasons.scenario.state")));
+    getServer().getPluginManager().registerEvents(resettable, this);
+    world = resettable;
     ScenarioCommands commands = new ScenarioCommands(this, this::reset);
     getServer().getPluginManager().registerEvents(commands, this);
     getLifecycleManager()
@@ -338,7 +336,7 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
     ScenarioHooks hooks = getServer().getServicesManager().load(ScenarioHooks.class);
     if (resettable == null || hooks == null) {
       return CompletableFuture.failedFuture(
-          new IllegalStateException("This server isn't shared between scenarios"));
+          new IllegalStateException("Seasons' scenario hooks aren't running"));
     }
     String archived = step;
     return resettable.reset(hooks, () -> copyArchives(archived));

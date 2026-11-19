@@ -39,8 +39,8 @@ export class ScenarioContext {
    * @param webhookPort fixed for a shard, so a webhook URL written in one session still works in
    *   the next
    */
-  constructor ({ host, port, version, adminName, serverDir = '.', tls, webhookPort = 25601, log }) {
-    Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, log })
+  constructor ({ host, port, version, adminName, serverDir = '.', tls, webhookPort = 25601, control = async () => null, log }) {
+    Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, control, log })
     this.bots = []
     this.servers = []
     /** How far Seasons' clock runs ahead of this machine's, as /scenario clock last said. */
@@ -48,6 +48,20 @@ export class ScenarioContext {
     const latest = join(serverDir, 'logs/latest.log')
     /** Where the server log stood when the scenario started, so it reads only its own lines. */
     this.logStart = existsSync(latest) ? statSync(latest).size : 0
+  }
+
+  /**
+   * Resets the server to a fresh boot, as happens between scenarios on a shared server, and
+   * resolves with the test plugin's answer: "ok", or what the reset left behind. Every bot is
+   * kicked; join again afterwards. For checking the reset itself (docs/adr/0003).
+   */
+  async reset () {
+    const reply = await this.control('reset')
+    await Promise.all(this.bots.map((bot) => this.disconnected(bot, 10_000).catch(() => {})))
+    this.bots = []
+    this.adminBot = undefined
+    this.clockOffset = 0
+    return reply
   }
 
   /** An ISO-8601 time `ms` from now by Seasons' clock, in UTC, as /season schedule end takes it. */
