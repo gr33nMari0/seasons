@@ -105,7 +105,8 @@ public final class SeasonsPlugin extends JavaPlugin {
           .warn(
               "Scenario hooks are on (-D{}=true). Never run a real server like this.",
               ScenarioHooks.PROPERTY);
-      scenario.onReset(() -> restartFresh(platform, storage, seasonsClock, scenarioHooks));
+      scenario.onReset(whileStopped ->
+          restartFresh(platform, storage, seasonsClock, scenarioHooks, whileStopped));
       server
           .getServicesManager()
           .register(ScenarioHooks.class, scenario, this, ServicePriority.Normal);
@@ -130,17 +131,23 @@ public final class SeasonsPlugin extends JavaPlugin {
   }
 
   /**
-   * The scenario reset (docs/adr/0003): stops Seasons, deletes its config and data folders, and
-   * starts it again as on a fresh install. Only the scenario hooks call this.
+   * The scenario reset (docs/adr/0003): stops Seasons, runs {@code whileStopped}, deletes its
+   * config and data folders, and starts it again as on a fresh install. Only the scenario hooks
+   * call this.
    */
   private void restartFresh(
-      Platform platform, PaperStorage storage, Clock clock, Optional<ScenarioHooks> hooks) {
+      Platform platform,
+      PaperStorage storage,
+      Clock clock,
+      Optional<ScenarioHooks> hooks,
+      Runnable whileStopped) {
     Seasons running = seasons;
     if (running != null) {
       getServer().getServicesManager().unregister(SeasonsApi.class, running);
       running.stop();
       seasons = null;
     }
+    whileStopped.run();
     deleteTree(storage.configDirectory());
     deleteTree(storage.worldDataDirectory());
     start(platform, clock, hooks);

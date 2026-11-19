@@ -131,12 +131,16 @@ final class ScenarioWorld implements Listener {
         () -> {
           try {
             beforeSeasons.run();
-            clearScoreboard();
-            hooks.reset();
             List<String> unrestored = new ArrayList<>();
-            restoreWorlds(unrestored);
-            clearServerLists();
-            deletePlayerFiles();
+            // The world is put back while Seasons is stopped: loading a chunk to restore it can
+            // still reach Seasons (the tripwire scans what a chunk holds), and whatever that
+            // writes goes with Seasons' files.
+            hooks.reset(() -> {
+              clearScoreboard();
+              restoreWorlds(unrestored);
+              clearServerLists();
+              deletePlayerFiles();
+            });
             List<String> leaks = new ArrayList<>(unrestored);
             leaks.addAll(differences(read(state.resolve("baseline.txt")), fingerprint(hooks)));
             done.complete(leaks);

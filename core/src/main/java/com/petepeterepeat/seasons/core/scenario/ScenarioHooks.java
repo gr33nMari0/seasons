@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +46,7 @@ public final class ScenarioHooks implements CrashPoints {
   private final Runnable halt;
   private final ScenarioClock clock;
   private final ScenarioScheduler scheduler;
-  private volatile Runnable restart = () -> {};
+  private volatile Consumer<Runnable> restart = Runnable::run;
   private volatile @org.jspecify.annotations.Nullable Wiring wiring;
 
   /** What the hooks read from, set once Seasons has started. */
@@ -72,25 +73,29 @@ public final class ScenarioHooks implements CrashPoints {
   }
 
   /**
-   * How {@link #reset} starts Seasons again as a fresh install: stop it, delete its config and data
-   * folders, and start a new one. Set by the platform's plugin.
+   * How {@link #reset} starts Seasons again as a fresh install: stop it, run the task it is given,
+   * delete its config and data folders, and start a new one. Set by the platform's plugin.
    */
-  public void onReset(Runnable restart) {
+  public void onReset(Consumer<Runnable> restart) {
     this.restart = restart;
   }
 
   /**
    * Returns Seasons to a fresh install: no crash point armed, the clock back to real time, and
-   * Seasons stopped, its files deleted and started again. Runs on the thread that owns global
-   * state, with nobody online.
+   * Seasons stopped, its files deleted and started again. {@code whileStopped} runs once Seasons
+   * has stopped and before its files are deleted, so whatever Seasons might still write while the
+   * world is put back is deleted too. Runs on the thread that owns global state, with nobody
+   * online.
    */
-  public void reset() {
+  public void reset(Runnable whileStopped) {
     LOG.warn("Scenario reset: Seasons starts again as a fresh install");
     armed.clear();
     wiring = null;
-    restart.run();
-    scheduler.forgetDelayed();
-    clock.reset();
+    restart.accept(() -> {
+      scheduler.forgetDelayed();
+      clock.reset();
+      whileStopped.run();
+    });
   }
 
   /**
