@@ -10,7 +10,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
 | M4 to M7 | Not started | See On hold, below |
 
-Before the first beta, branch `m3-finish` builds what is left within M0 to M3 scope: access modes `bounds` and `gate`, `/hof claim`, a gallery's own settings, the armour-stand figure and poses, the launch button, `/season audit`, the archive status in `/season info`, item ids checked in config.yml, `launch.requireManual` and the saved last valid position. The plan is `docs/m3-finish.md`, the readings `docs/questions.md` 165 to 177.
+Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
 Test infrastructure: the faster scenario suite (#14) runs every scenario on every pull request in four CI shards, on shared servers reset and checked for leaks between scenarios, with the scenario clock and sync barrier in place of waits; the old one-server-per-scenario mode runs nightly (ADR 0003, questions 114 to 121).
 
@@ -193,9 +193,29 @@ After #18 opened: CI caught a race in `m3-frontier-border` (a trip to the Nether
 From the review of #18: Map Link's source (thebuildcraft/MapLink at 595f7f4) shows it imports BlueMap's points and areas, not only player positions, and leaves out areas larger than its `maxChunkArea`; questions 143, 158, 159 and 164 now say what it does and are decided, and the spec edit naming it is taken out of this branch (the owner makes it in the Docs original). An `outside` zone is now a ring on the map, reaching `max(2 × radius, 5000)` blocks beyond its circle or box (`MapModel.Outline.Beyond#around`; `MapModelsTest#anOutsideZoneIsARingWithItsInsideAsAHole`, `#aRingReachesTwiceTheRadiusBeyondItsInsideAndAtLeast5000Blocks`, `BlueMapPublisherTest#anOutsideZoneIsARingWithItsInsideAsAHoleAndSitsAtItsFrontier`, `m3-bluemap`). Height zones stay off the map, by the owner's decision (159). The secret refusal says a URL typed into the command is in the server log and should be rotated (163, `m3-config`). New end-to-end checks: an elytra and a pearl route in `m3-height-zones` (the pearl into the floor zone, since a thrown pearl can't climb into the sky), a chest and a bucket across the frontier in `m3-outside-zone`, and a death and respawn in `m3-frontier-border`, which found that a player respawning inside the square kept the world's border: a respawn now sends the frontier's again at once (`Milestones#respawned`, from `PlayerPostRespawnEvent`; `ZonesTest#aRespawnInsideTheFrontierBringsTheBorderBackAtOnce`).
 
 
+## Finishing M0 to M3
+
+**Before the first beta** (branch `m3-finish`). An audit of M0 to M3's scope against the spec's milestones, command, permission and config tables, `docs/questions.md` and the code found twelve things unbuilt or built only in part (questions 165). Passing end to end on Paper 26.3:
+
+| Item | Test |
+| --- | --- |
+| A gallery's own `assignment`, `access`, `renderer` and `decorating` times, each falling back to config.yml (questions 166) | unit: `GalleryFilesTest#aGallerysOwnSettingsReadAndWriteBack`, `#unsetSettingsComeFromConfigYml`, `#aBadSettingSaysWhere`, `HallRulesTest#aGallerysOwnAfterArchiveDecidesItsOwnersTime`; the scenarios below set them by hand edit |
+| Access mode `bounds`: a visitor walking or teleported into a cell is refused and audited; the owner walks in while decorating and is moved to the gallery entry when the window closes; `/hof <owner>` lands at the gallery entry; a bypass holder walks in (168) | `m2-access-bounds.mjs`; unit: `HallVisitsTest#aBoundsCellRefusesEveryoneButItsDecoratingOwner`, `#theSweepMovesAnyoneInsideABoundsCellToTheGalleryEntry`, `#hofToAPlayerInABoundsGalleryLandsAtTheGalleryEntry`, `ConfigLoaderTest#everyAccessModeLoads` |
+| Access mode `gate`: the gate plane is `cells.gateBlock` while the cell is locked and air while its owner may decorate it; the owner inside when it shuts goes to the gallery entry; nobody breaks or builds in it; a gate changed behind Seasons' back is put back and audited; still shut after a restart; a crash right after `GATE_SET` is journalled is set right at startup (169) | `m2-access-gate.mjs`, `m1-gate-crash.mjs` (two sessions each); unit: `GatesTest` |
+| `/hof claim [cell]` and `claim` assignment: players are told to claim when the window opens; a named cell or the one they stand in; each refusal; whoever never claims gets a free cell when archived; claims audited (167) | `m1-claim.mjs`; unit: `ClaimTest` |
+| The armour-stand figure: arms, every slot locked, invulnerable, in the player's head, the helmet on a trophy anchor; a visitor takes nothing from it; without mannequins every figure falls back (170) | `m1-armour-stand.mjs`; unit: `FiguresTest#anArmourStandGalleryDrawsTheFallbackWithTheHelmetOnATrophy`, `#withoutMannequinsFiguresFallBack` |
+| A cell's figure pose; reconciliation draws again a figure of the wrong kind or pose, and a crouching mannequin needs nothing after a restart (171) | `m1-armour-stand.mjs` (two sessions; the bot reads the pose players see); unit: `FiguresTest#aMannequinKeepsItsHelmetAndTakesItsCellsPose`, `#aFigureOfTheOtherRendererIsDrawnAgain`, `GalleryFilesTest#aCellsPoseReadsAndABadOneSaysWhere` |
+| The launch button: `/hof gallery launch`; outside the Intermission it says why; refused and audited for players without `seasons.admin.season`; two presses within 10 seconds launch, one after 10 seconds asks again (172) | `m1-launch-button.mjs`; unit: `LaunchButtonTest` |
+| `/season audit [player]`: the last 10 entries, oldest first, across the month boundary, only a player's with a name; config admins only (173) | `m3-audit.mjs`; unit: `AuditLogTest` |
+| `/season info` gives the archive status: archived into a season, or waiting to be (174) | `m1-archive-commands.mjs`; unit: `ArchivingTest#infoGivesTheArchiveStatus` |
+| config.yml names items and a gate block the server knows; `launch.requireManual: false` is refused (175, 176) | `m3-config.mjs`; unit: `ConfigLoaderTest#unknownItemsAreProblemsWithTheirPath`, `#requireManualFalseIsRefused` |
+| The last valid position is kept in the player record, so a player found inside a blocked zone after a restart goes back to where they last stood outside (177) | `m3-login-inside.mjs` (two sessions); unit: `ZonesTest#aPlayerFoundInsideAfterARestartGoesBackToTheirSavedLastValidPosition`, `#aSavedPositionNowInsideAZoneSendsThemToTheSpawn` |
+
+Built: `Gallery.Settings` and `FigureRenderer`, read and written by `GalleryFiles`; `HallService#mayBeIn`, `#galleryEntry` and `#inGate`, with `HallVisits` refusing entry to a `bounds` cell and its sweep moving people out; `hall/Gates` with the `GATE_SET` journal kind and crash point, `cells.gateBlock` and `World#setBlocks`; `HallService#claim` and `/hof claim`; `Figure.Kind` and a figure's pose, `Displays#drawnAs`, and the armour stand in `PaperDisplays`; a gallery's `launch` block, `/hof gallery launch` and the two-press button; `AuditLog#recent` and `/season audit`; the archive line of `/season info`; `World#isItem` and `#isBlock` for config checks; `PlayerRecord#lastValid`. Decisions: `docs/questions.md` 165 to 177.
+
 ## On hold
 
-Within M0 to M3 nothing is on hold: what is left is built on `m3-finish` (above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
+Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
 
 | Item | Milestone | Why then |
 | --- | --- | --- |
