@@ -25,8 +25,18 @@ public interface World {
   /** Whether the game knows an item, such as {@code minecraft:trident}. */
   boolean isItem(String id);
 
-  /** Whether the game knows a block, such as {@code minecraft:iron_bars}. */
-  boolean isBlock(String id);
+  /**
+   * Whether the game knows a block that can stand as a cell's gate, such as {@code
+   * minecraft:iron_bars}: solid, not falling, and holding nothing of its own (no block entity).
+   * Liquids, air, sand and containers aren't.
+   */
+  boolean isGateBlock(String id);
+
+  /**
+   * Whether the block at a position keeps contents or data of its own, as a container, sign,
+   * lectern or decorated pot does (a block entity). False if its chunk isn't loaded.
+   */
+  boolean holdsContents(Position position);
 
   /** Whether the chunk holding a position is loaded, entities included. Never loads it. */
   boolean isLoaded(Position position);

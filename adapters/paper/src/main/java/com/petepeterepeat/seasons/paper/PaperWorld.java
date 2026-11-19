@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.TileState;
 
 final class PaperWorld implements World {
   @Override
@@ -66,9 +67,24 @@ final class PaperWorld implements World {
   }
 
   @Override
-  public boolean isBlock(String id) {
+  public boolean isGateBlock(String id) {
     Material material = Material.matchMaterial(id);
-    return material != null && material.isBlock();
+    return material != null
+        && material.isBlock()
+        && material.isSolid()
+        && !material.hasGravity()
+        && !(material.createBlockData().createBlockState() instanceof TileState);
+  }
+
+  @Override
+  public boolean holdsContents(Position position) {
+    if (!isLoaded(position)) {
+      return false;
+    }
+    return world(position.dimension())
+            .getBlockAt(position.blockX(), position.blockY(), position.blockZ())
+            .getState(false)
+        instanceof TileState;
   }
 
   @Override

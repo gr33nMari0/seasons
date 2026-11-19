@@ -63,7 +63,12 @@ class MapModelsTest {
         }
 
         @Override
-        public boolean isBlock(String id) {
+        public boolean isGateBlock(String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean holdsContents(Position position) {
           throw new UnsupportedOperationException();
         }
 

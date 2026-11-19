@@ -164,7 +164,7 @@ public final class Seasons implements SeasonsApi {
             environment,
             platform.world()::dimensionExists,
             platform.world()::isItem,
-            platform.world()::isBlock);
+            platform.world()::isGateBlock);
     List<ConfigProblem> startupProblems = loadConfig(loader);
 
     Journal journal = null;
@@ -264,7 +264,7 @@ public final class Seasons implements SeasonsApi {
       unarchiver = Optional.of(unarchiving);
       recovery = Optional.of(replay);
       rollover = archiving;
-      gates = new Gates(platform, config, halls, journal, audit, crash);
+      gates = new Gates(platform, config, halls, journal, audit, crash, announcer);
     }
 
     LaunchSequence launch =

@@ -14,6 +14,7 @@ import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.GalleryRules;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Messages;
+import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -153,6 +154,73 @@ class GatesTest {
 
     assertThat(gateIs("minecraft:iron_bars")).isTrue();
     assertThat(audit()).contains("\"action\":\"reconcile\"").contains("gate shut");
+  }
+
+  @Test
+  void aGateIsNeverSetOverABlockWithContents() throws IOException {
+    fake.tick();
+    run("/season decorate open");
+    fake.tick();
+    fake.setBlock(5, 64, 5, FakePlatform.CHEST);
+
+    run("/season decorate close");
+    fake.tick();
+    fake.tick();
+
+    assertThat(fake.blockAt(PLANE.getFirst()).type())
+        .as("the chest stays")
+        .isEqualTo("minecraft:chest");
+    assertThat(PLANE.stream().skip(1).map(at -> fake.blockAt(at).type()))
+        .as("nothing of the gate is set while it is there")
+        .containsOnly("minecraft:air");
+    assertThat(journal()).containsOnlyOnce("season-2:c1/shut");
+    assertThat(audit()).containsOnlyOnce("\"action\":\"gate\"").contains("contents at 5, 64, 5");
+
+    fake.setBlock(5, 64, 5, BlockInfo.AIR);
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("set once the chest is gone").isTrue();
+  }
+
+  @Test
+  void aGateThatDoesntStaySetIsLeftAloneUntilAReload() throws IOException {
+    fake.tick();
+    for (int i = 0; i < 10; i++) {
+      fake.setBlock(5, 64, 5, FakePlatform.STONE);
+      fake.tick();
+    }
+
+    assertThat(journal().split("season-2:c1/shut", -1))
+        .as("three tries in all, since no pass found it set")
+        .hasSize(4);
+    assertThat(audit()).containsOnlyOnce("unsteady at");
+
+    run("/season reload");
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("tried again after a reload").isTrue();
+  }
+
+  @Test
+  void aGatePlaneMayNotCoverAnchorsOrTheGallerysOwnPoints() {
+    Bounds bounds = Bounds.between(OVERWORLD, 0, 60, 0, 10, 70, 10);
+    Cell gated =
+        Cell.create("c1")
+            .withBounds(bounds)
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 2, 64, 2)))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 4, 65, 2)))
+            .withAnchor(Anchor.of(AnchorType.ARCHIVE, Position.of(OVERWORLD, 3, 64, 2)));
+    Gallery gallery =
+        Gallery.create("g", 2, OVERWORLD)
+            .withBounds(Bounds.between(OVERWORLD, 0, 60, 0, 30, 70, 30))
+            .withCell(gated)
+            .withLaunch(Optional.of(Position.of(OVERWORLD, 4, 64, 2)));
+
+    assertThat(GalleryRules.check(gallery))
+        .extracting(GalleryRules.Problem::message)
+        .containsExactly(
+            "the gate's plane holds the archive anchor of c1 at 3, 64, 2, which the gate would be"
+                + " set over",
+            "the gate's plane holds the launch button at 4, 64, 2, which the gate would be set"
+                + " over");
   }
 
   @Test

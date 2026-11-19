@@ -179,6 +179,21 @@ public final class FakePlatform {
   }
 
   public static final BlockInfo STONE = new BlockInfo("minecraft:stone", true, false, false);
+  public static final BlockInfo CHEST = new BlockInfo("minecraft:chest", true, false, false);
+
+  /** Blocks that can't stand as a gate: liquids, air, falling blocks, block entities. */
+  static final java.util.Set<String> UNSTEADY =
+      java.util.Set.of(
+          "minecraft:lava",
+          "minecraft:water",
+          "minecraft:air",
+          "minecraft:sand",
+          "minecraft:chest");
+
+  /** Blocks with contents of their own. */
+  static final java.util.Set<String> CONTENTS =
+      java.util.Set.of("minecraft:chest", "minecraft:barrel", "minecraft:decorated_pot");
+
   public static final BlockInfo LAVA = new BlockInfo("minecraft:lava", false, true, false);
   public static final BlockInfo BED = new BlockInfo("minecraft:straw_bed", true, false, true);
   public static final BlockInfo MAGMA = new BlockInfo("minecraft:magma_block", true, false, false);
@@ -647,8 +662,13 @@ public final class FakePlatform {
           }
 
           @Override
-          public boolean isBlock(String id) {
-            return !id.contains("not_");
+          public boolean isGateBlock(String id) {
+            return !id.contains("not_") && !UNSTEADY.contains(id);
+          }
+
+          @Override
+          public boolean holdsContents(Position position) {
+            return CONTENTS.contains(blockAt(position).type());
           }
 
           @Override

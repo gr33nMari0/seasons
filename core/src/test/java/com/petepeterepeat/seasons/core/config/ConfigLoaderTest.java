@@ -106,7 +106,7 @@ class ConfigLoaderTest {
           rareItems: [trident, minecraft:not_a_thing]
         cells:
           containers: [chest, not_a_box]
-          gateBlock: not_a_block
+          gateBlock: lava
         """);
 
     ConfigLoader.Result result =
@@ -116,7 +116,7 @@ class ConfigLoaderTest {
                 Map.of(),
                 dimension -> true,
                 id -> !id.contains("not_"),
-                id -> !id.contains("not_"))
+                id -> !id.equals("minecraft:lava"))
             .load();
 
     assertThat(result.snapshot()).isEmpty();
@@ -129,7 +129,9 @@ class ConfigLoaderTest {
             org.assertj.core.groups.Tuple.tuple(
                 Optional.of("cells.containers"), "not_a_box isn't an item this server knows"),
             org.assertj.core.groups.Tuple.tuple(
-                Optional.of("cells.gateBlock"), "not_a_block isn't a block this server knows"));
+                Optional.of("cells.gateBlock"),
+                "lava can't be a gate: it must be a solid block that doesn't fall and holds"
+                    + " nothing"));
   }
 
   @Test

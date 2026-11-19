@@ -71,7 +71,7 @@ public final class ConfigLoader {
   private final Map<String, String> environment;
   private final Predicate<String> dimensionExists;
   private final Predicate<String> isItem;
-  private final Predicate<String> isBlock;
+  private final Predicate<String> isGateBlock;
 
   /**
    * A loader that takes every dimension id as one the server has.
@@ -100,7 +100,8 @@ public final class ConfigLoader {
 
   /**
    * @param isItem whether the server knows an item, such as {@code minecraft:trident}
-   * @param isBlock whether the server knows a block, such as {@code minecraft:iron_bars}
+   * @param isGateBlock whether a block can stand as a cell's gate, such as {@code
+   *     minecraft:iron_bars} (see {@link com.petepeterepeat.seasons.core.port.World#isGateBlock})
    */
   public ConfigLoader(
       Path configDirectory,
@@ -108,9 +109,9 @@ public final class ConfigLoader {
       Map<String, String> environment,
       Predicate<String> dimensionExists,
       Predicate<String> isItem,
-      Predicate<String> isBlock) {
+      Predicate<String> isGateBlock) {
     this.isItem = isItem;
-    this.isBlock = isBlock;
+    this.isGateBlock = isGateBlock;
     this.configDirectory = configDirectory;
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
@@ -672,7 +673,8 @@ public final class ConfigLoader {
 
   /**
    * "Item groups name known items" (questions 175): every rare item and cell container is an item
-   * the server knows, and the gate block a block. Ids without a namespace are Minecraft's.
+   * the server knows, and the gate block one that can stand as a gate: solid, not falling, holding
+   * nothing. Ids without a namespace are Minecraft's.
    */
   private void checkNames(SeasonsConfig config, List<ConfigProblem> problems) {
     for (String item : config.firsts().rareItems()) {
@@ -690,10 +692,14 @@ public final class ConfigLoader {
       }
     }
     String gate = config.cells().gateBlock();
-    if (!isBlock.test(namespaced(gate))) {
+    if (!isGateBlock.test(namespaced(gate))) {
       problems.add(
           ConfigProblem.atPath(
-              CONFIG, "cells.gateBlock", gate + " isn't a block this server knows"));
+              CONFIG,
+              "cells.gateBlock",
+              gate
+                  + " can't be a gate: it must be a solid block that doesn't fall and holds"
+                  + " nothing"));
     }
   }
 

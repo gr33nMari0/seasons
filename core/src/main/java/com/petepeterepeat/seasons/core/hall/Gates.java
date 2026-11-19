@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.hall;
 
+import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -32,12 +34,21 @@ import org.slf4j.LoggerFactory;
  * second each gate whose chunks are loaded is compared with what it should be, which covers the
  * window opening and closing, an owner's time running out, launch, reloads and startup, and puts
  * back a gate changed behind Seasons' back. Every change is journalled ({@code GATE_SET}) before
- * the blocks change; recovery needs nothing more than the next pass. Server thread only.
+ * the blocks change; recovery needs nothing more than the next pass.
+ *
+ * <p>A gate is never set over a block with contents of its own, such as a chest, so no item is
+ * lost: it stays as it is, and admins are told, until the block is gone. A gate that doesn't stay
+ * set ({@value #ATTEMPTS} tries at the same state without a pass finding it right, as with a block
+ * knocked out each time) is left alone, and admins are told, until what it should be changes or the
+ * config is reloaded, so it can't fill the journal. Server thread only.
  */
 public final class Gates {
   private static final Logger LOG = LoggerFactory.getLogger(Gates.class);
   private static final Duration PASS = Duration.ofSeconds(1);
   private static final String AIR = "minecraft:air";
+
+  /** Tries at setting a gate, with no pass finding it right between, before it is left alone. */
+  static final int ATTEMPTS = 3;
 
   private final Platform platform;
   private final ConfigHolder config;
@@ -45,6 +56,7 @@ public final class Gates {
   private final Journal journal;
   private final AuditLog audit;
   private final CrashPoints crash;
+  private final Announcer announcer;
   private final Executor serverThread;
 
   /** Whether each gate, by cell key, was last set open, as far as Seasons knows. */
@@ -52,6 +64,24 @@ public final class Gates {
 
   /** Gates whose change is being journalled now. */
   private final Set<String> changing = new HashSet<>();
+
+  /** Tries at each gate since a pass last found it right. */
+  private final Map<String, Tries> tries = new HashMap<>();
+
+  /** Gates left alone because they don't stay set, with what held them. */
+  private final Map<String, Held> held = new HashMap<>();
+
+  /** Gates left alone because a block in their plane has contents. */
+  private final Set<String> blocked = new HashSet<>();
+
+  /**
+   * Tries at setting a gate {@code open} (or shut). A change of what it should be starts again,
+   * since the window may open and close faster than a pass.
+   */
+  private record Tries(boolean open, int count) {}
+
+  /** A gate left alone while it should be {@code open} under this config. */
+  private record Held(boolean open, ConfigSnapshot config) {}
 
   private @Nullable ScheduledTask passes;
 
@@ -61,7 +91,9 @@ public final class Gates {
       HallService halls,
       Journal journal,
       AuditLog audit,
-      CrashPoints crash) {
+      CrashPoints crash,
+      Announcer announcer) {
+    this.announcer = announcer;
     this.platform = platform;
     this.config = config;
     this.halls = halls;
@@ -82,9 +114,14 @@ public final class Gates {
     }
   }
 
-  /** Sets every loaded gate that isn't what it should be. */
+  /**
+   * Sets every loaded gate that isn't what it should be. A held gate is let go by a new config
+   * snapshot, which every reload makes, so the snapshot is compared by reference.
+   */
+  @SuppressWarnings("ReferenceEquality")
   void pass() {
-    SeasonsConfig settings = config.get().config();
+    ConfigSnapshot snapshot = config.get();
+    SeasonsConfig settings = snapshot.config();
     String shut = blockId(settings.cells().gateBlock());
     Set<String> seen = new HashSet<>();
     for (Gallery gallery : halls.galleries()) {
@@ -113,12 +150,61 @@ public final class Gates {
         Boolean was = applied.get(key);
         if (matches) {
           applied.put(key, open);
-        } else {
-          set(ref, blocks, open, wanted, was != null && was == open);
+          tries.remove(key);
+          held.remove(key);
+          blocked.remove(key);
+          continue;
         }
+        Held stuck = held.get(key);
+        if (stuck != null && stuck.open() == open && stuck.config() == snapshot) {
+          continue;
+        }
+        held.remove(key);
+        Optional<Position> contents =
+            blocks.stream().filter(platform.world()::holdsContents).findFirst();
+        if (contents.isPresent()) {
+          if (blocked.add(key)) {
+            leftAlone(ref, "contents", contents.get());
+          }
+          continue;
+        }
+        blocked.remove(key);
+        Tries before = tries.get(key);
+        int tried = before != null && before.open() == open ? before.count() + 1 : 1;
+        tries.put(key, new Tries(open, tried));
+        if (tried > ATTEMPTS) {
+          tries.remove(key);
+          held.put(key, new Held(open, snapshot));
+          leftAlone(ref, "unsteady", blocks.getFirst());
+          continue;
+        }
+        set(ref, blocks, open, wanted, was != null && was == open);
       }
     }
     applied.keySet().retainAll(seen);
+    tries.keySet().retainAll(seen);
+    held.keySet().retainAll(seen);
+    blocked.retainAll(seen);
+  }
+
+  /**
+   * Tells admins, the log and the audit log that a gate is left as it is: a block in its plane has
+   * contents ({@code contents}), or it doesn't stay set ({@code unsteady}).
+   */
+  private void leftAlone(HallService.CellRef ref, String why, Position at) {
+    String where = at.blockX() + ", " + at.blockY() + ", " + at.blockZ();
+    audit.record(AuditLog.SEASONS, "gate", ref.key(), "left alone", why + " at " + where);
+    announcer.admins(
+        HallCommands.PERMISSION_ADMIN,
+        "hof.gate." + why,
+        "cell",
+        ref.key(),
+        "x",
+        Integer.toString(at.blockX()),
+        "y",
+        Integer.toString(at.blockY()),
+        "z",
+        Integer.toString(at.blockZ()));
   }
 
   /** Whether a cell's gate should be open: while its owner may decorate it. */
@@ -147,7 +233,16 @@ public final class Gates {
                     return;
                   }
                   owner.ifPresent(o -> crash.reached(CrashPoint.GATE_SET, o));
-                  platform.world().setBlocks(blocks, type);
+                  // Checked again: something with contents may have been put there meanwhile.
+                  if (blocks.stream().anyMatch(platform.world()::holdsContents)) {
+                    return;
+                  }
+                  try {
+                    platform.world().setBlocks(blocks, type);
+                  } catch (RuntimeException e) {
+                    LOG.error("Can't set the gate of {}", key, e);
+                    return;
+                  }
                   applied.put(key, open);
                   if (repair) {
                     audit.record(AuditLog.SEASONS, "reconcile", key, "repaired", "gate " + state);

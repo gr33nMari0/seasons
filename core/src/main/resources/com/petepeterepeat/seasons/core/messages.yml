@@ -258,6 +258,9 @@ hof:
     closed: "<red>Only its owner goes into that cell, while decorating it.</red>"
     moved-out: "<yellow>Only its owner can be in that cell, while decorating it, so you're at the gallery entry.</yellow>"
     gate-shut: "<yellow>The cell's gate shut, so you're at the gallery entry.</yellow>"
+  gate:
+    contents: "<red>The gate of cell <cell> is left as it is: the block at <x>, <y>, <z> in its plane holds something, such as a container or sign. Move it out of the gate's plane.</red>"
+    unsteady: "<red>The gate of cell <cell> doesn't stay set (at <x>, <y>, <z>), so Seasons has stopped setting it. Find what changes it, then run /season reload.</red>"
   launch:
     admins-only: "<red>Only an admin can launch the next season.</red>"
     again: "<gold>Press the launch button again within 10 seconds to launch Season <season>.</gold>"
