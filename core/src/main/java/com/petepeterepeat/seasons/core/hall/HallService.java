@@ -261,6 +261,15 @@ public final class HallService {
         || platform.permissions().has(player, BYPASS);
   }
 
+  /** Whether a position is in the gate plane of a cell in a {@code gate} gallery. */
+  public boolean inGate(Position position) {
+    SeasonsConfig settings = config.get().config();
+    return cellAt(position).stream()
+        .anyMatch(ref ->
+            ref.gallery().access(settings) == SeasonsConfig.CellAccess.GATE
+                && ref.cell().gate().map(plane -> plane.contains(position)).orElse(false));
+  }
+
   /** Where a player stands in a gallery outside its cells: its entry, else the Hall's. */
   public Optional<Position> galleryEntry(Gallery gallery) {
     return gallery

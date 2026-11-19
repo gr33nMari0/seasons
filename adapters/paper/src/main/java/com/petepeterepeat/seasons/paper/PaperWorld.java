@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.paper;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.World;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.bukkit.Material;
@@ -42,6 +43,20 @@ final class PaperWorld implements World {
   /** Every kind of bed, straw beds included. */
   static boolean isBed(Material type) {
     return Tag.BEDS.isTagged(type) || type == Material.STRAW_BED;
+  }
+
+  @Override
+  public void setBlocks(List<Position> blocks, String type) {
+    Material material = Material.matchMaterial(type);
+    if (material == null || !material.isBlock()) {
+      throw new IllegalArgumentException(type + " is not a block");
+    }
+    for (Position position : blocks) {
+      // Physics on, so bars and panes join their neighbours; setType never drops anything.
+      world(position.dimension())
+          .getBlockAt(position.blockX(), position.blockY(), position.blockZ())
+          .setType(material, true);
+    }
   }
 
   @Override

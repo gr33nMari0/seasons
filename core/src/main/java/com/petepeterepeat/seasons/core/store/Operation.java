@@ -60,7 +60,7 @@ public enum Operation {
       case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);
       case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
       case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
-      case EGG_DELIVERED, PET_TRAVELLED -> Optional.empty();
+      case EGG_DELIVERED, PET_TRAVELLED, GATE_SET -> Optional.empty();
     };
   }
 }

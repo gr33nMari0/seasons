@@ -121,6 +121,9 @@ public final class HallRules implements HallGuard {
     if (NEVER.contains(path(type))) {
       return refused(player, "place", type, block, "hof.rules.no-hopper");
     }
+    if (halls.inGate(block)) {
+      return refused(player, "place", type, block, "hof.no-build");
+    }
     if (decorating(player, block).isEmpty()) {
       return refused(player, "place", type, block, "hof.no-build");
     }
@@ -137,6 +140,10 @@ public final class HallRules implements HallGuard {
     String type = platform.world().block(block).type();
     if (bypasses(player)) {
       return bypassed(player, "break", type, block);
+    }
+    // The gate is Seasons' to open and shut (questions 169).
+    if (halls.inGate(block)) {
+      return refused(player, "break", type, block, "hof.no-build");
     }
     if (decorating(player, block).isEmpty()) {
       return refused(player, "break", type, block, "hof.no-build");

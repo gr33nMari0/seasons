@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core.hall;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * The rules galleries keep (see Validation rules in the spec): galleries don't overlap, cells sit
@@ -11,6 +12,9 @@ import java.util.List;
  * no figure anchor is allowed, as a cell still being tagged is; it is never handed out.
  */
 public final class GalleryRules {
+  /** The most blocks a gate plane may have. */
+  public static final long MAX_GATE = 64;
+
   private GalleryRules() {}
 
   /**
@@ -65,6 +69,36 @@ public final class GalleryRules {
                     path + ".anchors",
                     "the " + anchor.type().id() + " anchor must sit inside the cell's bounds"));
           }
+        }
+      }
+      if (cell.anchors(AnchorType.GATE).size() == 1) {
+        problems.add(
+            new Problem(
+                gallery.id(),
+                path + ".anchors",
+                "a gate needs two gate anchors, at opposite corners of its plane"));
+      }
+      Optional<Bounds> gate = cell.gate();
+      if (gate.isPresent()) {
+        Bounds plane = gate.get();
+        boolean thin =
+            plane.minX() == plane.maxX()
+                || plane.minY() == plane.maxY()
+                || plane.minZ() == plane.maxZ();
+        if (!thin) {
+          problems.add(
+              new Problem(
+                  gallery.id(), path + ".anchors", "the gate must be a plane one block thick"));
+        } else if (plane.volume() > MAX_GATE) {
+          problems.add(
+              new Problem(
+                  gallery.id(),
+                  path + ".anchors",
+                  "the gate is "
+                      + plane.volume()
+                      + " blocks; at most "
+                      + MAX_GATE
+                      + " are allowed"));
         }
       }
       for (AnchorType type : AnchorType.values()) {

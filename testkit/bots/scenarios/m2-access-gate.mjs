@@ -33,7 +33,7 @@ export default {
       await ctx.eventually(async () => assert(inside(c1, await ctx.position(admin, 'Owner')), 'the owner is in their cell'))
 
       // Closing the window shuts it, with the owner put out at the gallery entry.
-      const told = ctx.waitForMessages(owner, /^Your cell's gate shut, so you're at the gallery entry\.$/)
+      const told = ctx.waitForMessages(owner, /^The cell's gate shut, so you're at the gallery entry\.$/)
       await ctx.command(admin, '/season decorate close', /^The decorating window for Season 2 is closed\.$/)
       await waitGate(ctx, admin, BARS)
       await told

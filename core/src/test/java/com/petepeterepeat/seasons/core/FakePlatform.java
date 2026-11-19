@@ -622,6 +622,15 @@ public final class FakePlatform {
           }
 
           @Override
+          public void setBlocks(List<Position> positions, String type) {
+            boolean air = type.equals("minecraft:air");
+            for (Position at : positions) {
+              setBlock(
+                  at.blockX(), at.blockY(), at.blockZ(), new BlockInfo(type, !air, air, false));
+            }
+          }
+
+          @Override
           public boolean isLoaded(Position position) {
             return true;
           }

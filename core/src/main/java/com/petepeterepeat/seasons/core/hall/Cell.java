@@ -43,6 +43,22 @@ public record Cell(
     return anchors.stream().filter(a -> a.type() == type).findFirst();
   }
 
+  /**
+   * The gate plane between the cell's two gate anchors, for access mode {@code gate}; empty unless
+   * it has both.
+   */
+  public Optional<Bounds> gate() {
+    List<Anchor> corners = anchors(AnchorType.GATE);
+    if (corners.size() != 2) {
+      return Optional.empty();
+    }
+    Position a = corners.get(0).at();
+    Position b = corners.get(1).at();
+    return Optional.of(
+        Bounds.between(
+            a.dimension(), a.blockX(), a.blockY(), a.blockZ(), b.blockX(), b.blockY(), b.blockZ()));
+  }
+
   /** Whether the block a position is in lies inside the cell's bounds. */
   public boolean contains(Position position) {
     return bounds.map(b -> b.contains(position)).orElse(false);

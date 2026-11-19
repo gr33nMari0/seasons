@@ -120,8 +120,9 @@ class ConfigCommandsTest {
                 + " and 10, not 11");
     assertThat(run("/season config set pets.maxPerPlayer lots").getFirst())
         .startsWith("pets.maxPerPlayer wasn't changed: config.yml, at pets.maxPerPlayer");
-    assertThat(run("/season config set cells.access gate").getFirst())
-        .startsWith("cells.access wasn't changed: config.yml, at cells.access: only open");
+    assertThat(run("/season config set cells.access walls").getFirst())
+        .startsWith(
+            "cells.access wasn't changed: config.yml, at cells.access: 'walls' is not one of");
     assertThat(run("/season config set pets.maxPerPlayer { a: 1 }"))
         .containsExactly("pets.maxPerPlayer wasn't changed: set one key at a time, not a section");
 

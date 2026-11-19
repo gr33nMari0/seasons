@@ -58,6 +58,11 @@ class MapModelsTest {
         }
 
         @Override
+        public void setBlocks(List<Position> blocks, String type) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
         public boolean isLoaded(Position position) {
           throw new UnsupportedOperationException();
         }

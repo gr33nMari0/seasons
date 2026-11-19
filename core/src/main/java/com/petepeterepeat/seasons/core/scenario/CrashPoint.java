@@ -25,5 +25,7 @@ public enum CrashPoint {
   /** The item is gone from the vault file; it hasn't been given. */
   VAULT_WITHDRAW_PERSISTED,
   /** The item is given and the player's file saved; {@code VAULT_WITHDRAW_DONE} isn't written. */
-  VAULT_WITHDRAW_GIVEN
+  VAULT_WITHDRAW_GIVEN,
+  /** {@code GATE_SET} is on disk; the gate's blocks haven't changed. Armed by the cell's owner. */
+  GATE_SET
 }

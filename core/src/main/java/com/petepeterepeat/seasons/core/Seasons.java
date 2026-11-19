@@ -20,6 +20,7 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
@@ -113,6 +114,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable HallService hallService;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
+  private @Nullable Gates gates;
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
   private @Nullable MapService map;
@@ -256,6 +258,7 @@ public final class Seasons implements SeasonsApi {
       unarchiver = Optional.of(unarchiving);
       recovery = Optional.of(replay);
       rollover = archiving;
+      gates = new Gates(platform, config, halls, journal, audit, crash);
     }
 
     LaunchSequence launch =
@@ -290,6 +293,9 @@ public final class Seasons implements SeasonsApi {
     seasons.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
+    if (gates != null) {
+      gates.start();
+    }
     visiting.bind(seasons::state);
     visiting.start();
     reconciling.start();
@@ -530,6 +536,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (reconciler != null) {
       reconciler.stop();
+    }
+    if (gates != null) {
+      gates.stop();
     }
     if (rules != null) {
       rules.stop();
