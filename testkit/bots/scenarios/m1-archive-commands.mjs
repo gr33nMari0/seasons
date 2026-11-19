@@ -2,7 +2,8 @@
 // @sessions 2
 // /season archive and /season reprocess, and archiving being harmless to repeat: a player is
 // archived exactly once per season. Session 2 covers a player who missed a whole season and a
-// pre-Seasons player with no record, both archived into the season they last played.
+// pre-Seasons player with no record, both archived into the season they last played. /season info
+// gives a player's archive status.
 import { assert } from '../lib/context.mjs'
 import { GEAR_ITEMS, giveGear } from '../lib/gear.mjs'
 
@@ -18,13 +19,15 @@ export default {
       await ctx.leave(oldTimer)
       await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
 
-      await ctx.join('Again')
+      const again = await ctx.join('Again')
+      await ctx.command(again, '/season info', /^Your cell: none yet$/)
       await ctx.command(admin, '/season archive Again', /^Again has no finished season waiting to be archived\.$/)
       await ctx.command(admin, '/season archive Nobody', /^Nobody isn't online\b/)
       await giveGear(ctx, admin, 'Again')
       await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
       await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
       assert((await ctx.archive(admin, 'Again', 2)).items === GEAR_ITEMS, 'archived once')
+      await ctx.command(again, '/season info', /^Archived into Season 2\.$/)
 
       // Running it again changes nothing: the gear given now stays with the player.
       await ctx.command(admin, '/give Again minecraft:apple 3', /^Gave 3/)
