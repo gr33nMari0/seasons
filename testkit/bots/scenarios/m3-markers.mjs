@@ -51,6 +51,16 @@ export default {
     ctx.writeFile(MARKERS, good)
     await ctx.command(admin, '/season reload', /^Reloaded /)
 
+    // A command edit the load refuses is put back. A hand edit not reloaded yet holds "iron farm",
+    // so adding "Iron Farm" by command makes a file with both; the file goes back to the hand edit,
+    // and nothing is audited.
+    const handEdited = good.replace(/sets:\n( +)/, (line, indent) => `sets:\n${indent}farms: { iron farm: { pos: [10, 64, -20] } }\n${indent}`)
+    ctx.writeFile(MARKERS, handEdited)
+    await ctx.command(admin, '/season marker add farms Iron Farm', /^The waypoint wasn't saved: markers\.yml, at sets\.farms\.Iron Farm: the set already has a waypoint by that name, ignoring case\. See the server log\.$/)
+    assert(ctx.readFile(MARKERS) === handEdited, `markers.yml is as the hand edit left it: ${ctx.readFile(MARKERS)}`)
+    await ctx.command(admin, '/season reload', /^Reloaded /)
+    await ctx.command(admin, '/season marker remove farms IRON FARM', /^Removed waypoint iron farm from farms\.$/)
+
     // Every change is in the audit log, with who made it.
     const audit = ctx.readFile(`world/dimensions/minecraft/overworld/seasons/audit/${new Date().toISOString().slice(0, 7)}.jsonl`)
     for (const entry of [
@@ -60,6 +70,7 @@ export default {
     ]) {
       assert(entry.test(audit), `the audit log has ${entry}: ${audit}`)
     }
+    assert(!/"target":"markers\.yml sets\.farms\.Iron Farm","result":"ok","details":"none -> /.test(audit), `the refused add isn't audited: ${audit}`)
     await ctx.command(admin, '/season status', /^BlueMap isn't installed, so no map markers are published\.$/)
   }
 }
