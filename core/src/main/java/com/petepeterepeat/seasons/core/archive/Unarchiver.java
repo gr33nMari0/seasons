@@ -105,6 +105,19 @@ public final class Unarchiver {
   public CompletableFuture<Outcome> unarchive(
       PlayerRef player, int season, boolean force, String actor) {
     PlayerId id = player.id();
+    // Held before the vault page is read, so no withdrawal can change the page or the inventory
+    // between the read and the restore.
+    if (!hold.hold(id)) {
+      return CompletableFuture.completedFuture(new Outcome.Busy());
+    }
+    return held(player, season, force, actor)
+        .whenCompleteAsync((outcome, failure) -> hold.release(id), serverThread);
+  }
+
+  /** {@link #unarchive}, with the player held throughout. */
+  private CompletableFuture<Outcome> held(
+      PlayerRef player, int season, boolean force, String actor) {
+    PlayerId id = player.id();
     return writer
         .submit(() -> read(id, season))
         .thenComposeAsync(
@@ -126,9 +139,6 @@ public final class Unarchiver {
               Plan plan = plan(archive, live, stored.vaultPage());
               if (!plan.displaced().isEmpty() && plan.displacedFromPlayer() && !force) {
                 return done(new Outcome.NotEmpty());
-              }
-              if (!hold.hold(id)) {
-                return done(new Outcome.Busy());
               }
               int dataVersion = platform.inventories().dataVersion();
               Instant now = clock.instant();
@@ -153,7 +163,6 @@ public final class Unarchiver {
                       serverThread)
                   .handleAsync(
                       (file, failure) -> {
-                        hold.release(id);
                         if (failure != null) {
                           String reason = Archiver.reason(failure);
                           audit.record(actor, "unarchive", player.name(), "failed", reason);
