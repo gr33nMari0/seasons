@@ -50,7 +50,7 @@ export default {
     await ctx.command(admin, '/season reload', /^Reloaded /)
     await ctx.command(admin, '/season spawn candidate list', [
       /^- east-jungle: /,
-      /^- west-tundra: -5000, 70, 300 in minecraft:overworld, 5009 blocks from 0, 0$/
+      /^- west-tundra: -5000, 70, 300 in minecraft:overworld, 5008 blocks from 0, 0$/
     ])
 
     // Every edit is in the audit log, with who made it.

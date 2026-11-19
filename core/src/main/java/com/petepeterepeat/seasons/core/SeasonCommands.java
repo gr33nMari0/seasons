@@ -806,10 +806,30 @@ final class SeasonCommands {
     }
   }
 
-  /** A next spawn inside one of the next season's zones, which launch would refuse. */
+  /**
+   * A next spawn inside one of the next season's zones, which launch would refuse, or beyond the
+   * strongholds' reach, which it wouldn't.
+   */
   private void spawnDryRun(CommandSource source, Messages messages) {
     int next = seasons.state().map(SeasonState::season).orElse(0) + 1;
     Optional<SeasonFile> file = config.get().season(next);
+    Optional<Position> far = file.flatMap(SeasonFile::spawn).filter(SeasonFile::beyondStrongholds);
+    if (far.isPresent()) {
+      Position spawn = far.get();
+      source.reply(
+          messages.get(
+              "end.dry-run.spawn-far",
+              "next",
+              Integer.toString(next),
+              "x",
+              Integer.toString(spawn.blockX()),
+              "y",
+              Integer.toString(spawn.blockY()),
+              "z",
+              Integer.toString(spawn.blockZ()),
+              "distance",
+              Long.toString(SeasonFile.distanceFromOrigin(spawn))));
+    }
     Optional<Zone> holding = file.flatMap(SeasonFile::zoneHoldingSpawn);
     if (holding.isEmpty()) {
       return;

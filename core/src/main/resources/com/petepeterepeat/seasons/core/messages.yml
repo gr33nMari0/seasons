@@ -96,6 +96,7 @@ end:
     no-players: "<gray>Nobody is online to archive; players catch up when they next log in.</gray>"
     next: "<gray>Then Season <season> would move to the Intermission.</gray>"
     spawn-in-zone: "<red>Season <next>'s spawn at <x>, <y>, <z> is inside zone <zone>. /season launch is refused until it moves.</red>"
+    spawn-far: "<yellow>Season <next>'s spawn at <x>, <y>, <z> is <distance> blocks from 0, 0, beyond 24,000: strongholds may be out of reach.</yellow>"
     refused: "<red>/season end would be refused:</red> <reason>"
 
 cancel:
@@ -124,8 +125,24 @@ launch:
 
 spawn:
   set: "<green>Season <season>'s spawn is now <x>, <y>, <z> in <dimension>.</green>"
-  player-only: "<red>Stand where the spawn should be and run this in game.</red>"
+  set-candidate: "<green>Season <season>'s spawn is now candidate <name>: <x>, <y>, <z> in <dimension>.</green>"
+  player-only: "<red>Stand where the spawn should be and run this in game, or name a spawn candidate.</red>"
   failed: "<red>The spawn wasn't saved: <error>. See the server log.</red>"
+  far: "<yellow>That's <distance> blocks from 0, 0, beyond 24,000: strongholds may be out of reach.</yellow>"
+  candidate:
+    added: "<green>Added spawn candidate <name> for Season <season> at <x>, <y>, <z> in <dimension>.</green>"
+    removed: "<green>Removed spawn candidate <name> from Season <season>.</green>"
+    exists: "<red>Season <season> already has a spawn candidate called <name>.</red>"
+    unknown: "<red>Season <season> has no spawn candidate called <name>.</red>"
+    bad-name: "<red>Candidate names are lower-case letters, digits and dashes, up to 32, such as north-mesa.</red>"
+    player-only: "<red>Stand where the candidate is and run this in game.</red>"
+    inside: "<red>Season <season>'s spawn candidates can't be inside zone <zone>; every candidate must stay outside every zone.</red>"
+    none: "<gray>Season <season> has no spawn candidates yet. Stand at one and run /season spawn candidate add with its name.</gray>"
+    header: "<gold>Season <season>'s spawn candidates:</gold>"
+    line: "<gray>- <name>: <x>, <y>, <z> in <dimension>, <distance> blocks from 0, 0<notes></gray>"
+    the-spawn: " (the spawn)"
+    beyond: " (beyond 24,000)"
+    failed: "<red>The spawn candidate wasn't saved: <error>. See the server log.</red>"
 
 archive:
   done: "<gold>Your Season <season> is archived in the Hall of Fame.</gold>"
@@ -359,6 +376,7 @@ zone:
   player-only: "<red>Stand at the zone's centre and run this in game.</red>"
   around-spawn: "<red>That zone would hold Season <season>'s spawn at <x>, <y>, <z>; the spawn must stay outside every zone.</red>"
   spawn-inside: "<red>Season <season>'s spawn can't be inside zone <zone>; the spawn must stay outside every zone.</red>"
+  around-candidate: "<red>That zone would hold Season <season>'s spawn candidate <name> at <x>, <y>, <z>; every candidate must stay outside every zone.</red>"
   unknown: "<red>There's no zone called <id>.</red>"
   bad-mode: "<red>A zone's mode is off, announce, block or no-build.</red>"
   bad-after: "<red>A zone becomes off or no-build once it unlocks.</red>"

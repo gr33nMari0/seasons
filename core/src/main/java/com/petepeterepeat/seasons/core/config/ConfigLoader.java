@@ -388,6 +388,11 @@ public final class ConfigLoader {
           problems.add(ConfigProblem.atPath(name, "spawn", Objects.requireNonNull(e.getMessage())));
           continue;
         }
+        Optional<Map<String, Position>> candidates =
+            candidates(name, node.node("spawnCandidates"), problems);
+        if (candidates.isEmpty()) {
+          continue;
+        }
         Map<String, Zone> zones;
         UnlockCondition homecoming;
         try {
@@ -409,8 +414,20 @@ public final class ConfigLoader {
                   "this server has no dimension " + zone.dimension()));
           continue;
         }
-        SeasonFile loaded = new SeasonFile(season, plannedEnd, spawn, zones, homecoming);
+        SeasonFile loaded =
+            new SeasonFile(season, plannedEnd, spawn, zones, homecoming, candidates.get());
         loaded.zoneHoldingSpawn().ifPresent(zone -> warnings.add(spawnInZone(name, loaded, zone)));
+        loaded
+            .spawn()
+            .filter(SeasonFile::beyondStrongholds)
+            .ifPresent(at -> warnings.add(spawnBeyondStrongholds(name, loaded.season(), at)));
+        loaded
+            .spawnCandidates()
+            .forEach((candidate, at) ->
+                loaded
+                    .zoneHolding(at)
+                    .ifPresent(
+                        zone -> warnings.add(candidateInZone(name, loaded, candidate, at, zone))));
         seasons.put(season, loaded);
       } catch (ParsingException e) {
         problems.add(syntax(name, e));
@@ -436,6 +453,78 @@ public final class ConfigLoader {
         + " is inside zone "
         + zone.id()
         + "; /season launch is refused until one of them moves";
+  }
+
+  /** The warning for a spawn beyond {@link SeasonFile#STRONGHOLD_REACH}. */
+  public static String spawnBeyondStrongholds(String file, int season, Position at) {
+    return file
+        + ": Season "
+        + season
+        + "'s spawn at "
+        + at.blockX()
+        + ", "
+        + at.blockY()
+        + ", "
+        + at.blockZ()
+        + " is "
+        + SeasonFile.distanceFromOrigin(at)
+        + " blocks from 0, 0, beyond 24,000; strongholds may be out of reach";
+  }
+
+  /** The warning for a spawn candidate inside a zone, as reload and validate report it. */
+  public static String candidateInZone(
+      String file, SeasonFile season, String candidate, Position at, Zone zone) {
+    return file
+        + ": Season "
+        + season.season()
+        + "'s spawn candidate "
+        + candidate
+        + " at "
+        + at.blockX()
+        + ", "
+        + at.blockY()
+        + ", "
+        + at.blockZ()
+        + " is inside zone "
+        + zone.id()
+        + "; every candidate must stay outside every zone";
+  }
+
+  /**
+   * A season file's spawn candidates, each written as a spawn is, by name; empty after adding a
+   * problem for any that doesn't make sense, or is in a dimension the server doesn't have.
+   */
+  private Optional<Map<String, Position>> candidates(
+      String file, ConfigurationNode node, List<ConfigProblem> problems) {
+    Map<String, Position> candidates = new HashMap<>();
+    int before = problems.size();
+    for (Map.Entry<Object, ? extends ConfigurationNode> entry : node.childrenMap().entrySet()) {
+      String name = String.valueOf(entry.getKey());
+      String path = "spawnCandidates." + name;
+      if (!SeasonFile.CANDIDATE_NAME.matcher(name).matches()) {
+        problems.add(
+            ConfigProblem.atPath(
+                file, path, "candidate names are lower-case letters, digits and dashes"));
+        continue;
+      }
+      Optional<Position> at;
+      try {
+        at = spawn(entry.getValue());
+      } catch (IllegalArgumentException e) {
+        problems.add(ConfigProblem.atPath(file, path, String.valueOf(e.getMessage())));
+        continue;
+      }
+      if (at.isEmpty()) {
+        problems.add(ConfigProblem.atPath(file, path, "pos needs three numbers, [x, y, z]"));
+      } else if (!dimensionExists.test(at.get().dimension())) {
+        problems.add(
+            ConfigProblem.atPath(
+                file, path + ".dimension", "this server has no dimension " + at.get().dimension()));
+      } else {
+        candidates.put(name, at.get());
+      }
+    }
+    return problems.size() == before ? Optional.of(candidates) : Optional.empty();
   }
 
   /**

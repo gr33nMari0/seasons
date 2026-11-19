@@ -36,7 +36,8 @@ export default {
     ])
 
     // The commands won't put the spawn or a candidate in a zone.
-    await forceload(ctx, admin, SPAWN, 240)
+    await forceload(ctx, admin, SPAWN, 40)
+    await forceload(ctx, admin, MESA, 40)
     await standAt(ctx, admin, 'SeasonsAdmin', SPAWN)
     await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 3000, -60, 0 in minecraft:overworld\.$/)
     await ctx.command(admin, '/season zone add pen cylinder 20', /^That zone would hold Season 3's spawn at 3000, -60, 0; the spawn must stay outside every zone\.$/)

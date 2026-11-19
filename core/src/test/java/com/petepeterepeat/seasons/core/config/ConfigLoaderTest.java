@@ -253,6 +253,89 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void spawnCandidatesLoadAndOneInsideAZoneIsAWarning() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        """
+        schema-version: 1
+        season: 3
+        spawnCandidates:
+          north-mesa: { pos: [3200, 80, -20100] }
+          east-jungle: { dimension: minecraft:overworld, pos: [19400, 70, 4100], yaw: 90 }
+          stray: { pos: [3005, -60, 0] }
+        zones:
+          pen: { dimension: minecraft:overworld, shape: { cylinder: { center: [3000, 0], radius: 20 } } }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.snapshot().get().season(3).orElseThrow().spawnCandidates())
+        .containsOnlyKeys("east-jungle", "north-mesa", "stray")
+        .containsEntry(
+            "north-mesa",
+            new com.petepeterepeat.seasons.core.port.Position(
+                "minecraft:overworld", 3200, 80, -20100, 0f, 0f));
+    assertThat(result.warnings())
+        .containsExactly(
+            "seasons/3.yml: Season 3's spawn candidate stray at 3005, -60, 0 is inside zone pen;"
+                + " every candidate must stay outside every zone");
+  }
+
+  @Test
+  void aSpawnBeyond24000BlocksFromTheOriginIsAWarning() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    Files.writeString(
+        worldDir().resolve("seasons/3.yml"),
+        "schema-version: 1\nseason: 3\nspawn: { pos: [25000, -60, 0] }\n");
+    Files.writeString(
+        worldDir().resolve("seasons/4.yml"),
+        "schema-version: 1\nseason: 4\nspawn: { pos: [16970, 70, 16970] }\n");
+    Files.writeString(
+        worldDir().resolve("seasons/5.yml"),
+        """
+        schema-version: 1
+        season: 5
+        spawn: { dimension: minecraft:the_nether, pos: [25000, 70, 0] }
+        """);
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isPresent();
+    assertThat(result.warnings())
+        .as("only the overworld's strongholds count, and 16970, 16970 is within 24,000")
+        .containsExactly(
+            "seasons/3.yml: Season 3's spawn at 25000, -60, 0 is 25000 blocks from 0, 0, beyond"
+                + " 24,000; strongholds may be out of reach");
+  }
+
+  @Test
+  void aCandidateWithABadNamePositionOrDimensionIsAProblem() throws IOException {
+    Files.createDirectories(worldDir().resolve("seasons"));
+    ConfigLoader server =
+        new ConfigLoader(
+            configDir(), worldDir(), Map.of(), dimension -> !dimension.endsWith("the_neter"));
+    for (String candidate :
+        List.of(
+            "North_Mesa: { pos: [1, 2, 3] }",
+            "north-mesa: { pos: [1, 2] }",
+            "north-mesa: {}",
+            "north-mesa: { dimension: minecraft:the_neter, pos: [1, 2, 3] }")) {
+      Files.writeString(
+          worldDir().resolve("seasons/3.yml"),
+          "schema-version: 1\nseason: 3\nspawnCandidates:\n  " + candidate + "\n");
+      assertThat(server.load().problems())
+          .as(candidate)
+          .singleElement()
+          .satisfies(problem -> {
+            assertThat(problem.file()).isEqualTo("seasons/3.yml");
+            assertThat(problem.path().orElseThrow()).startsWith("spawnCandidates.");
+          });
+    }
+  }
+
+  @Test
   void aZoneInADimensionTheServerDoesntHaveIsAProblem() throws IOException {
     Files.createDirectories(worldDir().resolve("seasons"));
     Files.writeString(

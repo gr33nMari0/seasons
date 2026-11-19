@@ -165,6 +165,25 @@ public final class ZoneCommands {
               Integer.toString(at.blockZ())));
       return;
     }
+    Optional<Map.Entry<String, Position>> candidate =
+        file(season.getAsInt()).flatMap(f -> f.candidateIn(zone));
+    if (candidate.isPresent()) {
+      Position at = candidate.get().getValue();
+      source.reply(
+          messages.get(
+              "zone.around-candidate",
+              "season",
+              Integer.toString(season.getAsInt()),
+              "name",
+              candidate.get().getKey(),
+              "x",
+              Integer.toString(at.blockX()),
+              "y",
+              Integer.toString(at.blockY()),
+              "z",
+              Integer.toString(at.blockZ())));
+      return;
+    }
     int number = season.getAsInt();
     edit(
         source,
