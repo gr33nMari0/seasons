@@ -2,7 +2,7 @@
 // A44 (building). A visitor can't place or break a cushion in someone else's cell, though they can
 // sit on one; the owner can place and break them while decorating, and not once the cell is
 // locked. A no-build zone refusing cushions waits for zones (M3).
-import { assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { FLOOR, buildGallery, cellOf, gameMode, visit } from '../lib/hall.mjs'
 import { entityAt, hit, placeEntity } from '../lib/protection.mjs'
 import { sit } from '../lib/visits.mjs'
@@ -42,7 +42,7 @@ export default {
     assert(!await placeEntity(ctx, admin, 'Owner', CUSHION, seat), 'once locked the owner can\'t place one')
     for (let i = 0; i < 3; i++) await hit(ctx, admin, 'Owner', CUSHION, other)
     assert(await entityAt(ctx, admin, CUSHION, other), 'nor break one')
-    await sleep(300)
+    await ctx.sync(admin, [], 6)
     assert(await sit(ctx, admin, 'Visitor', CUSHION, other), 'anyone can still sit on it')
   }
 }

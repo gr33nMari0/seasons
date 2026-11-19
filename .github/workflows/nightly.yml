@@ -1,0 +1,46 @@
+name: nightly
+# The scenario suite as it ran before shared servers: every scenario on a freshly wiped server of
+# its own (-PscenarioIsolation=fresh). It catches what a shared server's reset might hide.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+jobs:
+  fresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - id: month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/run-task-jars
+            testkit/build/scenario/*/bundler
+          key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: paper-
+      - name: Every scenario on a fresh server
+        run: |
+          ./gradlew build :testkit:scenarioTest -PscenarioIsolation=fresh
+          cat build/reports/scenario-timings.md >> "$GITHUB_STEP_SUMMARY"
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-scenario-results
+          retention-days: 7
+          path: testkit/build/scenario-results

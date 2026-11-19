@@ -4,7 +4,7 @@
 // dragon flag is reset too (unit test: the bots can't reach the End). An old-world zone drawn in
 // the Intermission doesn't stop anyone until launch locks it. Walking is the test plugin's client
 // move (docs/adr/0001).
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
 import { LOCKED, cylinder } from '../lib/zones.mjs'
 
@@ -30,7 +30,7 @@ export default {
     await cylinder(ctx, admin, 'old-world', OLD_WORLD, 20)
     await standAt(ctx, admin, 'Pat', EDGE)
     await move(ctx, admin, 'Pat', IN, 'walk')
-    await sleep(SECOND)
+    await ctx.sync(admin, [pat], 20)
     await waitNear(ctx, admin, 'Pat', IN)
     await ctx.command(admin, '/tp SeasonsAdmin 0 -60 0', /^Teleported /)
     await ctx.command(admin, '/gamemode adventure Pat', /^Set Pat's game mode/)
@@ -49,11 +49,12 @@ export default {
     }
     await ctx.command(admin, '/damage Pat 4', /^Applied 4|invulnerable/)
     assert(await ctx.entityData(admin, 'Pat', 'Health') === '20.0f', 'Pat takes no damage while immune')
-    await sleep(6 * SECOND)
+    await ctx.advance(admin, 6 * SECOND)
     await ctx.command(admin, '/damage Pat 4', /^Applied 4/)
     assert(await ctx.entityData(admin, 'Pat', 'Health') === '16.0f', 'Pat takes damage once immunity ends')
 
-    assert(await ctx.holds(admin, 'loaded 2000 -60 -1500'), 'the spawn chunk is loaded')
+    // Loading the spawn chunk takes the game a moment of its own.
+    await ctx.eventually(async () => assert(await ctx.holds(admin, 'loaded 2000 -60 -1500'), 'the spawn chunk is loaded'))
     await ctx.command(admin, '/scoreboard objectives list', /\[Deaths, Season 3\]/)
     await ctx.command(admin, '/season info', /^Phase: Active, Frontier stage$/)
     // The world spawn: a player with no respawn point respawns there after dying elsewhere.

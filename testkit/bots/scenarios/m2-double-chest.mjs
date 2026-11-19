@@ -4,7 +4,7 @@
 // cell; and a double chest already across the Hall's edge (made here by /setblock) opens as a
 // view-only copy from outside and feeds no hopper. A pair outside the Hall shows the halves really
 // join and its hopper does pull.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, blockItems, buildGallery, cellOf, place } from '../lib/hall.mjs'
 import { expectViewOnly, openContainer } from '../lib/protection.mjs'
 import { standAt } from '../lib/visits.mjs'
@@ -60,7 +60,8 @@ export default {
     await setblock({ ...out, y: FLOOR - 1 }, 'minecraft:hopper')
     await setblock({ ...controlRight, y: FLOOR - 1 }, 'minecraft:hopper')
     await ctx.eventually(async () => assert(/diamond/.test(await blockItems(ctx, admin, { ...controlRight, y: FLOOR - 1 }) ?? ''), 'the hopper under the pair outside the Hall pulls from its other half'), 10 * SECOND)
-    await sleep(3 * SECOND)
+    // Hoppers need game ticks: three seconds of them, enough to move several items.
+    await ctx.sync(admin, [], 60)
     assert(await blockItems(ctx, admin, hall) === stocked, 'the hopper under the outside half took nothing from the Hall half')
     assert(await blockItems(ctx, admin, { ...out, y: FLOOR - 1 }) === null, 'that hopper is empty')
   }

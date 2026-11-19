@@ -26,9 +26,10 @@ export default {
     await discord.waitFor(/^Season first! Alex completed \[Stone Age\]\.$/, 15 * SECOND)
 
     // The second is not.
-    const quiet = ctx.expectNoMessage(alex, /^Season first! Sam completed/, 5 * SECOND)
+    const quiet = ctx.quiet(alex, /^Season first! Sam completed/)
     await ctx.command(admin, '/advancement grant Sam only minecraft:story/mine_stone', /^Granted the advancement/)
-    await quiet
+    await ctx.sync(admin, [alex], 20)
+    quiet.verify()
 
     // The first to the Nether.
     const nether = ctx.waitForMessages(alex, /^Season first! Sam reached the Nether\.$/, 15 * SECOND, 'the Nether first')
@@ -38,6 +39,8 @@ export default {
     // A rare item, noticed by the inventory sweep.
     const trident = ctx.waitForMessages(sam, /^Season first! Alex found Trident\.$/, 30 * SECOND, 'the trident first')
     await ctx.command(admin, '/give Alex minecraft:trident', /^Gave 1 /)
+    // The inventory sweep runs every 10 seconds by Seasons' clock.
+    await ctx.advance(admin, 10 * SECOND)
     await trident
     await discord.waitFor(/^Season first! Alex found Trident\.$/, 15 * SECOND)
 

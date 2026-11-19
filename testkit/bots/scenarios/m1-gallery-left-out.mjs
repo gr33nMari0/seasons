@@ -3,7 +3,7 @@
 // A broken gallery file at startup is left out, and nothing else is: the other galleries and the
 // planned end load. /season status shows it, admins hear about it as they join, and /season end and
 // /season launch are refused until it is fixed and /season reload succeeds.
-import { DAY, isoIn } from '../lib/context.mjs'
+import { DAY, SECOND } from '../lib/context.mjs'
 import { buildGallery } from '../lib/hall.mjs'
 
 const BROKEN = 'world/dimensions/minecraft/overworld/seasons/galleries/broken.yml'
@@ -15,13 +15,16 @@ export default {
       const admin = await ctx.admin()
       await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
       await buildGallery(ctx, admin, { cells: 2 })
-      await ctx.command(admin, `/season schedule end ${isoIn(30 * DAY)}`, /^Season 2 now ends at /)
+      await ctx.command(admin, `/season schedule end ${ctx.isoIn(30 * DAY)}`, /^Season 2 now ends at /)
       // A hand edit gone wrong, found at the next start.
       ctx.writeFile(BROKEN, 'schema-version: 1\nid: broken\nkind: season\nseason: 1\nbounds: { min: [0, -61\n')
     },
     async (ctx) => {
       const admin = await ctx.admin()
-      await ctx.waitForMessages(admin, /^Gallery broken couldn't be loaded at startup/, 15_000, 'the notice as an admin joins')
+      // Admins hear about it a few seconds after joining, by Seasons' clock.
+      const notice = ctx.waitForMessages(admin, /^Gallery broken couldn't be loaded at startup/, 15_000, 'the notice as an admin joins')
+      await ctx.advance(admin, 3 * SECOND)
+      await notice
       await ctx.command(admin, '/season status', [/^Planned end: /, /^Gallery broken couldn't be loaded at startup/])
       await ctx.command(admin, '/hof gallery info season-2', /^Gallery season-2 /)
       await ctx.command(admin, '/season end --now', /^Season 2 can't end while a gallery file failed to load/)
@@ -33,9 +36,11 @@ export default {
 
       ctx.writeFile(BROKEN, 'schema-version: 1\nid: broken\nkind: season\nseason: 1\ndimension: minecraft:overworld\nbounds: { min: [200, -61, 200], max: [210, -50, 210] }\n')
       await ctx.command(admin, '/season reload', /^Reloaded /)
-      const quiet = ctx.expectNoMessage(admin, /^Gallery broken/, 2000)
+      const quiet = ctx.quiet(admin, /^Gallery broken/)
       await ctx.command(admin, '/season status', /^Journal: /)
-      await quiet
+      await ctx.advance(admin, 3 * SECOND)
+      await ctx.sync(admin)
+      quiet.verify()
       await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
       await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     }

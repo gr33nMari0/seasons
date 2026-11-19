@@ -8,7 +8,7 @@ The acceptance scenarios use Mineflayer bots as players. Mineflayer 4.39.0, the 
 
 ## Decision
 
-The scenario servers (`testkit`, `scenarioServer_*` tasks) download ViaVersion and ViaBackwards from Modrinth through run-paper, pinned in `gradle/libs.versions.toml`. The bots connect as 26.1 clients and ViaBackwards translates. Nothing ships with them: they are never in the Seasons or Seasons Web jars, and `runServer` for manual testing doesn't install them.
+The scenario servers (`testkit`, `scenarioRun_*` tasks) download ViaVersion and ViaBackwards from Modrinth through run-paper's download service, pinned in `gradle/libs.versions.toml`. The bots connect as 26.1 clients and ViaBackwards translates. Nothing ships with them: they are never in the Seasons or Seasons Web jars, and `runServer` for manual testing doesn't install them.
 
 ## Consequences
 

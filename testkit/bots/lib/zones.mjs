@@ -2,7 +2,7 @@
 // Zones in scenarios: a season launched into its Frontier stage, where zones lock, a base zone to
 // keep out of, and the test plugin's stand-ins for what bots can't do through the protocol
 // translation (docs/adr/0001): flying, riding, chorus fruit, portals, buckets and lighting.
-import { SECOND, assert, sleep } from './context.mjs'
+import { SECOND, assert } from './context.mjs'
 import { FLOOR } from './hall.mjs'
 import { middle, move, near, pearl, standAt } from './visits.mjs'
 
@@ -102,7 +102,8 @@ export async function expectEveryRouteRefused (ctx, admin, bot, from, to, zone, 
     const told = ctx.waitForMessages(bot, LOCKED(zone), 10 * SECOND, `the ${route} refusal`)
     await go(bot.username, to)
     await told
-    await sleep(1500)
+    // Long enough for a refused move to have put them back: a round of the zone sweep and more.
+    await ctx.sync(admin, [bot], 20)
     const at = await ctx.position(admin, bot.username)
     assert(outside(at), `${route}: ${bot.username} stays out, at ${JSON.stringify(at)}`)
     assert(near(at, middle(from), 2), `${route}: ${bot.username} is back where they stood, at ${JSON.stringify(at)}`)

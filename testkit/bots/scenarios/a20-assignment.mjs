@@ -2,7 +2,7 @@
 // A20. Opening the decorating window gives everyone who played the season a random free cell and
 // tells them which; a player who first plays later gets one at next login. The window opens by
 // itself decorating.opensBefore (7 days) before the planned end.
-import { DAY, assert, isoIn } from '../lib/context.mjs'
+import { DAY, assert } from '../lib/context.mjs'
 import { buildGallery, owners } from '../lib/hall.mjs'
 
 const TOLD = /^Your Hall of Fame cell for Season 2 is (c\d) in season-2\.$/
@@ -20,7 +20,7 @@ export default {
     // A planned end 6 days away is inside the 7-day window, so the window opens at once.
     const alexTold = ctx.waitForMessages(alex, TOLD, 15_000)
     const samTold = ctx.waitForMessages(sam, TOLD, 15_000)
-    await ctx.command(admin, `/season schedule end ${isoIn(6 * DAY)}`, /^Season 2 now ends at /)
+    await ctx.command(admin, `/season schedule end ${ctx.isoIn(6 * DAY)}`, /^Season 2 now ends at /)
     const [alexLine, samLine] = await Promise.all([alexTold, samTold])
     const alexCell = TOLD.exec(alexLine)[1]
     const samCell = TOLD.exec(samLine)[1]

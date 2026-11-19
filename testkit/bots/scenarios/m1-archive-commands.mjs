@@ -34,6 +34,9 @@ export default {
       await ctx.command(admin, '/season reprocess Again', /^Again has nothing pending\.$/)
       await ctx.command(admin, '/season reprocess Nobody', /^Nobody has nothing pending\.$/)
 
+      // Between seasons Seasons puts anyone who leaves the Hall back at its entry, ops included;
+      // the admin holds seasons.hof.bypass to stand outside and set the spawn.
+      await ctx.command(admin, '/scenario permit SeasonsAdmin seasons.hof.bypass', /^Permitted /)
       await ctx.command(admin, '/tp SeasonsAdmin 300 -60 300', /^Teleported /)
       await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 300, 'admin moved'))
       await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now 300, -60, 300/)

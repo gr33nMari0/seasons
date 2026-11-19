@@ -3,7 +3,7 @@
 // arranges their cell but takes nothing out of it into the next season (questions 87): the chest
 // they filled before the end opens as a view-only copy, a block they break drops nothing, and they
 // still carry nothing.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { FLOOR, blockItems, breakBlock, buildGallery, cellOf, gameMode, inside, place, visit } from '../lib/hall.mjs'
 import { expectViewOnly, openContainer, openWindow } from '../lib/protection.mjs'
 
@@ -38,7 +38,7 @@ export default {
     assert(await openContainer(ctx, admin, 'Owner', chest) === 'copy', 'their stash opens as a copy')
     await expectViewOnly(ctx, admin, owner, chest)
     assert(await breakBlock(ctx, admin, 'Owner', stone, { drops: true }), 'they can still break a block')
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [], 20)
     assert(!await ctx.holds(admin, 'entity @e[type=item]'), 'it dropped nothing')
     assert(await ctx.itemCount(admin, 'Owner') === 0, 'they still carry nothing')
     assert(await blockItems(ctx, admin, chest) === stocked, 'the stash stays in the cell')

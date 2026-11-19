@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A2. /season end starts a 10-minute boss-bar countdown; /season cancel during it changes
 // nothing; --now skips it; a second /season end during a countdown is refused.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 
 export default {
   name: 'a02-end-countdown',
@@ -21,7 +21,7 @@ export default {
 
     // Skipping the countdown: straight to archiving, which ends in the Intermission.
     await ctx.command(admin, '/season end --now', /^Season 2 has ended\b/)
-    await sleep(2 * SECOND)
+    await ctx.sync(admin, [player], 20)
     assert(ctx.bossBars(player).length === 0, `--now shows no countdown, saw ${ctx.bossBars(player)}`)
     await ctx.command(player, '/season info', /^Phase: Intermission$/)
     await ctx.command(admin, '/season end', /^Season 2 has already ended\b/)

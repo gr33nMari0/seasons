@@ -3,7 +3,7 @@
 // one record with the same items, one archive page per chest, a mannequin wearing the gear with
 // the head's skin, and three archive anchors. The chests and stand hold nothing real afterwards,
 // and /hof import undo puts every item back where it was.
-import { assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { at, blockItems, buildSeasonOneCell, selectorData, skinValue, use } from '../lib/hall.mjs'
 
 // Each chest holds diamonds, logs and a shulker box of gold; the stand a chestplate, boots, a
@@ -77,7 +77,7 @@ export default {
 
     // Each archive anchor opens the view at its own chest's page.
     await ctx.command(admin, `/tp Owner ${built.stand.x + 0.5} -60 ${built.stand.z - 1.5}`, /^Teleported /)
-    await sleep(1000)
+    await ctx.sync(admin, [owner], 20)
     for (let i = 0; i < built.chests.length; i++) {
       const opened = new Promise((resolve) => owner.once('windowOpen', resolve))
       await use(ctx, admin, 'Owner', built.chests[i])
@@ -87,7 +87,7 @@ export default {
       assert(diamonds?.name === 'diamond' && diamonds.count === i + 1, `chest ${i + 1}'s page starts with its diamonds: ${JSON.stringify(diamonds)}`)
       assert(window.slots[4 + i]?.name === 'oak_log' && window.slots[26]?.name === 'shulker_box', `chest ${i + 1}'s items keep their slots`)
       owner.closeWindow(window)
-      await sleep(300)
+      await ctx.sync(admin, [owner])
     }
     // The figure opens the view too, by the bot's own click.
     const opened = new Promise((resolve) => owner.once('windowOpen', resolve))

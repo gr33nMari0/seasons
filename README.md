@@ -19,8 +19,11 @@ You need JDK 25 (Temurin) and Node 24. On macOS: `brew install --cask temurin@25
 ```bash
 ./gradlew build                       # compile, unit tests, both jars
 ./gradlew :adapters:paper:runServer   # Paper 26.3 in adapters/paper/run/ with both plugins installed
-./gradlew scenarioTest                # a Paper server plus Mineflayer bots run the acceptance scenarios
+./gradlew scenarioTest                # Paper servers plus Mineflayer bots run the acceptance scenarios
+./gradlew scenarioTest -Pscenarios=a33-homecoming,m3-*   # just those scenarios
 ```
+
+`scenarioTest` runs the scenarios in shards side by side, each shard on one Paper server that is reset between scenarios; `-PscenarioIsolation=fresh` gives every scenario a server of its own instead. Server logs and results land in `testkit/build/scenario-results/`, timings in `build/reports/scenario-timings.md`.
 
 The jars land in `adapters/paper/build/libs/Seasons-<version>.jar` and `web/build/libs/SeasonsWeb-<version>.jar`.
 
@@ -33,6 +36,7 @@ adapters/paper/      the Paper Seasons Adapter: implements the ports with public
 integrations/        BlueMap and Discord, each enabled only when present
 web/                 the Seasons Web plugin
 testkit/             the test plugin and the Mineflayer scenario suite (testkit/bots)
+buildSrc/            the build logic that runs scenario shards
 docs/                spec, paper-api.md, questions.md, adr/
 ```
 

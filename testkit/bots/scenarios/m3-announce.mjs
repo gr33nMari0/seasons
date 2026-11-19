@@ -28,10 +28,11 @@ export default {
     await discord.waitFor(/^Pat entered the market \(opens at Homecoming\)$/)
     await waitNear(ctx, admin, 'Pat', middle({ x: 305, y: FLOOR, z: 310 }))
 
-    const once = ctx.expectNoMessage(admin, ENTERED, 5 * SECOND)
+    const once = ctx.quiet(admin, ENTERED)
     await move(ctx, admin, 'Pat', middle({ x: 297, y: FLOOR, z: 310 }), 'walk')
     await move(ctx, admin, 'Pat', middle({ x: 306, y: FLOOR, z: 311 }), 'walk')
-    await once
+    await ctx.sync(admin, [], 20)
+    once.verify()
     assert(discord.posts.filter((p) => /entered the market/.test(p.content ?? '')).length === 1, 'one Discord post')
   }
 }

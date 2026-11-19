@@ -3,7 +3,7 @@
 // owner decorating their cell, nor a hopper minecart; and nothing pulls items out of a Hall
 // container, neither a hopper nor a hopper minecart under it. A hopper under a chest outside the
 // Hall still pulls, so the test can't pass by hoppers never working.
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, blockItems, buildGallery, cellOf, gameMode, place, selectorData, visit } from '../lib/hall.mjs'
 import { placeEntity } from '../lib/protection.mjs'
 
@@ -42,7 +42,8 @@ export default {
     await ctx.command(admin, `/summon minecraft:hopper_minecart ${cartChest.x + 0.5} ${cartChest.y - 1} ${cartChest.z + 0.5}`, /^Summoned /)
 
     await ctx.eventually(async () => assert(await blockItems(ctx, admin, { ...outsideChest, y: outsideChest.y - 1 }) !== null, 'the hopper outside the Hall pulls'), 10 * SECOND)
-    await sleep(3 * SECOND)
+    // Hoppers need game ticks: three seconds of them, enough to move several items.
+    await ctx.sync(admin, [], 60)
     assert(await blockItems(ctx, admin, hallChest) === stocked, 'the hopper took nothing from the Hall chest')
     assert(await blockItems(ctx, admin, { ...hallChest, y: hallChest.y - 1 }) === null, 'the hopper under the Hall is empty')
     assert(await blockItems(ctx, admin, cartChest) === stocked, 'the hopper minecart took nothing from the Hall chest')

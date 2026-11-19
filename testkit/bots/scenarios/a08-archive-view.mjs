@@ -3,7 +3,7 @@
 // drag, double-click, creative clone) moves nothing, and the client is resynced. The view pages.
 // The view opens from the viewer's archive anchor in their cell.
 import itemLoader from 'prismarine-item'
-import { assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { GEAR_ITEMS, GEAR_STACKS } from '../lib/gear.mjs'
 import { buildGallery, cellOf, use } from '../lib/hall.mjs'
 
@@ -77,7 +77,7 @@ export default {
       assert(page.view.some((item) => item?.name === 'diamond_sword'), 'Previous goes back to page 1')
     })
     viewer.closeWindow(viewer.currentWindow)
-    await sleep(500)
+    await ctx.sync(admin, [viewer])
     assert(await ctx.itemCount(admin, 'Viewer') === 10, 'the viewer still has only their own dirt')
     assert((await ctx.archive(admin, 'Viewer', 2)).items === GEAR_ITEMS + 5, 'the archive is unchanged')
   }

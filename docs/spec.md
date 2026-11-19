@@ -1001,7 +1001,7 @@ Target: well under 1 ms per tick on average, measured with the spark profiler. A
 | Layer | Covers |
 | --- | --- |
 | Unit tests (core with JUnit; listeners and commands with MockBukkit) | State transitions, unlock rules, zone geometry, config validation and migrations, journal recovery decisions |
-| End-to-end (a real Paper server through run-paper, Mineflayer bots as players) | Archiving end to end; crash recovery at each journal step; each archive-view click type; vault withdrawal with a full inventory; zone enforcement by walking, elytra, pearl, portal and boat; `/hof` entry and return; reconciliation; import |
+| End-to-end (real Paper servers, Mineflayer bots as players) | Archiving end to end; crash recovery at each journal step; each archive-view click type; vault withdrawal with a full inventory; zone enforcement by walking, elytra, pearl, portal and boat; `/hof` entry and return; reconciliation; import |
 | Rehearsal | A full rollover on a copy of the real world with Mineflayer bots, before each live season |
 
 **CI and releases**
@@ -1078,7 +1078,7 @@ How the design maps onto Paper. Everything here is public Paper API. `docs/paper
 ### Testing and release
 
 - Core unit tests are unchanged. [MockBukkit](https://github.com/MockBukkit/MockBukkit) covers listener and command tests; it is published per game version and can trail a new drop, so it never blocks a release.
-- End-to-end: CI starts a real Paper server with run-paper and a small test plugin that runs scenarios and exits with a pass or fail code. [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots join that offline-mode server to play the player side: logging in mid-rollover, clicking every slot of the archive view, throwing pearls at a zone edge.
+- End-to-end: CI starts real Paper servers with a small test plugin that runs the scenarios and reports each one's pass or fail. run-paper downloads Paper and the Via plugins; the scenario shard runner in `buildSrc` launches the servers, several side by side (see The scenario suite under Development environment and repository). [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots join those offline-mode servers to play the player side: logging in mid-rollover, clicking every slot of the archive view, throwing pearls at a zone edge.
 - Tagged releases publish to [Hangar](https://hangar.papermc.io/) (Paper's plugin repository), Modrinth and GitHub Releases from GitHub Actions.
 
 ## Multi-platform design (Paper first)
@@ -1177,7 +1177,9 @@ flake.nix  .envrc           # optional: the Nix dev shell
 AGENTS.md  CLAUDE.md        # CLAUDE.md is one line: @AGENTS.md
 LICENSE  THIRD_PARTY_NOTICES.md  README.md  CHANGELOG.md  CONTRIBUTING.md  SECURITY.md
 docs/spec.md  docs/paper-api.md  docs/questions.md  docs/adr/
-.github/workflows/build.yml  .github/workflows/release.yml  .github/dependabot.yml
+.github/workflows/build.yml  .github/workflows/nightly.yml  .github/workflows/release.yml
+.github/scripts/docs-only.sh  .github/dependabot.yml
+buildSrc/                   # the scenario shard runner: plain Java on the Gradle API
 .gitignore                  # build/, .gradle/, run/, .idea/, .direnv/, secrets.yml, *.jar
 ```
 
@@ -1201,8 +1203,11 @@ The shaded jars are the only jars: disable the plain `jar` task so `build/libs` 
 ```bash
 ./gradlew build                       # compile, unit tests, both jars
 ./gradlew :adapters:paper:runServer   # Paper 26.3 in run/ with both plugins installed
-./gradlew scenarioTest                # a Paper server plus Mineflayer bots run the acceptance scenarios
+./gradlew scenarioTest                # Paper servers plus Mineflayer bots run the acceptance scenarios
+./gradlew scenarioTest -Pscenarios=a33-homecoming,m3-*   # just those scenarios
 ```
+
+**The scenario suite.** `scenarioTest` splits the scenarios into shards, longest first by the committed `testkit/scenario-timings.json`, and runs the shards side by side, each on its own Paper server with its own port and folder: as many as the machine has two cores and 2 GB of memory for, or `-PscenarioShards=<n>`. A shard's server boots once and runs its scenarios one after another, in an order shuffled with a printed seed (`-PscenarioSeed=<n>` repeats it). Between scenarios the test plugin resets the server to a fresh boot (Seasons' state in memory and on disk, players and their files, scoreboards, rules, every block touched in every dimension, entities) and checks it matches the fingerprint of the shard's fresh boot; a difference fails the scenario before it, loudly. Scenarios with sessions or crash points still restart the server; a scenario the reset can't serve is marked `// @isolated <reason>` and gets a fresh server of its own. Scenarios don't wait out time: `/scenario clock` moves Seasons' clock past reminders, countdowns, windows, rate limits and cooldowns, and `/scenario sync` answers once the server has finished its tick, in place of fixed sleeps; only waits the game itself needs ticks for remain (ADR 0003). `-PscenarioIsolation=fresh` runs every scenario on a freshly wiped server of its own, as the nightly workflow does. Each run writes `build/reports/scenario-timings.md`; after adding or changing scenarios, refresh the balance with `./gradlew :testkit:updateScenarioTimings`. Targets: about 5 minutes for a pull request's CI, under a minute for one scenario, under 5 minutes for the full suite on the MacBook.
 
 To test on real data, copy a backup of TheRanch's world into `run/world`, never the live world. `run/server.properties` sets `online-mode=false` so the bots can join; it never ships.
 
@@ -1210,7 +1215,7 @@ To test on real data, copy a backup of TheRanch's world into `run/world`, never 
 
 1. `git init`, commit the bootstrap, then `gh repo create seasons --public --source . --push`. A public repository makes release downloads public; the licence still forbids selling. Make it `--private` until v1 if you prefer.
 2. In the repository settings, protect `main`: pull requests only, and the `build` check must pass.
-3. Every push and pull request runs `build.yml`. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
+3. Every push and pull request runs `build.yml`: one job builds the jars and runs the unit tests, four shard jobs run the scenarios with those jars (Paper, its libraries and the Via jars cached between runs; Gradle's downloads saved by the jars job, so Maven Central isn't asked for everything six times at once), and a final job named `build` collects every shard's samples, runs the NBT neutrality test and fails unless every shard passed and every session of every scenario file has a passing result among them (`:testkit:scenarioCoverage`), so a shard that never ran can't pass unnoticed. The shard count is the matrix's length alone. A push that changes only documentation (`docs/`, Markdown files at the root, `LICENSE`; `.github/scripts/docs-only.sh`) skips the shards, and the final job passes that, and nothing else, as skipped. A newer push to the same branch cancels the run before it. `nightly.yml` runs the suite in fresh mode every night and on demand. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
 
 ```yaml
 # .github/workflows/build.yml
@@ -1221,28 +1226,182 @@ on:
   pull_request:
 permissions:
   contents: read
+# A newer push to the same branch or pull request cancels the run before it.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.rule.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Does this change only documentation?
+        id: rule
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # The rule itself, and the paths that count as docs: .github/scripts/docs-only.sh
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            docs_only=false
+          else
+            docs_only=$(git diff --name-only "$BASE...$GITHUB_SHA" | .github/scripts/docs-only.sh)
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "Docs-only change: $docs_only" >> "$GITHUB_STEP_SUMMARY"
+
+  jars:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-java@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
-      - run: ./gradlew build scenarioTest
-      - uses: actions/upload-artifact@v4
+      # Gradle's downloads, shared with the shard and final jobs (see their restore step).
+      - id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - run: ./gradlew build
+      - if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - uses: actions/upload-artifact@v7
         with:
           name: seasons-dev-${{ github.sha }}
           path: |
             adapters/paper/build/libs/Seasons-*.jar
             web/build/libs/SeasonsWeb-*.jar
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scenario-jars-${{ github.sha }}
+          retention-days: 3
+          path: |
+            adapters/paper/build/libs/Seasons-*.jar
+            web/build/libs/SeasonsWeb-*.jar
+            testkit/build/libs/seasons-testkit-*.jar
+
+  shard:
+    needs: [changes, jars]
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The shard count comes from this list alone (strategy.job-total); the final job checks
+        # that the shards between them ran every scenario.
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      # Gradle's downloads, saved by the jars job: the other jobs start with them instead of all
+      # fetching every dependency from Maven Central at once, which it rate-limits (HTTP 429).
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: scenario-jars-${{ github.sha }}
+          path: scenario-jars
+      - id: month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # Paper's jar and the Via jars (run-paper's cache), and Paper unpacked with its libraries.
+      # A new month or a version change starts a new cache, which picks up newer Paper builds.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/run-task-jars
+            testkit/build/scenario/*/bundler
+          key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: paper-
+      - name: Scenario shard ${{ matrix.shard }} of ${{ strategy.job-total }}
+        run: ./gradlew :testkit:scenarioTest -PscenarioShards=${{ strategy.job-total }} -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scenario-results-${{ matrix.shard }}
+          retention-days: 7
+          path: testkit/build/scenario-results
+
+  # The check branch protection requires. It runs whatever happened before it, and passes only if
+  # the jars built and every shard passed, or every shard was skipped for a docs-only change: a job
+  # skipped because something it needs failed would otherwise count as passing. After passing
+  # shards, every session of every scenario file must have a passing result in their results.
+  build:
+    needs: [changes, jars, shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard passed, or all were skipped for a docs-only change
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          JARS: ${{ needs.jars.result }}
+          SHARDS: ${{ needs.shard.result }}
+        run: |
+          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, shards: $SHARDS"
+          [ "$CHANGES" = success ] || { echo "The docs-only check didn't run"; exit 1; }
+          [ "$JARS" = success ] || { echo "The jars didn't build"; exit 1; }
+          if [ "$DOCS_ONLY" = true ] && [ "$SHARDS" = skipped ]; then
+            echo "Docs-only change: the scenario shards were skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [ "$SHARDS" = success ] || { echo "A scenario shard didn't pass"; exit 1; }
+      - if: needs.shard.result == 'success'
+        uses: actions/checkout@v7
+      - if: needs.shard.result == 'success'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - if: needs.shard.result == 'success'
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - if: needs.shard.result == 'success'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - if: needs.shard.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: scenario-results-*
+          merge-multiple: true
+          path: testkit/build/scenario-results
+      - if: needs.shard.result == 'success'
+        name: Every scenario passed in some shard, NBT neutrality of every shard's samples and archives, and the run's timings
+        run: |
+          ./gradlew :testkit:scenarioCoverage :testkit:nbtNeutralityTest :testkit:scenarioTimings
+          cat build/reports/scenario-timings.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
 ```yaml
@@ -1308,6 +1467,7 @@ Notes on the workflows: `cache-provider: basic` keeps Gradle's open-source cache
 - Build milestone by milestone, M0 to M7. A milestone is done when its acceptance scenarios pass in CI.
 - Branch per milestone or feature, small commits with conventional messages, a pull request into main. Never push to main directly.
 - Commands: ./gradlew build, ./gradlew scenarioTest, ./gradlew :adapters:paper:runServer.
+- While working, run the unit tests and only the scenarios you touch (./gradlew scenarioTest -Pscenarios=<name>,<prefix>-*). Run the full suite once in the background before pushing. Don't wait for CI after pushing.
 - Public Paper API only: no server internals, reflection or paperweight-userdev. List every Paper API you call in docs/paper-api.md.
 - Only the server thread changes the world. Journal before every world change. No real archived item ever exists in the world.
 - Player-facing text goes in messages.yml; settings in config files through Configurate records.

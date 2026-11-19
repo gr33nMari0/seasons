@@ -6,7 +6,7 @@
 // arrival), Pat stays on the Nether side and is told why. The audit entry names the old portal's
 // spot, so the game really was taking Pat there. (A second trip can't follow: a bot that sends no
 // moves isn't ticked, so its portal cooldown never runs out. A bypass holder is A30's walk in.)
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { BASE, LOCKED, drawBase, launchFrontier } from '../lib/zones.mjs'
 
@@ -43,7 +43,7 @@ export default {
     // Pat stands by the Nether portal, then steps in.
     await ctx.command(admin, `/execute in ${NETHER} run tp Pat ${n.x + 0.5} ${n.y} ${n.z - 2 + 0.5}`, /^Teleported /)
     await ctx.eventually(async () => assert(await dimension() === NETHER, 'Pat is in the Nether'))
-    await sleep(SECOND)
+    await ctx.sync(admin, [pat], 20)
     const told = ctx.waitForMessages(pat, LOCKED('base'), 30 * SECOND, 'the refusal at the old portal')
     await ctx.command(admin, `/execute in ${NETHER} run tp Pat ${n.x + 0.5} ${n.y} ${n.z + 0.5}`, /^Teleported /)
     await told

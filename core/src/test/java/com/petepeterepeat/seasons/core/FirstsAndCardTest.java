@@ -44,7 +44,7 @@ class FirstsAndCardTest {
       };
 
   private void start() {
-    hooks = new ScenarioHooks(() -> {});
+    hooks = TestHooks.of(() -> {});
     seasons =
         new Seasons(
             fake.platform(new Capabilities(EnumSet.allOf(Capability.class)), dir),

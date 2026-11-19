@@ -3,7 +3,7 @@
 // take a stack of Season 1 blocks from an old chest and build with it, and break and rebuild part
 // of a Season 1 base. Routes in and building are the test plugin's stand-ins where bots can't act
 // through the protocol translation (docs/adr/0001, ADR 0003).
-import { SECOND, assert, sleep } from '../lib/context.mjs'
+import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { openContainer } from '../lib/protection.mjs'
 import { middle, move, standAt, waitNear } from '../lib/visits.mjs'
@@ -30,7 +30,8 @@ export default {
     await standAt(ctx, admin, 'Pat', OUTSIDE)
     const inside = middle({ x: CHEST.x + 1, y: FLOOR, z: CHEST.z })
     await move(ctx, admin, 'Pat', inside, 'walk')
-    await sleep(2 * SECOND)
+    // A full round of the zone sweep, which would send Pat back if the base were still locked.
+    await ctx.sync(admin, [pat], 20)
     await waitNear(ctx, admin, 'Pat', inside)
 
     // A stack from the old chest, built with.

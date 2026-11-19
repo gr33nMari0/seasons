@@ -28,7 +28,7 @@ export default {
       new RegExp(`^${PROBLEM.source}$`)
     ])
     await toOther
-    await waitUntil(() => PROBLEM.test(ctx.readFile('logs/latest.log')), 10 * SECOND, 'the problem in the server log')
+    await waitUntil(() => PROBLEM.test(ctx.serverLog()), 10 * SECOND, 'the problem in the server log')
     await ctx.command(admin, '/season validate', new RegExp(`^${PROBLEM.source}$`))
 
     // The previous config is still live: a 2-minute countdown, not 3 minutes or the default 10.

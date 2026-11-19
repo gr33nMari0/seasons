@@ -5,9 +5,85 @@ on:
   pull_request:
 permissions:
   contents: read
+# A newer push to the same branch or pull request cancels the run before it.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.rule.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Does this change only documentation?
+        id: rule
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # The rule itself, and the paths that count as docs: .github/scripts/docs-only.sh
+          if [ -z "$BASE" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]; then
+            docs_only=false
+          else
+            docs_only=$(git diff --name-only "$BASE...$GITHUB_SHA" | .github/scripts/docs-only.sh)
+          fi
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+          echo "Docs-only change: $docs_only" >> "$GITHUB_STEP_SUMMARY"
+
+  jars:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      # Gradle's downloads, shared with the shard and final jobs (see their restore step).
+      - id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - run: ./gradlew build
+      - if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: seasons-dev-${{ github.sha }}
+          path: |
+            adapters/paper/build/libs/Seasons-*.jar
+            web/build/libs/SeasonsWeb-*.jar
+      - uses: actions/upload-artifact@v7
+        with:
+          name: scenario-jars-${{ github.sha }}
+          retention-days: 3
+          path: |
+            adapters/paper/build/libs/Seasons-*.jar
+            web/build/libs/SeasonsWeb-*.jar
+            testkit/build/libs/seasons-testkit-*.jar
+
+  shard:
+    needs: [changes, jars]
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The shard count comes from this list alone (strategy.job-total); the final job checks
+        # that the shards between them ran every scenario.
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -20,10 +96,88 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
-      - run: ./gradlew build scenarioTest
-      - uses: actions/upload-artifact@v7
+      # Gradle's downloads, saved by the jars job: the other jobs start with them instead of all
+      # fetching every dependency from Maven Central at once, which it rate-limits (HTTP 429).
+      - uses: actions/cache/restore@v6
         with:
-          name: seasons-dev-${{ github.sha }}
           path: |
-            adapters/paper/build/libs/Seasons-*.jar
-            web/build/libs/SeasonsWeb-*.jar
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: scenario-jars-${{ github.sha }}
+          path: scenario-jars
+      - id: month
+        run: echo "month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # Paper's jar and the Via jars (run-paper's cache), and Paper unpacked with its libraries.
+      # A new month or a version change starts a new cache, which picks up newer Paper builds.
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/run-task-jars
+            testkit/build/scenario/*/bundler
+          key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
+          restore-keys: paper-
+      - name: Scenario shard ${{ matrix.shard }} of ${{ strategy.job-total }}
+        run: ./gradlew :testkit:scenarioTest -PscenarioShards=${{ strategy.job-total }} -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: scenario-results-${{ matrix.shard }}
+          retention-days: 7
+          path: testkit/build/scenario-results
+
+  # The check branch protection requires. It runs whatever happened before it, and passes only if
+  # the jars built and every shard passed, or every shard was skipped for a docs-only change: a job
+  # skipped because something it needs failed would otherwise count as passing. After passing
+  # shards, every session of every scenario file must have a passing result in their results.
+  build:
+    needs: [changes, jars, shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every shard passed, or all were skipped for a docs-only change
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          JARS: ${{ needs.jars.result }}
+          SHARDS: ${{ needs.shard.result }}
+        run: |
+          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, shards: $SHARDS"
+          [ "$CHANGES" = success ] || { echo "The docs-only check didn't run"; exit 1; }
+          [ "$JARS" = success ] || { echo "The jars didn't build"; exit 1; }
+          if [ "$DOCS_ONLY" = true ] && [ "$SHARDS" = skipped ]; then
+            echo "Docs-only change: the scenario shards were skipped" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [ "$SHARDS" = success ] || { echo "A scenario shard didn't pass"; exit 1; }
+      - if: needs.shard.result == 'success'
+        uses: actions/checkout@v7
+      - if: needs.shard.result == 'success'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - if: needs.shard.result == 'success'
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - if: needs.shard.result == 'success'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
+      - if: needs.shard.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: scenario-results-*
+          merge-multiple: true
+          path: testkit/build/scenario-results
+      - if: needs.shard.result == 'success'
+        name: Every scenario passed in some shard, NBT neutrality of every shard's samples and archives, and the run's timings
+        run: |
+          ./gradlew :testkit:scenarioCoverage :testkit:nbtNeutralityTest :testkit:scenarioTimings
+          cat build/reports/scenario-timings.md >> "$GITHUB_STEP_SUMMARY"
