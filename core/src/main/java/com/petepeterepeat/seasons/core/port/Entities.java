@@ -16,6 +16,32 @@ public interface Entities {
   /** The owner of a tamed animal. */
   Optional<PlayerId> owner(UUID entity);
 
+  /** What the game says about a loaded entity, if it is loaded. */
+  Optional<PetInfo> pet(UUID entity);
+
+  /**
+   * Marks a loaded entity as a player's registered pet, so {@link PetEvents} hear about it, or
+   * takes the mark off. Does nothing if it isn't loaded.
+   */
+  void markPet(UUID entity, Optional<PlayerId> owner);
+
+  /**
+   * Finds an entity, loading the chunk at its last known position without stalling the tick and
+   * waiting for that chunk's entities. If it is there, the chunk stays loaded until {@link #bring}
+   * or {@link #release}. Completes with what the game says about it, or empty if it isn't there.
+   */
+  CompletableFuture<Optional<PetInfo>> load(UUID entity, Optional<Position> lastSeen);
+
+  /**
+   * Unleashes an entity, takes it out of any vehicle and off anything riding it, then teleports it,
+   * across dimensions if needed, and lets go of the chunk {@link #load} kept. Completes with
+   * whether it arrived.
+   */
+  CompletableFuture<Boolean> bring(UUID entity, Position destination);
+
+  /** Lets go of the chunk {@link #load} kept loaded for an entity that isn't brought. */
+  void release(UUID entity);
+
   /**
    * Where the monsters are within a box around a position, as vanilla counts them for sleeping:
    * hostile mobs, and neutral ones only while angry.

@@ -14,14 +14,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Brings one online player into a launched season: to its spawn in survival, with the season title,
- * arrival immunity and their statistics baseline. At launch for everyone online, and at the first
- * login after it for everyone else.
+ * arrival immunity and their statistics baseline, and their registered pets after them. At launch
+ * for everyone online, and at the first login after it for everyone else.
  */
 public final class SeasonEntry {
   private static final Logger LOG = LoggerFactory.getLogger(SeasonEntry.class);
@@ -31,19 +32,26 @@ public final class SeasonEntry {
   private final PlayerStore store;
   private final Immunity immunity;
   private final Clock clock;
+  private final Consumer<PlayerId> arrived;
   private final Executor serverThread;
 
+  /**
+   * @param arrived told once a player has reached a season's spawn, such as for their pets to
+   *     follow
+   */
   public SeasonEntry(
       Platform platform,
       Supplier<ConfigSnapshot> config,
       PlayerStore store,
       Immunity immunity,
-      Clock clock) {
+      Clock clock,
+      Consumer<PlayerId> arrived) {
     this.platform = platform;
     this.config = config;
     this.store = store;
     this.immunity = immunity;
     this.clock = clock;
+    this.arrived = arrived;
     this.serverThread = platform.scheduler()::runGlobal;
   }
 
@@ -85,6 +93,7 @@ public final class SeasonEntry {
                       messages.get("launch.title", "season", number),
                       messages.get("launch.subtitle", "season", number));
               takeBaseline(player, season);
+              arrived.accept(player);
               return true;
             },
             serverThread);

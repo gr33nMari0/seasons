@@ -896,11 +896,12 @@ final class ScenarioCommands implements BasicCommand, Listener {
                                         + "'s vault")));
   }
 
-  /** The one entity with a scoreboard tag, loaded in any world. */
+  /** The one entity with a scoreboard tag, found as a command's selector finds it. */
   private Optional<Entity> tagged(String tag) {
-    return plugin.getServer().getWorlds().stream()
-        .flatMap(world -> world.getEntities().stream())
-        .filter(entity -> entity.getScoreboardTags().contains(tag))
+    return plugin
+        .getServer()
+        .selectEntities(plugin.getServer().getConsoleSender(), "@e[tag=" + tag + ",limit=1]")
+        .stream()
         .findFirst();
   }
 
@@ -908,7 +909,15 @@ final class ScenarioCommands implements BasicCommand, Listener {
     Optional<Entity> found = tagged(args[1]);
     Player owner = plugin.getServer().getPlayerExact(args[2]);
     if (found.isEmpty() || !(found.get() instanceof Tameable animal) || owner == null) {
-      sender.sendMessage("Can't tame " + args[1] + " to " + args[2]);
+      sender.sendMessage(
+          "Can't tame "
+              + args[1]
+              + " to "
+              + args[2]
+              + ": "
+              + (found.isEmpty()
+                  ? "no such entity"
+                  : owner == null ? "owner offline" : "untameable"));
       return;
     }
     animal.setTamed(true);

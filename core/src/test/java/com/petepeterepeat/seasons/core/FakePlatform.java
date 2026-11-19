@@ -72,6 +72,51 @@ public final class FakePlatform {
   public final Map<PlayerId, FakePlayer> players = new HashMap<>();
   public final List<PagedView> opened = new ArrayList<>();
 
+  /** Animals in the fake world, by id. */
+  public final Map<java.util.UUID, FakePet> pets = new java.util.LinkedHashMap<>();
+
+  /** What each player is looking at. */
+  public final Map<PlayerId, java.util.UUID> looking = new HashMap<>();
+
+  public com.petepeterepeat.seasons.core.port.@Nullable PetEvents petEvents;
+
+  /** Chunks kept loaded for a pet between load and bring or release. */
+  public final Set<java.util.UUID> petTickets = new java.util.HashSet<>();
+
+  /** One animal: what the game would say about it, whether it is loaded, and its mark. */
+  public static final class FakePet {
+    public final java.util.UUID id = java.util.UUID.randomUUID();
+    public String type;
+    public boolean tameable = true;
+    public boolean tamed = true;
+    public Optional<PlayerId> owner = Optional.empty();
+    public boolean chest;
+    public Optional<String> name = Optional.empty();
+    public Position at;
+    public boolean loaded = true;
+    public Optional<PlayerId> marked = Optional.empty();
+    public boolean leashed;
+    public boolean riding;
+
+    FakePet(String type, Position at) {
+      this.type = type;
+      this.at = at;
+    }
+
+    com.petepeterepeat.seasons.core.port.PetInfo info() {
+      return new com.petepeterepeat.seasons.core.port.PetInfo(
+          id, type, tameable, tameable && tamed, owner, chest, name, at);
+    }
+  }
+
+  /** Adds a loaded animal, tamed to a player if given. */
+  public FakePet animal(String type, Position at, @Nullable PlayerRef owner) {
+    FakePet pet = new FakePet(type, at);
+    pet.owner = Optional.ofNullable(owner).map(PlayerRef::id);
+    pets.put(pet.id, pet);
+    return pet;
+  }
+
   /** Withdraw-only menus opened, newest last. */
   public final List<Withdraw> withdraws = new ArrayList<>();
 
@@ -363,6 +408,20 @@ public final class FakePlatform {
           }
 
           @Override
+          public Optional<java.util.UUID> targetEntity(PlayerId id, int range) {
+            return Optional.ofNullable(looking.get(id))
+                .filter(target -> {
+                  FakePet pet = pets.get(target);
+                  return pet != null
+                      && pet.loaded
+                      && Math.hypot(
+                              pet.at.x() - state(id).position.x(),
+                              pet.at.z() - state(id).position.z())
+                          <= range;
+                });
+          }
+
+          @Override
           public Optional<String> knownName(PlayerId id) {
             return online.stream().filter(p -> p.id().equals(id)).map(PlayerRef::name).findFirst();
           }
@@ -570,7 +629,49 @@ public final class FakePlatform {
 
           @Override
           public Optional<PlayerId> owner(java.util.UUID entity) {
-            return Optional.empty();
+            return loadedPet(entity).flatMap(pet -> pet.owner);
+          }
+
+          @Override
+          public Optional<com.petepeterepeat.seasons.core.port.PetInfo> pet(java.util.UUID entity) {
+            return loadedPet(entity).map(FakePet::info);
+          }
+
+          @Override
+          public void markPet(java.util.UUID entity, Optional<PlayerId> owner) {
+            loadedPet(entity).ifPresent(pet -> pet.marked = owner);
+          }
+
+          @Override
+          public CompletableFuture<Optional<com.petepeterepeat.seasons.core.port.PetInfo>> load(
+              java.util.UUID entity, Optional<Position> lastSeen) {
+            FakePet pet = pets.get(entity);
+            if (pet != null
+                && !pet.loaded
+                && lastSeen.isPresent()
+                && near(pet.at, lastSeen.get())) {
+              pet.loaded = true;
+            }
+            Optional<com.petepeterepeat.seasons.core.port.PetInfo> found = pet(entity);
+            found.ifPresent(info -> petTickets.add(entity));
+            return CompletableFuture.completedFuture(found);
+          }
+
+          @Override
+          public CompletableFuture<Boolean> bring(java.util.UUID entity, Position destination) {
+            petTickets.remove(entity);
+            Optional<FakePet> pet = loadedPet(entity);
+            pet.ifPresent(p -> {
+              p.leashed = false;
+              p.riding = false;
+              p.at = destination;
+            });
+            return CompletableFuture.completedFuture(pet.isPresent());
+          }
+
+          @Override
+          public void release(java.util.UUID entity) {
+            petTickets.remove(entity);
           }
 
           @Override
@@ -632,6 +733,11 @@ public final class FakePlatform {
           @Override
           public void zones(com.petepeterepeat.seasons.core.port.ZoneGuard g) {
             zoneGuard = g;
+          }
+
+          @Override
+          public void pets(com.petepeterepeat.seasons.core.port.PetEvents p) {
+            petEvents = p;
           }
         };
     Displays shownDisplays =
@@ -777,6 +883,17 @@ public final class FakePlatform {
         statistics,
         storage,
         imports);
+  }
+
+  private Optional<FakePet> loadedPet(java.util.UUID id) {
+    return Optional.ofNullable(pets.get(id)).filter(pet -> pet.loaded);
+  }
+
+  /** Whether two positions are in the same chunk, as loading one finds what the other holds. */
+  private static boolean near(Position a, Position b) {
+    return a.dimension().equals(b.dimension())
+        && a.blockX() >> 4 == b.blockX() >> 4
+        && a.blockZ() >> 4 == b.blockZ() >> 4;
   }
 
   private static boolean within(Position at, Position min, Position max) {

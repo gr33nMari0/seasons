@@ -65,6 +65,9 @@ public interface Players {
   /** The hotbar slot (0 to 8) in an online player's main hand. */
   int heldSlot(PlayerId id);
 
+  /** The entity an online player is looking at, within {@code range} blocks. */
+  Optional<java.util.UUID> targetEntity(PlayerId id, int range);
+
   /** The block an online player is looking at, within {@code range} blocks. */
   Optional<Position> targetBlock(PlayerId id, int range);
 

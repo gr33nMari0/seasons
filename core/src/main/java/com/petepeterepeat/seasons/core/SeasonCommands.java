@@ -96,7 +96,8 @@ final class SeasonCommands {
       Optional<LoginService> login,
       ArchiveFiles archives,
       VaultFiles vaults,
-      HallService hall) {}
+      HallService hall,
+      java.util.function.LongSupplier petsWaiting) {}
 
   SeasonCommands(
       Platform platform,
@@ -946,6 +947,10 @@ final class SeasonCommands {
               Integer.toString(finished),
               "waiting",
               Long.toString(waiting)));
+    }
+    if (state.launchedAt().isPresent() && !LoginPlan.isBetweenSeasons(state.phase())) {
+      source.reply(
+          messages.get("status.pets", "count", Long.toString(services.petsWaiting().getAsLong())));
     }
     if (!LoginPlan.isBetweenSeasons(state.phase())) {
       Optional<FurthestTracker.SeasonBest> best = services.furthest().seasonBest(state.season());

@@ -56,7 +56,9 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperDisplays displays =
         new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
     PaperAdvancements advancements = new PaperAdvancements(server, players);
-    PaperEvents events = new PaperEvents(this, text, inventories, players, displays, advancements);
+    PaperEntities entities = new PaperEntities(this, server, new NamespacedKey(this, "pet"));
+    PaperEvents events =
+        new PaperEvents(this, text, inventories, players, displays, advancements, entities);
     PaperMenus menus = new PaperMenus(server, players, codec, text, archived);
     PaperStorage storage = new PaperStorage(this, server);
     Clock clock = Clock.systemUTC();
@@ -79,7 +81,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             inventories,
             advancements,
             new PaperWorld(),
-            new PaperEntities(server),
+            entities,
             displays,
             menus,
             new PaperCommands(this, text),
@@ -96,6 +98,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(events.zoneGuard(), this);
     server.getPluginManager().registerEvents(menus, this);
     server.getPluginManager().registerEvents(advancements, this);
+    server.getPluginManager().registerEvents(entities, this);
 
     start(platform, clock, hooks);
     Clock seasonsClock = clock;

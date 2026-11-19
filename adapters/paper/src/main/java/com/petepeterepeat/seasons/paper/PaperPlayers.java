@@ -209,6 +209,11 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public Optional<UUID> targetEntity(PlayerId id, int range) {
+    return player(id).map(p -> p.getTargetEntity(range)).map(Entity::getUniqueId);
+  }
+
+  @Override
   public Optional<Position> targetBlock(PlayerId id, int range) {
     return player(id)
         .map(p -> p.getTargetBlockExact(range))

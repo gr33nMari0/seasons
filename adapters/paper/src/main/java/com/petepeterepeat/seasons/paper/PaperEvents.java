@@ -7,6 +7,7 @@ import com.petepeterepeat.seasons.core.event.IntentHandler;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Milestones;
+import com.petepeterepeat.seasons.core.port.PetEvents;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Sessions;
@@ -113,6 +114,7 @@ final class PaperEvents implements Events, Listener {
   private final PaperPlayers players;
   private final PaperDisplays displays;
   private final PaperAdvancements advancements;
+  private final PaperEntities entities;
   private final PaperHallGuard hallGuard;
   private final PaperZoneGuard zoneGuard;
   private @Nullable Milestones milestones;
@@ -126,8 +128,10 @@ final class PaperEvents implements Events, Listener {
       PaperInventories inventories,
       PaperPlayers players,
       PaperDisplays displays,
-      PaperAdvancements advancements) {
+      PaperAdvancements advancements,
+      PaperEntities entities) {
     this.plugin = plugin;
+    this.entities = entities;
     this.advancements = advancements;
     this.text = text;
     this.inventories = inventories;
@@ -170,6 +174,11 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void zones(ZoneGuard guard) {
     zoneGuard.guard(guard);
+  }
+
+  @Override
+  public void pets(PetEvents pets) {
+    entities.listen(pets);
   }
 
   /** An ender dragon's death can unlock zones or bring Homecoming. */

@@ -61,7 +61,9 @@ class PaperHallGuardTest {
             new PaperInventories(players, codec, archived),
             players,
             new PaperDisplays(server, text, codec, new NamespacedKey("seasons", "d"), archived),
-            new PaperAdvancements(server, players));
+            new PaperAdvancements(server, players),
+            new PaperEntities(
+                MockBukkit.createMockPlugin(), server, new NamespacedKey("seasons", "pet")));
     guard = events.hallGuard();
     events.hall(BELOW_TEN);
   }
