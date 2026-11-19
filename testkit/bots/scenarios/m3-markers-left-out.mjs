@@ -15,6 +15,9 @@ export default {
   sessions: [
     async (ctx) => {
       const admin = await ctx.admin()
+      // Pat plays from before the launch, so joining again later moves them nowhere: a new player
+      // would be sent to the spawn as they join, racing the scenario's own teleport.
+      await ctx.join('Pat')
       await launchFrontier(ctx, admin)
       await drawBase(ctx, admin)
       await standAt(ctx, admin, admin.username, OUTSIDE)
