@@ -1001,7 +1001,7 @@ Target: well under 1 ms per tick on average, measured with the spark profiler. A
 | Layer | Covers |
 | --- | --- |
 | Unit tests (core with JUnit; listeners and commands with MockBukkit) | State transitions, unlock rules, zone geometry, config validation and migrations, journal recovery decisions |
-| End-to-end (a real Paper server through run-paper, Mineflayer bots as players) | Archiving end to end; crash recovery at each journal step; each archive-view click type; vault withdrawal with a full inventory; zone enforcement by walking, elytra, pearl, portal and boat; `/hof` entry and return; reconciliation; import |
+| End-to-end (real Paper servers, Mineflayer bots as players) | Archiving end to end; crash recovery at each journal step; each archive-view click type; vault withdrawal with a full inventory; zone enforcement by walking, elytra, pearl, portal and boat; `/hof` entry and return; reconciliation; import |
 | Rehearsal | A full rollover on a copy of the real world with Mineflayer bots, before each live season |
 
 **CI and releases**
@@ -1078,7 +1078,7 @@ How the design maps onto Paper. Everything here is public Paper API. `docs/paper
 ### Testing and release
 
 - Core unit tests are unchanged. [MockBukkit](https://github.com/MockBukkit/MockBukkit) covers listener and command tests; it is published per game version and can trail a new drop, so it never blocks a release.
-- End-to-end: CI starts a real Paper server with run-paper and a small test plugin that runs scenarios and exits with a pass or fail code. [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots join that offline-mode server to play the player side: logging in mid-rollover, clicking every slot of the archive view, throwing pearls at a zone edge.
+- End-to-end: CI starts real Paper servers with a small test plugin that runs the scenarios and reports each one's pass or fail. run-paper downloads Paper and the Via plugins; the scenario shard runner in `buildSrc` launches the servers, several side by side (see The scenario suite under Development environment and repository). [Mineflayer](https://github.com/PrismarineJS/mineflayer) bots join those offline-mode servers to play the player side: logging in mid-rollover, clicking every slot of the archive view, throwing pearls at a zone edge.
 - Tagged releases publish to [Hangar](https://hangar.papermc.io/) (Paper's plugin repository), Modrinth and GitHub Releases from GitHub Actions.
 
 ## Multi-platform design (Paper first)
@@ -1215,7 +1215,7 @@ To test on real data, copy a backup of TheRanch's world into `run/world`, never 
 
 1. `git init`, commit the bootstrap, then `gh repo create seasons --public --source . --push`. A public repository makes release downloads public; the licence still forbids selling. Make it `--private` until v1 if you prefer.
 2. In the repository settings, protect `main`: pull requests only, and the `build` check must pass.
-3. Every push and pull request runs `build.yml`: one job builds the jars and runs the unit tests, four shard jobs run the scenarios with those jars (Paper, its libraries and the Via jars cached between runs; Gradle's downloads saved by the jars job, so Maven Central isn't asked for everything six times at once), and a final job named `build` collects every shard's samples, runs the NBT neutrality test and fails unless every shard passed. A push that changes only documentation (`docs/`, Markdown files at the root, `LICENSE`; `.github/scripts/docs-only.sh`) skips the shards, and the final job passes that, and nothing else, as skipped. A newer push to the same branch cancels the run before it. `nightly.yml` runs the suite in fresh mode every night and on demand. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
+3. Every push and pull request runs `build.yml`: one job builds the jars and runs the unit tests, four shard jobs run the scenarios with those jars (Paper, its libraries and the Via jars cached between runs; Gradle's downloads saved by the jars job, so Maven Central isn't asked for everything six times at once), and a final job named `build` collects every shard's samples, runs the NBT neutrality test and fails unless every shard passed and every session of every scenario file has a passing result among them (`:testkit:scenarioCoverage`), so a shard that never ran can't pass unnoticed. The shard count is the matrix's length alone. A push that changes only documentation (`docs/`, Markdown files at the root, `LICENSE`; `.github/scripts/docs-only.sh`) skips the shards, and the final job passes that, and nothing else, as skipped. A newer push to the same branch cancels the run before it. `nightly.yml` runs the suite in fresh mode every night and on demand. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
 
 ```yaml
 # .github/workflows/build.yml
@@ -1302,6 +1302,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The shard count comes from this list alone (strategy.job-total); the final job checks
+        # that the shards between them ran every scenario.
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
@@ -1338,8 +1340,8 @@ jobs:
             testkit/build/scenario/*/bundler
           key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
           restore-keys: paper-
-      - name: Scenario shard ${{ matrix.shard }} of 4
-        run: ./gradlew :testkit:scenarioTest -PscenarioShards=4 -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
+      - name: Scenario shard ${{ matrix.shard }} of ${{ strategy.job-total }}
+        run: ./gradlew :testkit:scenarioTest -PscenarioShards=${{ strategy.job-total }} -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
       - if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -1349,7 +1351,8 @@ jobs:
 
   # The check branch protection requires. It runs whatever happened before it, and passes only if
   # the jars built and every shard passed, or every shard was skipped for a docs-only change: a job
-  # skipped because something it needs failed would otherwise count as passing.
+  # skipped because something it needs failed would otherwise count as passing. After passing
+  # shards, every session of every scenario file must have a passing result in their results.
   build:
     needs: [changes, jars, shard]
     if: always()
@@ -1395,9 +1398,9 @@ jobs:
           merge-multiple: true
           path: testkit/build/scenario-results
       - if: needs.shard.result == 'success'
-        name: NBT neutrality of every shard's samples and archives, and the run's timings
+        name: Every scenario passed in some shard, NBT neutrality of every shard's samples and archives, and the run's timings
         run: |
-          ./gradlew :testkit:nbtNeutralityTest :testkit:scenarioTimings
+          ./gradlew :testkit:scenarioCoverage :testkit:nbtNeutralityTest :testkit:scenarioTimings
           cat build/reports/scenario-timings.md >> "$GITHUB_STEP_SUMMARY"
 ```
 
