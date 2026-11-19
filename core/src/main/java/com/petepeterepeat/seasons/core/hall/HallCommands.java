@@ -36,6 +36,9 @@ public final class HallCommands {
   /** Permission for {@code /hof swap}. */
   public static final String PERMISSION_SWAP = "seasons.hof.swap";
 
+  /** {@code /hof claim}. */
+  public static final String PERMISSION_CLAIM = "seasons.hof.claim";
+
   private static final Pattern WORDS = Pattern.compile("\\s+");
 
   /** Splits on runs of whitespace, dropping empty words. */
@@ -188,6 +191,11 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
                                 .executes(this::cellInfo))))
+        .then(
+            CommandNode.literal("claim")
+                .permission(PERMISSION_CLAIM)
+                .executes(this::claim)
+                .then(CommandNode.argument("cell", ArgumentType.id()).executes(this::claim)))
         .then(
             CommandNode.literal("swap")
                 .permission(PERMISSION_SWAP)
@@ -644,6 +652,37 @@ public final class HallCommands {
                 messages()
                     .get("hof.swap.done", "name", askerName, "cell", swapped.theirs().cell().id()));
       }
+    }
+  }
+
+  void claim(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    switch (hall.claim(source.player().get(), arguments.optionalString("cell"))) {
+      case HallService.ClaimResult.Refused refused ->
+          source.reply(
+              messages().get(refused.messageKey(), refused.placeholders().toArray(String[]::new)));
+      case HallService.ClaimResult.Claimed claimed ->
+          source.reply(
+              messages()
+                  .get(
+                      "hof.assigned",
+                      "season",
+                      Integer.toString(claimed.cell().gallery().season()),
+                      "cell",
+                      claimed.cell().cell().id(),
+                      "gallery",
+                      claimed.cell().gallery().id()));
+      case HallService.ClaimResult.Free free ->
+          source.reply(
+              messages()
+                  .get(
+                      "hof.claim.free",
+                      "cells",
+                      String.join(
+                          ", ", free.cells().stream().map(ref -> ref.cell().id()).toList())));
     }
   }
 

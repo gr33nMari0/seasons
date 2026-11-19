@@ -253,6 +253,16 @@ hof:
     closed: "<red>Only its owner goes into that cell, while decorating it.</red>"
     moved-out: "<yellow>Only its owner can be in that cell, while decorating it, so you're at the gallery entry.</yellow>"
     gate-shut: "<yellow>The cell's gate shut, so you're at the gallery entry.</yellow>"
+  claim:
+    open: "<gold>Claim your Hall of Fame cell for Season <season> with /hof claim [cell].</gold>"
+    closed: "<red>Cells can only be claimed while the decorating window is open.</red>"
+    already: "<red>You already have a cell, <cell>. Swap it with /hof swap instead.</red>"
+    not-played: "<red>You haven't played Season <season> yet.</red>"
+    none-free: "<red>No cell is free to claim.</red>"
+    free: "<gray>Free cells: <cells>. Claim one with /hof claim [cell].</gray>"
+    other-season: "<red><cell> isn't a cell of Season <season>.</red>"
+    not-claimed: "<red>Cells in <gallery> aren't claimed: they're handed out.</red>"
+    taken: "<red><cell> is taken.</red>"
   swap:
     closed: "<red>Cells can only be swapped while the decorating window is open.</red>"
     self: "<red>You can't swap with yourself.</red>"

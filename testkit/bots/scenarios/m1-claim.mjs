@@ -9,7 +9,7 @@ import { audit } from '../lib/protection.mjs'
 import { standAt } from '../lib/visits.mjs'
 
 const FILE = 'world/dimensions/minecraft/overworld/seasons/galleries/season-2.yml'
-const TOLD = /^Claim your Hall of Fame cell for Season 2 with \/hof claim <cell>\.$/
+const TOLD = /^Claim your Hall of Fame cell for Season 2 with \/hof claim \[cell\]\.$/
 
 export default {
   name: 'm1-claim',
@@ -32,7 +32,7 @@ export default {
     await ctx.command(alex, '/hof claim c1', /^Your Hall of Fame cell for Season 2 is c1 in season-2\.$/)
     await ctx.command(sam, '/hof claim c1', /^c1 is taken\.$/)
     await ctx.command(alex, '/hof claim c3', /^You already have a cell, c1\. Swap it with \/hof swap instead\.$/)
-    await ctx.command(sam, '/hof claim', /^Free cells: c2, c3, c4\. Claim one with \/hof claim <cell>\.$/)
+    await ctx.command(sam, '/hof claim', /^Free cells: c2, c3, c4\. Claim one with \/hof claim \[cell\]\.$/)
     await standAt(ctx, admin, 'Sam', cells[1].entry)
     await ctx.command(sam, '/hof claim', /^Your Hall of Fame cell for Season 2 is c2 in season-2\.$/)
 

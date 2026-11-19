@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchivePages;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.event.Decision;
@@ -72,6 +73,7 @@ public final class HallService {
   private final PlayerStore players;
   private final ArchiveFiles archives;
   private final Announcer announcer;
+  private final AuditLog audit;
   private final RandomGenerator random;
   private final Map<PlayerId, SwapRequest> swaps = new HashMap<>();
 
@@ -108,6 +110,7 @@ public final class HallService {
       PlayerStore players,
       ArchiveFiles archives,
       Announcer announcer,
+      AuditLog audit,
       RandomGenerator random) {
     this.platform = platform;
     this.config = config;
@@ -118,6 +121,7 @@ public final class HallService {
     this.players = players;
     this.archives = archives;
     this.announcer = announcer;
+    this.audit = audit;
     this.random = random;
     this.lastTick = clock.instant();
   }
@@ -391,6 +395,105 @@ public final class HallService {
             .count();
   }
 
+  /** Whether a gallery's cells are claimed with {@code /hof claim}. */
+  private boolean claims(Gallery gallery) {
+    return gallery.assignment(config.get().config()) == SeasonsConfig.CellAssignment.CLAIM;
+  }
+
+  /** The free cells of a season's {@code claim} galleries. */
+  private List<CellRef> claimable(int season) {
+    return freeCells(season).stream().filter(ref -> claims(ref.gallery())).toList();
+  }
+
+  /**
+   * A player archived without a cell who could have claimed one gets a free one at random, so
+   * nobody who played goes without displays while a cell is free (questions 167).
+   */
+  private Optional<CellRef> unclaimed(PlayerId player, int season) {
+    List<CellRef> free = claimable(season);
+    if (free.isEmpty() || !players.find(player).map(r -> earnsCell(r, season)).orElse(false)) {
+      return Optional.empty();
+    }
+    CellRef assigned = assign(free.get(random.nextInt(free.size())), season, Optional.of(player));
+    tell(player, season, assigned);
+    return Optional.of(assigned);
+  }
+
+  /** What {@code /hof claim} came to. */
+  public sealed interface ClaimResult {
+    record Refused(String messageKey, List<String> placeholders) implements ClaimResult {}
+
+    record Claimed(CellRef cell) implements ClaimResult {}
+
+    /** No cell named and none where they stand: the free cells to choose from. */
+    record Free(List<CellRef> cells) implements ClaimResult {}
+  }
+
+  private static ClaimResult refusedClaim(String key, String... placeholders) {
+    return new ClaimResult.Refused(key, List.of(placeholders));
+  }
+
+  /**
+   * {@code /hof claim [cell]}: a free cell of a {@code claim} gallery, during the window, for a
+   * player who played the season and has none. Without a cell, the one they stand in.
+   */
+  public ClaimResult claim(PlayerId player, Optional<String> name) {
+    Optional<SeasonState> found = state.get();
+    if (found.isEmpty() || !playing(found.get()) || !found.get().decorating().open()) {
+      return refusedClaim("hof.claim.closed");
+    }
+    int season = found.get().season();
+    Optional<CellRef> mine = cellOf(player, season);
+    if (mine.isPresent()) {
+      return refusedClaim("hof.claim.already", "cell", mine.get().cell().id());
+    }
+    if (!players.find(player).map(r -> earnsCell(r, season)).orElse(false)) {
+      return refusedClaim("hof.claim.not-played", "season", Integer.toString(season));
+    }
+    List<CellRef> free = claimable(season);
+    CellRef chosen;
+    if (name.isEmpty()) {
+      Optional<CellRef> here =
+          cellAt(platform.players().position(player))
+              .filter(ref -> free.stream().anyMatch(f -> f.key().equals(ref.key())));
+      if (here.isEmpty()) {
+        return free.isEmpty() ? refusedClaim("hof.claim.none-free") : new ClaimResult.Free(free);
+      }
+      chosen = here.get();
+    } else {
+      String cell = name.get();
+      CellRef ref;
+      switch (resolve(cell)) {
+        case Resolved.Found(CellRef named) -> ref = named;
+        case Resolved.Ambiguous() -> {
+          return refusedClaim("hof.ambiguous-cell", "cell", cell);
+        }
+        case Resolved.NotFound() -> {
+          return refusedClaim("hof.no-cell", "cell", cell);
+        }
+      }
+      if (ref.gallery().kind() != Gallery.Kind.SEASON || ref.gallery().season() != season) {
+        return refusedClaim(
+            "hof.claim.other-season", "cell", cell, "season", Integer.toString(season));
+      }
+      if (!claims(ref.gallery())) {
+        return refusedClaim("hof.claim.not-claimed", "gallery", ref.gallery().id());
+      }
+      if (!isFree(ref.cell(), season)) {
+        return refusedClaim("hof.claim.taken", "cell", ref.cell().id());
+      }
+      chosen = ref;
+    }
+    CellRef claimed = assign(chosen, season, Optional.of(player));
+    audit.record(
+        platform.players().knownName(player).orElse(player.toString()),
+        "claim",
+        claimed.key(),
+        "claimed",
+        "Season " + season);
+    return new ClaimResult.Claimed(claimed);
+  }
+
   /** Whether a gallery hands its cells out by itself: random or ordered assignment. */
   private boolean handsOut(Gallery gallery) {
     SeasonsConfig.CellAssignment strategy = gallery.assignment(config.get().config());
@@ -454,6 +557,17 @@ public final class HallService {
     decorating.accept(d -> d.opened(now));
     int season = current.get().season();
     int owners = assignAll(season);
+    if (seasonGalleries(season).stream().anyMatch(this::claims)) {
+      for (PlayerRecord record : withoutCell(season)) {
+        if (platform.players().find(record.id()).isPresent()) {
+          platform
+              .players()
+              .sendMessage(
+                  record.id(),
+                  messages().get("hof.claim.open", "season", Integer.toString(season)));
+        }
+      }
+    }
     return new OpenResult.Opened(owners);
   }
 
@@ -907,7 +1021,7 @@ public final class HallService {
     return new CellDirectory() {
       @Override
       public Optional<Position> cell(PlayerId player, int season) {
-        Optional<CellRef> cell = ensureCell(player, season);
+        Optional<CellRef> cell = ensureCell(player, season).or(() -> unclaimed(player, season));
         Optional<Position> arrival = cell.flatMap(HallService.this::arrival);
         if (arrival.isEmpty()) {
           return arrival;

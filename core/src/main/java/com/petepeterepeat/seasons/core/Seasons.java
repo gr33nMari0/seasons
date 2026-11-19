@@ -210,6 +210,7 @@ public final class Seasons implements SeasonsApi {
             players,
             archives,
             announcer,
+            audit,
             RandomGenerator.getDefault());
     hallService = halls;
     HallAudit hallAudit = new HallAudit(audit, clock);
