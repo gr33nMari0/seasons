@@ -193,7 +193,8 @@ public final class BlueMapPublisher implements MapPublisher {
         map.getMarkerSets().putAll(sets);
       }
       status = new Status.Published(shown.size(), wanted.size());
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | LinkageError e) {
+      // A LinkageError: a BlueMap whose API lacks a call made here.
       if (failures >= BACKOFF.size()) {
         LOG.error("Can't publish the map to BlueMap; trying again with the next change", e);
         return;
