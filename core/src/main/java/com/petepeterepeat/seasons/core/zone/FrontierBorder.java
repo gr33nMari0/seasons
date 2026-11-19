@@ -50,6 +50,14 @@ final class FrontierBorder {
     players.showBorder(player, wanted);
   }
 
+  /**
+   * Forgets the border a player was sent, as when they change dimension: the game sends their
+   * client the new world's border then, whatever Seasons sent before.
+   */
+  void forget(PlayerId player) {
+    shown.remove(player);
+  }
+
   /** Forgets players who have left: their client has the world's border when they come back. */
   void retain(Set<PlayerId> online) {
     shown.keySet().retainAll(online);

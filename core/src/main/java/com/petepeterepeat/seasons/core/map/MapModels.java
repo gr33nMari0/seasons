@@ -184,8 +184,8 @@ public final class MapModels {
           outline =
               new Outline.Beyond(
                   new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1));
-      // A height zone covers every column, so as an area it would cover the whole map; and Map
-      // Link, which shows areas flat, would show every block of the dimension as locked.
+      // A height zone covers every column, so as an area it would cover the whole map, which the
+      // top-down view shows as every block of the dimension locked (questions 159).
       case ZoneShape.YAbove _, ZoneShape.YBelow _ -> {
         return Optional.empty();
       }

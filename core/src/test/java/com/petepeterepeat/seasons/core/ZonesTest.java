@@ -377,6 +377,29 @@ class ZonesTest {
   }
 
   @Test
+  void aTripToAnotherDimensionAndBackBetweenSweepsBringsTheBorderBackAtOnce() throws IOException {
+    writeSeasonFile(
+        "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } } }\n");
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nzones:\n  frontierBorder: true\n",
+        UTF_8);
+    assertThat(run("/season reload").text()).first().asString().startsWith("Reloaded");
+    fake.player(pat).position = SPAWN;
+    sweepAll();
+    BorderSquare square = new BorderSquare(3000, 0, 200);
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square));
+
+    // The game sends the client each world's own border on the way; no sweep sees the trip.
+    fake.player(pat).position = Position.of("minecraft:the_nether", 375.5, 64, 0.5);
+    fake.milestones.enteredDimension(pat.id(), "minecraft:the_nether");
+    fake.player(pat).position = SPAWN;
+    fake.milestones.enteredDimension(pat.id(), "minecraft:overworld");
+
+    assertThat(fake.player(pat).borders).containsExactly(Optional.of(square), Optional.of(square));
+  }
+
+  @Test
   void aNoBuildOrAnnounceFrontierHasNoBorderSinceItCanBeCrossed() throws IOException {
     writeSeasonFile(
         "  frontier: { shape: { outside: { circle: { center: [3000, 0], radius: 100 } } }, mode:"

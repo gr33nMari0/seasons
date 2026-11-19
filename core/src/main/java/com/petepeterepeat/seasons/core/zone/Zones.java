@@ -663,6 +663,15 @@ public final class Zones implements ZoneGuard, Milestones {
 
   @Override
   public void enteredDimension(PlayerId player, String dimension) {
+    // The game has just sent the client the new world's border: send the frontier's again at once
+    // if it applies, rather than waiting for a sweep that may not see the trip at all.
+    borders.forget(player);
+    borders.update(
+        player,
+        platform.players().position(player),
+        map(),
+        config.get().config().zones().frontierBorder(),
+        bypasses(player));
     arrived(player);
     if (!dimension.equals(THE_END) || seasons == null) {
       return;
