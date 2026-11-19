@@ -37,7 +37,7 @@ export default {
       const took = ctx.waitForMessages(pat, /^Took 3 × minecraft:diamond from your vault\.$/)
       await take(ctx, admin, pat, 'diamond', 3)
       await took
-      assert(slotOf(pat.currentWindow, 'diamond') < 0, 'the diamonds are gone from the Returned page')
+      await ctx.eventually(async () => assert(slotOf(pat.currentWindow, 'diamond') < 0, 'the diamonds are gone from the vault'))
       pat.closeWindow(pat.currentWindow)
       assert((await ctx.archive(admin, 'Pat', 2)).vault === ENDER_COUNT, 'the Season 2 page is untouched')
 
@@ -72,7 +72,7 @@ export default {
       await take(ctx, admin, pat, 'emerald', 5)
       await take(ctx, admin, pat, 'music_disc_cat', 1)
       await take(ctx, admin, pat, 'dragon_egg', 1)
-      assert(snapshot(pat.currentWindow).view.every((item) => item == null), `the page is empty: ${JSON.stringify(snapshot(pat.currentWindow).view)}`)
+      await ctx.eventually(async () => assert(snapshot(pat.currentWindow).view.every((item) => item == null), `the page is empty: ${JSON.stringify(snapshot(pat.currentWindow).view)}`))
       pat.closeWindow(pat.currentWindow)
       assert((await ctx.archive(admin, 'Pat', 2)).vault === 0, 'the vault page is empty')
       await ctx.command(admin, '/season status', /^Journal: .*, 0 waiting for recovery$/)
