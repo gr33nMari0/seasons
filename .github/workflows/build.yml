@@ -43,7 +43,22 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      # Gradle's downloads, shared with the shard and final jobs (see their restore step).
+      - id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - run: ./gradlew build
+      - if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - uses: actions/upload-artifact@v7
         with:
           name: seasons-dev-${{ github.sha }}
@@ -79,6 +94,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      # Gradle's downloads, saved by the jars job: the other jobs start with them instead of all
+      # fetching every dependency from Maven Central at once, which it rate-limits (HTTP 429).
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - uses: actions/download-artifact@v8
         with:
           name: scenario-jars-${{ github.sha }}
@@ -137,6 +160,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      - if: needs.shard.result == 'success'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - if: needs.shard.result == 'success'
         uses: actions/download-artifact@v8
         with:

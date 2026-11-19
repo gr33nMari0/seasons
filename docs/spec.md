@@ -1215,7 +1215,7 @@ To test on real data, copy a backup of TheRanch's world into `run/world`, never 
 
 1. `git init`, commit the bootstrap, then `gh repo create seasons --public --source . --push`. A public repository makes release downloads public; the licence still forbids selling. Make it `--private` until v1 if you prefer.
 2. In the repository settings, protect `main`: pull requests only, and the `build` check must pass.
-3. Every push and pull request runs `build.yml`: one job builds the jars and runs the unit tests, four shard jobs run the scenarios with those jars (Paper, its libraries and the Via jars cached between runs), and a final job named `build` collects every shard's samples, runs the NBT neutrality test and fails unless every shard passed. A push that changes only documentation (`docs/`, Markdown files at the root, `LICENSE`; `.github/scripts/docs-only.sh`) skips the shards, and the final job passes that, and nothing else, as skipped. A newer push to the same branch cancels the run before it. `nightly.yml` runs the suite in fresh mode every night and on demand. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
+3. Every push and pull request runs `build.yml`: one job builds the jars and runs the unit tests, four shard jobs run the scenarios with those jars (Paper, its libraries and the Via jars cached between runs; Gradle's downloads saved by the jars job, so Maven Central isn't asked for everything six times at once), and a final job named `build` collects every shard's samples, runs the NBT neutrality test and fails unless every shard passed. A push that changes only documentation (`docs/`, Markdown files at the root, `LICENSE`; `.github/scripts/docs-only.sh`) skips the shards, and the final job passes that, and nothing else, as skipped. A newer push to the same branch cancels the run before it. `nightly.yml` runs the suite in fresh mode every night and on demand. Pushing a tag such as `v1.0.0` runs `release.yml`, which publishes a GitHub Release with both jars and their checksums.
 
 ```yaml
 # .github/workflows/build.yml
@@ -1264,7 +1264,22 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      # Gradle's downloads, shared with the shard and final jobs (see their restore step).
+      - id: deps
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - run: ./gradlew build
+      - if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - uses: actions/upload-artifact@v7
         with:
           name: seasons-dev-${{ github.sha }}
@@ -1300,6 +1315,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      # Gradle's downloads, saved by the jars job: the other jobs start with them instead of all
+      # fetching every dependency from Maven Central at once, which it rate-limits (HTTP 429).
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - uses: actions/download-artifact@v8
         with:
           name: scenario-jars-${{ github.sha }}
@@ -1358,6 +1381,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      - if: needs.shard.result == 'success'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - if: needs.shard.result == 'success'
         uses: actions/download-artifact@v8
         with:
