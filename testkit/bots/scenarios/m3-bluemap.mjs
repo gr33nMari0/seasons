@@ -4,7 +4,7 @@
 // candidates, the Hall, the museum, and shared waypoints in sets of their own, but no zone areas,
 // since no zone is in force yet. From launch: the season's spawn and no candidates, and each locked
 // zone as an area on its own dimension's maps, with the Hall cut out of the one around it; an
-// outside zone as the world with its circle cut out, and a height zone not at all. At
+// outside zone as a ring around its circle with the circle cut out, and a height zone not at all. At
 // Homecoming the locked areas go, and a zone that becomes no-build is shown as one. After
 // /bluemap reload, which drops every marker added through BlueMap's API, Seasons publishes them
 // again; /season status counts them. /scenario bluemap reads the marker sets through BlueMap's API.
@@ -127,7 +127,9 @@ export default {
     const farm = over.get('seasons/zone-farm')
     assert(farm.minY === -64 && farm.maxY === 1 && farm.points === 4 && farm.holes === 0, `a box keeps its corners: ${JSON.stringify(farm)}`)
     const frontier = over.get('seasons/zone-frontier')
-    assert(frontier.points === 4 && frontier.holes === 3 && frontier.x === FRONTIER.x && frontier.z === FRONTIER.z, `the frontier is the world with its circle, the Hall and the museum cut out, placed at its centre: ${JSON.stringify(frontier)}`)
+    // A ring out to 9,000 blocks from its centre (twice the radius beyond the circle), not a square
+    // to the world's edge.
+    assert(frontier.points >= 32 && frontier.holes === 3 && frontier.x === FRONTIER.x && frontier.z === FRONTIER.z, `the frontier is a ring with its circle, the Hall and the museum cut out, placed at its centre: ${JSON.stringify(frontier)}`)
     assert(!over.has('seasons/zone-sky'), 'a height zone isn\'t shown')
     const oldNether = markersIn(launched, NETHER).get('seasons/zone-old-nether')
     assert(oldNether.minY === 0 && oldNether.maxY === 128, `old-nether stops at the roof: ${JSON.stringify(oldNether)}`)

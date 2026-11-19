@@ -179,10 +179,10 @@ public final class MapModels {
         maxY = cylinder.maxY().isPresent() ? cylinder.maxY().getAsInt() + 1 : maxY;
       }
       case ZoneShape.OutsideCircle c ->
-          outline = new Outline.Beyond(new Outline.Circle(c.centerX(), c.centerZ(), c.radius()));
+          outline = Outline.Beyond.around(new Outline.Circle(c.centerX(), c.centerZ(), c.radius()));
       case ZoneShape.OutsideBox b ->
           outline =
-              new Outline.Beyond(
+              Outline.Beyond.around(
                   new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1));
       // A height zone covers every column, so as an area it would cover the whole map, which the
       // top-down view shows as every block of the dimension locked (questions 159).
@@ -190,10 +190,13 @@ public final class MapModels {
         return Optional.empty();
       }
     }
+    Outline area = outline;
     List<Outline> holes = new ArrayList<>();
     for (ZoneShape.Box box : zone.exempt()) {
-      if (beyondInside(zone.shape(), box.minX(), box.minZ(), box.maxX(), box.maxZ())) {
-        holes.add(new Outline.Rectangle(box.minX(), box.minZ(), box.maxX() + 1, box.maxZ() + 1));
+      Outline.Rectangle hole =
+          new Outline.Rectangle(box.minX(), box.minZ(), box.maxX() + 1, box.maxZ() + 1);
+      if (canBeHole(area, hole)) {
+        holes.add(hole);
       }
     }
     for (Gallery gallery : galleries) {
@@ -201,31 +204,57 @@ public final class MapModels {
           .bounds()
           .filter(b ->
               b.dimension().equals(zone.dimension())
-                  && zone.shape().reaches(b.minX(), b.minZ(), b.maxX(), b.maxZ())
-                  && beyondInside(zone.shape(), b.minX(), b.minZ(), b.maxX(), b.maxZ()))
-          .ifPresent(b ->
-              holes.add(new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1)));
+                  && zone.shape().reaches(b.minX(), b.minZ(), b.maxX(), b.maxZ()))
+          .map(b -> new Outline.Rectangle(b.minX(), b.minZ(), b.maxX() + 1, b.maxZ() + 1))
+          .filter(hole -> canBeHole(area, hole))
+          .ifPresent(holes::add);
     }
     return Optional.of(
         new Area(
-            "zone-" + zone.id(), label, zone.dimension(), outline, holes, minY, maxY, style.get()));
+            "zone-" + zone.id(), label, zone.dimension(), area, holes, minY, maxY, style.get()));
   }
 
   /**
-   * Whether a rectangle of columns can be a hole in a zone's area: for an outside zone, only if it
-   * lies wholly beyond the zone's inside, since a hole overlapping another (the inside) breaks the
-   * area's shape. The zone is enforced there all the same; the map just doesn't show the cut-out.
+   * Whether a rectangle can be a hole in a zone's area: in an outside zone's ring, only if it lies
+   * wholly beyond the ring's inside and wholly within its outer edge, since a hole crossing another
+   * hole (the inside) or the outline breaks the area's shape. The zone is enforced there all the
+   * same; the map just doesn't show the cut-out.
    */
-  private static boolean beyondInside(ZoneShape shape, int minX, int minZ, int maxX, int maxZ) {
-    return switch (shape) {
-      case ZoneShape.OutsideCircle c -> {
-        double x = Math.clamp(c.centerX(), minX, maxX + 1.0);
-        double z = Math.clamp(c.centerZ(), minZ, maxZ + 1.0);
-        yield Math.hypot(x - c.centerX(), z - c.centerZ()) >= c.radius();
+  private static boolean canBeHole(Outline outline, Outline.Rectangle hole) {
+    return !(outline instanceof Outline.Beyond ring)
+        || (!overlaps(ring.inside(), hole) && holds(ring.outer(), hole));
+  }
+
+  /** Whether a rectangle and a circle or rectangle share any ground. */
+  private static boolean overlaps(Outline outline, Outline.Rectangle r) {
+    return switch (outline) {
+      case Outline.Circle c -> {
+        // The rectangle's point nearest the centre.
+        double x = Math.clamp(c.centerX(), r.minX(), r.maxX());
+        double z = Math.clamp(c.centerZ(), r.minZ(), r.maxZ());
+        yield Math.hypot(x - c.centerX(), z - c.centerZ()) < c.radius();
       }
-      case ZoneShape.OutsideBox b ->
-          maxX < b.minX() || minX > b.maxX() || maxZ < b.minZ() || minZ > b.maxZ();
-      default -> true;
+      case Outline.Rectangle o ->
+          r.maxX() > o.minX() && r.minX() < o.maxX() && r.maxZ() > o.minZ() && r.minZ() < o.maxZ();
+      case Outline.Beyond _ -> true;
+    };
+  }
+
+  /** Whether a circle or rectangle holds all of a rectangle. */
+  private static boolean holds(Outline outline, Outline.Rectangle r) {
+    return switch (outline) {
+      case Outline.Circle c -> {
+        // The rectangle's corner furthest from the centre.
+        double x = Math.max(Math.abs(r.minX() - c.centerX()), Math.abs(r.maxX() - c.centerX()));
+        double z = Math.max(Math.abs(r.minZ() - c.centerZ()), Math.abs(r.maxZ() - c.centerZ()));
+        yield Math.hypot(x, z) <= c.radius();
+      }
+      case Outline.Rectangle o ->
+          r.minX() >= o.minX()
+              && r.maxX() <= o.maxX()
+              && r.minZ() >= o.minZ()
+              && r.maxZ() <= o.maxZ();
+      case Outline.Beyond _ -> false;
     };
   }
 

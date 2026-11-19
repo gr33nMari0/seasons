@@ -287,7 +287,7 @@ class MapModelsTest {
   }
 
   @Test
-  void anOutsideZoneIsAnAreaToTheWorldsEdgeWithItsInsideAsAHole() {
+  void anOutsideZoneIsARingWithItsInsideAsAHole() {
     Zone frontier =
         new Zone(
             "frontier",
@@ -296,10 +296,13 @@ class MapModelsTest {
             ZoneMode.BLOCK,
             new UnlockCondition.Homecoming(),
             ZoneMode.NO_BUILD,
-            // One exemption beyond the circle, one across its edge.
+            // One exemption beyond the circle, one across its edge, one beyond the ring's outer
+            // edge (5,100 from the centre) and one across it.
             List.of(
                 ZoneShape.Box.between(3200, 0, 0, 3210, 100, 10),
-                ZoneShape.Box.between(3095, 0, 0, 3105, 100, 10)),
+                ZoneShape.Box.between(3095, 0, 0, 3105, 100, 10),
+                ZoneShape.Box.between(9000, 0, 0, 9010, 100, 10),
+                ZoneShape.Box.between(8095, 0, 0, 8105, 100, 10)),
             Optional.empty());
     Zone edge = Zone.drawn("edge", OVERWORLD, new ZoneShape.OutsideBox(-500, -500, 500, 500));
     // The Hall at 0, 0 lies beyond the frontier, and inside the edge's box.
@@ -321,7 +324,8 @@ class MapModelsTest {
                 "zone-frontier",
                 "frontier: locked until Homecoming",
                 OVERWORLD,
-                new Outline.Beyond(new Outline.Circle(3000, 0, 100)),
+                new Outline.Beyond(
+                    new Outline.Circle(3000, 0, 100), new Outline.Circle(3000, 0, 5100)),
                 List.of(
                     new Outline.Rectangle(3200, 0, 3211, 11),
                     new Outline.Rectangle(-10, -10, 11, 11)),
@@ -332,11 +336,26 @@ class MapModelsTest {
                 "zone-edge",
                 "edge: no building",
                 OVERWORLD,
-                new Outline.Beyond(new Outline.Rectangle(-500, -500, 501, 501)),
+                new Outline.Beyond(
+                    new Outline.Rectangle(-500, -500, 501, 501),
+                    new Outline.Rectangle(-5500, -5500, 5501, 5501)),
                 List.of(),
                 -64,
                 320,
                 Style.NO_BUILD));
+  }
+
+  @Test
+  void aRingReachesTwiceTheRadiusBeyondItsInsideAndAtLeast5000Blocks() {
+    assertThat(Outline.Beyond.around(new Outline.Circle(18450, -9120, 6000)).outer())
+        .isEqualTo(new Outline.Circle(18450, -9120, 18000));
+    assertThat(Outline.Beyond.around(new Outline.Circle(0, 0, 1000)).outer())
+        .isEqualTo(new Outline.Circle(0, 0, 6000));
+    // A rectangle's radius is half its longer side.
+    assertThat(Outline.Beyond.around(new Outline.Rectangle(0, 0, 8000, 2000)).outer())
+        .isEqualTo(new Outline.Rectangle(-8000, -8000, 16000, 10000));
+    assertThat(Outline.Beyond.around(new Outline.Rectangle(0, 0, 10, 10)).outer())
+        .isEqualTo(new Outline.Rectangle(-5000, -5000, 5010, 5010));
   }
 
   @Test

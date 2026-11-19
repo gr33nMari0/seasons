@@ -50,12 +50,37 @@ public record MapModel(
     record Circle(double centerX, double centerZ, double radius) implements Outline {}
 
     /**
-     * Everything beyond a rectangle or circle, out to the edge of the world: an {@code outside}
-     * zone. A web map draws it as the world with {@code inside} as a hole.
+     * A ring beyond a rectangle or circle: an {@code outside} zone, drawn out to {@code outer}
+     * rather than the edge of the world, so web maps and the mods that copy their areas can show it
+     * (questions 158). A web map draws {@code outer} with {@code inside} as a hole.
      */
-    record Beyond(Outline inside) implements Outline {
-      /** How far the world reaches from 0, 0 along x and z, whatever its border is set to. */
-      public static final double WORLD_EDGE = 29_999_984;
+    record Beyond(Outline inside, Outline outer) implements Outline {
+      /** The least a ring reaches beyond its inside, in blocks. */
+      public static final double MIN_REACH = 5000;
+
+      /**
+       * The ring around {@code inside} that reaches {@code max(2 × radius, 5000)} blocks beyond it,
+       * where a rectangle's radius is half its longer side: a circle around a circle, a rectangle
+       * around a rectangle.
+       */
+      public static Beyond around(Outline inside) {
+        return switch (inside) {
+          case Circle c ->
+              new Beyond(c, new Circle(c.centerX(), c.centerZ(), c.radius() + reach(c.radius())));
+          case Rectangle r -> {
+            double reach = reach(Math.max(r.maxX() - r.minX(), r.maxZ() - r.minZ()) / 2);
+            yield new Beyond(
+                r,
+                new Rectangle(
+                    r.minX() - reach, r.minZ() - reach, r.maxX() + reach, r.maxZ() + reach));
+          }
+          case Beyond _ -> throw new IllegalArgumentException("A ring is beyond a circle or box");
+        };
+      }
+
+      private static double reach(double radius) {
+        return Math.max(2 * radius, MIN_REACH);
+      }
     }
   }
 

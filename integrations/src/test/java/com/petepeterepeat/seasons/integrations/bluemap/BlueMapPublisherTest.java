@@ -248,7 +248,7 @@ class BlueMapPublisherTest {
   }
 
   @Test
-  void anOutsideZoneIsTheWorldWithItsInsideAsAHoleAndSitsAtItsFrontier() throws Exception {
+  void anOutsideZoneIsARingWithItsInsideAsAHoleAndSitsAtItsFrontier() throws Exception {
     FakeBlueMap api = blueMap();
     BlueMapPublisher publisher = publisher();
     Area frontier =
@@ -256,7 +256,7 @@ class BlueMapPublisherTest {
             "zone-frontier",
             "frontier: locked until Homecoming",
             OVERWORLD,
-            new Outline.Beyond(new Outline.Circle(18450, -9120, 6000)),
+            Outline.Beyond.around(new Outline.Circle(18450, -9120, 6000)),
             List.of(new Outline.Rectangle(-10, -10, 11, 11)),
             -64,
             320,
@@ -267,8 +267,9 @@ class BlueMapPublisherTest {
 
     ExtrudeMarker zone =
         (ExtrudeMarker) api.maps.get("world").getMarkerSets().get("seasons").get("zone-frontier");
-    assertThat(zone.getShape().getMin().getX()).isEqualTo(-Outline.Beyond.WORLD_EDGE);
-    assertThat(zone.getShape().getMax().getY()).isEqualTo(Outline.Beyond.WORLD_EDGE);
+    // The ring's outer edge, 18,000 from the centre: twice the radius beyond the circle.
+    assertThat(zone.getShape().getMin().getX()).isCloseTo(18450 - 18000, within(1.0));
+    assertThat(zone.getShape().getMax().getY()).isCloseTo(-9120 + 18000, within(1.0));
     assertThat(zone.getHoles()).hasSize(2);
     assertThat(zone.getHoles().iterator().next().getMin().getX()).isCloseTo(12450, within(1.0));
     assertThat(zone.getPosition().getX()).isEqualTo(18450);
