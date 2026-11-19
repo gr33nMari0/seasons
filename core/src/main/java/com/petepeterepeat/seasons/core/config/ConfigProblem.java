@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.config;
 
+import com.petepeterepeat.seasons.core.message.Messages;
 import java.util.Optional;
 
 /**
@@ -26,5 +27,38 @@ public record ConfigProblem(
 
   public static ConfigProblem inFile(String file, String message) {
     return new ConfigProblem(file, Optional.empty(), Optional.empty(), message);
+  }
+
+  /** The {@code messages.yml} line that shows this problem, by whether it has a line or a path. */
+  public String messageKey() {
+    if (line.isPresent()) {
+      return "config.problem-line";
+    }
+    return path.isPresent() ? "config.problem-path" : "config.problem-file";
+  }
+
+  /** The placeholders {@link #messageKey()}'s line takes. */
+  public String[] placeholders() {
+    if (line.isPresent()) {
+      return new String[] {
+        "file",
+        file,
+        "line",
+        Integer.toString(line.get().line()),
+        "column",
+        Integer.toString(line.get().column()),
+        "message",
+        message
+      };
+    }
+    if (path.isPresent()) {
+      return new String[] {"file", file, "path", path.get(), "message", message};
+    }
+    return new String[] {"file", file, "message", message};
+  }
+
+  /** The problem as admins read it, in plain text. */
+  public String describe(Messages messages) {
+    return messages.text(messageKey(), placeholders());
   }
 }

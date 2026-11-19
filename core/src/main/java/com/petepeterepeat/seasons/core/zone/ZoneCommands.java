@@ -429,6 +429,7 @@ public final class ZoneCommands {
         source,
         new ConfigEdits.Change(
             "seasons/" + season + ".yml " + change.path(), change.before(), change.after()),
+        file,
         () -> edit.apply(file),
         "zone.failed",
         done);

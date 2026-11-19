@@ -224,4 +224,42 @@ class SpawnCommandsTest {
                 + " spawnCandidates.north-mesa\",\"result\":\"ok\",\"details\":\"4000, 64, -2000"
                 + " in minecraft:overworld -> none\"}");
   }
+
+  @Test
+  void anEditThatDoesntTakeIsPutBackAndNotAudited() throws IOException {
+    run("/season init 2");
+    runAt(NORTH, "/season spawn candidate add north-mesa");
+    String before = seasonFile(3);
+    // A hand edit gone wrong in another file, not reloaded yet: the load after each edit fails.
+    Path config = dir.resolve("plugins/Seasons/config.yml");
+    String good = Files.readString(config, UTF_8);
+    Files.writeString(config, "schedule: [nonsense\n", UTF_8);
+
+    assertThat(runAt(EAST, "/season spawn candidate add east-jungle"))
+        .singleElement()
+        .asString()
+        .startsWith("The spawn candidate wasn't saved: config.yml, line ");
+    assertThat(run("/season spawn set north-mesa"))
+        .singleElement()
+        .asString()
+        .startsWith("The spawn wasn't saved: config.yml, line ");
+    assertThat(run("/season spawn candidate remove north-mesa"))
+        .singleElement()
+        .asString()
+        .startsWith("The spawn candidate wasn't saved: config.yml, line ");
+    assertThat(seasonFile(3)).as("Season 3's file is as it was").isEqualTo(before);
+
+    // Fixing the other file brings in none of the edits that were refused.
+    Files.writeString(config, good, UTF_8);
+    assertThat(run("/season reload")).first().asString().startsWith("Reloaded ");
+    assertThat(run("/season spawn candidate list"))
+        .containsExactly(
+            "Season 3's spawn candidates:",
+            "- north-mesa: 4000, 64, -2000 in minecraft:overworld, 4472 blocks from 0, 0");
+    assertThat(Files.readAllLines(dir.resolve("world/seasons/audit/2026-11.jsonl")))
+        .filteredOn(line -> line.contains("\"action\":\"config\""))
+        .singleElement()
+        .asString()
+        .contains("spawnCandidates.north-mesa", "none -> 4000, 64, -2000");
+  }
 }

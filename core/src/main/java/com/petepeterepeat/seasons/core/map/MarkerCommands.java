@@ -97,6 +97,7 @@ public final class MarkerCommands {
     edits.edit(
         source,
         new ConfigEdits.Change(target(set, name), ConfigEdits.NONE, ConfigEdits.describe(at)),
+        loader.markersFile(),
         () -> WaypointFiles.add(loader.markersFile(), backups, set, new Waypoint(name, at)),
         "marker.failed",
         () -> {
@@ -135,6 +136,7 @@ public final class MarkerCommands {
         source,
         new ConfigEdits.Change(
             target(set, waypoint.name()), ConfigEdits.describe(waypoint.at()), ConfigEdits.NONE),
+        loader.markersFile(),
         () -> WaypointFiles.remove(loader.markersFile(), backups, set, waypoint.name()),
         "marker.failed",
         () -> source.reply(messages().get("marker.removed", "set", set, "name", waypoint.name())));

@@ -246,11 +246,7 @@ final class SeasonCommands {
       }
     }
     for (ConfigProblem problem : startupProblems) {
-      source.reply(
-          messages.get(
-              "status.config-problem",
-              "problem",
-              messages.text(problemKey(problem), problemPlaceholders(problem))));
+      source.reply(messages.get("status.config-problem", "problem", problem.describe(messages)));
     }
     var gaps = platform.capabilities().gaps();
     if (gaps.isEmpty()) {
@@ -321,11 +317,7 @@ final class SeasonCommands {
   /** A gallery left out at startup, for /season status and admins as they join. */
   static Message galleryLeftOut(Messages messages, String gallery, ConfigProblem problem) {
     return messages.get(
-        "status.gallery-left-out",
-        "gallery",
-        gallery,
-        "problem",
-        messages.text(problemKey(problem), problemPlaceholders(problem)));
+        "status.gallery-left-out", "gallery", gallery, "problem", problem.describe(messages));
   }
 
   void decorateOpen(CommandSource source, Arguments arguments) {
@@ -727,7 +719,7 @@ final class SeasonCommands {
           messages.get("config.reload-error", "error", String.valueOf(failure.getMessage())));
     } else if (result != null) {
       for (ConfigProblem problem : result.problems()) {
-        details.add(messages.get(problemKey(problem), problemPlaceholders(problem)));
+        details.add(messages.get(problem.messageKey(), problem.placeholders()));
       }
     }
     source.reply(messages.get("config.reload-failed"));
@@ -1012,32 +1004,8 @@ final class SeasonCommands {
   private void problems(CommandSource source, List<ConfigProblem> problems) {
     Messages messages = messages();
     for (ConfigProblem problem : problems) {
-      source.reply(messages.get(problemKey(problem), problemPlaceholders(problem)));
+      source.reply(messages.get(problem.messageKey(), problem.placeholders()));
     }
-  }
-
-  private static String problemKey(ConfigProblem problem) {
-    if (problem.line().isPresent()) {
-      return "config.problem-line";
-    }
-    return problem.path().isPresent() ? "config.problem-path" : "config.problem-file";
-  }
-
-  private static String[] problemPlaceholders(ConfigProblem problem) {
-    if (problem.line().isPresent()) {
-      return new String[] {
-        "file", problem.file(),
-        "line", Integer.toString(problem.line().get().line()),
-        "column", Integer.toString(problem.line().get().column()),
-        "message", problem.message()
-      };
-    }
-    if (problem.path().isPresent()) {
-      return new String[] {
-        "file", problem.file(), "path", problem.path().get(), "message", problem.message()
-      };
-    }
-    return new String[] {"file", problem.file(), "message", problem.message()};
   }
 
   private void reply(CommandSource source, Transition transition, String doneKey) {

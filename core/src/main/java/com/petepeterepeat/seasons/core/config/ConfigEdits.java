@@ -7,8 +7,13 @@ import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.store.AtomicFiles;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +23,11 @@ import org.slf4j.LoggerFactory;
  * every file is loaded again and swapped in, so the edit is in force at once, and the edit is
  * audited as a config change with its path, the old value, the new one and who. The zone, spawn and
  * waypoint commands all edit this way.
+ *
+ * <p>An edit is on disk only while it is in force. If the write or the load fails, the file is put
+ * back as it was in the same turn on the writer thread, before any other edit runs: otherwise a
+ * change nobody was told took effect would go live, unaudited, at the next reload, and a file the
+ * load refuses would stop every later reload and leave the next startup without it.
  */
 public final class ConfigEdits {
   /** The value of a key that isn't there, before an add or after a remove. */
@@ -65,17 +75,22 @@ public final class ConfigEdits {
 
   /**
    * Writes a file, loads every file again and swaps them in, audits the change and then runs {@code
-   * done}, on the server thread. If the write or the load fails, nothing is swapped in and the
-   * source is told with {@code failedKey}, a message whose {@code <error>} is the reason.
+   * done}, on the server thread. If the write or the load fails, the file is put back as it was,
+   * nothing is swapped in or audited, and the source is told with {@code failedKey}, a message
+   * whose {@code <error>} is the reason.
+   *
+   * @param file the file {@code edit} writes
    */
   public void edit(
-      CommandSource source, Change change, FileEdit edit, String failedKey, Runnable done) {
+      CommandSource source,
+      Change change,
+      Path file,
+      FileEdit edit,
+      String failedKey,
+      Runnable done) {
     var _ =
         writer
-            .submit(() -> {
-              edit.apply();
-              return loader.load();
-            })
+            .submit(() -> writeAndLoad(file, edit))
             .whenComplete((result, failure) ->
                 platform
                     .scheduler()
@@ -84,10 +99,7 @@ public final class ConfigEdits {
                         String error =
                             failure != null
                                 ? String.valueOf(failure.getMessage())
-                                : result.problems().stream()
-                                    .map(Object::toString)
-                                    .findFirst()
-                                    .orElse("?");
+                                : firstProblem(result);
                         LOG.error("A config edit ({}) failed: {}", change.target(), error, failure);
                         source.reply(messages().get(failedKey, "error", error));
                         return;
@@ -102,6 +114,63 @@ public final class ConfigEdits {
                           change.before() + " -> " + change.after());
                       done.run();
                     }));
+  }
+
+  /**
+   * On the writer thread: the edit, then every file loaded again. If either fails, the file goes
+   * back as it was before this returns, so the next edit starts from it.
+   */
+  private ConfigLoader.Result writeAndLoad(Path file, FileEdit edit) throws IOException {
+    Optional<byte[]> before =
+        Files.exists(file) ? Optional.of(Files.readAllBytes(file)) : Optional.empty();
+    ConfigLoader.Result result;
+    try {
+      edit.apply();
+      result = loader.load();
+    } catch (IOException | RuntimeException e) {
+      putBack(file, before, String.valueOf(e.getMessage()));
+      throw e;
+    }
+    if (result.snapshot().isEmpty()) {
+      putBack(file, before, firstProblem(result));
+    }
+    return result;
+  }
+
+  /**
+   * Puts a file back as it was before an edit, or removes it if there was none. The copy the edit
+   * kept in the backups is of this same content.
+   *
+   * @param reason why the edit didn't take, for the error if the file can't be put back
+   */
+  private static void putBack(Path file, Optional<byte[]> before, String reason)
+      throws IOException {
+    try {
+      if (before.isEmpty()) {
+        Files.deleteIfExists(file);
+      } else if (!Files.exists(file) || !Arrays.equals(Files.readAllBytes(file), before.get())) {
+        AtomicFiles.write(file, before.get());
+      }
+    } catch (IOException e) {
+      LOG.error(
+          "{} couldn't be put back after an edit that didn't take; it still holds it", file, e);
+      throw new IOException(
+          reason
+              + "; "
+              + file.getFileName()
+              + " couldn't be put back, so it still holds the edit ("
+              + e.getMessage()
+              + ")",
+          e);
+    }
+  }
+
+  /** The first reason a load failed, as admins read it. */
+  private String firstProblem(ConfigLoader.Result result) {
+    return result.problems().stream()
+        .findFirst()
+        .map(problem -> problem.describe(messages()))
+        .orElse("?");
   }
 
   /** A position as the audit log writes it: {@code 3000, 64, 0 in minecraft:overworld}. */

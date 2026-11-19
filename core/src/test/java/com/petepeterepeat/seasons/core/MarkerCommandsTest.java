@@ -128,6 +128,53 @@ class MarkerCommandsTest {
                 + " in minecraft:overworld -> none\"}");
   }
 
+  @Test
+  void anEditThatDoesntTakeIsPutBackAndNotAudited() throws IOException {
+    start(MapPublisher.NONE);
+    Path markers = dir.resolve("world/seasons/markers.yml");
+    Path config = dir.resolve("plugins/Seasons/config.yml");
+    String good = Files.readString(config, UTF_8);
+
+    // Another file broken by hand and not reloaded: the load fails, and markers.yml, which wasn't
+    // there, still isn't.
+    Files.writeString(config, "schedule: [nonsense\n", UTF_8);
+    assertThat(runAsAlex("/season marker add hubs Hub"))
+        .singleElement()
+        .asString()
+        .startsWith("The waypoint wasn't saved: config.yml, line ");
+    assertThat(markers).doesNotExist();
+    Files.writeString(config, good, UTF_8);
+
+    // A hand edit not reloaded yet holds "tower", so a command adding "Tower" makes a file the load
+    // refuses; it is put back as the hand edit left it.
+    runAsAlex("/season marker add megaprojects Hub");
+    String handEdited =
+        """
+        schema-version: 1
+        sets:
+          megaprojects:
+            Hub: { pos: [100, 64, -200] }
+            tower: { pos: [1, 64, 1] }
+        """;
+    Files.writeString(markers, handEdited, UTF_8);
+    assertThat(runAsAlex("/season marker add megaprojects Tower"))
+        .singleElement()
+        .asString()
+        .startsWith("The waypoint wasn't saved: markers.yml, at sets.megaprojects.")
+        .contains("already has a waypoint by that name, ignoring case");
+    assertThat(markersFile()).isEqualTo(handEdited);
+
+    assertThat(run("/season reload")).first().asString().startsWith("Reloaded ");
+    assertThat(run("/season marker remove megaprojects TOWER"))
+        .containsExactly("Removed waypoint tower from megaprojects.");
+    assertThat(Files.readAllLines(dir.resolve("world/seasons/audit/2026-11.jsonl")))
+        .filteredOn(line -> line.contains("\"action\":\"config\""))
+        .extracting(line -> line.replaceFirst("^.*\"target\":\"([^\"]*)\".*$", "$1"))
+        .as("only the edits that took")
+        .containsExactly(
+            "markers.yml sets.megaprojects.Hub", "markers.yml sets.megaprojects.tower");
+  }
+
   /** A publisher that says it has published to so many maps, and publishes nothing. */
   private static MapPublisher publishedTo(int maps) {
     return new MapPublisher() {

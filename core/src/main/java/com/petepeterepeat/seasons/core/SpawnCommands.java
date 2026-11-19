@@ -119,6 +119,7 @@ final class SpawnCommands {
             "seasons/" + season + ".yml spawn",
             file.flatMap(SeasonFile::spawn).map(ConfigEdits::describe).orElse(ConfigEdits.NONE),
             ConfigEdits.describe(at)),
+        loader.seasonFile(season),
         () -> SeasonFiles.writeSpawn(loader.seasonFile(season), backups, season, at),
         "spawn.failed",
         () -> {
@@ -173,6 +174,7 @@ final class SpawnCommands {
             "seasons/" + season + ".yml spawnCandidates." + name,
             ConfigEdits.NONE,
             ConfigEdits.describe(at)),
+        loader.seasonFile(season),
         () -> SeasonFiles.writeCandidate(loader.seasonFile(season), backups, season, name, at),
         "spawn.candidate.failed",
         () -> {
@@ -205,6 +207,7 @@ final class SpawnCommands {
             "seasons/" + season + ".yml spawnCandidates." + name,
             ConfigEdits.describe(at.get()),
             ConfigEdits.NONE),
+        loader.seasonFile(season),
         () -> SeasonFiles.removeCandidate(loader.seasonFile(season), backups, season, name),
         "spawn.candidate.failed",
         () ->
