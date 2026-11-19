@@ -22,6 +22,7 @@ import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.season.Decorating;
 import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.Phase;
+import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.nio.file.Path;
@@ -81,6 +82,14 @@ public final class HallService {
   private final Set<PlayerId> switchedWithoutRecord = new HashSet<>();
 
   private Supplier<Optional<SeasonState>> state = Optional::empty;
+  private Consumer<PlayerId> launch = player -> {};
+
+  /** When each admin last pressed a launch button, for the second press that launches. */
+  private final Map<PlayerId, Instant> launchPresses = new HashMap<>();
+
+  /** How long after a first press on the launch button a second one launches. */
+  public static final Duration LAUNCH_CONFIRM = Duration.ofSeconds(10);
+
   private Consumer<UnaryOperator<Decorating>> decorating = change -> {};
   private Instant lastTick;
   private @Nullable ScheduledTask sweeper;
@@ -135,6 +144,11 @@ public final class HallService {
       Supplier<Optional<SeasonState>> state, Consumer<UnaryOperator<Decorating>> decorating) {
     this.state = state;
     this.decorating = decorating;
+  }
+
+  /** Connects the launch button to {@code /season launch}, run as the player who pressed it. */
+  public void bindLaunch(Consumer<PlayerId> launch) {
+    this.launch = launch;
   }
 
   /** Starts the game-mode sweep and the decorating clock. */
@@ -890,6 +904,15 @@ public final class HallService {
 
   private Optional<Decision> useBlock(Intent.UseBlock use) {
     for (Gallery gallery : galleries()) {
+      if (gallery.launch().filter(at -> sameBlock(at, use.block())).isPresent()) {
+        if (use.mainHand()) {
+          pressLaunch(use.player(), use.block());
+        }
+        // Whatever it is, Seasons decides what it does: no redstone signal.
+        return Optional.of(new Decision.Deny(Optional.empty()));
+      }
+    }
+    for (Gallery gallery : galleries()) {
       if (!gallery.contains(use.block()) && gallery.bounds().isPresent()) {
         continue;
       }
@@ -913,6 +936,49 @@ public final class HallService {
       }
     }
     return Optional.empty();
+  }
+
+  private static boolean sameBlock(Position a, Position b) {
+    return a.dimension().equals(b.dimension())
+        && a.blockX() == b.blockX()
+        && a.blockY() == b.blockY()
+        && a.blockZ() == b.blockZ();
+  }
+
+  /**
+   * The launch button (questions 172): only for {@code seasons.admin.season}; during the
+   * Intermission the first press asks, and a second within {@link #LAUNCH_CONFIRM} launches.
+   * Otherwise it runs {@code /season launch}, which says why it can't.
+   */
+  private void pressLaunch(PlayerId player, Position at) {
+    if (!platform.permissions().has(player, SeasonService.ADMIN_PERMISSION)) {
+      audit.record(
+          platform.players().knownName(player).orElse(player.toString()),
+          HallAudit.BLOCKED,
+          "hall",
+          "denied",
+          "launch at " + at.blockX() + ", " + at.blockY() + ", " + at.blockZ());
+      platform.players().sendMessage(player, messages().get("hof.launch.admins-only"));
+      return;
+    }
+    Optional<SeasonState> current = state.get();
+    if (current.isEmpty() || !(current.get().phase() instanceof Phase.Intermission)) {
+      launch.accept(player);
+      return;
+    }
+    Instant now = clock.instant();
+    Instant first = launchPresses.remove(player);
+    if (first != null && now.isBefore(first.plus(LAUNCH_CONFIRM))) {
+      launch.accept(player);
+      return;
+    }
+    launchPresses.put(player, now);
+    platform
+        .players()
+        .sendMessage(
+            player,
+            messages()
+                .get("hof.launch.again", "season", Integer.toString(current.get().season() + 1)));
   }
 
   private Optional<Decision> useDisplay(Intent.UseDisplay use) {

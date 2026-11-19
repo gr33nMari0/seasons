@@ -46,6 +46,10 @@ public final class GalleryRules {
   /** The rules one gallery keeps by itself. */
   public static List<Problem> check(Gallery gallery) {
     List<Problem> problems = new ArrayList<>();
+    if (gallery.launch().isPresent() && !gallery.contains(gallery.launch().get())) {
+      problems.add(
+          new Problem(gallery.id(), "launch", "the launch button must sit inside the gallery"));
+    }
     List<Cell> seen = new ArrayList<>();
     for (Cell cell : gallery.cells()) {
       String path = "cells." + cell.id();

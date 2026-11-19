@@ -9,7 +9,9 @@ import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
+import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigCommands;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
@@ -34,6 +36,7 @@ import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.map.MapService;
 import com.petepeterepeat.seasons.core.map.MarkerCommands;
+import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
@@ -370,6 +373,20 @@ public final class Seasons implements SeasonsApi {
                 pets::waiting,
                 maps::status));
     commands = built;
+    halls.bindLaunch(player ->
+        built.launch(
+            new CommandSource() {
+              @Override
+              public Optional<PlayerId> player() {
+                return Optional.of(player);
+              }
+
+              @Override
+              public void reply(Message message) {
+                platform.players().sendMessage(player, message);
+              }
+            },
+            Arguments.NONE));
     platform
         .events()
         .handle(

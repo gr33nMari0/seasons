@@ -15,6 +15,7 @@ import java.util.Optional;
  * @param dimension where the gallery is; its bounds, cells and anchors are all in it
  * @param cells in the order they were made
  * @param settings what the gallery sets for itself; the rest comes from config.yml
+ * @param launch the launch button's block, if the gallery has one (questions 172)
  */
 public record Gallery(
     String id,
@@ -25,7 +26,8 @@ public record Gallery(
     Optional<Position> entry,
     List<Position> exits,
     List<Cell> cells,
-    Settings settings) {
+    Settings settings,
+    Optional<Position> launch) {
   public Gallery {
     exits = List.copyOf(exits);
     cells = List.copyOf(cells);
@@ -67,7 +69,8 @@ public record Gallery(
         Optional.empty(),
         List.of(),
         List.of(),
-        Settings.NONE);
+        Settings.NONE,
+        Optional.empty());
   }
 
   public SeasonsConfig.CellAssignment assignment(SeasonsConfig config) {
@@ -110,22 +113,26 @@ public record Gallery(
 
   public Gallery withBounds(Bounds next) {
     return new Gallery(
-        id, kind, season, dimension, Optional.of(next), entry, exits, cells, settings);
+        id, kind, season, dimension, Optional.of(next), entry, exits, cells, settings, launch);
   }
 
   public Gallery withEntry(Position next) {
     return new Gallery(
-        id, kind, season, dimension, bounds, Optional.of(next), exits, cells, settings);
+        id, kind, season, dimension, bounds, Optional.of(next), exits, cells, settings, launch);
   }
 
   public Gallery withExit(Position exit) {
     List<Position> next = new ArrayList<>(exits);
     next.add(exit);
-    return new Gallery(id, kind, season, dimension, bounds, entry, next, cells, settings);
+    return new Gallery(id, kind, season, dimension, bounds, entry, next, cells, settings, launch);
+  }
+
+  public Gallery withLaunch(Optional<Position> next) {
+    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, settings, next);
   }
 
   public Gallery withSettings(Settings next) {
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, next);
+    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, next, launch);
   }
 
   /** Replaces the cell with the same id, or adds it at the end. */
@@ -142,6 +149,6 @@ public record Gallery(
     } else {
       next.add(cell);
     }
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, next, settings);
+    return new Gallery(id, kind, season, dimension, bounds, entry, exits, next, settings, launch);
   }
 }

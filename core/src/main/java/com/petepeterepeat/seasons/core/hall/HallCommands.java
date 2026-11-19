@@ -127,6 +127,14 @@ public final class HallCommands {
                                     CommandNode.argument("at", ArgumentType.greedy())
                                         .executes(this::galleryExit))))
                 .then(
+                    CommandNode.literal("launch")
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::galleryLaunch)
+                                .then(
+                                    CommandNode.argument("at", ArgumentType.greedy())
+                                        .executes(this::galleryLaunch))))
+                .then(
                     CommandNode.literal("info")
                         .then(
                             CommandNode.argument("gallery", ArgumentType.word())
@@ -333,6 +341,34 @@ public final class HallCommands {
         source,
         hall.save(found.get().withExit(at.get())),
         messages().get("hof.gallery.exit", place("gallery", found.get().id(), at.get())));
+  }
+
+  /** {@code /hof gallery launch <gallery> [at|none]}: sets or removes the launch button. */
+  void galleryLaunch(CommandSource source, Arguments arguments) {
+    Optional<Gallery> found = gallery(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Gallery gallery = found.get();
+    if (arguments.optionalString("at").map(String::trim).filter("none"::equals).isPresent()) {
+      saved(
+          source,
+          hall.save(gallery.withLaunch(Optional.empty())),
+          messages().get("hof.gallery.no-launch", "gallery", gallery.id()));
+      return;
+    }
+    Optional<Position> at = position(source, arguments.optionalString("at"), gallery.dimension());
+    if (at.isEmpty()) {
+      return;
+    }
+    if (!gallery.contains(at.get())) {
+      source.reply(messages().get("hof.gallery.launch-outside", "gallery", gallery.id()));
+      return;
+    }
+    saved(
+        source,
+        hall.save(gallery.withLaunch(at)),
+        messages().get("hof.gallery.launch", place("gallery", gallery.id(), at.get())));
   }
 
   void galleryInfo(CommandSource source, Arguments arguments) {

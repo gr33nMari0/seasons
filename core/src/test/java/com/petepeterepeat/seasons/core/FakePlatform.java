@@ -171,6 +171,9 @@ public final class FakePlatform {
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
+  /** Who lacks the admin nodes everyone else holds. */
+  public final Set<PlayerId> withoutAdmin = new java.util.HashSet<>();
+
   public static List<Integer> key(Position at) {
     return List.of(at.blockX(), at.blockY(), at.blockZ());
   }
@@ -931,7 +934,9 @@ public final class FakePlatform {
         menus,
         (root, aliases) -> commands.add(root),
         // Everyone holds every node except the bypass nodes, which only those a test names get.
-        (player, node) -> !node.endsWith(".bypass") || bypassing.contains(player),
+        (player, node) ->
+            (!node.endsWith(".bypass") || bypassing.contains(player))
+                && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player)),
         events,
         scheduler,
         dragon,

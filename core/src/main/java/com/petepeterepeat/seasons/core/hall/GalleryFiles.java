@@ -43,6 +43,7 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
  * bounds: { min: [20, -61, 20], max: [44, -50, 30] }
  * entry: { pos: [21, -60, 21], yaw: 0 }
  * exits: [[21, -60, 20]]
+ * launch: { pos: [30, -60, 21] }    # optional: the launch button
  * assignment: claim                 # optional, as cells.assignment in config.yml
  * access: gate                      # optional, as cells.access
  * renderer: armour-stand            # optional: mannequin (the default) or armour-stand
@@ -120,7 +121,12 @@ public final class GalleryFiles {
       String cellId = String.valueOf(entry2.getKey());
       cells.add(cell(cellId, entry2.getValue(), dimension, "cells." + cellId));
     }
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, settings(node));
+    Optional<Position> launch =
+        node.node("launch").virtual()
+            ? Optional.empty()
+            : Optional.of(point(node.node("launch"), dimension, "launch"));
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, exits, cells, settings(node), launch);
   }
 
   private static Gallery.Settings settings(ConfigurationNode node) throws Invalid {
@@ -286,6 +292,9 @@ public final class GalleryFiles {
     }
     for (Position exit : gallery.exits()) {
       setXyz(node.node("exits").appendListNode(), exit);
+    }
+    if (gallery.launch().isPresent()) {
+      setPoint(node.node("launch"), gallery.launch().get());
     }
     Gallery.Settings settings = gallery.settings();
     if (settings.assignment().isPresent()) {

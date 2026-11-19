@@ -174,7 +174,8 @@ class MapModelsTest {
             Optional.empty(),
             List.of(),
             List.of(),
-            Gallery.Settings.NONE);
+            Gallery.Settings.NONE,
+            Optional.empty());
 
     MapModel model =
         build(

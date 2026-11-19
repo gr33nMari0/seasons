@@ -228,6 +228,9 @@ hof:
     cells-outside: "<red>Cell <cell> would end up outside gallery <gallery>.</red>"
     entry: "<green>Gallery <gallery>'s entry is now at <x>, <y>, <z>.</green>"
     exit: "<green>Added an exit to gallery <gallery> at <x>, <y>, <z>.</green>"
+    launch: "<green>Gallery <gallery>'s launch button is now at <x>, <y>, <z>.</green>"
+    no-launch: "<green>Gallery <gallery> has no launch button now.</green>"
+    launch-outside: "<red>The launch button must sit inside gallery <gallery>.</red>"
     info: "<gold>Gallery <gallery></gold> <gray>(Season <season>): <cells> cells, <free> free</gray>"
     info-cell: "Cell <cell>: <owner>"
     free: "free"
@@ -253,6 +256,9 @@ hof:
     closed: "<red>Only its owner goes into that cell, while decorating it.</red>"
     moved-out: "<yellow>Only its owner can be in that cell, while decorating it, so you're at the gallery entry.</yellow>"
     gate-shut: "<yellow>The cell's gate shut, so you're at the gallery entry.</yellow>"
+  launch:
+    admins-only: "<red>Only an admin can launch the next season.</red>"
+    again: "<gold>Press the launch button again within 10 seconds to launch Season <season>.</gold>"
   claim:
     open: "<gold>Claim your Hall of Fame cell for Season <season> with /hof claim [cell].</gold>"
     closed: "<red>Cells can only be claimed while the decorating window is open.</red>"
