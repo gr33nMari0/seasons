@@ -2,15 +2,17 @@
 
 Where each milestone stands. A milestone is done when its acceptance scenarios pass in CI (see Milestones in `docs/spec.md`).
 
-| Milestone | State | Scenarios passing |
+| Milestone | State | Scenarios passing in CI |
 | --- | --- | --- |
 | M0 Skeleton | Done (#1, review fixes #7) | Empty scenario, NBT neutrality |
-| M1 Core rollover | Done (#8, #9, #10) | A1, A2, A3, A4, A5, A7, A8, A9, A10, A11, A12, A13, A14, A15, A20, A21, A40, A46, A47, A50, A51. A6 passes except the zone lock, which waits for M3 (questions 53) and runs again in full then. `/season config get|set` comes with M3 (questions 54) |
-| M2 Hall protection | Part 1 (visits) done (#11); part 2 (protection) merged (#12) | A22, A23, A24, A25, A26, A27, A28, A29, A44 (its no-build half came with M3 part 1). A9 widened |
-| M3 Old world | Part 1 (zones and Homecoming) merged (#13); part 2 (ender vault and pets) merged (#15); part 3 (BlueMap, spawn candidates, shared waypoints) merged (#16); part 4 (the `outside`, `y-above` and `y-below` shapes, the frontier border, `/season config get\|set`) in review (#18), passed CI | Part 1: A30, A31, A32, A33, A34, A35, A45; A6 in full (the zone lock); A41's spawn half; A44's no-build half. Part 2: A16, A17, A18, A19, A36. Part 3: A41 in full. Part 4, passed in CI on #18: A30, A32, A33, A35 and A41 again for the new shapes. Every M3 scenario passes in CI; M3 is done when #18 merges (questions 54 and 93 settled, 154 to 164) |
-| M4 to M7 | Not started | — |
+| M1 Core rollover | Done (#8, #9, #10) | A1 to A15, A20, A21, A40, A46, A47, A50, A51 (A6's zone lock with M3) |
+| M2 Hall protection | Done (#11, #12) | A22 to A29, A44 (its no-build half with M3), A9 widened |
+| M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
+| M4 to M7 | Not started | See On hold, below |
 
-Test infrastructure: the faster scenario suite (branch `test-speed`) runs every scenario on every pull request in four CI shards, on shared servers reset and checked for leaks between scenarios, with the scenario clock and sync barrier in place of waits; the old one-server-per-scenario mode runs nightly (ADR 0003, questions 114 to 119).
+Before the first beta, branch `m3-finish` builds what is left within M0 to M3 scope: access modes `bounds` and `gate`, `/hof claim`, a gallery's own settings, the armour-stand figure and poses, the launch button, `/season audit`, the archive status in `/season info`, item ids checked in config.yml, `launch.requireManual` and the saved last valid position. The plan is `docs/m3-finish.md`, the readings `docs/questions.md` 165 to 177.
+
+Test infrastructure: the faster scenario suite (#14) runs every scenario on every pull request in four CI shards, on shared servers reset and checked for leaks between scenarios, with the scenario clock and sync barrier in place of waits; the old one-server-per-scenario mode runs nightly (ADR 0003, questions 114 to 121).
 
 ## M1
 
@@ -30,27 +32,25 @@ Built: the state machine (Active with Frontier and Open, Ending as countdown the
 
 | Scenario | Test |
 | --- | --- |
-| A4 (part 2's half) end state: everyone online archived (inventory, ender chest, XP, advancements, vault), then cleared and reset; "in their own cell" waits for part 3 | `a04-end-state.mjs`; unit: `ArchivingTest#theEndArchivesEveryoneOnlineIntoTheSeason`, `#archivingAgainTakesNothing` |
-| A5 (part 2's half) catch-up: an offline player is archived at login, then enters the new season after launch; "into their cell" waits for part 3 | `a05-catch-up.mjs`; unit: `ArchivingTest#anOfflinePlayerIsArchivedAtLogin…`, `LoginPlanTest` |
-| A6 (part 2's half) `/season launch`: refused without a spawn or while anyone online isn't archived, `--dry-run`, everyone online teleported to the new spawn with title, sound and fireworks, deaths objective, announcement; locking the old-world zones waits for M3 | `a06-launch.mjs`; unit: `SeasonsTest`, `LoginPlanTest` |
+| A4 (part 2's half) end state: everyone online archived (inventory, ender chest, XP, advancements, vault), then cleared and reset | `a04-end-state.mjs`; unit: `ArchivingTest#theEndArchivesEveryoneOnlineIntoTheSeason`, `#archivingAgainTakesNothing` |
+| A5 (part 2's half) catch-up: an offline player is archived at login, then enters the new season after launch | `a05-catch-up.mjs`; unit: `ArchivingTest#anOfflinePlayerIsArchivedAtLogin…`, `LoginPlanTest` |
+| A6 (part 2's half) `/season launch`: refused without a spawn or while anyone online isn't archived, `--dry-run`, everyone online teleported to the new spawn with title, sound and fireworks, deaths objective, announcement (the zone lock: M3 part 1) | `a06-launch.mjs`; unit: `SeasonsTest`, `LoginPlanTest` |
 | A7 a crash at each step (file written, `ARCHIVE_STARTED`, `VAULT_SEALED`, reset, `ARCHIVE_DONE`) ends with every item exactly once | `a07-crash-*.mjs` (five, two sessions each); unit: `ArchivingTest#aCrashAtAnyStepEndsWithEveryItemExactlyOnce`, `#recoveryStopsIfTheInventory…`, `JournalRecoveryTest` |
 | A8 the archive view: paged, view only, nothing can be taken by any click type, the off-hand swap included | `a08-archive-view.mjs` (opened through the scenario hooks, ADR 0003); unit: `ArchivePagesTest`, `PaperMenusTest` |
 | A9 tripwire: an archived item found in the world is deleted, audited and logged | `a09-tripwire.mjs`; unit: `PaperPortsTest` |
 | A10 archive files are NBT neutral | `NbtNeutralityTest` (archive samples from the testkit) |
-| A11 (part 2's half) `/season unarchive` restores items and advancements, refused over a full inventory, `--force` keeps what was in the way; removing the displays waits for part 3 | `a11-unarchive.mjs`; unit: `ArchivingTest#unarchiveRestoresAndKeeps…` |
-| A12 (part 2's half) advancements archived with the completed / visible count, the screen empty afterwards, restored without announcements; the plaque waits for part 3 | `a12-advancements.mjs` |
-| A15 (part 2's half) the furthest block placed from 0,0, in `/season status`; "placing one in the Hall doesn't count" waits for the Hall in part 3 | `a15-furthest-block.mjs`; unit: `FurthestBlockTest`, `ArchivingTest#theFurthestBlockCounts…` |
+| A11 (part 2's half) `/season unarchive` restores items and advancements, refused over a full inventory, `--force` keeps what was in the way | `a11-unarchive.mjs`; unit: `ArchivingTest#unarchiveRestoresAndKeeps…` |
+| A12 (part 2's half) advancements archived with the completed / visible count, the screen empty afterwards, restored without announcements | `a12-advancements.mjs` |
+| A15 (part 2's half) the furthest block placed from 0,0, in `/season status` | `a15-furthest-block.mjs`; unit: `FurthestBlockTest`, `ArchivingTest#theFurthestBlockCounts…` |
 | A47 (second half) players from before Seasons are archived into the init season | `ArchivingTest#aPlayerFromBeforeSeasons…`, `m1-archive-commands.mjs` |
 | `/season archive`, `spawn set`, `reprocess` | `m1-archive-commands.mjs` (two sessions) |
 | Review fixes: nothing leaves the player before the clear (cursor and grid), archive files never overwritten, unarchive never re-archived into an older season, launch waits for unarchived players, players held at login | unit: `ArchivingTest#aCrashAtAnyStep…` (with a cursor item), `#aFailedWriteLeavesEverything…`, `#aJoiningPlayerIsHeld…`, `#unarchivingDuringALaterSeason…`, `#unarchivingAnOlderSeason…`, `#anArchiveFileIsMovedAside…`, `PaperPortsTest#settling…` |
 
 A13 (firsts) and A14 (season card): built in part 4, below (questions 27).
 
-Built: `Archiver` and `Unarchiver` with journal recovery at every step, archive and vault files, `/season launch`, `spawn set`, `archive`, `unarchive`, `reprocess`, login catch-up, season entry (safe teleport, immunity, celebration, statistics baseline), the furthest-block tracker, the paged archive view, a minimal tripwire (pickup and inventory-close checks, a 30-second sweep; delete, audit, warn; the Discord webhook waits for M4), and the scenario hooks (ADR 0003). `StubArchiver` is gone.
+Built: `Archiver` and `Unarchiver` with journal recovery at every step, archive and vault files, `/season launch`, `spawn set`, `archive`, `unarchive`, `reprocess`, login catch-up, season entry (safe teleport, immunity, celebration, statistics baseline), the furthest-block tracker, the paged archive view, a minimal tripwire (pickup and inventory-close checks, a 30-second sweep; delete, audit, warn; the admin webhook is M4), and the scenario hooks (ADR 0003). `StubArchiver` is gone.
 
 Movement spike (folded into A5, A6, A15): server-side teleports of bots work through ViaBackwards; a bot's own block placement is dropped, so A15 places blocks with the test plugin's `/scenario place`, which fires the same `BlockPlaceEvent` (ADR 0001, ADR 0003).
-
-Part 3 seams, empty until then: `Galleries.lockAll`, `CellDirectory` (returns no cells, which is why archived players "stay"), `DisplayRenderer`, `HallBounds`.
 
 **Part 3: the Hall** (#10). Passing end to end on Paper 26.3, with `./gradlew build scenarioTest` green:
 
@@ -76,8 +76,6 @@ Built: gallery files (`galleries/<id>.yml`, validated on load and reload), `/hof
 
 Review fixes: a cell changed between the import's scan and its clear stops that cell and changes nothing; `/season unarchive` refuses imported records; leaving the Hall puts back survival only for players Seasons switched, remembered across restarts; the import never writes a gallery that breaks the rules, and anchors a double chest at a half inside the cell. Unit: `ArchivingTest#aChestEmptiedAfterTheScan…`, `#anImportTakesTheCellsItems…`, `#anImportThatWouldWriteABrokenGallery…`, `#anImportedRecordIsNeverUnarchived`, `#leavingTheHallPutsBackSurvival…`.
 
-Not yet: the wand and `/hof stamp` (M5), access modes `bounds` and `gate`, view-only copies of decorative containers, visiting the Hall (`/hof`, beds), `/hof claim`.
-
 Known limits: test bots stand still and send no movement packets, and can't place blocks themselves (ADR 0001); M2/M3's walking, flying and pearl scenarios need a Mineflayer that speaks the server's version.
 
 **Part 4: season firsts and the season card** (#10). Passing end to end on Paper 26.3:
@@ -88,7 +86,7 @@ Known limits: test bots stand still and send no movement packets, and can't plac
 | A14 the season card: highlights, firsts, furthest block and every General-tab statistic as the season's difference; it opens as a book from the plaque anchor | `a14-season-card.mjs` (card lines through the scenario hooks, ADR 0003); unit: `FirstsAndCardTest#theSeasonCardHas…`, `#theCardOpensFromThePlaqueAnchorAsABook` |
 | A broken gallery file at startup is left out alone; status and joining admins are told; end and launch wait for a reload that fixes it | `m1-gallery-left-out.mjs` (two sessions); unit: `FirstsAndCardTest#aBrokenGalleryIsLeftOut…`, `#aGalleryBrokenDuringTheIntermission…` |
 
-Built: season firsts for advancements, the Nether, the End, diamonds, elytras and `firsts.rareItems`, kept in `season.json`, broadcast and posted to Discord once each; `/season firsts`; the season card as a book from the plaque anchor; block counts with the statistics baseline; galleries left out at startup. Decisions: `docs/questions.md` 55 to 61. The dragon slayer first, awards and the egg wall wait for M4.
+Built: season firsts for advancements, the Nether, the End, diamonds, elytras and `firsts.rareItems`, kept in `season.json`, broadcast and posted to Discord once each; `/season firsts`; the season card as a book from the plaque anchor; block counts with the statistics baseline; galleries left out at startup. Decisions: `docs/questions.md` 55 to 61. The dragon slayer first, awards and the egg wall are M4.
 
 
 ## M2
@@ -107,7 +105,7 @@ Built: season firsts for advancements, the Nether, the End, diamonds, elytras an
 
 Built: `/hof` (alias `/halloffame`), `/hof <season>`, `/hof <player>`, `/hof leave`, sneak-clicking a bed; the entry checks (`EntryChecks`) with the new `hof.entry` keys `onGround`, `noHazards`, `cooldown` and `rateLimit`; the saved return (position, dimension, yaw, pitch and game mode) in the player record, written before the teleport; return safety (`ReturnSafety`) with the bed, nearby and spawn fallbacks; arrival immunity; sealing (`HallVisits`): leaving the bounds by a move, a teleport or anything the 500 ms sweep notices returns the player, exit anchors, no drops, pickups, pearls, chorus fruit or riding, cushions as seats, and `seasons.hof.bypass`. Decisions: `docs/questions.md` 62 to 75 (73 to 75 from the review: `/hof` refuses a spot return safety would turn down, `/hof leave` only inside the Hall, stale saved spots dropped).
 
-**Part 2: protecting the Hall** (#12). Passing end to end on Paper 26.3 with `./gradlew build scenarioTest` run locally; they count once CI on #12 passes, and A44 is whole only with M3's no-build zones:
+**Part 2: protecting the Hall** (#12). Passing end to end on Paper 26.3 (A44's no-build half came with M3 part 1):
 
 | Scenario | Test |
 | --- | --- |
@@ -121,16 +119,12 @@ Built: `/hof` (alias `/halloffame`), `/hof <season>`, `/hof <player>`, `/hof lea
 | Reconciliation: when a cell's chunk loads again, a figure moved out of its cell is drawn again and the moved one removed, and a stray display removed; `/hof reconcile` puts back changed gear and then finds nothing to do; each repair is audited | `m2-reconcile.mjs`; unit: `HallRulesTest#reconciliationOnChunkLoad…`, `#reconciliationFixesAFiguresGear`, `#reconciliationStaysWithinItsBudgetEachTick`, `#aDisplayFarFromItsCellIsRemovedWhenItsChunkLoads` |
 | After their archive (`decorating.afterArchive` at its default 15 minutes) an owner still builds, but their stash opens as a copy, a broken block drops nothing and they carry nothing (questions 87) | `m2-after-archive-keeps.mjs`; unit: `HallRulesTest#afterTheirArchiveAnOwnerArrangesTheirCellButTakesNothingOut` |
 | A double chest can't be made across the Hall's edge or a cell's; one already across the Hall's edge opens as a copy from outside and feeds no hopper, while the same pair outside the Hall does (questions 88) | `m2-double-chest.mjs`; unit: `HallRulesTest#aDoubleChestNeverReachesAcrossACellOrTheHallsEdge` |
-| `cells.access: bounds` or `gate` is refused on load | unit: `ConfigLoaderTest#accessModesNotBuiltYetAreRefused` |
 
 Built: `HallRules` (deny by default for every player intent in the Hall, and `HallGuard` for changes nobody makes), `HallAudit` (`hall-blocked` and `hall-bypass` entries, repeats within 10 s counted), the `Reconciler` (on entities loading, every 5 minutes for loaded cells, and `/hof reconcile`; about 1 ms a tick), and on Paper `PaperHallGuard` plus the new intents in `PaperEvents`: buckets, fire, bone meal, entity placing, using and breaking, container opens swapped for view-only copies, no damage in the Hall but from `/kill` and the void, and the tripwire over entities and Hall containers as chunks load and over hoppers. Decorating owners pick up in their own cell before the season ends; after their archive they take nothing out of it. Double chests stay on one side of every cell's edge and the Hall's (`PaperChests`). The test plugin gains `/scenario open`, `place-entity` and `hit`, a block state for `place` and `drops` for `break` (ADR 0003). Decisions: `docs/questions.md` 76 to 86, and 87 to 89 from the review.
 
-Not yet: access modes `bounds` and `gate` (refused on load until built), the admin webhook for tripwire hits (M4), cushions in no-build zones (M3).
-
-
 ## M3
 
-**Part 1: zones and Homecoming** (#13). Passing end to end on Paper 26.3 with `./gradlew build scenarioTest` run locally; they count once CI on the pull request passes:
+**Part 1: zones and Homecoming** (#13). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
@@ -151,8 +145,6 @@ Not yet: access modes `bounds` and `gate` (refused on load until built), the adm
 
 Built: the zone model (`zone/`: `Zone`, `ZoneShape` box and cylinder, `ZoneMode`, `UnlockCondition`, `ZoneFiles`) in each season's file with `homecoming.unlock`; `ZoneState` in `season.json` (zones unlocked or locked on their own, the dragon's death, players who reached the End); `Zones`, which works out the zones in force from the files and the state (indexed by chunk), refuses entry on moves, teleports, portals and vehicle moves, runs the sweep (every 50 ms, a tenth of the players each time), refuses changes across a blocked zone's edge and building in no-build zones, announces entries, checks unlock conditions once a second and runs Homecoming; `ZoneCommands` (`/season zone add|mode|after|remove|list`, `/season unlock homecoming|<zone>`, `/season lock <zone>`); spawn checks in `/season spawn set`, `/season end --dry-run`, launch and on load; `zones.announceToDiscord` in config.yml; and on Paper `PaperZoneGuard` (a listener of its own beside the Hall's, rather than one guard for both: the Hall stops everything inside it, zones only what crosses an edge) with portal, vehicle and dragon events in `PaperEvents`. The test plugin gains `move … fly`, `place … consume`, `ride`, `chorus`, `portal`, `portal-pair`, `bucket`, `ignite` and `permit`, and the bots read Paper's action bar (ADR 0003). Decisions: `docs/questions.md` 90 to 108, and 109 to 113 from the review.
 
-Not yet: the ender vault (A36) and pets (A16 to A19) came with part 2, below; part 3 brings BlueMap areas and spawn candidates, the `outside`, `y-above` and `y-below` shapes (refused on load until then), the 24,000-block spawn warning and spawn candidates in A41, `/season config get|set` and markers.
-
 **Part 2: the ender vault and pets** (#15). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
@@ -168,9 +160,7 @@ Not yet: the ender vault (A36) and pets (A16 to A19) came with part 2, below; pa
 
 Built: the vault (`vault/Vault`: `/vault`, the layout of season pages and the Returned page, the per-click withdrawal queue and transaction, recovery for `VAULT_WITHDRAW`, `returnItem` for M4's curator returns and eggs), `VaultFiles` reading pages, withdrawing with history, rolling back and adding returns; the withdraw-only menu (`Menus#openWithdraw`) and whole-stack giving (`Inventories#give`) on Paper; `/season unarchive` restoring the vault page as it is now. Pets (`pet/Pets`: `/pet add|list|remove`, last known positions, deaths and removals, notices for offline owners, travel, the waiting count in `/season status`), pets and notices in the player record, and on Paper the `seasons:pet` mark, `EntitiesUnloadEvent` and `EntityRemoveFromWorldEvent` with the removal reason, loading a pet's chunk with a ticket, and unleashing, dismounting and teleporting it. Travel is hooked into `SeasonEntry` (launch and login catch-up) and into the end of every login's catch-up. The test plugin gains `vault-return`, `tame`, `chest`, `leash` and `forget-pet` (ADR 0003). Decisions: `docs/questions.md` 122 to 135, and 136 to 139 from the review.
 
-Not yet: BlueMap, spawn candidates, the 24,000-block spawn warning and shared waypoints came with part 3, below; the `outside`, `y-above` and `y-below` shapes (refused on load until then) and `/season config get|set` wait for part 4.
-
-**Part 3: BlueMap, spawn candidates and shared waypoints** (branch `m3-bluemap`). Passing end to end on Paper 26.3 with `./gradlew build scenarioTest` run locally; they count once CI on the pull request passes:
+**Part 3: BlueMap, spawn candidates and shared waypoints** (#16, race fixes #17). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
@@ -184,9 +174,7 @@ Not yet: BlueMap, spawn candidates, the 24,000-block spawn warning and shared wa
 
 Built: spawn candidates in each season's file (`spawnCandidates`), validated and written by command, with `/season spawn candidate add|remove|list` and `/season spawn set [candidate]` in a new `SpawnCommands`; the 24,000-block warning (`SeasonFile#beyondStrongholds`) on spawn set, candidate add, load and the end dry run; one edit path for command edits (`ConfigEdits`: write, reload every file, swap in, audit), which the zone, spawn and marker commands share, so setting the spawn is now audited; shared waypoints (`map/Waypoints`, `config/WaypointFiles`, `<world>/seasons/markers.yml`) and `/season marker add|remove` (`map/MarkerCommands`); the map (`map/MapModel`, `MapModels`) and `MapService`, which publishes it when the files or the season state change; `Zones#inForce`; build heights on the `World` port; the `MapPublisher` port with `/season status` saying where it stands; and in `integrations/bluemap` the `BlueMapPublisher`, wired by `PaperMaps` only when BlueMap is installed. The scenario suite gains `// @plugins <name>` for a scenario that needs an optional plugin on a server of its own, BlueMap pinned for test servers only, and the test plugin's `/scenario bluemap` (ADR 0004). From the review: `ConfigEdits` puts a file back when its edit doesn't take, `markers.yml` is left out at startup like a broken gallery (`ConfigSnapshot#markersLeftOut`), and config problems are worded by `ConfigProblem#describe` wherever an edit reports one. Decisions: `docs/questions.md` 140 to 151, and 152 and 153 from the review.
 
-Not yet: the `outside`, `y-above` and `y-below` shapes, the frontier border and `/season config get|set` came with part 4, below.
-
-**Part 4: the outside and height shapes, the frontier border and `/season config get|set`** (#18, branch `m3-shapes-config`). Passed end to end on Paper 26.3 in CI on #18:
+**Part 4: the outside and height shapes, the frontier border and `/season config get|set`** (#18). Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
@@ -203,3 +191,25 @@ Built: `ZoneShape.OutsideCircle`, `OutsideBox`, `YAbove` and `YBelow`, with `rea
 After #18 opened: CI caught a race in `m3-frontier-border` (a trip to the Nether and back between two sweeps left the player with the world's border, which the game sends on every change of dimension, while Seasons thought it had sent the frontier's); a change of dimension now forgets the border sent and works it out again at once (`ZonesTest#aTripToAnotherDimensionAndBackBetweenSweepsBringsTheBorderBackAtOnce`). Map Link is identified as thebuildcraft/MapLink, and what it reads and draws, its `maxChunkArea` limit included, is in `docs/questions.md` 164.
 
 From the review of #18: Map Link's source (thebuildcraft/MapLink at 595f7f4) shows it imports BlueMap's points and areas, not only player positions, and leaves out areas larger than its `maxChunkArea`; questions 143, 158, 159 and 164 now say what it does and are decided, and the spec edit naming it is taken out of this branch (the owner makes it in the Docs original). An `outside` zone is now a ring on the map, reaching `max(2 × radius, 5000)` blocks beyond its circle or box (`MapModel.Outline.Beyond#around`; `MapModelsTest#anOutsideZoneIsARingWithItsInsideAsAHole`, `#aRingReachesTwiceTheRadiusBeyondItsInsideAndAtLeast5000Blocks`, `BlueMapPublisherTest#anOutsideZoneIsARingWithItsInsideAsAHoleAndSitsAtItsFrontier`, `m3-bluemap`). Height zones stay off the map, by the owner's decision (159). The secret refusal says a URL typed into the command is in the server log and should be rotated (163, `m3-config`). New end-to-end checks: an elytra and a pearl route in `m3-height-zones` (the pearl into the floor zone, since a thrown pearl can't climb into the sky), a chest and a bucket across the frontier in `m3-outside-zone`, and a death and respawn in `m3-frontier-border`, which found that a player respawning inside the square kept the world's border: a respawn now sends the frontier's again at once (`Milestones#respawned`, from `PlayerPostRespawnEvent`; `ZonesTest#aRespawnInsideTheFrontierBringsTheBorderBackAtOnce`).
+
+
+## On hold
+
+Within M0 to M3 nothing is on hold: what is left is built on `m3-finish` (above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
+
+| Item | Milestone | Why then |
+| --- | --- | --- |
+| The dragon egg to the slayer with a fanfare, the dragon slayer first, `dragon.newEggEachSeason` and `eggTo`, the dragon flag reset at launch, `EGG_DELIVERED` | M4 | Milestone list ("dragon egg to the slayer with fanfare"); questions 27, 55; A37 to A39 |
+| The museum and the egg wall: `/museum add\|remove`, `museum.yml` and `data/museum/`, the end dry run's egg plinth check | M4 | Milestone list ("the egg wall", "the museum") |
+| Awards, on the plaque's trophies and in the archive record | M4 | Milestone list; the award list is still an open decision |
+| Curation: `/hof curate`, `/hof curate undo`, the `seasons.curate.*` nodes, `CURATE_STARTED` and `CURATE_DONE`, curator returns to the vault's Returned page, recovering `--force` displaced items | M4 | Milestone list ("curation"); questions 4, 23 |
+| Discord posts for the season end, launch, awards and the dragon slayer; the admin webhook, tripwire hits included | M4 | Milestone list ("Discord webhooks"); questions 14, 28 |
+| The wand (`/hof wand`, anchors and bounds by click, `/season zone add <id> box` and `outside box` with no corners) | M5 | Milestone list ("wand"); questions 92, 156 |
+| Templates and `/hof stamp`, the `alcove` and `plinth` templates in the jar, `templates/` | M5 | Milestone list ("templates and stamping") |
+| bStats, with a plugin id per jar | M6 | Question 3 |
+| CI across every supported version, compiling against the newest Paper API with deprecations as errors | M6 | Milestone list ("CI across supported versions"); question 5 |
+| Performance scenario A43 | M6 | Milestone list |
+| Generated config docs (config.yml comments from annotations) | M6 | Milestone list ("generated config docs") |
+| Hangar and Modrinth listings | M6 | Milestone list |
+| Seasons Web: the web server and API, `/web link\|sessions\|logout\|privacy`, `seasons.web` and `seasons.web.admin`, privacy flags in the player record, firsts copied into archives | M7 | Milestone list; question 56; A48, A49 |
+| Fabric and NeoForge adapters; Bedrock players through Geyser | Later | Milestone list ("Later: Seasons Adapters") |
