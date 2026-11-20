@@ -563,6 +563,92 @@ class DragonTest {
     assertThat(state().kill().orElseThrow().egg()).isEqualTo(Egg.RETURNED);
   }
 
+  @Test
+  void theEggIsGuardedFromTheKillUntilItIsTaken() {
+    launched();
+    PlayerRef pat = fake.join("Pat");
+    assertThat(fake.eggGuarded).isFalse();
+
+    dragon().died(DRAGON, Optional.of(pat.id()));
+    assertThat(fake.eggGuarded).isTrue();
+    eggAppears();
+
+    assertThat(fake.eggGuarded).isFalse();
+    assertThat(eggsOn(pat)).isEqualTo(1);
+  }
+
+  @Test
+  void anEggThatLeftThePortalBeforeItWasTakenGivesNone() throws IOException {
+    launched();
+    PlayerRef pat = fake.join("Pat");
+    PlayerRef admin = fake.join("Admin");
+    dragon().died(DRAGON, Optional.of(pat.id()));
+    // Moved between being seen and being taken, as a click would teleport it.
+    fake.beforeEggRemoved = fake.eggs::clear;
+
+    eggAppears();
+
+    assertThat(eggsOn(pat)).isZero();
+    assertThat(returned(pat)).allMatch(Optional::isEmpty);
+    assertThat(state().kill().orElseThrow().egg()).isEqualTo(Egg.MISSING);
+    assertThat(fake.eggGuarded).isFalse();
+    assertThat(said(admin))
+        .contains(
+            "Season 3's dragon egg left the exit portal before it could be taken, so Pat was given"
+                + " none. It is still in the End.");
+  }
+
+  @Test
+  void aCrashThatRollsTheEndBackIsPutRightAtStartup() throws IOException {
+    launched();
+    PlayerRef pat = fake.join("Pat");
+    dragon().died(DRAGON, Optional.of(pat.id()));
+    Position egg = eggAppears();
+    assertThat(eggsOn(pat)).isEqualTo(1);
+
+    // A crash before the End was saved: the egg is back on the portal and the flag clear again.
+    halted = true;
+    fake.eggs.add(egg);
+    fake.dragonKilled = false;
+    restart();
+
+    assertThat(fake.eggs).isEmpty();
+    assertThat(fake.dragonKilled).isTrue();
+    assertThat(eggsOn(pat)).isEqualTo(1);
+    assertThat(returned(pat)).allMatch(Optional::isEmpty);
+    assertThat(state().kill().orElseThrow().eggAt()).isEmpty();
+  }
+
+  @Test
+  void onceTheEndIsSavedAnEggPutOnThePortalIsLeftAlone() {
+    launched();
+    PlayerRef pat = fake.join("Pat");
+    dragon().died(DRAGON, Optional.of(pat.id()));
+    Position egg = eggAppears();
+    assertThat(state().kill().orElseThrow().eggAt()).contains(egg);
+
+    dragon().endSaved();
+    assertThat(state().kill().orElseThrow().eggAt()).isEmpty();
+    // Pat puts the egg back on the portal as a display, and the server restarts.
+    fake.eggs.add(egg);
+    restart();
+
+    assertThat(fake.eggs).containsExactly(egg);
+  }
+
+  @Test
+  void aCleanStopCountsAsTheEndSaved() {
+    launched();
+    PlayerRef pat = fake.join("Pat");
+    dragon().died(DRAGON, Optional.of(pat.id()));
+    Position egg = eggAppears();
+
+    fake.eggs.add(egg);
+    restart();
+
+    assertThat(fake.eggs).containsExactly(egg);
+  }
+
   /** Runs something that reaches an armed crash point, as the server stopping dead there. */
   private void crash(Runnable action) {
     try {

@@ -26,6 +26,12 @@ public interface DragonFight {
   /** Takes the dragon egg at a block away, leaving air; false if no egg stands there. */
   boolean removeEgg(Position at);
 
+  /**
+   * Freezes or frees the dragon egg on top of the exit portal: while frozen nobody can make it
+   * teleport, break it, push it or blow it up, so it stays put until Seasons takes it.
+   */
+  void guardEgg(boolean guarded);
+
   /** One dragon egg, as an item. */
   NeutralItem eggItem();
 }

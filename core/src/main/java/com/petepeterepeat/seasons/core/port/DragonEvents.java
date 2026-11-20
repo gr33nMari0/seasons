@@ -23,4 +23,7 @@ public interface DragonEvents {
 
   /** The End was loaded. */
   void endLoaded();
+
+  /** The End was saved, so a block changed in it before now survives a crash. */
+  void endSaved();
 }

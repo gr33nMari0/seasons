@@ -64,6 +64,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     Clock clock = Clock.systemUTC();
     Scheduler scheduler = new PaperScheduler(this, server, players, executor);
     // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
+    PaperDragonFight dragonFight = new PaperDragonFight();
     Optional<ScenarioHooks> hooks = Optional.empty();
     if (Boolean.getBoolean(ScenarioHooks.PROPERTY)) {
       ScenarioClock movable = new ScenarioClock(clock);
@@ -88,7 +89,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             new PaperPermissions(players),
             events,
             scheduler,
-            new PaperDragonFight(),
+            dragonFight,
             new PaperStatistics(players),
             storage,
             new PaperImports(this, server, codec));
@@ -97,6 +98,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(events.hallGuard(), this);
     server.getPluginManager().registerEvents(events.zoneGuard(), this);
     server.getPluginManager().registerEvents(events.dragonEvents(), this);
+    server.getPluginManager().registerEvents(dragonFight, this);
     server.getPluginManager().registerEvents(menus, this);
     server.getPluginManager().registerEvents(advancements, this);
     server.getPluginManager().registerEvents(entities, this);

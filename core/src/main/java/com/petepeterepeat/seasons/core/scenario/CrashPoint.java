@@ -28,6 +28,8 @@ public enum CrashPoint {
   VAULT_WITHDRAW_GIVEN,
   /** {@code GATE_SET} is on disk; the gate's blocks haven't changed. Armed by the cell's owner. */
   GATE_SET,
+  /** {@code EGG_DELIVERED} is on disk; the egg is still on the exit portal. Armed by the slayer. */
+  EGG_JOURNALLED,
   /**
    * {@code EGG_DELIVERED} is on disk and the egg is off the exit portal; it isn't on the Returned
    * page yet. Armed by the slayer.

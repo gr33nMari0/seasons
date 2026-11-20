@@ -14,12 +14,13 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.event.world.WorldSaveEvent;
 import org.jspecify.annotations.Nullable;
 
 /**
  * The End's dragons, for the slayer: who hurt one and how much, who dealt the final blow, and the
- * End loading. A player is whoever caused the damage, as its damage source says, so a hit, an
- * arrow, a trident, or a crystal or TNT they set off all count as theirs.
+ * End loading and being saved. A player is whoever caused the damage, as its damage source says, so
+ * a hit, an arrow, a trident, or a crystal or TNT they set off all count as theirs.
  */
 final class PaperDragonEvents implements Listener {
   private @Nullable DragonEvents listener;
@@ -59,6 +60,15 @@ final class PaperDragonEvents implements Listener {
     if (listening != null
         && event.getWorld().getKey().asString().equals(PaperDragonFight.THE_END)) {
       listening.endLoaded();
+    }
+  }
+
+  @EventHandler(priority = EventPriority.MONITOR)
+  void onWorldSave(WorldSaveEvent event) {
+    DragonEvents listening = listener;
+    if (listening != null
+        && event.getWorld().getKey().asString().equals(PaperDragonFight.THE_END)) {
+      listening.endSaved();
     }
   }
 

@@ -232,6 +232,13 @@ public final class FakePlatform {
 
   public final List<Position> eggs = new ArrayList<>();
   public final List<Position> eggsRemoved = new ArrayList<>();
+
+  /** Whether Seasons has frozen the egg on the portal, so nobody can move it. */
+  public boolean eggGuarded;
+
+  /** Runs once, just before Seasons next takes an egg off the portal. */
+  public @Nullable Runnable beforeEggRemoved;
+
   public com.petepeterepeat.seasons.core.port.@Nullable DragonEvents dragonEvents;
 
   /** Puts a dragon egg on top of the exit portal, as the game does after a kill, and returns it. */
@@ -949,11 +956,21 @@ public final class FakePlatform {
 
           @Override
           public boolean removeEgg(Position at) {
+            Runnable first = beforeEggRemoved;
+            if (first != null) {
+              beforeEggRemoved = null;
+              first.run();
+            }
             boolean removed = eggs.remove(at);
             if (removed) {
               eggsRemoved.add(at);
             }
             return removed;
+          }
+
+          @Override
+          public void guardEgg(boolean guarded) {
+            eggGuarded = guarded;
           }
 
           @Override

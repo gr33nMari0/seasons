@@ -395,6 +395,7 @@ dragon:
   egg-given: "<green>The dragon egg is yours.</green>"
   egg-returned: "<yellow>Your inventory is full, so the dragon egg waits on your vault's Returned page: /vault</yellow>"
   egg-missing: "<red>No dragon egg appeared on the exit portal within 30 seconds of Season <season>'s first kill, so <name> was given none.</red>"
+  egg-moved: "<red>Season <season>'s dragon egg left the exit portal before it could be taken, so <name> was given none. It is still in the End.</red>"
   flag-pending: "<yellow>The End isn't loaded, so the dragon's previously-killed flag will be cleared when it loads.</yellow>"
 
 card:

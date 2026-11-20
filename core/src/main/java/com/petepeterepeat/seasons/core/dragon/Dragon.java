@@ -51,6 +51,11 @@ import org.slf4j.LoggerFactory;
  * a reference ({@code egg-s3}), and the vault's own withdrawal gives it to them from there. A crash
  * anywhere is finished at startup: an egg the vault was given is done; otherwise it is taken off
  * the portal if it is still there, and put on the Returned page.
+ *
+ * <p>While the egg is awaited and taken, the adapter freezes it on the portal, so nobody can move
+ * it between Seasons seeing it and taking it. Once the season's first kill is past, startup and the
+ * End loading set the previously-killed flag again and take off an egg the vault already holds,
+ * since a crash can roll the End back to before both (questions 195 and 196).
  */
 public final class Dragon implements DragonEvents {
   /** How often the exit portal is checked for the egg after a kill, and for how long. */
@@ -136,6 +141,7 @@ public final class Dragon implements DragonEvents {
     if (current.get().dragon().flagPending()) {
       endLoaded();
     }
+    secure();
     Optional<Kill> kill = current.get().dragon().kill();
     if (kill.isPresent() && kill.get().slayer().isPresent()) {
       switch (kill.get().egg()) {
@@ -153,6 +159,8 @@ public final class Dragon implements DragonEvents {
       saver = null;
     }
     stopWatching();
+    // A clean stop saves the End after this, so the egg handed over can't come back.
+    endSaved();
   }
 
   /**
@@ -178,6 +186,52 @@ public final class Dragon implements DragonEvents {
       LOG.info("The End loaded: cleared the dragon's previously-killed flag, as launch asked");
       update(d -> d.withFlagPending(false));
     }
+    secure();
+  }
+
+  @Override
+  public void endSaved() {
+    Optional<Kill> kill = state().flatMap(s -> s.dragon().kill());
+    if (kill.isPresent() && handedOver(kill.get()) && kill.get().eggAt().isPresent()) {
+      update(d -> d.withKill(kill.get().withEgg(kill.get().egg(), Optional.empty())));
+    }
+  }
+
+  /**
+   * Once the season's first kill is past, makes sure the End agrees, as a crash can roll it back:
+   * the previously-killed flag set, so no later kill drops an egg, and no egg on the portal where
+   * the vault was given one. Needs the End loaded; otherwise it waits for it to load.
+   */
+  private void secure() {
+    Optional<Kill> kill = state().flatMap(s -> s.dragon().kill());
+    if (kill.isEmpty() || kill.get().egg() == Egg.WAITING) {
+      return;
+    }
+    if (!platform.dragonFight().previouslyKilled()
+        && !platform.dragonFight().setPreviouslyKilled(true)) {
+      return;
+    }
+    if (!handedOver(kill.get()) || kill.get().eggAt().isEmpty()) {
+      return;
+    }
+    Position at = kill.get().eggAt().get();
+    if (platform.dragonFight().removeEgg(at)) {
+      LOG.warn("Took the dragon egg the vault already holds off the portal after a restart");
+      audit.record(
+          AuditLog.SEASONS,
+          "egg",
+          kill.get().name(),
+          "removed",
+          "Season "
+              + state().map(SeasonState::season).orElse(0)
+              + ": back on the portal after a restart, though the vault already had it");
+    }
+    endSaved();
+  }
+
+  /** Whether the egg went to the slayer's vault, so none belongs on the portal. */
+  private static boolean handedOver(Kill kill) {
+    return kill.egg() == Egg.RETURNED || kill.egg() == Egg.GIVEN;
   }
 
   @Override
@@ -291,6 +345,7 @@ public final class Dragon implements DragonEvents {
   /** Checks the exit portal once a second for the new egg, for up to 30 seconds. */
   private void watch(int season, Kill kill) {
     stopWatching();
+    platform.dragonFight().guardEgg(true);
     int[] checks = {0};
     watcher =
         platform
@@ -303,6 +358,9 @@ public final class Dragon implements DragonEvents {
                       || now.isEmpty()
                       || now.get().egg() != Egg.WAITING) {
                     stopWatching();
+                    if (now.isEmpty() || now.get().egg() != Egg.TAKING) {
+                      platform.dragonFight().guardEgg(false);
+                    }
                     return;
                   }
                   Optional<Position> egg =
@@ -315,6 +373,7 @@ public final class Dragon implements DragonEvents {
                     take(season, now.get(), egg.get());
                   } else if (++checks[0] >= WATCH_CHECKS) {
                     stopWatching();
+                    platform.dragonFight().guardEgg(false);
                     update(d -> d.withKill(now.get().withEgg(Egg.MISSING, Optional.empty())));
                     audit.record(
                         AuditLog.SEASONS, "egg", kill.name(), "missing", "Season " + season);
@@ -347,7 +406,12 @@ public final class Dragon implements DragonEvents {
               journal
                   .orElseThrow()
                   .append(JournalKind.EGG_DELIVERED, slayer, season, payload(season, at))
-                  .thenRunAsync(() -> clearAndReturn(season, taking, at), serverThread)
+                  .thenRunAsync(
+                      () -> {
+                        crash.reached(CrashPoint.EGG_JOURNALLED, slayer);
+                        clearAndReturn(season, taking, at, false);
+                      },
+                      serverThread)
                   .exceptionally(failure -> {
                     LOG.error("Handing over Season {}'s dragon egg stopped", season, failure);
                     return null;
@@ -356,13 +420,29 @@ public final class Dragon implements DragonEvents {
   }
 
   /**
-   * Takes the egg off the portal, if it is still there, and puts it on the slayer's Returned page,
-   * then gives it to them if they are online. Run again by recovery, it changes nothing done
-   * already.
+   * Takes the egg off the portal and puts it on the slayer's Returned page, then gives it to them
+   * if they are online. Run again by recovery, it changes nothing done already, and an egg already
+   * off the portal is one it took before the crash.
+   *
+   * @param recovering whether a crash interrupted the hand-over; otherwise an egg gone from the
+   *     portal left it some other way, it is still in the world, and the vault gets none
    */
-  private void clearAndReturn(int season, Kill kill, Position at) {
+  private void clearAndReturn(int season, Kill kill, Position at, boolean recovering) {
     PlayerId slayer = kill.slayer().orElseThrow();
     boolean removed = platform.dragonFight().removeEgg(at);
+    platform.dragonFight().guardEgg(false);
+    if (!removed && !recovering) {
+      update(d -> d.withKill(kill.withEgg(Egg.MISSING, Optional.empty())));
+      audit.record(AuditLog.SEASONS, "egg", kill.name(), "moved", "Season " + season);
+      announcer.admins(
+          SeasonService.ADMIN_PERMISSION,
+          "dragon.egg-moved",
+          "season",
+          Integer.toString(season),
+          "name",
+          kill.name());
+      return;
+    }
     crash.reached(CrashPoint.EGG_CLEARED, slayer);
     var _ =
         writer
@@ -374,7 +454,7 @@ public final class Dragon implements DragonEvents {
                     Optional.of(ref(season))))
             .thenRunAsync(
                 () -> {
-                  update(d -> d.withKill(kill.withEgg(Egg.RETURNED, Optional.empty())));
+                  update(d -> d.withKill(kill.withEgg(Egg.RETURNED, kill.eggAt())));
                   audit.record(
                       AuditLog.SEASONS,
                       "egg",
@@ -406,7 +486,9 @@ public final class Dragon implements DragonEvents {
             .thenAcceptAsync(
                 given -> {
                   if (given && state().map(SeasonState::season).orElse(0) == season) {
-                    update(d -> d.withKill(kill.withEgg(Egg.GIVEN, Optional.empty())));
+                    update(d ->
+                        d.withKill(
+                            d.kill().map(k -> k.withEgg(Egg.GIVEN, k.eggAt())).orElseThrow()));
                   }
                 },
                 serverThread);
@@ -415,6 +497,7 @@ public final class Dragon implements DragonEvents {
   /** An egg being taken when the server stopped: finished as far as it got. */
   private void recoverTaking(int season, Kill kill) {
     PlayerId slayer = kill.slayer().orElseThrow();
+    platform.dragonFight().guardEgg(true);
     var _ =
         writer
             .submit(() -> vaults.delivered(slayer, ref(season)))
@@ -422,9 +505,10 @@ public final class Dragon implements DragonEvents {
                 delivered -> {
                   LOG.warn("Finishing handing over Season {}'s dragon egg after a restart", season);
                   if (delivered) {
-                    update(d -> d.withKill(kill.withEgg(Egg.RETURNED, Optional.empty())));
+                    update(d -> d.withKill(kill.withEgg(Egg.RETURNED, kill.eggAt())));
+                    secure();
                   } else {
-                    clearAndReturn(season, kill, kill.eggAt().orElseThrow());
+                    clearAndReturn(season, kill, kill.eggAt().orElseThrow(), true);
                   }
                 },
                 serverThread)

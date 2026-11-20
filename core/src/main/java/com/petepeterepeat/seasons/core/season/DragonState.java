@@ -67,7 +67,9 @@ public record DragonState(Optional<Fight> fight, Optional<Kill> kill, boolean fl
    * @param slayer the slayer, or empty if no player had a hand in it
    * @param name the slayer's name then
    * @param eggBefore an egg already on the exit portal when the dragon died, left alone
-   * @param eggAt where the egg being handed over stood, once Seasons is taking it
+   * @param eggAt where the egg being handed over stood, once Seasons is taking it; kept after it is
+   *     handed over until the End has been saved without it, since a crash before then brings it
+   *     back on the portal
    */
   public record Kill(
       Optional<PlayerId> slayer,
@@ -95,7 +97,7 @@ public record DragonState(Optional<Fight> fight, Optional<Kill> kill, boolean fl
     PORTAL,
     /** None came: the flag was set, as for any later kill. */
     NONE,
-    /** None appeared in time. */
+    /** None appeared in time, or it left the portal before Seasons could take it. */
     MISSING
   }
 
