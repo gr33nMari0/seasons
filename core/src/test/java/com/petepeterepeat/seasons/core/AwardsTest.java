@@ -254,6 +254,32 @@ class AwardsTest {
     assertThat(winners(awards, "most-advancements")).containsExactly("Alex");
   }
 
+  @Test
+  void theCardListsAwardsAndTheDragonCredit() {
+    ArchiveRecord pats = archive("Pat", Map.of("minecraft:deaths", 2L), 1);
+    SeasonFirst slain =
+        new SeasonFirst(2, FirstsTracker.DRAGON, "", id("Pat"), "Pat", Instant.EPOCH);
+    SeasonAwards awards =
+        new SeasonAwards(
+            2, Instant.EPOCH, Awards.compute(DEFAULTS, List.of(pats), Optional.of(slain)));
+
+    List<String> card =
+        com.petepeterepeat.seasons.core.hall.SeasonCard.of(
+                pats, Optional.empty(), List.of(slain), Optional.of(awards), Messages.defaults())
+            .plainLines();
+
+    assertThat(card)
+        .containsSubsequence(
+            "Slew the ender dragon",
+            "Season firsts",
+            "slew the ender dragon",
+            "Awards",
+            "Most deaths (2)",
+            "Dragon slayer",
+            "Most advancements (1)",
+            "Statistics");
+  }
+
   // End to end on the fake platform.
 
   private void start() {
