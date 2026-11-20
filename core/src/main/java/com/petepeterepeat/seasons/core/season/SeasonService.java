@@ -388,6 +388,14 @@ public final class SeasonService {
   }
 
   /**
+   * Changes what the season remembers of the dragon, and saves it. Nothing happens before {@code
+   * /season init}.
+   */
+  public void updateDragon(java.util.function.UnaryOperator<DragonState> change) {
+    state.ifPresent(current -> update(current.withDragon(change.apply(current.dragon()))));
+  }
+
+  /**
    * Runs a task on the server thread once the latest state is on disk, so what it does to the world
    * never runs ahead of the state that records it. If that save failed, the task doesn't run.
    */
