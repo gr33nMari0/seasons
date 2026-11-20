@@ -4,6 +4,13 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- A dragon egg every season (M4 part 1). With `dragon.newEggEachSeason`, launch clears the End's previously-killed flag, or does so when the End loads if it isn't loaded then. Seasons tracks every player who damages the End's dragon, by whoever caused the damage, arrows and crystals included. The season's first kill makes its slayer the player behind the final blow, or else whoever dealt the most damage; with nobody, the egg stays on the portal as in vanilla. The slayer gets a fanfare (a title and sound for everyone, fireworks over the exit portal, a broadcast, a Discord post) and the "slew the ender dragon" season first.
+- The egg is taken off the exit portal as it appears and given to the slayer, or kept on the Returned page of their vault if their inventory is full or they have left. Each step is journalled (`EGG_DELIVERED`) and a crash at any of them is finished at startup. `dragon.eggTo: portal` leaves it on the portal.
+- The museum: `/museum add <anchor> [label]` puts the op's held item on a museum plinth, shown as a copy with "label · Season · credit"; `/museum remove <anchor>` gives it back. Both are journalled (`MUSEUM_STARTED`, `MUSEUM_DONE`), recovered after a crash and audited. Plinths are museum cells with a trophy anchor, kept in `museum.yml` and `data/museum/`.
+- The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Taran" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
+
 ## [1.0.0-beta.1] - 2026-11-20
 
 ### Added

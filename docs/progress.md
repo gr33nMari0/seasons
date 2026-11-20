@@ -8,7 +8,8 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M1 Core rollover | Done (#8, #9, #10) | A1 to A15, A20, A21, A40, A46, A47, A50, A51 (A6's zone lock with M3) |
 | M2 Hall protection | Done (#11, #12) | A22 to A29, A44 (its no-build half with M3), A9 widened |
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
-| M4 to M7 | Not started | See On hold, below |
+| M4 Season extras | In progress: part 1 on `m4-dragon-museum` | A37 to A39 |
+| M5 to M7 | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -213,17 +214,33 @@ From the review of #18: Map Link's source (thebuildcraft/MapLink at 595f7f4) sho
 
 Built: `Gallery.Settings` and `FigureRenderer`, read and written by `GalleryFiles`; `HallService#mayBeIn`, `#galleryEntry` and `#inGate`, with `HallVisits` refusing entry to a `bounds` cell and its sweep moving people out; `hall/Gates` with the `GATE_SET` journal kind and crash point, `cells.gateBlock` and `World#setBlocks`; `HallService#claim` and `/hof claim`; `Figure.Kind` and a figure's pose, `Displays#drawnAs`, and the armour stand in `PaperDisplays`; a gallery's `launch` block, `/hof gallery launch` and the two-press button; `AuditLog#recent` and `/season audit`; the archive line of `/season info`; `World#isItem` and `#isGateBlock` for config checks, `World#holdsContents` for gates; `PlayerRecord#lastValid`. Decisions: `docs/questions.md` 165 to 177.
 
+## M4
+
+**Part 1: the dragon egg and the museum** (branch `m4-dragon-museum`). Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A37 after launch the dragon is respawned with four crystals; the first kill of the season gives the egg to the slayer, taken off the portal as it appears, with a title for everyone, fireworks over the portal, a broadcast, a Discord post and the dragon slayer first; the final blow (an arrow) beats more damage dealt; a Season 2 dragon that died with no player involved leaves its egg on the portal unannounced, and that egg is left alone; a second kill in the season gives no egg and no fanfare | `a37-dragon-egg.mjs`; unit: `DragonTest#theFinalBlowMakesTheSlayerOverMoreDamage`, `#onlyTheSeasonsFirstKillCounts`, `#aDragonNobodyHurtLeavesItsEggOnThePortalUnannounced`, `#theEggIsTakenOffThePortalAndGivenToTheSlayer`, `#anEggAlreadyOnThePortalIsLeftAlone`, `#launchClearsThePreviouslyKilledFlag` |
+| A38 with a full inventory the egg goes to the slayer's Returned page and is taken from there before Homecoming; a slayer who left before the egg appeared finds it there; a crystal a player sets off is their final blow | `a38-egg-returned.mjs`; unit: `DragonTest#aFullInventorySendsTheEggToTheReturnedPage`, `#aSlayerWhoLeftFindsTheEggOnTheReturnedPage` |
+| A39 at season end the season's egg plinth shows a dragon egg with "Season 3 · slain by Pat", a copy tagged as archived; a season without a slayer shows nothing; reconciliation keeps it and draws it again; the end dry run warns while the season has no egg plinth | `a39-egg-wall.mjs`; unit: `MuseumTest#atSeasonEndTheEggPlinthShowsTheEggAndTheSlayer`, `#anEggPlinthWithSomethingPutThereByHandKeepsIt`, `#theDryRunWarnsWithoutAnEggPlinth`, `GalleryFilesTest#anEggPlinthReadsAndWritesBackAndOnlyATrophyCanBeOne`, `#onlyAMuseumHasEggPlinthsAndOnlyOnePerSeason` |
+| The slayer by most damage when no player dealt the final blow; `dragon.eggTo: portal` leaves the egg with the fanfare; `dragon.newEggEachSeason: false` leaves the flag at launch | `m4-slayer-rules.mjs`; unit: `DragonTest#withNoPlayerFinalBlowTheMostDamageMakesTheSlayer`, `#aTieGoesToWhoeverHitFirst`, `#damageToAnotherDragonDoesNotCount`, `#withEggToPortalTheEggStaysButTheSlayerIsAnnounced`, `#aKillWithTheFlagSetDropsNoEggButIsAnnounced`, `#withoutANewEggEachSeasonLaunchLeavesTheFlag`, `#anUnloadedEndGetsTheFlagClearedWhenItLoads`, `#anEggThatNeverAppearsIsReported`, `#nothingCountsOutsideTheSeasonsPlay` |
+| The damage dealt survives a restart mid-fight | `m4-dragon-restart.mjs` (two sessions); unit: `DragonTest#theDamageDealtSurvivesARestart` |
+| The egg exactly once after a crash at `EGG_CLEARED` and at `EGG_RETURNED`: off the portal and on the slayer's Returned page | `m4-egg-crash-cleared.mjs`, `m4-egg-crash-returned.mjs` (two sessions each); unit: `DragonTest#aCrashWithTheEggOffThePortalPutsItOnTheReturnedPage`, `#aCrashBeforeTheEggLeftThePortalTakesItAtStartup`, `#aCrashWithTheEggOnTheReturnedPageLeavesItThere` |
+| `/museum add <anchor> [label]` takes the held item and shows a tagged copy with "label · Season · credit"; the runbook's original egg on the first egg plinth; refused without an item, for an unknown anchor, an archived item and a plinth already holding something; `/museum remove` gives it back or keeps it while the inventory is full; audited; still there after a restart | `m4-museum.mjs` (two sessions); unit: `MuseumTest#addTakesTheHeldItemAndShowsItWithAPlaque`, `#withoutALabelThePlaqueHasTheSeasonAndCredit`, `#addIsRefusedWithEachReason`, `#removeGivesTheItemBackOrKeepsItWhileTheInventoryIsFull` |
+| `/museum add` exactly once after a crash at `MUSEUM_STORED` (the op keeps it) and at `MUSEUM_TAKEN` (the museum has it) | `m4-museum-crash-stored.mjs`, `m4-museum-crash-taken.mjs` (two sessions each); unit: `MuseumTest#aCrashBeforeTheItemIsTakenLeavesItWithTheOp`, `#aCrashAfterTheItemIsTakenLeavesItInTheMuseum` |
+
+Built: `DragonState` in `season.json` (the fight's tally, the season's first kill and where its egg went, a flag reset waiting for the End); `dragon/Dragon`, which clears the flag at launch with `dragon.newEggEachSeason`, tracks damage, chooses the slayer, runs the fanfare and records the dragon slayer first, watches the exit portal for the egg and hands it over through the vault (`EGG_DELIVERED`, then the Returned page under `egg-s<season>`, then the vault's own withdrawal), and finishes a hand-over a crash interrupted; `Vault#deliver` and references on the Returned page; on Paper `PaperDragonEvents` (damage by causing player, the death's final blow, the End loading) and the egg on `PaperDragonFight`. The museum: egg plinths (`egg: <season>`) in gallery files and their rules; `MuseumFiles` (`museum.yml`, `data/museum/`); `Museum` with `/museum add|remove` as journalled transactions (`MUSEUM_STARTED`, `MUSEUM_DONE`) and their recovery, plinth plans drawn by reconciliation, and the egg wall at season end; the end dry run's egg plinth warning; `Inventories#isArchived`. The test plugin gains `/scenario dragon info|respawn|hurt|crystal`, four crash points and `returned=` on the record line (ADR 0003); the dragon scenarios are the suite's first isolated ones. Decisions: `docs/questions.md` 178 to 194.
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
 
 | Item | Milestone | Why then |
 | --- | --- | --- |
-| The dragon egg to the slayer with a fanfare, the dragon slayer first, `dragon.newEggEachSeason` and `eggTo`, the dragon flag reset at launch, `EGG_DELIVERED` | M4 | Milestone list ("dragon egg to the slayer with fanfare"); questions 27, 55; A37 to A39 |
-| The museum and the egg wall: `/museum add\|remove`, `museum.yml` and `data/museum/`, the end dry run's egg plinth check | M4 | Milestone list ("the egg wall", "the museum") |
+| The dragon credit on the season card, the dragon slayer award, the `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
 | Awards, on the plaque's trophies and in the archive record | M4 | Milestone list; the award list is still an open decision |
-| Curation: `/hof curate`, `/hof curate undo`, the `seasons.curate.*` nodes, `CURATE_STARTED` and `CURATE_DONE`, curator returns to the vault's Returned page, recovering `--force` displaced items | M4 | Milestone list ("curation"); questions 4, 23 |
-| Discord posts for the season end, launch, awards and the dragon slayer; the admin webhook, tripwire hits included | M4 | Milestone list ("Discord webhooks"); questions 14, 28 |
+| Curation: `/hof curate`, `/hof curate undo`, the `seasons.curate.*` nodes, `CURATE_STARTED` and `CURATE_DONE`, curator returns to the vault's Returned page, the curator's museum action, recovering `--force` displaced items | M4 | Milestone list ("curation"); questions 4, 23, 194 |
+| Discord posts for the season end, launch and awards; the admin webhook, tripwire hits included | M4 | Milestone list ("Discord webhooks"); questions 14, 28 |
 | The wand (`/hof wand`, anchors and bounds by click, `/season zone add <id> box` and `outside box` with no corners) | M5 | Milestone list ("wand"); questions 92, 156 |
 | Templates and `/hof stamp`, the `alcove` and `plinth` templates in the jar, `templates/` | M5 | Milestone list ("templates and stamping") |
 | bStats, with a plugin id per jar | M6 | Question 3 |
