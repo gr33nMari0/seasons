@@ -92,6 +92,12 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
             LifecycleEvents.COMMANDS,
             event ->
                 event.registrar().register("scenario", "Scenario hooks (docs/adr/0003)", commands));
+    // A save point writes every world to disk at once, as the vanilla command does.
+    commands
+        .hooks()
+        .ifPresent(hooks ->
+            hooks.onSave(() ->
+                getServer().dispatchCommand(getServer().getConsoleSender(), "save-all flush")));
     commands
         .hooks()
         .ifPresent(hooks ->

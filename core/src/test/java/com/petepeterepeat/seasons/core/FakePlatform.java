@@ -162,6 +162,11 @@ public final class FakePlatform {
   public @Nullable HallGuard guard;
   public com.petepeterepeat.seasons.core.port.@Nullable ZoneGuard zoneGuard;
 
+  /** What each text display says and each item display shows, by display id. */
+  public final Map<java.util.UUID, Message> texts = new HashMap<>();
+
+  public final Map<java.util.UUID, NeutralItem> items = new HashMap<>();
+
   /** Fireworks set off at positions, such as Homecoming's at the spawn. */
   public final List<Position> fireworks = new ArrayList<>();
 
@@ -215,6 +220,33 @@ public final class FakePlatform {
   }
 
   public boolean dragonKilled = true;
+
+  /** Items a test says carry the {@code seasons:archived} tag. */
+  public final Set<NeutralItem> archivedItems = new java.util.HashSet<>();
+
+  /** Whether the End is loaded, with a dragon fight to set the flag on. */
+  public boolean endLoaded = true;
+
+  /** The exit portal, and the dragon eggs standing on top of it. */
+  public static final Position EXIT_PORTAL = Position.of("minecraft:the_end", 0, 65, 0);
+
+  public final List<Position> eggs = new ArrayList<>();
+  public final List<Position> eggsRemoved = new ArrayList<>();
+
+  /** Whether Seasons has frozen the egg on the portal, so nobody can move it. */
+  public boolean eggGuarded;
+
+  /** Runs once, just before Seasons next takes an egg off the portal. */
+  public @Nullable Runnable beforeEggRemoved;
+
+  public com.petepeterepeat.seasons.core.port.@Nullable DragonEvents dragonEvents;
+
+  /** Puts a dragon egg on top of the exit portal, as the game does after a kill, and returns it. */
+  public Position dropEgg() {
+    Position at = Position.of("minecraft:the_end", 0, 69 + eggs.size(), 0);
+    eggs.add(at);
+    return at;
+  }
 
   /** What one fake player carries and has done. */
   public static final class FakePlayer {
@@ -574,6 +606,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean isArchived(NeutralItem item) {
+            return archivedItems.contains(item);
+          }
+
+          @Override
           public List<String> purgeArchived(PlayerId player) {
             return List.of();
           }
@@ -815,12 +852,19 @@ public final class FakePlatform {
           public void pets(com.petepeterepeat.seasons.core.port.PetEvents p) {
             petEvents = p;
           }
+
+          @Override
+          public void dragon(com.petepeterepeat.seasons.core.port.DragonEvents d) {
+            dragonEvents = d;
+          }
         };
     Displays shownDisplays =
         new Displays() {
           @Override
           public java.util.UUID spawnText(Position position, Message text, String tag) {
-            return add(new Drawn(tag, position, List.of(), "text"));
+            java.util.UUID id = add(new Drawn(tag, position, List.of(), "text"));
+            texts.put(id, text);
+            return id;
           }
 
           @Override
@@ -832,7 +876,9 @@ public final class FakePlatform {
 
           @Override
           public java.util.UUID spawnItem(Position position, NeutralItem item, String tag) {
-            return add(new Drawn(tag, position, List.of(), "item"));
+            java.util.UUID id = add(new Drawn(tag, position, List.of(), "item"));
+            items.put(id, item);
+            return id;
           }
 
           private java.util.UUID add(Drawn shown) {
@@ -886,13 +932,50 @@ public final class FakePlatform {
     DragonFight dragon =
         new DragonFight() {
           @Override
-          public void setPreviouslyKilled(boolean previouslyKilled) {
-            dragonKilled = previouslyKilled;
+          public boolean setPreviouslyKilled(boolean previouslyKilled) {
+            if (endLoaded) {
+              dragonKilled = previouslyKilled;
+            }
+            return endLoaded;
+          }
+
+          @Override
+          public boolean previouslyKilled() {
+            return endLoaded && dragonKilled;
           }
 
           @Override
           public Optional<Position> exitPortal() {
-            return Optional.empty();
+            return Optional.of(EXIT_PORTAL);
+          }
+
+          @Override
+          public Optional<Position> eggOnPortal() {
+            return eggs.isEmpty() ? Optional.empty() : Optional.of(eggs.getLast());
+          }
+
+          @Override
+          public boolean removeEgg(Position at) {
+            Runnable first = beforeEggRemoved;
+            if (first != null) {
+              beforeEggRemoved = null;
+              first.run();
+            }
+            boolean removed = eggs.remove(at);
+            if (removed) {
+              eggsRemoved.add(at);
+            }
+            return removed;
+          }
+
+          @Override
+          public void guardEgg(boolean guarded) {
+            eggGuarded = guarded;
+          }
+
+          @Override
+          public NeutralItem eggItem() {
+            return FakeItems.item("minecraft:dragon_egg", 1);
           }
         };
     Statistics statistics =

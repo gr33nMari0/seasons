@@ -215,6 +215,11 @@ final class PaperInventories implements Inventories {
     return dataVersion;
   }
 
+  @Override
+  public boolean isArchived(NeutralItem item) {
+    return isArchived(codec.decode(item));
+  }
+
   /** Whether a stack carries the tag every archive-view copy has. */
   boolean isArchived(@Nullable ItemStack stack) {
     return stack != null && !stack.isEmpty() && stack.getPersistentDataContainer().has(archivedKey);

@@ -85,6 +85,7 @@ public final class SeasonService {
   private Optional<SeasonState> state = Optional.empty();
   private Optional<String> loadError = Optional.empty();
   private CompletableFuture<Void> lastSave = CompletableFuture.completedFuture(null);
+  private final List<java.util.function.IntConsumer> endingListeners = new java.util.ArrayList<>();
   private Instant startedAt;
   private @Nullable ProgressBar bar;
   private @Nullable ScheduledTask ticker;
@@ -317,12 +318,21 @@ public final class SeasonService {
     }
   }
 
+  /**
+   * Hears that a season's end sequence has started, its countdown over, such as the museum drawing
+   * the season's dragon egg. Heard again if a restart resumes the sequence.
+   */
+  public void onEnding(java.util.function.IntConsumer listener) {
+    endingListeners.add(listener);
+  }
+
   /** Online players are archived, then the season moves to the Intermission. */
   private void runEndSequence() {
     if (state.isEmpty() || !(state.get().phase() instanceof Archiving)) {
       return;
     }
     int season = state.get().season();
+    endingListeners.forEach(listener -> listener.accept(season));
     List<PlayerId> online = players.online().stream().map(PlayerRef::id).toList();
     var _ =
         archiver
@@ -385,6 +395,14 @@ public final class SeasonService {
   /** Changes what the zones remember, and saves it. Nothing happens before {@code /season init}. */
   public void updateZones(java.util.function.UnaryOperator<ZoneState> change) {
     state.ifPresent(current -> update(current.withZones(change.apply(current.zones()))));
+  }
+
+  /**
+   * Changes what the season remembers of the dragon, and saves it. Nothing happens before {@code
+   * /season init}.
+   */
+  public void updateDragon(java.util.function.UnaryOperator<DragonState> change) {
+    state.ifPresent(current -> update(current.withDragon(change.apply(current.dragon()))));
   }
 
   /**

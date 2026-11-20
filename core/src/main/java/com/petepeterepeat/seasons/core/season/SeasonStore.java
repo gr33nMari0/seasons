@@ -6,6 +6,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import com.petepeterepeat.seasons.core.config.Durations;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.port.PlayerId;
+import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.Phase.Active;
 import com.petepeterepeat.seasons.core.season.Phase.Archiving;
 import com.petepeterepeat.seasons.core.season.Phase.Countdown;
@@ -129,6 +130,7 @@ public final class SeasonStore {
       node.node("zones", "reachedEnd")
           .setList(
               String.class, zones.reachedEnd().stream().map(PlayerId::toString).sorted().toList());
+      dragon(node.node("dragon"), state.dragon());
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -187,7 +189,92 @@ public final class SeasonStore {
         node.node("launchApplied").getBoolean(true),
         decorating(node.node("decorating")),
         firsts(node.node("firsts")),
-        zones(node.node("zones")));
+        zones(node.node("zones")),
+        dragon(node.node("dragon")));
+  }
+
+  private static void dragon(ConfigurationNode node, DragonState dragon)
+      throws SerializationException {
+    node.node("flagPending").set(dragon.flagPending());
+    if (dragon.fight().isPresent()) {
+      DragonState.Fight fight = dragon.fight().get();
+      node.node("fight", "dragon").set(fight.dragon().toString());
+      for (DragonState.Dealt dealt : fight.dealt()) {
+        ConfigurationNode entry = node.node("fight", "dealt").appendListNode();
+        entry.node("player").set(dealt.player().toString());
+        entry.node("amount").set(dealt.amount());
+      }
+    }
+    if (dragon.kill().isPresent()) {
+      DragonState.Kill kill = dragon.kill().get();
+      ConfigurationNode at = node.node("kill");
+      if (kill.slayer().isPresent()) {
+        at.node("slayer").set(kill.slayer().get().toString());
+      }
+      at.node("name").set(kill.name());
+      at.node("at").set(kill.at().toString());
+      at.node("egg").set(kill.egg().name().toLowerCase(Locale.ROOT));
+      setBlock(at, "eggBefore", kill.eggBefore());
+      setBlock(at, "eggAt", kill.eggAt());
+    }
+  }
+
+  private static DragonState dragon(ConfigurationNode node) throws IOException {
+    try {
+      Optional<DragonState.Fight> fight = Optional.empty();
+      if (!node.node("fight").virtual()) {
+        List<DragonState.Dealt> dealt = new java.util.ArrayList<>();
+        for (ConfigurationNode entry : node.node("fight", "dealt").childrenList()) {
+          dealt.add(
+              new DragonState.Dealt(
+                  new PlayerId(UUID.fromString(entry.node("player").getString(""))),
+                  entry.node("amount").getDouble()));
+        }
+        fight =
+            Optional.of(
+                new DragonState.Fight(
+                    UUID.fromString(node.node("fight", "dragon").getString("")), dealt));
+      }
+      Optional<DragonState.Kill> kill = Optional.empty();
+      if (!node.node("kill").virtual()) {
+        ConfigurationNode at = node.node("kill");
+        kill =
+            Optional.of(
+                new DragonState.Kill(
+                    optional(at.node("slayer"), text -> new PlayerId(UUID.fromString(text))),
+                    at.node("name").getString(""),
+                    instant(at.node("at")),
+                    DragonState.Egg.valueOf(
+                        at.node("egg").getString("none").toUpperCase(Locale.ROOT)),
+                    block(at.node("eggBefore")),
+                    block(at.node("eggAt"))));
+      }
+      return new DragonState(fight, kill, node.node("flagPending").getBoolean(false));
+    } catch (IllegalArgumentException e) {
+      throw new IOException("season.json has a damaged dragon", e);
+    }
+  }
+
+  /** A block position as {@code [dimension, x, y, z]}. */
+  private static void setBlock(ConfigurationNode node, String key, Optional<Position> block)
+      throws SerializationException {
+    if (block.isPresent()) {
+      Position at = block.get();
+      node.node(key, "dimension").set(at.dimension());
+      node.node(key, "pos").setList(Integer.class, List.of(at.blockX(), at.blockY(), at.blockZ()));
+    }
+  }
+
+  private static Optional<Position> block(ConfigurationNode node) throws SerializationException {
+    if (node.virtual()) {
+      return Optional.empty();
+    }
+    List<Integer> pos = node.node("pos").getList(Integer.class, List.of());
+    if (pos.size() != 3) {
+      throw new IllegalArgumentException("a block position needs x, y and z");
+    }
+    return Optional.of(
+        Position.of(node.node("dimension").getString(""), pos.get(0), pos.get(1), pos.get(2)));
   }
 
   private static ZoneState zones(ConfigurationNode node) throws IOException {

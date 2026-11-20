@@ -5,6 +5,7 @@ import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
+import com.petepeterepeat.seasons.core.port.DragonEvents;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Milestones;
@@ -118,6 +119,7 @@ final class PaperEvents implements Events, Listener {
   private final PaperEntities entities;
   private final PaperHallGuard hallGuard;
   private final PaperZoneGuard zoneGuard;
+  private final PaperDragonEvents dragonEvents = new PaperDragonEvents();
   private @Nullable Milestones milestones;
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
@@ -180,6 +182,16 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void pets(PetEvents pets) {
     entities.listen(pets);
+  }
+
+  /** The End's dragons, a listener of its own. */
+  PaperDragonEvents dragonEvents() {
+    return dragonEvents;
+  }
+
+  @Override
+  public void dragon(DragonEvents dragon) {
+    dragonEvents.listen(dragon);
   }
 
   /** An ender dragon's death can unlock zones or bring Homecoming. */

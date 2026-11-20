@@ -78,6 +78,8 @@ import org.bukkit.util.Vector;
  *
  * <ul>
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
+ *   <li>{@code save-at <POINT> <player>} saves every world to disk when they reach that step,
+ *       without stopping, so a later crash point finds the world as it was there
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
@@ -136,6 +138,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code leash <tag> <holder tag>} puts an animal on a lead held by another entity
  *   <li>{@code forget-pet <tag>} takes Seasons' mark off a registered pet, so it can go unnoticed,
  *       as when its chunks are regenerated
+ *   <li>{@code dragon info|respawn|hurt|crystal ...} plays the End's dragon fight; see {@link
+ *       ScenarioDragon}
  *   <li>{@code reset} resets a shared scenario server to a fresh boot and reports any leak; the
  *       runner asks for this itself between scenarios, so this is for trying it by hand
  *   <li>{@code clock [+<duration>]} prints Seasons' time, after moving it forward by a duration
@@ -182,6 +186,11 @@ final class ScenarioCommands implements BasicCommand, Listener {
           CrashPoint point = CrashPoint.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_'));
           hooks.arm(point, id(args[2]));
           sender.sendMessage("Armed crash point " + point + " for " + args[2]);
+        }
+        case "save-at" -> {
+          CrashPoint point = CrashPoint.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_'));
+          hooks.armSave(point, id(args[2]));
+          sender.sendMessage("Armed save point " + point + " for " + args[2]);
         }
         case "archive" -> {
           var _ =
@@ -263,6 +272,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "chest" -> chest(sender, args);
         case "leash" -> leash(sender, args);
         case "forget-pet" -> forgetPet(sender, args);
+        case "dragon" -> ScenarioDragon.run(plugin, sender, args);
         case "reset" -> {
           var _ =
               reset
@@ -291,10 +301,10 @@ final class ScenarioCommands implements BasicCommand, Listener {
         }
         default ->
             sender.sendMessage(
-                "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
+                "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
                     + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
-                    + "|reset|clock|sync|bluemap ...");
+                    + "|dragon|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);

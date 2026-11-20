@@ -43,6 +43,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
   private final BiPredicate<PlayerId, Integer> unsettled;
 
   private final Optional<Journal> journal;
+  private final Runnable dragonFlag;
   private final Executor serverThread;
 
   public LaunchSequence(
@@ -52,7 +53,8 @@ public final class LaunchSequence implements SeasonService.Launcher {
       SeasonEntry entry,
       Supplier<Set<PlayerId>> busy,
       BiPredicate<PlayerId, Integer> unsettled,
-      Optional<Journal> journal) {
+      Optional<Journal> journal,
+      Runnable dragonFlag) {
     this.platform = platform;
     this.config = config;
     this.announcer = announcer;
@@ -60,6 +62,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
     this.busy = busy;
     this.unsettled = unsettled;
     this.journal = journal;
+    this.dragonFlag = dragonFlag;
     this.serverThread = platform.scheduler()::runGlobal;
   }
 
@@ -97,7 +100,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
             .spawn(season)
             .orElseThrow(() -> new IllegalStateException("Season " + season + " has no spawn"));
     platform.world().setSpawn(spawn);
-    platform.dragonFight().setPreviouslyKilled(false);
+    dragonFlag.run();
     platform
         .players()
         .deathsObjective(

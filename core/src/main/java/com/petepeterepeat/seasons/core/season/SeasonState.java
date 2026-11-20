@@ -28,6 +28,7 @@ import java.util.Set;
  *     cards read earlier seasons' from here after launch
  * @param zones this season's zones unlocked or locked one at a time, and the milestones their
  *     conditions wait for
+ * @param dragon this season's dragon fight, its first kill and where its egg went
  */
 public record SeasonState(
     int season,
@@ -43,7 +44,8 @@ public record SeasonState(
     boolean launchApplied,
     Decorating decorating,
     List<SeasonFirst> firsts,
-    ZoneState zones) {
+    ZoneState zones,
+    DragonState dragon) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
     firsts = List.copyOf(firsts);
@@ -65,7 +67,8 @@ public record SeasonState(
         launchedAt.isEmpty(),
         Decorating.NONE,
         List.of(),
-        ZoneState.NONE);
+        ZoneState.NONE,
+        DragonState.NONE);
   }
 
   /** The state {@code /season init} records. */
@@ -85,7 +88,8 @@ public record SeasonState(
         true,
         Decorating.NONE,
         List.of(),
-        ZoneState.NONE);
+        ZoneState.NONE,
+        DragonState.NONE);
   }
 
   /** A season launched from this one's Intermission, keeping what it needs to remember. */
@@ -105,7 +109,8 @@ public record SeasonState(
         false,
         Decorating.NONE,
         firsts,
-        ZoneState.NONE);
+        ZoneState.NONE,
+        DragonState.NONE);
   }
 
   public SeasonState withLaunchApplied() {
@@ -123,7 +128,8 @@ public record SeasonState(
         true,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -141,7 +147,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -160,7 +167,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -178,7 +186,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -196,7 +205,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -214,7 +224,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -232,7 +243,8 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withDecorating(Decorating next) {
@@ -250,7 +262,8 @@ public record SeasonState(
         launchApplied,
         next,
         firsts,
-        zones);
+        zones,
+        dragon);
   }
 
   public SeasonState withZones(ZoneState next) {
@@ -268,6 +281,26 @@ public record SeasonState(
         launchApplied,
         decorating,
         firsts,
+        next,
+        dragon);
+  }
+
+  public SeasonState withDragon(DragonState next) {
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        launchApplied,
+        decorating,
+        firsts,
+        zones,
         next);
   }
 
@@ -299,6 +332,7 @@ public record SeasonState(
         launchApplied,
         decorating,
         next,
-        zones);
+        zones,
+        dragon);
   }
 }

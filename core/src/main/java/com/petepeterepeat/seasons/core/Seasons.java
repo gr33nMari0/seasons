@@ -18,6 +18,7 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.dragon.Dragon;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
@@ -31,6 +32,8 @@ import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.Museum;
+import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
@@ -109,6 +112,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Tripwire tripwire;
   private @Nullable FirstsTracker firsts;
   private @Nullable Pets pets;
+  private @Nullable Dragon dragon;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -224,8 +228,20 @@ public final class Seasons implements SeasonsApi {
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
+    Museum museum =
+        new Museum(
+            platform,
+            config,
+            halls,
+            new MuseumFiles(world.resolve("museum.yml"), world.resolve("data/museum")),
+            writer,
+            Optional.ofNullable(journal),
+            hold,
+            audit,
+            crash,
+            clock);
     Reconciler reconciling =
-        new Reconciler(platform, halls, renderer, archives, writer, audit, nanoTime);
+        new Reconciler(platform, halls, renderer, archives, writer, audit, museum, nanoTime);
     reconciler = reconciling;
     HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
@@ -257,6 +273,7 @@ public final class Seasons implements SeasonsApi {
           new Vault(
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      replay.register(Operation.MUSEUM, museum.recovery());
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
@@ -267,6 +284,19 @@ public final class Seasons implements SeasonsApi {
       gates = new Gates(platform, config, halls, journal, audit, crash, announcer);
     }
 
+    Dragon fight =
+        new Dragon(
+            platform,
+            config,
+            announcer,
+            audit,
+            Optional.ofNullable(journal),
+            vault,
+            vaults,
+            writer,
+            crash,
+            clock);
+    dragon = fight;
     LaunchSequence launch =
         new LaunchSequence(
             platform,
@@ -275,7 +305,8 @@ public final class Seasons implements SeasonsApi {
             entry,
             hold::held,
             unsettled(players, recovery),
-            Optional.ofNullable(journal));
+            Optional.ofNullable(journal),
+            fight::launched);
     SeasonService seasons =
         new SeasonService(
             platform.players(),
@@ -304,7 +335,11 @@ public final class Seasons implements SeasonsApi {
     zones = zoning;
     zoning.bind(seasons);
     pets.bind(seasons::state, zoning::decide);
+    fight.bind(seasons);
+    museum.bind(seasons::state, reconciling);
+    seasons.onEnding(museum::seasonEnded);
     seasons.start();
+    fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);
     halls.start();
     if (gates != null) {
@@ -436,7 +471,9 @@ public final class Seasons implements SeasonsApi {
             List.of("halloffame"));
     vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
     platform.commands().register(pets.command(), List.of());
+    platform.commands().register(museum.command(), List.of());
     platform.events().pets(pets);
+    platform.events().dragon(fight);
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
 
     if (hooks.isPresent() && recovery.isPresent()) {
@@ -586,6 +623,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (pets != null) {
       pets.stop();
+    }
+    if (dragon != null) {
+      dragon.stop();
     }
     if (flusher != null) {
       flusher.cancel();

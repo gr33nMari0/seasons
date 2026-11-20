@@ -22,15 +22,20 @@ public enum Operation {
    * One item taken out of an ender vault: removed from the vault file, then given; the season is
    * the vault page's, 0 for the Returned page.
    */
-  VAULT_WITHDRAW(JournalKind.VAULT_WITHDRAW, JournalKind.VAULT_WITHDRAW_DONE);
+  VAULT_WITHDRAW(JournalKind.VAULT_WITHDRAW, JournalKind.VAULT_WITHDRAW_DONE),
+  /**
+   * {@code /museum add} or {@code remove}: an item moved between an op and a museum plinth; the
+   * season is the one being played then.
+   */
+  MUSEUM(JournalKind.MUSEUM_STARTED, JournalKind.MUSEUM_DONE);
 
   /**
-   * What tells two of this operation for the same player and season apart: a vault withdrawal's id,
-   * the start of each of its entries' payload, since a player makes many withdrawals from one page;
-   * empty for the rest, which run once per player and season.
+   * What tells two of this operation for the same player and season apart: a vault withdrawal's or
+   * museum change's id, the start of each of its entries' payload, since a player makes many of
+   * them; empty for the rest, which run once per player and season.
    */
   public String instance(JournalEntry entry) {
-    return this == VAULT_WITHDRAW ? entry.payloadHash().split("/", 2)[0] : "";
+    return this == VAULT_WITHDRAW || this == MUSEUM ? entry.payloadHash().split("/", 2)[0] : "";
   }
 
   private final JournalKind started;
@@ -60,6 +65,7 @@ public enum Operation {
       case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);
       case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
       case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
+      case MUSEUM_STARTED, MUSEUM_DONE -> Optional.of(MUSEUM);
       case EGG_DELIVERED, PET_TRAVELLED, GATE_SET -> Optional.empty();
     };
   }
