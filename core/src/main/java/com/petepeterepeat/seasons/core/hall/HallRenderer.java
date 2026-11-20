@@ -13,6 +13,8 @@ import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.season.Awards;
+import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -159,23 +161,39 @@ public final class HallRenderer implements DisplayRenderer {
                         new DisplayTag(gallery, cell, season, DisplayTag.FIGURE).toString(),
                         stand ? Figure.Kind.ARMOUR_STAND : Figure.Kind.MANNEQUIN,
                         stand ? Optional.empty() : ref.cell().pose()))));
-    if (helmet.isPresent()) {
-      List<Position> frames =
-          archive
-              .imported()
-              .map(i -> i.frames().stream().map(ImportedCell.Frame::at).toList())
-              .orElse(List.of());
-      Optional<Anchor> free =
-          ref.cell().anchors(AnchorType.TROPHY).stream()
-              .filter(trophy -> frames.stream().noneMatch(trophy::isAt))
-              .findFirst();
-      NeutralItem worn = helmet.get();
-      free.ifPresent(trophy ->
-          planned.add(
-              new Planned.Item(
-                  above(trophy.at(), 0.5),
-                  worn,
-                  new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString())));
+    List<Position> framed =
+        archive
+            .imported()
+            .map(i -> i.frames().stream().map(ImportedCell.Frame::at).toList())
+            .orElse(List.of());
+    // Trophy anchors an import's frames don't hold: the helmet first, then the awards.
+    List<Anchor> free =
+        new ArrayList<>(
+            ref.cell().anchors(AnchorType.TROPHY).stream()
+                .filter(trophy -> framed.stream().noneMatch(trophy::isAt))
+                .toList());
+    if (helmet.isPresent() && !free.isEmpty()) {
+      planned.add(
+          new Planned.Item(
+              above(free.removeFirst().at(), 0.5),
+              helmet.get(),
+              new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString()));
+    }
+    List<SeasonAwards.Award> won =
+        hall.seasonState()
+            .flatMap(s -> s.awards(season))
+            .map(a -> a.wonBy(archive.player()))
+            .orElse(List.of());
+    // One trophy per award, while free anchors last (questions 202).
+    for (int i = 0; i < Math.min(won.size(), free.size()); i++) {
+      Optional<NeutralItem> trophy = trophyItem(won.get(i).id());
+      if (trophy.isPresent()) {
+        planned.add(
+            new Planned.Item(
+                above(free.get(i).at(), 0.5),
+                trophy.get(),
+                new DisplayTag(gallery, cell, season, DisplayTag.TROPHY).toString()));
+      }
     }
     ref.cell()
         .anchor(AnchorType.PLAQUE)
@@ -183,7 +201,7 @@ public final class HallRenderer implements DisplayRenderer {
             planned.add(
                 new Planned.Text(
                     above(anchor.at(), PLAQUE_HEIGHT),
-                    plaque(messages, archive),
+                    plaque(messages, archive, won),
                     new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString())));
     if (archive.imported().isPresent()) {
       List<ImportedCell.Frame> frames = new ArrayList<>(archive.imported().get().frames());
@@ -210,6 +228,26 @@ public final class HallRenderer implements DisplayRenderer {
       case Planned.Text text -> platform.displays().spawnText(text.at(), text.text(), text.tag());
       case Planned.Item item -> platform.displays().spawnItem(item.at(), item.item(), item.tag());
     };
+  }
+
+  /** An award's trophy: the item config.yml names for it now. */
+  private Optional<NeutralItem> trophyItem(String award) {
+    return Optional.ofNullable(config.get().config().awards().get(award))
+        .flatMap(a -> Optional.ofNullable(a.item()))
+        .flatMap(id -> platform.world().item(id.indexOf(':') < 0 ? "minecraft:" + id : id));
+  }
+
+  private static Message plaque(
+      Messages messages, ArchiveRecord archive, List<SeasonAwards.Award> won) {
+    Message plaque = plaque(messages, archive);
+    if (won.isEmpty()) {
+      return plaque;
+    }
+    String names =
+        String.join(
+            messages.text("hof.award-separator"),
+            won.stream().map(a -> Awards.name(messages, a.id())).toList());
+    return Message.lines(List.of(plaque, messages.get("hof.plaque-awards", "awards", names)));
   }
 
   private static Message plaque(Messages messages, ArchiveRecord archive) {

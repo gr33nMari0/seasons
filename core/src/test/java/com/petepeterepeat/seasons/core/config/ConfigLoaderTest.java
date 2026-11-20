@@ -240,7 +240,8 @@ class ConfigLoaderTest {
                 "award ids are lower-case letters, digits and dashes, such as most-deaths"),
             org.assertj.core.groups.Tuple.tuple(Optional.of("awards.no-item.item"), "is missing"),
             org.assertj.core.groups.Tuple.tuple(
-                Optional.of("awards.bad-item.item"), "not_a_thing isn't an item this server knows"));
+                Optional.of("awards.bad-item.item"),
+                "not_a_thing isn't an item this server knows"));
     assertThat(bad.warnings()).contains("config.yml: unknown key awards.odd.colour is ignored");
   }
 

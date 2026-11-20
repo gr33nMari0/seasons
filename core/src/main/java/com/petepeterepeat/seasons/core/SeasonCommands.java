@@ -37,6 +37,7 @@ import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.Phase;
@@ -384,9 +385,9 @@ final class SeasonCommands {
     List<SeasonFirst> firsts = current.map(s -> s.firsts(s.season())).orElse(List.of());
     if (firsts.isEmpty()) {
       source.reply(messages.get("firsts.none", "season", season()));
-      return;
+    } else {
+      source.reply(messages.get("firsts.header", "season", season()));
     }
-    source.reply(messages.get("firsts.header", "season", season()));
     for (SeasonFirst first : firsts) {
       source.reply(
           messages.get(
@@ -398,6 +399,10 @@ final class SeasonCommands {
               "time",
               HumanTime.time(first.at().atZone(ZoneId.systemDefault()))));
     }
+    // Once the Intermission has worked them out, the season's awards.
+    current
+        .flatMap(s -> s.awards(s.season()))
+        .ifPresent(awards -> Awards.lines(messages, awards).forEach(source::reply));
   }
 
   /** A gallery left out at startup, for /season status and admins as they join. */

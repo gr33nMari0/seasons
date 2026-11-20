@@ -195,6 +195,8 @@ decorate:
   locked: "<yellow>Your cell is locked.</yellow>"
 
 hof:
+  plaque-awards: "<gold><awards></gold>"
+  award-separator: " · "
   locked: "<gold>The Season <season> galleries are locked.</gold>"
   assigned: "<gold>Your Hall of Fame cell for Season <season> is <cell> in <gallery>.</gold>"
   no-build: "<red>You can't build here.</red>"
@@ -368,6 +370,31 @@ firsts:
     end: "reached the End"
     item: "found <subject>"
     dragon: "slew the ender dragon"
+  recap-none: "<gray>No season firsts in Season <season>.</gray>"
+  recap-line: "<yellow><name></yellow> <what>"
+  recap-count: "<yellow><name></yellow> was first to <what>."
+  count:
+    advancement: "<n> advancement"
+    advancements: "<n> advancements"
+    item: "<n> item"
+    items: "<n> items"
+
+awards:
+  heading: "<gold>Season <season> awards:</gold>"
+  none: "<gray>No awards in Season <season>.</gray>"
+  line: "<yellow><award></yellow>: <winners> <gray>(<value>)</gray>"
+  line-plain: "<yellow><award></yellow>: <winners>"
+  and: " and "
+  comma: ", "
+  # Each award's name, by its id in config.yml. An award without one is named after its id.
+  names:
+    most-deaths: "Most deaths"
+    furthest-travelled: "Furthest travelled"
+    most-dedicated: "Most dedicated"
+    deepest-pockets: "Deepest pockets"
+    dragon-slayer: "Dragon slayer"
+    furthest-builder: "Furthest builder"
+    most-advancements: "Most advancements"
 
 museum:
   player-only: "<red>Only a player can move items in and out of the museum.</red>"
@@ -387,6 +414,8 @@ museum:
   plaque: "<label> · Season <season> · <credit>"
   plaque-unlabelled: "Season <season> · <credit>"
   egg-plaque: "Season <season> · slain by <name>"
+  season-plaque: "Season <season>"
+  award-line: "<gray><award>:</gray> <winners>"
 
 dragon:
   title: "<gold>The dragon is slain!</gold>"
@@ -421,6 +450,11 @@ card:
   ended: "Ended at <x>, <y>, <z> in <dimension>"
   firsts: "<dark_aqua><bold>Season firsts</bold></dark_aqua>"
   firsts-none: "<gray>None this season</gray>"
+  awards: "<dark_aqua><bold>Awards</bold></dark_aqua>"
+  awards-none: "<gray>None this season</gray>"
+  award: "<award> (<value>)"
+  award-plain: "<award>"
+  dragon: "Slew the ender dragon"
   general: "<dark_aqua><bold>Statistics</bold></dark_aqua>"
   stat: "<stat>: <value>"
   hours-minutes: "<hours> h <minutes> min"

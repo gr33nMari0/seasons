@@ -29,6 +29,8 @@ import java.util.Set;
  * @param zones this season's zones unlocked or locked one at a time, and the milestones their
  *     conditions wait for
  * @param dragon this season's dragon fight, its first kill and where its egg went
+ * @param awards every season's awards, worked out once as each season's Intermission began; season
+ *     cards, plaques and the museum read earlier seasons' from here after launch
  */
 public record SeasonState(
     int season,
@@ -45,10 +47,12 @@ public record SeasonState(
     Decorating decorating,
     List<SeasonFirst> firsts,
     ZoneState zones,
-    DragonState dragon) {
+    DragonState dragon,
+    List<SeasonAwards> awards) {
   public SeasonState {
     remindersSent = Set.copyOf(remindersSent);
     firsts = List.copyOf(firsts);
+    awards = List.copyOf(awards);
   }
 
   /** A season recorded with {@code /season init} or started at launch. */
@@ -68,7 +72,8 @@ public record SeasonState(
         Decorating.NONE,
         List.of(),
         ZoneState.NONE,
-        DragonState.NONE);
+        DragonState.NONE,
+        List.of());
   }
 
   /** The state {@code /season init} records. */
@@ -89,7 +94,8 @@ public record SeasonState(
         Decorating.NONE,
         List.of(),
         ZoneState.NONE,
-        DragonState.NONE);
+        DragonState.NONE,
+        List.of());
   }
 
   /** A season launched from this one's Intermission, keeping what it needs to remember. */
@@ -110,7 +116,8 @@ public record SeasonState(
         Decorating.NONE,
         firsts,
         ZoneState.NONE,
-        DragonState.NONE);
+        DragonState.NONE,
+        awards);
   }
 
   public SeasonState withLaunchApplied() {
@@ -129,7 +136,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withPhase(Phase next) {
@@ -148,7 +156,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   /** A new planned end, or none: reminders and the automatic end start over. */
@@ -168,7 +177,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withRemindersSent(Set<Duration> sent) {
@@ -187,7 +197,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withAutoEndStarted() {
@@ -206,7 +217,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withHomecoming(Instant at) {
@@ -225,7 +237,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withCountdownInterrupted(Optional<Instant> at) {
@@ -244,7 +257,8 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withDecorating(Decorating next) {
@@ -263,7 +277,8 @@ public record SeasonState(
         next,
         firsts,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withZones(ZoneState next) {
@@ -282,7 +297,8 @@ public record SeasonState(
         decorating,
         firsts,
         next,
-        dragon);
+        dragon,
+        awards);
   }
 
   public SeasonState withDragon(DragonState next) {
@@ -301,6 +317,36 @@ public record SeasonState(
         decorating,
         firsts,
         zones,
+        next,
+        awards);
+  }
+
+  /** A season's awards, once its Intermission has worked them out. */
+  public Optional<SeasonAwards> awards(int season) {
+    return awards.stream().filter(a -> a.season() == season).findFirst();
+  }
+
+  /** The same state with a season's awards, which are worked out once. */
+  public SeasonState withAwards(SeasonAwards worked) {
+    List<SeasonAwards> next = new ArrayList<>(awards);
+    next.removeIf(a -> a.season() == worked.season());
+    next.add(worked);
+    return new SeasonState(
+        season,
+        phase,
+        plannedEnd,
+        plannedEndSetAt,
+        remindersSent,
+        autoEndStarted,
+        launchedAt,
+        homecomingAt,
+        countdownInterrupted,
+        initSeason,
+        launchApplied,
+        decorating,
+        firsts,
+        zones,
+        dragon,
         next);
   }
 
@@ -333,6 +379,7 @@ public record SeasonState(
         decorating,
         next,
         zones,
-        dragon);
+        dragon,
+        awards);
   }
 }

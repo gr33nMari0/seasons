@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.paper;
 
 import com.petepeterepeat.seasons.core.port.BlockInfo;
+import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.World;
 import java.util.List;
@@ -11,6 +12,7 @@ import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
 import org.bukkit.block.TileState;
+import org.bukkit.inventory.ItemStack;
 
 final class PaperWorld implements World {
   @Override
@@ -64,6 +66,14 @@ final class PaperWorld implements World {
   public boolean isItem(String id) {
     Material material = Material.matchMaterial(id);
     return material != null && material.isItem();
+  }
+
+  @Override
+  public Optional<NeutralItem> item(String id) {
+    Material material = Material.matchMaterial(id);
+    return material == null || !material.isItem()
+        ? Optional.empty()
+        : Optional.of(new NeutralItem(ItemStack.of(material).serializeAsBytes()));
   }
 
   @Override

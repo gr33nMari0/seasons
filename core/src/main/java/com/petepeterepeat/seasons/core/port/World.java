@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core.port;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /** Blocks, chunks, dimensions and spawn. */
@@ -24,6 +25,9 @@ public interface World {
 
   /** Whether the game knows an item, such as {@code minecraft:trident}. */
   boolean isItem(String id);
+
+  /** One of an item, such as an award's trophy, if the game knows it. */
+  Optional<NeutralItem> item(String id);
 
   /**
    * Whether the game knows a block that can stand as a cell's gate, such as {@code

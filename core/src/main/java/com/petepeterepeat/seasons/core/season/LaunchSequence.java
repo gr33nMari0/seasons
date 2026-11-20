@@ -91,6 +91,21 @@ public final class LaunchSequence implements SeasonService.Launcher {
     return Optional.empty();
   }
 
+  /**
+   * The season's own deaths objective, made if it is missing, in the slot {@code deaths.display}
+   * names; earlier seasons' objectives are kept, off the screen.
+   */
+  @Override
+  public void showDeaths(SeasonState current) {
+    String number = Integer.toString(current.season());
+    platform
+        .players()
+        .deathsObjective(
+            "seasons_deaths_s" + current.season(),
+            config.get().messages().get("launch.deaths", "season", number),
+            config.get().config().deaths().display());
+  }
+
   @Override
   public CompletableFuture<Void> apply(SeasonState launched) {
     int season = launched.season();
@@ -101,12 +116,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
             .orElseThrow(() -> new IllegalStateException("Season " + season + " has no spawn"));
     platform.world().setSpawn(spawn);
     dragonFlag.run();
-    platform
-        .players()
-        .deathsObjective(
-            "seasons_deaths_s" + season,
-            config.get().messages().get("launch.deaths", "season", number),
-            config.get().config().deaths().display());
+    showDeaths(launched);
     announcer.admins(
         SeasonService.ADMIN_PERMISSION,
         "launch.loading",

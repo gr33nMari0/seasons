@@ -45,6 +45,18 @@ class FiguresTest {
   }
 
   private void start(Capabilities capabilities, String gallery, String cell) throws IOException {
+    start(capabilities, gallery, cell, alex -> {});
+  }
+
+  /**
+   * @param beforeEnd what Alex does in the season before it ends
+   */
+  private void start(
+      Capabilities capabilities,
+      String gallery,
+      String cell,
+      java.util.function.Consumer<PlayerRef> beforeEnd)
+      throws IOException {
     writeGallery(gallery, cell);
     seasons =
         new Seasons(
@@ -62,6 +74,7 @@ class FiguresTest {
     fake.sessions.joined(alex, false);
     fake.player(alex).inventory = FakeItems.gear();
     TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell assign c1 Alex");
+    beforeEnd.accept(alex);
     run("/season end --now");
   }
 
@@ -84,6 +97,7 @@ class FiguresTest {
             anchors:
               - { type: figure, pos: [6, 64, 7] }
               - { type: trophy, pos: [5, 64, 7] }
+              - { type: trophy, pos: [7, 64, 5] }
         """
             .formatted(gallery, cell));
   }
@@ -123,6 +137,43 @@ class FiguresTest {
     assertThat(figure().pose()).contains("crouching");
     assertThat(figure().equipment().getFirst()).isPresent();
     assertThat(drawn("item")).isEmpty();
+  }
+
+  @Test
+  void awardTrophiesTakeAnchorsAfterTheHelmet() throws IOException {
+    start(
+        all(),
+        "renderer: armour-stand",
+        "",
+        alex -> {
+          fake.player(alex).statistics.put("minecraft:deaths", 3L);
+          fake.player(alex).statistics.put("minecraft:play_time", 1_000L);
+        });
+
+    // The helmet takes the first trophy anchor; Most deaths the second; Most dedicated finds none
+    // free, so it is on the plaque and card only (questions 202).
+    List<FakePlatform.Drawn> items = drawn("item");
+    assertThat(items).hasSize(2);
+    assertThat(items)
+        .extracting(d -> List.of(d.at().blockX(), d.at().blockZ()))
+        .containsExactlyInAnyOrder(List.of(5, 7), List.of(7, 5));
+    Map<List<Integer>, String> shown = new java.util.HashMap<>();
+    fake.displays.forEach((id, d) -> {
+      if (d.kind().equals("item")) {
+        shown.put(List.of(d.at().blockX(), d.at().blockZ()), itemId(fake.items.get(id)));
+      }
+    });
+    assertThat(shown).containsEntry(List.of(7, 5), "minecraft:skeleton_skull");
+    assertThat(shown.get(List.of(5, 7))).isEqualTo("minecraft:iron_helmet");
+  }
+
+  private static String itemId(com.petepeterepeat.seasons.core.port.NeutralItem item) {
+    try {
+      return String.valueOf(
+          com.petepeterepeat.seasons.core.store.nbt.Nbt.read(item.nbt()).get("id"));
+    } catch (IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
   }
 
   @Test

@@ -124,6 +124,10 @@ public final class FakePlatform {
   public record Withdraw(PlayerId viewer, PagedView view, int startPage, Menus.Withdrawal taken) {}
 
   public final List<String> objectives = new ArrayList<>();
+
+  /** The objective shown in each display slot, by slot. */
+  public final Map<String, String> shownObjectives = new HashMap<>();
+
   public Position worldSpawn = Position.of("minecraft:overworld", 0, 64, 0);
 
   /** Blocks set by a test; elsewhere stone below y 64 and air from it up. */
@@ -545,7 +549,13 @@ public final class FakePlatform {
 
           @Override
           public void deathsObjective(String name, Message displayName, String slot) {
-            objectives.add(name);
+            if (!objectives.contains(name)) {
+              objectives.add(name);
+            }
+            shownObjectives.values().removeIf(shown -> shown.startsWith("seasons_deaths_"));
+            if (!slot.equals("none")) {
+              shownObjectives.put(slot, name);
+            }
           }
         };
     Inventories inventories =
@@ -696,6 +706,11 @@ public final class FakePlatform {
           @Override
           public boolean isItem(String id) {
             return !id.contains("not_");
+          }
+
+          @Override
+          public Optional<NeutralItem> item(String id) {
+            return isItem(id) ? Optional.of(FakeItems.item(id, 1)) : Optional.empty();
           }
 
           @Override

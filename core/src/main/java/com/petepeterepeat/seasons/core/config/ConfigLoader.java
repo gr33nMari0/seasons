@@ -675,7 +675,9 @@ public final class ConfigLoader {
     if (!SeasonsConfig.Deaths.SLOTS.contains(display)) {
       problems.add(
           ConfigProblem.atPath(
-              CONFIG, "deaths.display", "must be list, sidebar, below_name or none, not " + display));
+              CONFIG,
+              "deaths.display",
+              "must be list, sidebar, below_name or none, not " + display));
     }
     config
         .awards()

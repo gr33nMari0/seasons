@@ -19,8 +19,10 @@ import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.scenario.CrashPoint;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
+import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.Phase;
+import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.store.Journal;
@@ -531,16 +533,28 @@ public final class Museum {
                 : messages.get("museum.plaque-unlabelled", "season", season, "credit", t.credit());
         show(ref, trophy, true, stored.item().get(), plaque, planned);
       } else if (trophy.egg().isPresent()) {
-        Optional<SeasonFirst> slain = slayer(trophy.egg().getAsInt());
+        int season = trophy.egg().getAsInt();
+        Optional<SeasonFirst> slain = slayer(season);
+        List<Message> awards = awardLines(messages, season);
+        Message head =
+            slain
+                .map(s ->
+                    messages.get(
+                        "museum.egg-plaque",
+                        "season",
+                        Integer.toString(s.season()),
+                        "name",
+                        s.name()))
+                .orElseGet(
+                    () -> messages.get("museum.season-plaque", "season", Integer.toString(season)));
+        List<Message> lines = new ArrayList<>(List.of(head));
+        lines.addAll(awards);
+        Message plaque = lines.size() == 1 ? head : Message.lines(lines);
         if (slain.isPresent()) {
-          Message plaque =
-              messages.get(
-                  "museum.egg-plaque",
-                  "season",
-                  Integer.toString(slain.get().season()),
-                  "name",
-                  slain.get().name());
           show(ref, trophy, i == 0, platform.dragonFight().eggItem(), plaque, planned);
+        } else if (!awards.isEmpty()) {
+          // No slayer, so no egg, but the season's plaque still lists its winners (questions 201).
+          plaque(ref, trophy, i == 0, plaque, planned);
         }
       }
     }
@@ -565,6 +579,18 @@ public final class Museum {
             above(trophy.at(), TROPHY_HEIGHT),
             item,
             new DisplayTag(gallery, cell, 0, DisplayTag.TROPHY).toString()));
+    plaque(ref, trophy, first, plaque, planned);
+  }
+
+  /** A trophy anchor's plaque alone, placed as {@link #show} places it. */
+  private static void plaque(
+      HallService.CellRef ref,
+      Anchor trophy,
+      boolean first,
+      Message plaque,
+      List<HallRenderer.Planned> planned) {
+    String gallery = ref.gallery().id();
+    String cell = ref.cell().id();
     Optional<Anchor> plaqueAnchor = first ? ref.cell().anchor(AnchorType.PLAQUE) : Optional.empty();
     Position at =
         plaqueAnchor
@@ -573,6 +599,25 @@ public final class Museum {
     planned.add(
         new HallRenderer.Planned.Text(
             at, plaque, new DisplayTag(gallery, cell, 0, DisplayTag.PLAQUE).toString()));
+  }
+
+  /** A line for each award a season gave, once its Intermission has worked them out. */
+  private List<Message> awardLines(Messages messages, int season) {
+    return state
+        .get()
+        .flatMap(s -> s.awards(season))
+        .map(SeasonAwards::given)
+        .orElse(List.of())
+        .stream()
+        .map(award ->
+            messages.get(
+                "museum.award-line",
+                "award",
+                Awards.name(messages, award.id()),
+                "winners",
+                Awards.names(
+                    messages, award.winners().stream().map(SeasonAwards.Winner::name).toList())))
+        .toList();
   }
 
   /** The slayer of a season that has ended, if it had one. */

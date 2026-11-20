@@ -53,9 +53,11 @@ import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
+import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.LaunchSequence;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
+import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.season.SeasonStore;
@@ -338,6 +340,17 @@ public final class Seasons implements SeasonsApi {
     fight.bind(seasons);
     museum.bind(seasons::state, reconciling);
     seasons.onEnding(museum::seasonEnded);
+    archiver.ifPresent(a -> a.bind(seasons::state));
+    Awards awarding = new Awards(config, archives, writer, seasons, announcer, clock, serverThread);
+    awarding.bind(worked -> {
+      for (SeasonAwards.Award award : worked.awards()) {
+        for (SeasonAwards.Winner winner : award.winners()) {
+          var _ = renderer.render(winner.player(), worked.season());
+        }
+      }
+      museum.seasonEnded(worked.season());
+    });
+    seasons.onIntermission(awarding::intermission);
     seasons.start();
     fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);

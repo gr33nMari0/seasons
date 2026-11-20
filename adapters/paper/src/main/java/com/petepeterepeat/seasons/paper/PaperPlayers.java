@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.port.ProgressBar;
 import com.petepeterepeat.seasons.core.port.ResetPlan;
 import com.petepeterepeat.seasons.core.port.Skin;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -47,6 +48,9 @@ import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.util.Vector;
 
 final class PaperPlayers implements Players {
+  /** The start of every season's deaths objective's name, such as {@code seasons_deaths_s3}. */
+  private static final String DEATHS_PREFIX = "seasons_deaths_";
+
   private final Server server;
   private final PaperText text;
   private final NamespacedKey celebration;
@@ -403,6 +407,15 @@ final class PaperPlayers implements Players {
           case "none" -> null;
           default -> DisplaySlot.PLAYER_LIST;
         };
+    // Off the screen wherever else a Seasons deaths objective shows, this season's included; the
+    // objectives themselves are kept, so history is.
+    for (DisplaySlot other :
+        List.of(DisplaySlot.PLAYER_LIST, DisplaySlot.SIDEBAR, DisplaySlot.BELOW_NAME)) {
+      Objective shown = scoreboard.getObjective(other);
+      if (other != display && shown != null && shown.getName().startsWith(DEATHS_PREFIX)) {
+        scoreboard.clearSlot(other);
+      }
+    }
     if (display != null) {
       objective.setDisplaySlot(display);
     }

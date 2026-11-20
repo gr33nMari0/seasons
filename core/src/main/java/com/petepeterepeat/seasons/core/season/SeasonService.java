@@ -65,6 +65,12 @@ public final class SeasonService {
      * everyone online into the launched season. Harmless to run again after a crash.
      */
     CompletableFuture<Void> apply(SeasonState launched);
+
+    /**
+     * Shows a launched season's deaths objective where {@code deaths.display} now says, such as
+     * after a reload changes it.
+     */
+    default void showDeaths(SeasonState current) {}
   }
 
   private static final Duration TICK = Duration.ofSeconds(1);
@@ -86,6 +92,8 @@ public final class SeasonService {
   private Optional<String> loadError = Optional.empty();
   private CompletableFuture<Void> lastSave = CompletableFuture.completedFuture(null);
   private final List<java.util.function.IntConsumer> endingListeners = new java.util.ArrayList<>();
+  private final List<java.util.function.IntConsumer> intermissionListeners =
+      new java.util.ArrayList<>();
   private Instant startedAt;
   private @Nullable ProgressBar bar;
   private @Nullable ScheduledTask ticker;
@@ -154,6 +162,12 @@ public final class SeasonService {
       if (state.get().phase() instanceof Phase.Active && !state.get().launchApplied()) {
         LOG.warn("Season {} launched but didn't finish; finishing it now", seasonNumber());
         launchAfterSave();
+      }
+      if (state.get().phase() instanceof Phase.Intermission) {
+        int season = state.get().season();
+        // Once everything else has started.
+        scheduler.runGlobal(
+            () -> intermissionListeners.forEach(listener -> listener.accept(season)));
       }
     }
     ticker = scheduler.runGlobalRepeating(TICK, this::tick);
@@ -272,6 +286,10 @@ public final class SeasonService {
   /** After a successful reload, on the server thread. */
   public void reloaded(ConfigSnapshot snapshot) {
     reconcilePlannedEnd(snapshot);
+    // A changed deaths.display moves the season's objective at once.
+    state
+        .filter(s -> s.launchedAt().isPresent() && s.launchApplied())
+        .ifPresent(launcher::showDeaths);
   }
 
   /** Once a second: the countdown, reminders and the automatic end. */
@@ -326,6 +344,14 @@ public final class SeasonService {
     endingListeners.add(listener);
   }
 
+  /**
+   * Hears that a season's Intermission has begun, such as the awards being worked out. Heard again
+   * at startup while the server is in the Intermission, so what a restart cut short is finished.
+   */
+  public void onIntermission(java.util.function.IntConsumer listener) {
+    intermissionListeners.add(listener);
+  }
+
   /** Online players are archived, then the season moves to the Intermission. */
   private void runEndSequence() {
     if (state.isEmpty() || !(state.get().phase() instanceof Archiving)) {
@@ -359,6 +385,7 @@ public final class SeasonService {
                   }
                   if (apply(new AllArchived()) instanceof Changed) {
                     announcer.broadcast("end.intermission", "season", Integer.toString(season));
+                    intermissionListeners.forEach(listener -> listener.accept(season));
                   }
                 },
                 serverThread);
@@ -385,6 +412,11 @@ public final class SeasonService {
   /** Records a season first, and saves it. Nothing happens before {@code /season init}. */
   public void addFirst(SeasonFirst first) {
     state.ifPresent(current -> update(current.withFirst(first)));
+  }
+
+  /** Records a season's awards, and saves them. */
+  public void updateAwards(SeasonAwards awards) {
+    state.ifPresent(current -> update(current.withAwards(awards)));
   }
 
   /** {@code /season unlock homecoming}, or its condition coming true. */

@@ -27,7 +27,9 @@ import com.petepeterepeat.seasons.core.port.ResetPlan;
 import com.petepeterepeat.seasons.core.scenario.CrashPoint;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
+import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonService;
+import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
@@ -112,6 +114,7 @@ public final class Archiver implements RolloverArchiver {
   private final Executor serverThread;
   private final Set<Integer> noCellNoticeSent = new HashSet<>();
   private final JournalRecovery recovery;
+  private Supplier<Optional<SeasonState>> seasonState = Optional::empty;
 
   public Archiver(
       Platform platform,
@@ -145,6 +148,11 @@ public final class Archiver implements RolloverArchiver {
     this.crash = crash;
     this.recovery = recovery;
     this.serverThread = platform.scheduler()::runGlobal;
+  }
+
+  /** The season state, whose firsts and awards each archive copies. */
+  public void bind(Supplier<Optional<SeasonState>> state) {
+    this.seasonState = state;
   }
 
   @Override
@@ -492,10 +500,23 @@ public final class Archiver implements RolloverArchiver {
             platform.players().position(id),
             platform.players().skin(id),
             ArchiveHash.of(inventory, policy != EnderChestPolicy.KEEP));
-    return new Capture(archive, platform.inventories().dataVersion());
+    return new Capture(
+        archive.withHonours(honours(id, season)), platform.inventories().dataVersion());
   }
 
   private record Capture(ArchiveRecord record, int dataVersion) {}
+
+  /** The player's firsts in the season, and the awards they won if the season has them yet. */
+  private ArchiveRecord.Honours honours(PlayerId player, int season) {
+    Optional<SeasonState> state = seasonState.get();
+    return new ArchiveRecord.Honours(
+        state.map(s -> s.firsts(season)).orElse(List.of()).stream()
+            .filter(first -> first.player().equals(player))
+            .toList(),
+        state.flatMap(s -> s.awards(season)).map(a -> a.wonBy(player)).orElse(List.of()).stream()
+            .map(SeasonAwards.Award::id)
+            .toList());
+  }
 
   private Outcome archivedOutcome(PlayerId player, int season) {
     return store.find(player).filter(r -> r.archivedThrough() >= season).isPresent()

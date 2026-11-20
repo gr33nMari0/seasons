@@ -39,6 +39,21 @@ public final class Announcer {
     players.broadcast(messages().get(key, placeholders));
   }
 
+  /** Lines in chat, to everyone online and the console. */
+  public void broadcast(List<Message> lines) {
+    lines.forEach(players::broadcast);
+  }
+
+  /** Lines as one post on the public Discord channel, if a webhook is set. */
+  public void discord(List<Message> lines) {
+    ConfigSnapshot snapshot = config.get();
+    snapshot
+        .secrets()
+        .discordWebhook()
+        .ifPresent(url ->
+            webhooks.post(url, String.join("\n", lines.stream().map(Messages::plain).toList())));
+  }
+
   /** On the public Discord channel, if a webhook is set. */
   public void discord(String key, String... placeholders) {
     ConfigSnapshot snapshot = config.get();

@@ -63,6 +63,12 @@ class MapModelsTest {
         }
 
         @Override
+        public java.util.Optional<com.petepeterepeat.seasons.core.port.NeutralItem> item(
+            String id) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
         public boolean isGateBlock(String id) {
           throw new UnsupportedOperationException();
         }

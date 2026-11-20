@@ -146,6 +146,11 @@ public final class HallService {
     this.decorating = decorating;
   }
 
+  /** The season state, as last bound; empty before {@code /season init}. */
+  public Optional<SeasonState> seasonState() {
+    return state.get();
+  }
+
   /** Connects the launch button to {@code /season launch}, run as the player who pressed it. */
   public void bindLaunch(Consumer<PlayerId> launch) {
     this.launch = launch;
@@ -1067,6 +1072,7 @@ public final class HallService {
                         state.get().map(s -> s.firsts(season)).orElse(List.of()).stream()
                             .filter(first -> first.player().equals(player))
                             .toList(),
+                        state.get().flatMap(s -> s.awards(season)),
                         messages())),
             platform.scheduler()::runGlobal);
   }

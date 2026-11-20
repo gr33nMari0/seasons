@@ -19,4 +19,27 @@ public record Message(String template, Map<String, String> placeholders) {
   public static Message of(String template) {
     return new Message(template, Map.of());
   }
+
+  /**
+   * Several messages as one, each on its own line, such as a plaque with an award line. Each
+   * message's placeholders are renamed apart, so their values can't meet.
+   */
+  public static Message lines(java.util.List<Message> messages) {
+    StringBuilder template = new StringBuilder();
+    Map<String, String> values = new java.util.HashMap<>();
+    for (int i = 0; i < messages.size(); i++) {
+      Message message = messages.get(i);
+      String line = message.template();
+      for (Map.Entry<String, String> placeholder : message.placeholders().entrySet()) {
+        String renamed = "l" + i + "_" + placeholder.getKey();
+        line = line.replace("<" + placeholder.getKey() + ">", "<" + renamed + ">");
+        values.put(renamed, placeholder.getValue());
+      }
+      if (i > 0) {
+        template.append("<newline>");
+      }
+      template.append(line);
+    }
+    return new Message(template.toString(), values);
+  }
 }
