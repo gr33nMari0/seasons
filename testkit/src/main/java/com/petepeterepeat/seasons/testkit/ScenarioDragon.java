@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.testkit;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import org.bukkit.HeightMap;
 import org.bukkit.Location;
@@ -10,6 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.boss.DragonBattle;
 import org.bukkit.command.CommandSender;
 import org.bukkit.damage.DamageSource;
@@ -19,6 +18,9 @@ import org.bukkit.entity.Arrow;
 import org.bukkit.entity.EnderCrystal;
 import org.bukkit.entity.EnderDragon;
 import org.bukkit.entity.Player;
+import org.bukkit.event.entity.EntityPlaceEvent;
+import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.Nullable;
 
@@ -31,8 +33,11 @@ import org.jspecify.annotations.Nullable;
  *   <li>{@code info} prints {@code Dragon alive=… health=… killed=… phase=… portal=… egg=…}: the
  *       fight's dragon, the previously-killed flag, the respawn phase, the exit portal and the
  *       dragon egg on top of it, as positions or {@code none}
- *   <li>{@code respawn} puts four end crystals on the exit portal, as players place them, and
- *       starts the respawn, whatever the previously-killed flag says
+ *   <li>{@code respawn <player>} has the player place four end crystals from their inventory on the
+ *       exit portal, each firing the same {@code EntityPlaceEvent} as the game's own, and asks the
+ *       game to respawn the dragon after each as the end crystal item does ({@code
+ *       DragonBattle#initiateRespawn()}, the game's own check: the dragon is dead and the four
+ *       crystals stand there). The previously-killed flag is left alone
  *   <li>{@code hurt <player> <amount> <melee|arrow>} hurts the dragon by a player's hit, or by an
  *       arrow the player shot
  *   <li>{@code crystal <player>} puts an end crystal by the dragon's head and has the player break
@@ -51,7 +56,7 @@ final class ScenarioDragon {
     }
     switch (args.length > 1 ? args[1] : "") {
       case "info" -> info(sender, end, battle);
-      case "respawn" -> respawn(sender, end, battle);
+      case "respawn" -> respawn(plugin, sender, end, battle, args);
       case "hurt" -> hurt(plugin, sender, battle, args);
       case "crystal" -> crystal(plugin, sender, battle, args);
       default -> sender.sendMessage("Usage: /scenario dragon info|respawn|hurt|crystal ...");
@@ -83,25 +88,39 @@ final class ScenarioDragon {
     return top.getType() == Material.DRAGON_EGG ? describe(top) : "none";
   }
 
-  private static void respawn(CommandSender sender, World end, DragonBattle battle) {
+  private static void respawn(
+      Plugin plugin, CommandSender sender, World end, DragonBattle battle, String[] args) {
     Location portal = battle.getEndPortalLocation();
-    if (portal == null) {
-      sender.sendMessage("Can't respawn: the End has no exit portal");
+    Player player = args.length > 2 ? plugin.getServer().getPlayerExact(args[2]) : null;
+    if (portal == null || player == null) {
+      sender.sendMessage(
+          "Can't respawn: " + (portal == null ? "the End has no exit portal" : "no such player"));
       return;
     }
-    List<EnderCrystal> crystals = new ArrayList<>();
     int[][] sides = {{3, 0}, {-3, 0}, {0, 3}, {0, -3}};
     for (int[] side : sides) {
-      Location at = portal.clone().add(side[0] + 0.5, 1, side[1] + 0.5);
-      crystals.add(end.spawn(at, EnderCrystal.class, crystal -> crystal.setShowingBottom(false)));
+      if (!player.getInventory().removeItem(ItemStack.of(Material.END_CRYSTAL)).isEmpty()) {
+        sender.sendMessage("Can't respawn: " + player.getName() + " has no end crystal left");
+        return;
+      }
+      Block on = portal.clone().add(side[0], 0, side[1]).getBlock();
+      EnderCrystal crystal =
+          end.createEntity(on.getLocation().add(0.5, 1, 0.5), EnderCrystal.class);
+      crystal.setShowingBottom(false);
+      EntityPlaceEvent event =
+          new EntityPlaceEvent(crystal, player, on, BlockFace.UP, EquipmentSlot.HAND);
+      plugin.getServer().getPluginManager().callEvent(event);
+      if (event.isCancelled()) {
+        sender.sendMessage("Can't respawn: placing an end crystal was refused");
+        return;
+      }
+      end.addEntity(crystal);
+      battle.initiateRespawn();
     }
-    // Paper starts a respawn only once the flag says a dragon was killed, where the game's own
-    // crystals ask only that the dragon is dead; the flag is put back at once, as the egg needs it.
-    boolean killed = battle.hasBeenPreviouslyKilled();
-    battle.setPreviouslyKilled(true);
-    boolean started = battle.initiateRespawn(crystals);
-    battle.setPreviouslyKilled(killed);
-    sender.sendMessage(started ? "Respawning the dragon" : "The dragon can't respawn now");
+    sender.sendMessage(
+        battle.getRespawnPhase() != DragonBattle.RespawnPhase.NONE
+            ? "Respawning the dragon"
+            : "The dragon can't respawn now");
   }
 
   private static void hurt(

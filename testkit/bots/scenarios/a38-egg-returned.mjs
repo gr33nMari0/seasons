@@ -57,7 +57,7 @@ export default {
     // by the time the egg appears.
     await nextSeason(ctx, admin, 3)
     await toTheEnd(ctx, admin, ['Pat', 'Sam'])
-    await respawn(ctx, admin)
+    await respawn(ctx, admin, 'Pat')
     for (let i = 0; i < 3; i++) await hurt(ctx, admin, 'Pat', 200, 'melee')
     const slain = ctx.waitForMessages(pat, /^Sam slew the ender dragon!$/, 30 * SECOND, 'the broadcast')
     await ctx.eventually(async () => {

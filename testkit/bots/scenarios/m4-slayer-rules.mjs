@@ -40,7 +40,7 @@ export default {
     await nextSeason(ctx, admin, 3)
     assert((await dragonInfo(ctx, admin)).killed, 'the flag is still set after launch')
     await toTheEnd(ctx, admin, ['Pat', 'Sam'])
-    await respawn(ctx, admin)
+    await respawn(ctx, admin, 'Pat')
     const again = ctx.waitForMessages(sam, /^Pat slew the ender dragon!$/, 15 * SECOND, 'the Season 4 broadcast')
     await hurt(ctx, admin, 'Pat', 1000, 'melee')
     await again

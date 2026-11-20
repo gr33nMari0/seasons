@@ -78,6 +78,8 @@ import org.bukkit.util.Vector;
  *
  * <ul>
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
+ *   <li>{@code save-at <POINT> <player>} saves every world to disk when they reach that step,
+ *       without stopping, so a later crash point finds the world as it was there
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
@@ -184,6 +186,11 @@ final class ScenarioCommands implements BasicCommand, Listener {
           CrashPoint point = CrashPoint.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_'));
           hooks.arm(point, id(args[2]));
           sender.sendMessage("Armed crash point " + point + " for " + args[2]);
+        }
+        case "save-at" -> {
+          CrashPoint point = CrashPoint.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_'));
+          hooks.armSave(point, id(args[2]));
+          sender.sendMessage("Armed save point " + point + " for " + args[2]);
         }
         case "archive" -> {
           var _ =
@@ -294,7 +301,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         }
         default ->
             sender.sendMessage(
-                "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
+                "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
                     + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
                     + "|dragon|reset|clock|sync|bluemap ...");

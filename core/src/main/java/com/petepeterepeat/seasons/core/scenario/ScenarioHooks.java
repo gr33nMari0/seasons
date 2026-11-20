@@ -43,6 +43,8 @@ public final class ScenarioHooks implements CrashPoints {
   private static final Logger LOG = LoggerFactory.getLogger(ScenarioHooks.class);
 
   private final Map<PlayerId, CrashPoint> armed = new ConcurrentHashMap<>();
+  private final Map<PlayerId, CrashPoint> saveAt = new ConcurrentHashMap<>();
+  private volatile Runnable save = () -> {};
   private final List<Runnable> beforeHalt = new CopyOnWriteArrayList<>();
   private final Runnable halt;
   private final ScenarioClock clock;
@@ -92,6 +94,7 @@ public final class ScenarioHooks implements CrashPoints {
   public void reset(Runnable whileStopped) {
     LOG.warn("Scenario reset: Seasons starts again as a fresh install");
     armed.clear();
+    saveAt.clear();
     wiring = null;
     restart.accept(() -> {
       scheduler.forgetDelayed();
@@ -129,6 +132,19 @@ public final class ScenarioHooks implements CrashPoints {
     armed.put(player, point);
   }
 
+  /**
+   * Saves the worlds to disk the next time {@code player} reaches {@code point}, without stopping,
+   * so a later crash point finds the world as it was there rather than as it was at the last save.
+   */
+  public void armSave(CrashPoint point, PlayerId player) {
+    saveAt.put(player, point);
+  }
+
+  /** How {@link #armSave} saves the worlds; set by the test plugin. */
+  public void onSave(Runnable save) {
+    this.save = save;
+  }
+
   /** Runs just before a halt, such as the test plugin noting that the stop was asked for. */
   public void beforeHalt(Runnable task) {
     beforeHalt.add(task);
@@ -136,6 +152,10 @@ public final class ScenarioHooks implements CrashPoints {
 
   @Override
   public void reached(CrashPoint point, PlayerId player) {
+    if (saveAt.remove(player, point)) {
+      LOG.warn("Scenario save point {} reached for {}: saving the worlds", point, player);
+      save.run();
+    }
     if (armed.get(player) != point) {
       return;
     }

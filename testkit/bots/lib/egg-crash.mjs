@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The server stops dead at one step of handing the dragon egg over (Runtime.halt, through the
-// scenario hooks in docs/adr/0003) and starts again. Whatever the step, the egg ends up exactly
-// once: off the portal and on the slayer's Returned page, since they are offline when Seasons
-// finishes the job at startup.
+// scenario hooks in docs/adr/0003) and starts again. The worlds are saved to disk once the hand-over
+// is journalled, with the egg still on the portal, so a halt after that rolls the End back to an
+// egg on the portal, as a real crash before the next save would. Whatever the step, the egg ends up
+// exactly once: off the portal and on the slayer's Returned page, since they are offline when
+// Seasons finishes the job at startup.
 import { assert } from './context.mjs'
 import { carried } from './vault.mjs'
 import { launchFrontier } from './zones.mjs'
@@ -19,6 +21,7 @@ export function eggCrashScenario (name, point) {
         await launchFrontier(ctx, admin)
         await toTheEnd(ctx, admin, ['Pat'])
         await waitForDragon(ctx, admin)
+        await ctx.command(admin, '/scenario save-at EGG_JOURNALLED Pat', /^Armed save point /)
         await ctx.command(admin, `/scenario crash-at ${point} Pat`, /^Armed crash point /)
         const gone = ctx.disconnected(pat, EGG_WAIT)
         await hurt(ctx, admin, 'Pat', 1000, 'melee')
@@ -30,7 +33,11 @@ export function eggCrashScenario (name, point) {
         await ctx.join('Pat')
         await ctx.eventually(async () => assert((await ctx.archive(admin, 'Pat', 3)).returned === 1, 'the egg is on the Returned page'), 30_000)
         assert(await carried(ctx, admin, 'Pat', 'dragon_egg') === 0, 'and not on Pat as well')
-        assert((await dragonInfo(ctx, admin)).egg === 'none', 'nor on the portal')
+        const info = await dragonInfo(ctx, admin)
+        // The fight was saved with its exit portal, so "none" below means no egg stands there.
+        assert(info.portal !== 'none', `the End knows its exit portal: ${JSON.stringify(info)}`)
+        assert(info.egg === 'none', `nor on the portal: ${info.egg}`)
+        assert(info.killed, 'and the next kill drops no egg')
         assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:dragon_egg"}}]'), 'no egg was dropped')
         await ctx.command(admin, '/season status', /^Journal: .*, 0 waiting for recovery$/)
       }

@@ -40,12 +40,14 @@ export async function waitForDragon (ctx, admin, timeoutMs = 90 * SECOND) {
 }
 
 /**
- * Respawns the dragon with four crystals on the exit portal, as players do, and waits for it. The
- * game's summoning takes a while, so its ticks run as fast as the server can for a moment.
+ * Respawns the dragon as players do: a player places four end crystals on the exit portal and the
+ * game's own check starts the summoning, with the previously-killed flag left alone. Then waits for
+ * it; the summoning takes a while, so its ticks run as fast as the server can for a moment.
  */
-export async function respawn (ctx, admin) {
+export async function respawn (ctx, admin, name) {
+  await ctx.command(admin, `/give ${name} minecraft:end_crystal 4`, /^Gave 4 /)
   await ctx.command(admin, '/tick sprint 3000', /./)
-  await ctx.command(admin, '/scenario dragon respawn', /^Respawning the dragon$/)
+  await ctx.command(admin, `/scenario dragon respawn ${name}`, /^Respawning the dragon$/)
   await waitForDragon(ctx, admin)
 }
 

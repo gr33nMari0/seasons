@@ -39,9 +39,12 @@ export default {
     let info = await dragonInfo(ctx, admin)
     assert(!info.killed, `launch cleared the previously-killed flag: ${JSON.stringify(info)}`)
 
-    // Respawned with four crystals. Sam deals far more, but Pat's arrow is the final blow.
+    // Pat places four crystals on the portal and the game respawns the dragon, the flag untouched.
+    // Sam deals far more, but Pat's arrow is the final blow.
     await toTheEnd(ctx, admin, ['Pat', 'Sam'])
-    await respawn(ctx, admin)
+    await respawn(ctx, admin, 'Pat')
+    info = await dragonInfo(ctx, admin)
+    assert(!info.killed, `the respawn left the flag clear: ${JSON.stringify(info)}`)
     // A body hit takes a quarter and one: Sam deals 153 of the 200, Pat 2 and then the last 45.
     for (let i = 0; i < 3; i++) await hurt(ctx, admin, 'Sam', 200, 'melee')
     await hurt(ctx, admin, 'Pat', 4, 'arrow')
@@ -64,7 +67,7 @@ export default {
     await ctx.command(admin, '/season firsts', [/^Season 3 firsts:$/, /^Pat slew the ender dragon \(/])
 
     // A second kill in Season 3: no egg, as in vanilla, and no fanfare.
-    await respawn(ctx, admin)
+    await respawn(ctx, admin, 'Pat')
     const again = [pat, sam].map((bot) => ctx.quiet(bot, SLAIN))
     await hurt(ctx, admin, 'Sam', 1000, 'melee')
     // Past the death animation, when an egg would have appeared.
