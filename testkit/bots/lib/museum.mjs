@@ -14,7 +14,8 @@ export const PLINTHS = {
   core: { anchor: 'museum:core', trophy: { x: 211, y: FLOOR + 1, z: 305 }, plaque: { x: 211, y: FLOOR, z: 303 } }
 }
 
-const box = (x) => `{ min: [${x - 1}, ${FLOOR - 1}, 304], max: [${x + 1}, ${FLOOR + 5}, 306] }`
+/** A plinth's cell around its trophy, from `z` to 306. */
+const box = (x, z = 304) => `{ min: [${x - 1}, ${FLOOR - 1}, ${z}], max: [${x + 1}, ${FLOOR + 5}, 306] }`
 const pos = (at) => `[${at.x}, ${at.y}, ${at.z}]`
 
 /** Writes the museum gallery, reloads and keeps its chunks loaded. */
@@ -37,7 +38,7 @@ export async function writeMuseum (ctx, admin) {
     '    anchors:',
     `      - { type: trophy, pos: ${pos(eggS3.trophy)}, egg: 3 }`,
     '  core:',
-    `    bounds: ${box(core.trophy.x)}`,
+    `    bounds: ${box(core.trophy.x, core.plaque.z)}`,
     '    anchors:',
     `      - { type: trophy, pos: ${pos(core.trophy)} }`,
     `      - { type: plaque, pos: ${pos(core.plaque)}, yaw: 0 }`,
