@@ -9,10 +9,11 @@ import java.util.OptionalInt;
  * figure faces.
  *
  * @param page for an imported archive anchor, the page of the archive view it opens at (0-based)
+ * @param egg for a trophy anchor in a museum, the season whose dragon egg it shows: an egg plinth
  */
-public record Anchor(AnchorType type, Position at, OptionalInt page) {
+public record Anchor(AnchorType type, Position at, OptionalInt page, OptionalInt egg) {
   public static Anchor of(AnchorType type, Position at) {
-    return new Anchor(type, at, OptionalInt.empty());
+    return new Anchor(type, at, OptionalInt.empty(), OptionalInt.empty());
   }
 
   /** Whether the anchor sits on the block a position is in. */

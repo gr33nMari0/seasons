@@ -34,7 +34,7 @@ class GalleryFilesTest {
         Cell.create("c1")
             .withBounds(Bounds.between(OVERWORLD, 0, -61, 0, 4, -54, 8))
             .withAnchor(Anchor.of(AnchorType.FIGURE, at(2, -60, 6, 180f)))
-            .withAnchor(new Anchor(AnchorType.ARCHIVE, at(3, -60, 6, 0f), OptionalInt.of(2)))
+            .withAnchor(new Anchor(AnchorType.ARCHIVE, at(3, -60, 6, 0f), OptionalInt.of(2), OptionalInt.empty()))
             .withOwner(2, Optional.of(owner))
             .withImported(true);
     return Gallery.create("season-2", 2, OVERWORLD)
@@ -146,5 +146,81 @@ class GalleryFilesTest {
             GalleryFiles.read("season-2", yaml("season: 2\ncells:\n  c1:\n    pose: dabbing\n")))
         .extracting(e -> ((GalleryFiles.Invalid) e).path())
         .isEqualTo("cells.c1.pose");
+  }
+
+  @Test
+  void anEggPlinthReadsAndWritesBackAndOnlyATrophyCanBeOne() throws Exception {
+    String museum =
+        """
+        kind: museum
+        cells:
+          egg-s3:
+            anchors:
+              - { type: trophy, pos: [1, -59, 1], egg: 3 }
+        """;
+    Gallery read = GalleryFiles.read("museum", yaml(museum));
+    assertThat(read.cell("egg-s3").orElseThrow().anchor(AnchorType.TROPHY).orElseThrow().egg())
+        .isEqualTo(OptionalInt.of(3));
+
+    Path file = dir.resolve("museum.yml");
+    GalleryFiles.write(file, dir.resolve("backups"), read);
+    assertThat(GalleryFiles.read("museum", YamlConfigurationLoader.builder().path(file).build().load()))
+        .isEqualTo(read);
+
+    assertThatThrownBy(() ->
+            GalleryFiles.read(
+                "museum",
+                yaml(museum.replace("type: trophy", "type: plaque"))))
+        .extracting(e -> ((GalleryFiles.Invalid) e).path())
+        .isEqualTo("cells.egg-s3.anchors.0.egg");
+  }
+
+  @Test
+  void onlyAMuseumHasEggPlinthsAndOnlyOnePerSeason() {
+    Anchor egg = new Anchor(AnchorType.TROPHY, at(2, -60, 2, 0f), OptionalInt.empty(), OptionalInt.of(3));
+    Cell plinth =
+        Cell.create("egg").withBounds(Bounds.between(OVERWORLD, 0, -61, 0, 4, -54, 4)).withAnchor(egg);
+    Gallery season =
+        Gallery.create("season-3", 3, OVERWORLD)
+            .withBounds(Bounds.between(OVERWORLD, 0, -61, 0, 10, -50, 10))
+            .withCell(plinth);
+    assertThat(GalleryRules.check(List.of(season)))
+        .extracting(GalleryRules.Problem::message)
+        .contains("only a museum can have an egg plinth");
+
+    Gallery museum = museum("museum", 100, plinth);
+    Gallery annex = museum("annex", 200, plinth);
+    assertThat(GalleryRules.check(List.of(museum)))
+        .extracting(GalleryRules.Problem::message)
+        .isEmpty();
+    assertThat(GalleryRules.check(List.of(museum, annex)))
+        .extracting(GalleryRules.Problem::message)
+        .containsExactly("Season 3 already has its egg plinth at museum:egg");
+  }
+
+  /** A museum gallery at {@code x} with one plinth moved there. */
+  private static Gallery museum(String id, int x, Cell plinth) {
+    Anchor egg = plinth.anchors().getFirst();
+    Anchor moved =
+        new Anchor(
+            egg.type(),
+            at(x + 2, -60, 2, 0f),
+            egg.page(),
+            egg.egg());
+    Cell cell =
+        Cell.create("egg")
+            .withBounds(Bounds.between(OVERWORLD, x, -61, 0, x + 4, -54, 4))
+            .withAnchor(moved);
+    return new Gallery(
+        id,
+        Gallery.Kind.MUSEUM,
+        0,
+        OVERWORLD,
+        Optional.of(Bounds.between(OVERWORLD, x, -61, 0, x + 10, -50, 10)),
+        Optional.empty(),
+        List.of(),
+        List.of(cell),
+        Gallery.Settings.NONE,
+        Optional.empty());
   }
 }

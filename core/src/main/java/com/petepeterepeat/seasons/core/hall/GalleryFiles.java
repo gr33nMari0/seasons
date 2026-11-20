@@ -54,6 +54,7 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
  *     anchors:
  *       - { type: figure, pos: [22, -60, 28], yaw: 180 }
  *       - { type: archive, pos: [23, -60, 28] }
+ *       - { type: trophy, pos: [21, -59, 28], egg: 3 }   # in a museum: Season 3's egg plinth
  *     owners: { "2": 7c2a... }
  * </pre>
  */
@@ -210,7 +211,16 @@ public final class GalleryFiles {
           anchor.node("page").virtual()
               ? OptionalInt.empty()
               : OptionalInt.of(anchor.node("page").getInt());
-      anchors.add(new Anchor(type, position, page));
+      OptionalInt egg = OptionalInt.empty();
+      if (!anchor.node("egg").virtual()) {
+        int season = anchor.node("egg").getInt(0);
+        if (type != AnchorType.TROPHY || season < 1) {
+          throw new Invalid(
+              at + ".egg", "is a season number, and only a trophy anchor can be an egg plinth");
+        }
+        egg = OptionalInt.of(season);
+      }
+      anchors.add(new Anchor(type, position, page, egg));
     }
     Map<Integer, PlayerId> owners = new HashMap<>();
     for (Map.Entry<Object, ? extends ConfigurationNode> owner :
@@ -330,6 +340,9 @@ public final class GalleryFiles {
         setPoint(a, anchor.at());
         if (anchor.page().isPresent()) {
           a.node("page").set(anchor.page().getAsInt());
+        }
+        if (anchor.egg().isPresent()) {
+          a.node("egg").set(anchor.egg().getAsInt());
         }
       }
       for (Map.Entry<Integer, PlayerId> owner : new java.util.TreeMap<>(cell.owners()).entrySet()) {

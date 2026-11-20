@@ -621,7 +621,8 @@ public final class HallImporter {
               new Anchor(
                   AnchorType.ARCHIVE,
                   block(imported.containers().get(i).block()),
-                  OptionalInt.of(pages.get(i))));
+                  OptionalInt.of(pages.get(i)),
+                  OptionalInt.empty()));
     }
     for (ImportedCell.Frame frame : imported.frames()) {
       cell = cell.withAnchor(Anchor.of(AnchorType.TROPHY, block(frame.at())));

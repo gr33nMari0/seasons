@@ -41,6 +41,29 @@ public final class GalleryRules {
       seen.add(gallery);
       problems.addAll(check(gallery));
     }
+    // One egg plinth per season, across every museum.
+    java.util.Map<Integer, String> eggs = new java.util.HashMap<>();
+    for (Gallery gallery : galleries) {
+      for (Cell cell : gallery.cells()) {
+        for (Anchor anchor : cell.anchors()) {
+          if (anchor.egg().isEmpty()) {
+            continue;
+          }
+          String where = gallery.id() + ":" + cell.id();
+          String was = eggs.putIfAbsent(anchor.egg().getAsInt(), where);
+          if (was != null) {
+            problems.add(
+                new Problem(
+                    gallery.id(),
+                    "cells." + cell.id() + ".anchors",
+                    "Season "
+                        + anchor.egg().getAsInt()
+                        + " already has its egg plinth at "
+                        + was));
+          }
+        }
+      }
+    }
     return problems;
   }
 
@@ -104,6 +127,11 @@ public final class GalleryRules {
           }
         }
         for (Anchor anchor : cell.anchors()) {
+          if (anchor.egg().isPresent() && gallery.kind() != Gallery.Kind.MUSEUM) {
+            problems.add(
+                new Problem(
+                    gallery.id(), path + ".anchors", "only a museum can have an egg plinth"));
+          }
           if (!bounds.contains(anchor.at())) {
             problems.add(
                 new Problem(
