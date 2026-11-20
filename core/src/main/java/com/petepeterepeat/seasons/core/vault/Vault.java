@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -202,6 +203,59 @@ public final class Vault {
                 describe(item) + ": " + why));
   }
 
+  /**
+   * Gives a player the item with a reference on their Returned page, as a dragon egg is handed
+   * over: the same transaction as a click, queued with their clicks, but no menu opens and the
+   * messages are the caller's. Completes with whether it was given; if not, it stays on the page.
+   *
+   * @param took said once it is given
+   * @param kept said if it stays on the page: a full inventory, or a moment it can't move
+   */
+  public CompletableFuture<Boolean> deliver(PlayerId player, String ref, String took, String kept) {
+    return writer
+        .submit(() -> slotOf(vaults, player, ref))
+        .thenCompose(slot -> {
+          if (slot.isEmpty()) {
+            return CompletableFuture.completedFuture(false);
+          }
+          CompletableFuture<Boolean> given = new CompletableFuture<>();
+          queue(
+              player,
+              () ->
+                  withdraw(
+                      player,
+                      VaultFiles.RETURNED,
+                      slot.getAsInt(),
+                      new Notice(OptionalInt.empty(), took, kept, kept))
+                      .whenComplete((result, failure) ->
+                          given.complete(failure == null && Boolean.TRUE.equals(result))));
+          return given;
+        });
+  }
+
+  /** The Returned slot the item with this reference went to, while it is still there. */
+  private static OptionalInt slotOf(VaultFiles vaults, PlayerId player, String ref)
+      throws IOException {
+    VaultFiles.Contents contents = vaults.read(player);
+    OptionalInt slot = vaults.returnedSlot(player, ref);
+    if (slot.isEmpty()
+        || slot.getAsInt() >= contents.returned().size()
+        || contents.returned().get(slot.getAsInt()).isEmpty()) {
+      return OptionalInt.empty();
+    }
+    return slot;
+  }
+
+  /**
+   * What a withdrawal says and does after: the menu page to open again, if any, and the messages
+   * for an item given, kept for a full inventory, or kept because the player is busy.
+   */
+  private record Notice(OptionalInt reopen, String took, String full, String busy) {
+    static Notice menu(int shownPage) {
+      return new Notice(OptionalInt.of(shownPage), "vault.took", "vault.full", "vault.busy");
+    }
+  }
+
   /** The handler that settles withdrawals a crash left open. */
   public RecoveryHandler recovery() {
     return this::recover;
@@ -291,34 +345,42 @@ public final class Vault {
               messages().get(access == Access.SEALED ? "vault.locked" : "vault.locked-between"));
       return;
     }
-    // One transaction at a time per player, in the order clicked.
+    queue(player, () -> withdraw(player, page, vaultSlot, Notice.menu(shownPage)));
+  }
+
+  /** One transaction at a time per player, in the order asked for. */
+  private void queue(PlayerId player, Supplier<CompletableFuture<Boolean>> transaction) {
     queues.compute(
         player,
         (who, tail) ->
             (tail == null ? CompletableFuture.<Void>completedFuture(null) : tail)
-                .thenCompose(done -> withdraw(player, page, vaultSlot, shownPage))
+                .thenCompose(done -> transaction.get())
+                .<Void>thenApply(given -> null)
                 .exceptionally(failure -> {
                   LOG.error("A withdrawal from the vault of {} failed", player, failure);
                   return null;
                 }));
   }
 
-  /** One withdrawal, run on the server thread with the player held throughout. */
-  private CompletableFuture<Void> withdraw(PlayerId player, int page, int slot, int shownPage) {
-    CompletableFuture<Void> done = new CompletableFuture<>();
+  /**
+   * One withdrawal, run on the server thread with the player held throughout. Completes with
+   * whether the item was given.
+   */
+  private CompletableFuture<Boolean> withdraw(PlayerId player, int page, int slot, Notice notice) {
+    CompletableFuture<Boolean> done = new CompletableFuture<>();
     serverThread.execute(() -> {
       if (platform.players().find(player).isEmpty()) {
-        done.complete(null);
+        done.complete(false);
         return;
       }
       if (page != VaultFiles.RETURNED && access(state.get()) != Access.OPEN) {
         platform.players().sendMessage(player, messages().get("vault.locked"));
-        done.complete(null);
+        done.complete(false);
         return;
       }
       if (!hold.hold(player)) {
-        platform.players().sendMessage(player, messages().get("vault.busy"));
-        done.complete(null);
+        platform.players().sendMessage(player, messages().get(notice.busy()));
+        done.complete(false);
         return;
       }
       platform.players().saveData(player);
@@ -338,7 +400,7 @@ public final class Vault {
                     crash.reached(CrashPoint.VAULT_WITHDRAW_PERSISTED, player);
                     return taken.isEmpty()
                         ? finish(player, page, id)
-                        : give(player, page, id, taken.get(), given);
+                        : give(player, page, id, taken.get(), given, notice);
                   },
                   serverThread)
               .handle((result, failure) -> failure)
@@ -353,10 +415,10 @@ public final class Vault {
                       LOG.error("Withdrawing from the vault of {} stopped", player, failure);
                       platform.players().sendMessage(player, messages().get("vault.failed"));
                     }
-                    if (platform.players().find(player).isPresent()) {
-                      var _ = open(player, shownPage, false);
+                    if (notice.reopen().isPresent() && platform.players().find(player).isPresent()) {
+                      var _ = open(player, notice.reopen().getAsInt(), false);
                     }
-                    done.complete(null);
+                    done.complete(given.get());
                   },
                   serverThread);
     });
@@ -384,7 +446,12 @@ public final class Vault {
 
   /** On the server thread: gives the item, or puts it back if it won't go. */
   private CompletableFuture<Void> give(
-      PlayerId player, int page, String id, NeutralItem item, AtomicBoolean given) {
+      PlayerId player,
+      int page,
+      String id,
+      NeutralItem item,
+      AtomicBoolean given,
+      Notice notice) {
     given.set(
         platform.players().find(player).isPresent() && platform.inventories().give(player, item));
     if (given.get()) {
@@ -405,7 +472,7 @@ public final class Vault {
                         player,
                         messages()
                             .get(
-                                "vault.took",
+                                notice.took(),
                                 "count",
                                 Integer.toString(count(item)),
                                 "item",
@@ -424,7 +491,7 @@ public final class Vault {
                   name(player),
                   "refused",
                   page(page) + ": no room for " + describe(item));
-              platform.players().sendMessage(player, messages().get("vault.full"));
+              platform.players().sendMessage(player, messages().get(notice.full()));
             },
             serverThread);
   }

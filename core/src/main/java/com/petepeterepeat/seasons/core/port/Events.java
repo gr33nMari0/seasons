@@ -31,4 +31,7 @@ public interface Events {
 
   /** Sets who hears about registered pets unloading or being removed. */
   void pets(PetEvents pets);
+
+  /** Sets who hears about the End's dragons being hurt and dying, and the End loading. */
+  void dragon(DragonEvents dragon);
 }

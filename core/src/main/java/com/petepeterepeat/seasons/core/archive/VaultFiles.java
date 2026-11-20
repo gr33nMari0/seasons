@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
@@ -134,18 +135,71 @@ public final class VaultFiles {
 
   /** Adds an item to the Returned page, in its first empty slot. */
   public void addReturned(PlayerId player, NeutralItem item, Instant at) throws IOException {
+    var _ = addReturned(player, item, at, Optional.empty());
+  }
+
+  /**
+   * Adds an item to the Returned page, in its first empty slot, and resolves with that slot. With a
+   * reference, such as {@code egg-s3}, the vault remembers it was given this item, and adding it
+   * again changes nothing and resolves with the slot it went to the first time.
+   */
+  public int addReturned(PlayerId player, NeutralItem item, Instant at, Optional<String> ref)
+      throws IOException {
     Map<String, Object> root = load(player);
+    if (ref.isPresent()) {
+      Optional<Map<String, Object>> was = delivery(root, ref.get());
+      if (was.isPresent()) {
+        return ArchiveFiles.value(was.get(), "slot", Integer.class);
+      }
+    }
     List<Optional<NeutralItem>> returned = new ArrayList<>(returned(root));
     int free = returned.indexOf(Optional.<NeutralItem>empty());
     if (free >= 0) {
       returned.set(free, Optional.of(item));
     } else {
+      free = returned.size();
       returned.add(Optional.of(item));
     }
     root.put("returned", ArchiveFiles.slots(returned));
     root.put("returned-size", returned.size());
     root.put("returned-at", at.toEpochMilli());
+    if (ref.isPresent()) {
+      List<Map<String, Object>> deliveries = new ArrayList<>(deliveries(root));
+      Map<String, Object> entry = new LinkedHashMap<>();
+      entry.put("ref", ref.get());
+      entry.put("slot", free);
+      entry.put("at", at.toEpochMilli());
+      deliveries.add(entry);
+      root.put("deliveries", NbtList.ofCompounds(deliveries));
+    }
     write(player, root);
+    return free;
+  }
+
+  /**
+   * Whether the vault was given the item with this reference, whether it is still on the Returned
+   * page or has been taken since.
+   */
+  public boolean delivered(PlayerId player, String ref) throws IOException {
+    return Files.exists(path(player)) && delivery(load(player), ref).isPresent();
+  }
+
+  /** The Returned slot the item with this reference went to, if the vault was given it. */
+  public OptionalInt returnedSlot(PlayerId player, String ref) throws IOException {
+    if (Files.notExists(path(player))) {
+      return OptionalInt.empty();
+    }
+    return delivery(load(player), ref)
+        .map(e -> OptionalInt.of(ArchiveFiles.value(e, "slot", Integer.class)))
+        .orElse(OptionalInt.empty());
+  }
+
+  private static Optional<Map<String, Object>> delivery(Map<String, Object> root, String ref) {
+    return deliveries(root).stream().filter(e -> ref.equals(e.get("ref"))).findFirst();
+  }
+
+  private static List<Map<String, Object>> deliveries(Map<String, Object> root) {
+    return root.get("deliveries") instanceof NbtList list ? list.compounds() : List.of();
   }
 
   /**

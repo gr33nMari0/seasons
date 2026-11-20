@@ -96,6 +96,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(events.hallGuard(), this);
     server.getPluginManager().registerEvents(events.zoneGuard(), this);
+    server.getPluginManager().registerEvents(events.dragonEvents(), this);
     server.getPluginManager().registerEvents(menus, this);
     server.getPluginManager().registerEvents(advancements, this);
     server.getPluginManager().registerEvents(entities, this);

@@ -2,8 +2,8 @@
 package com.petepeterepeat.seasons.core.scenario;
 
 /**
- * The moments in archiving, importing or a vault withdrawal a scenario can stop the server at, each
- * right after its write.
+ * The moments in archiving, importing, a vault withdrawal, handing over the dragon egg or {@code
+ * /museum add} a scenario can stop the server at, each right after its write.
  */
 public enum CrashPoint {
   /** The archive file is written and fsynced; the journal says nothing yet. */
@@ -27,5 +27,19 @@ public enum CrashPoint {
   /** The item is given and the player's file saved; {@code VAULT_WITHDRAW_DONE} isn't written. */
   VAULT_WITHDRAW_GIVEN,
   /** {@code GATE_SET} is on disk; the gate's blocks haven't changed. Armed by the cell's owner. */
-  GATE_SET
+  GATE_SET,
+  /**
+   * {@code EGG_DELIVERED} is on disk and the egg is off the exit portal; it isn't on the Returned
+   * page yet. Armed by the slayer.
+   */
+  EGG_CLEARED,
+  /** The egg is on the slayer's Returned page; it hasn't been given. Armed by the slayer. */
+  EGG_RETURNED,
+  /**
+   * {@code MUSEUM_STARTED} is on disk and the item is in the museum's store; the op still holds
+   * it. Armed by the op.
+   */
+  MUSEUM_STORED,
+  /** The item is taken from the op and their file saved; {@code MUSEUM_DONE} isn't written. */
+  MUSEUM_TAKEN
 }

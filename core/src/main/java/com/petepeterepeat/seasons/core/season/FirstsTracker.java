@@ -27,7 +27,8 @@ import org.jspecify.annotations.Nullable;
  * Season firsts (see Stats, season cards and awards in the spec): the first player this season to
  * complete each advancement, to reach the Nether and the End, and to carry a diamond, an elytra or
  * an item on {@code firsts.rareItems}. Each is recorded once per season, broadcast in chat and
- * posted to Discord. Only while the season is being played; the dragon slayer comes with M4.
+ * posted to Discord. Only while the season is being played. The dragon slayer is recorded by {@code
+ * Dragon}, whose fanfare announces it.
  */
 public final class FirstsTracker implements Milestones {
   /** How often online players' inventories are checked for first items. */
@@ -38,6 +39,7 @@ public final class FirstsTracker implements Milestones {
 
   public static final String NETHER = "nether";
   public static final String END = "end";
+  public static final String DRAGON = "dragon";
   public static final String ADVANCEMENT = "advancement:";
   public static final String ITEM = "item:";
 
@@ -164,6 +166,9 @@ public final class FirstsTracker implements Milestones {
     }
     if (key.equals(END)) {
       return "firsts.what.end";
+    }
+    if (key.equals(DRAGON)) {
+      return "firsts.what.dragon";
     }
     if (key.startsWith(ITEM)) {
       return "firsts.what.item";
