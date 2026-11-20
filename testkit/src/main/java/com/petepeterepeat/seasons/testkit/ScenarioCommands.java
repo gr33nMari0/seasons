@@ -136,6 +136,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code leash <tag> <holder tag>} puts an animal on a lead held by another entity
  *   <li>{@code forget-pet <tag>} takes Seasons' mark off a registered pet, so it can go unnoticed,
  *       as when its chunks are regenerated
+ *   <li>{@code dragon info|respawn|hurt|crystal ...} plays the End's dragon fight; see {@link
+ *       ScenarioDragon}
  *   <li>{@code reset} resets a shared scenario server to a fresh boot and reports any leak; the
  *       runner asks for this itself between scenarios, so this is for trying it by hand
  *   <li>{@code clock [+<duration>]} prints Seasons' time, after moving it forward by a duration
@@ -263,6 +265,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "chest" -> chest(sender, args);
         case "leash" -> leash(sender, args);
         case "forget-pet" -> forgetPet(sender, args);
+        case "dragon" -> ScenarioDragon.run(plugin, sender, args);
         case "reset" -> {
           var _ =
               reset
@@ -294,7 +297,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
                 "Usage: /scenario crash-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
                     + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
-                    + "|reset|clock|sync|bluemap ...");
+                    + "|dragon|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);
