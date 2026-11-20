@@ -27,6 +27,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Registry;
+import org.bukkit.Statistic;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
@@ -269,6 +270,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "permit" -> permit(sender, args);
         case "vault-return" -> vaultReturn(sender, hooks, args);
         case "tame" -> tame(sender, args);
+        case "stat" -> stat(sender, args);
         case "chest" -> chest(sender, args);
         case "leash" -> leash(sender, args);
         case "forget-pet" -> forgetPet(sender, args);
@@ -924,6 +926,44 @@ final class ScenarioCommands implements BasicCommand, Listener {
         .selectEntities(plugin.getServer().getConsoleSender(), "@e[tag=" + tag + ",limit=1]")
         .stream()
         .findFirst();
+  }
+
+  /**
+   * Sets a player's statistic as if they had earned it: a General-tab one by the game's id, such as
+   * {@code minecraft:deaths} or {@code minecraft:play_time}, or a block mined or used, such as
+   * {@code minecraft:mined:minecraft:diamond_ore}.
+   */
+  private void stat(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    String id = args[2];
+    int value = Integer.parseInt(args[3]);
+    if (player == null) {
+      sender.sendMessage(args[1] + " isn't online");
+      return;
+    }
+    String[] parts = id.split(":", 3);
+    if (parts.length == 3 && (parts[1].equals("mined") || parts[1].equals("used"))) {
+      Material material = Material.matchMaterial(parts[2]);
+      if (material == null) {
+        sender.sendMessage("No such block " + parts[2]);
+        return;
+      }
+      player.setStatistic(
+          parts[1].equals("mined") ? Statistic.MINE_BLOCK : Statistic.USE_ITEM, material, value);
+    } else {
+      String key = id.equals("minecraft:play_time") ? "minecraft:play_one_minute" : id;
+      Optional<Statistic> statistic =
+          Arrays.stream(Statistic.values())
+              .filter(s -> s.getType() == Statistic.Type.UNTYPED)
+              .filter(s -> s.getKey().asString().equals(key))
+              .findFirst();
+      if (statistic.isEmpty()) {
+        sender.sendMessage("No such statistic " + id);
+        return;
+      }
+      player.setStatistic(statistic.get(), value);
+    }
+    sender.sendMessage("Set " + id + " of " + args[1] + " to " + value + ".");
   }
 
   private void tame(CommandSender sender, String[] args) {

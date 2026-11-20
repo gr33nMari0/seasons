@@ -25,7 +25,8 @@ export default {
     ctx.writeFile(CONFIG, OURS)
     await ctx.command(admin, '/season reload', /^Reloaded /)
     await ctx.command(admin, '/season config get awards.most-jumps.measure', /^awards\.most-jumps\.measure = minecraft:jump$/)
-    await ctx.command(admin, '/season config get awards.deepest-pockets', [/^awards\.deepest-pockets\.measure = off$/, /^awards\.deepest-pockets\.item = diamond$/])
+    // YAML reads a bare off as false, which Seasons takes as off.
+    await ctx.command(admin, '/season config get awards.deepest-pockets', [/^awards\.deepest-pockets\.measure = false$/, /^awards\.deepest-pockets\.item = diamond$/])
     await ctx.command(admin, '/season config set awards.most-deaths.item wither_skeleton_skull', /^Set awards\.most-deaths\.item to wither_skeleton_skull in config\.yml \(it was skeleton_skull\)\.$/)
     await ctx.command(admin, '/season config set awards.most-deaths.measure kills', /^awards\.most-deaths\.measure wasn't changed: config\.yml, at awards\.most-deaths\.measure: kills isn't a measure: /)
     await ctx.command(admin, '/season config set awards.most-jumps.item not_an_item', /^awards\.most-jumps\.item wasn't changed: config\.yml, at awards\.most-jumps\.item: not_an_item isn't an item this server knows$/)
