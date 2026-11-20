@@ -4,7 +4,7 @@
 // keeps the old one; deaths.display moves the season's objective to the sidebar or below names, or
 // takes it off the screen with none, at once; anything else is refused. The bots read the display
 // slots the server sends them.
-import { assert } from '../lib/context.mjs'
+import { SECOND, assert } from '../lib/context.mjs'
 import { launchFrontier } from '../lib/zones.mjs'
 import { nextSeason } from '../lib/dragon.mjs'
 
@@ -12,12 +12,19 @@ const SLOTS = { list: 0, sidebar: 1, belowName: 2 }
 
 /**
  * Keeps what the server last showed in each display slot, from the packets themselves: Mineflayer
- * forgets nothing when a slot is cleared.
+ * doesn't forget a slot when it is cleared.
  */
 function watchSlots (bot) {
   bot.seasonsSlots = {}
   bot._client.on('scoreboard_display_objective', (packet) => {
     bot.seasonsSlots[packet.position] = packet.name || null
+  })
+  // The game takes an objective shown nowhere else off the client altogether, slots and all.
+  bot._client.on('scoreboard_objective', (packet) => {
+    if (packet.action !== 1) return
+    for (const slot of Object.keys(bot.seasonsSlots)) {
+      if (bot.seasonsSlots[slot] === packet.name) bot.seasonsSlots[slot] = null
+    }
   })
 }
 
@@ -38,6 +45,8 @@ export default {
     watchSlots(pat)
     await launchFrontier(ctx, admin)
     await sees(ctx, pat, 'list', 'seasons_deaths_s3')
+    // Past the arrival immunity, which a kill can't get through.
+    await ctx.advance(admin, 6 * SECOND)
     await ctx.command(admin, '/kill Pat', /^Killed Pat/)
     await ctx.command(admin, '/scoreboard players get Pat seasons_deaths_s3', /^Pat has 1 /)
 
@@ -50,7 +59,7 @@ export default {
     // The next launch: a new objective at zero takes the slot; Season 3's is kept, off the screen.
     await nextSeason(ctx, admin, 3)
     await sees(ctx, pat, 'sidebar', 'seasons_deaths_s4')
-    await ctx.command(admin, '/scoreboard objectives list', [/seasons_deaths_s3/, /seasons_deaths_s4/])
+    await ctx.command(admin, '/scoreboard objectives list', /\[Deaths, Season 3\].*\[Deaths, Season 4\]|\[Deaths, Season 4\].*\[Deaths, Season 3\]/)
     await ctx.command(admin, '/scoreboard players get Pat seasons_deaths_s3', /^Pat has 1 /)
     await ctx.command(admin, '/scoreboard players get Pat seasons_deaths_s4', /^Can't get value of seasons_deaths_s4 for Pat; none is set$/)
 
