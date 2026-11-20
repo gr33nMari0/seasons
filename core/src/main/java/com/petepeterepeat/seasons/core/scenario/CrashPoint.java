@@ -36,8 +36,8 @@ public enum CrashPoint {
   /** The egg is on the slayer's Returned page; it hasn't been given. Armed by the slayer. */
   EGG_RETURNED,
   /**
-   * {@code MUSEUM_STARTED} is on disk and the item is in the museum's store; the op still holds
-   * it. Armed by the op.
+   * {@code MUSEUM_STARTED} is on disk and the item is in the museum's store; the op still holds it.
+   * Armed by the op.
    */
   MUSEUM_STORED,
   /** The item is taken from the op and their file saved; {@code MUSEUM_DONE} isn't written. */

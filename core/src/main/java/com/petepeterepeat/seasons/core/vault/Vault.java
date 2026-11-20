@@ -223,10 +223,10 @@ public final class Vault {
               player,
               () ->
                   withdraw(
-                      player,
-                      VaultFiles.RETURNED,
-                      slot.getAsInt(),
-                      new Notice(OptionalInt.empty(), took, kept, kept))
+                          player,
+                          VaultFiles.RETURNED,
+                          slot.getAsInt(),
+                          new Notice(OptionalInt.empty(), took, kept, kept))
                       .whenComplete((result, failure) ->
                           given.complete(failure == null && Boolean.TRUE.equals(result))));
           return given;
@@ -415,7 +415,8 @@ public final class Vault {
                       LOG.error("Withdrawing from the vault of {} stopped", player, failure);
                       platform.players().sendMessage(player, messages().get("vault.failed"));
                     }
-                    if (notice.reopen().isPresent() && platform.players().find(player).isPresent()) {
+                    if (notice.reopen().isPresent()
+                        && platform.players().find(player).isPresent()) {
                       var _ = open(player, notice.reopen().getAsInt(), false);
                     }
                     done.complete(given.get());
@@ -446,12 +447,7 @@ public final class Vault {
 
   /** On the server thread: gives the item, or puts it back if it won't go. */
   private CompletableFuture<Void> give(
-      PlayerId player,
-      int page,
-      String id,
-      NeutralItem item,
-      AtomicBoolean given,
-      Notice notice) {
+      PlayerId player, int page, String id, NeutralItem item, AtomicBoolean given, Notice notice) {
     given.set(
         platform.players().find(player).isPresent() && platform.inventories().give(player, item));
     if (given.get()) {

@@ -46,11 +46,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The museum (see Ender vault, museum and dragon egg in the spec): galleries of kind {@code museum}
- * whose cells are plinths, each with one trophy anchor, no owners and display-only forever.
- * {@code /museum add <anchor> [label]} takes the op's held item into the store and shows a copy of
- * it with a plaque line; {@code /museum remove <anchor>} gives it back. A trophy anchor tagged
- * {@code egg: <season>} is that season's egg plinth: once the season has ended, it shows a dragon
- * egg with the slayer's name, unless something was put there by hand (questions 187 to 192).
+ * whose cells are plinths, each with one trophy anchor, no owners and display-only forever. {@code
+ * /museum add <anchor> [label]} takes the op's held item into the store and shows a copy of it with
+ * a plaque line; {@code /museum remove <anchor>} gives it back. A trophy anchor tagged {@code egg:
+ * <season>} is that season's egg plinth: once the season has ended, it shows a dragon egg with the
+ * slayer's name, unless something was put there by hand (questions 187 to 192).
  *
  * <p>Both commands are one transaction each, journalled as the vault's withdrawals are: save the
  * op's file and journal {@code MUSEUM_STARTED} with their inventory's hash, change the store, move
@@ -177,7 +177,8 @@ public final class Museum {
     String key = ref.key();
     InventorySnapshot inventory = platform.inventories().snapshot(op);
     int slot = platform.players().heldSlot(op);
-    Optional<NeutralItem> held = slot < inventory.storage().size() ? inventory.storage().get(slot) : Optional.empty();
+    Optional<NeutralItem> held =
+        slot < inventory.storage().size() ? inventory.storage().get(slot) : Optional.empty();
     if (held.isEmpty()) {
       source.reply(messages.get("museum.no-item"));
       return;
@@ -187,7 +188,8 @@ public final class Museum {
       return;
     }
     NeutralItem item = held.get();
-    Optional<String> label = arguments.optionalString("label").map(String::strip).filter(l -> !l.isEmpty());
+    Optional<String> label =
+        arguments.optionalString("label").map(String::strip).filter(l -> !l.isEmpty());
     var _ =
         writer
             .submit(() -> files.item(key))
@@ -195,8 +197,8 @@ public final class Museum {
                 there -> {
                   if (there.isPresent()) {
                     source.reply(
-                        messages().get(
-                            "museum.occupied", "anchor", key, "item", itemId(there.get())));
+                        messages()
+                            .get("museum.occupied", "anchor", key, "item", itemId(there.get())));
                     return CompletableFuture.completedFuture(null);
                   }
                   return putIn(source, op, ref, slot, item, label);
@@ -316,7 +318,8 @@ public final class Museum {
   }
 
   /** The remove transaction, on the server thread with the op held throughout. */
-  private CompletableFuture<Void> takeOut(CommandSource source, PlayerId op, HallService.CellRef ref) {
+  private CompletableFuture<Void> takeOut(
+      CommandSource source, PlayerId op, HallService.CellRef ref) {
     if (!hold.hold(op)) {
       source.reply(messages().get("museum.busy"));
       return CompletableFuture.completedFuture(null);
@@ -389,8 +392,8 @@ public final class Museum {
   }
 
   /**
-   * An add or remove left open: the op's saved inventory, compared with its hash from before,
-   * says whether the item moved, and the store is set to match.
+   * An add or remove left open: the op's saved inventory, compared with its hash from before, says
+   * whether the item moved, and the store is set to match.
    */
   private CompletableFuture<RecoveryOutcome> recover(OpenOperation operation) {
     if (operation.player().isEmpty()) {
@@ -462,8 +465,7 @@ public final class Museum {
 
   private record Stored(Optional<MuseumFiles.Trophy> trophy, Optional<NeutralItem> item) {}
 
-  private List<HallRenderer.Planned> plan(
-      HallService.CellRef ref, Anchor trophy, Stored stored) {
+  private List<HallRenderer.Planned> plan(HallService.CellRef ref, Anchor trophy, Stored stored) {
     Messages messages = messages();
     Optional<NeutralItem> item = stored.item();
     Optional<Message> plaque = Optional.empty();
@@ -474,8 +476,15 @@ public final class Museum {
           Optional.of(
               t.label().isPresent()
                   ? messages.get(
-                      "museum.plaque", "label", t.label().get(), "season", season, "credit", t.credit())
-                  : messages.get("museum.plaque-unlabelled", "season", season, "credit", t.credit()));
+                      "museum.plaque",
+                      "label",
+                      t.label().get(),
+                      "season",
+                      season,
+                      "credit",
+                      t.credit())
+                  : messages.get(
+                      "museum.plaque-unlabelled", "season", season, "credit", t.credit()));
     } else if (trophy.egg().isPresent()) {
       Optional<SeasonFirst> slain = slayer(trophy.egg().getAsInt());
       if (slain.isPresent()) {
@@ -523,7 +532,8 @@ public final class Museum {
     boolean ended =
         s.season() > season
             || (s.season() == season
-                && (s.phase() instanceof Phase.Archiving || s.phase() instanceof Phase.Intermission));
+                && (s.phase() instanceof Phase.Archiving
+                    || s.phase() instanceof Phase.Intermission));
     if (!ended) {
       return Optional.empty();
     }

@@ -24,8 +24,8 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
 /**
  * The museum's store: {@code museum.yml} holds each trophy's label, season and credit, and {@code
  * data/museum/<gallery>.<cell>.dat} its item as the platform wrote it, vanilla NBT with its {@code
- * DataVersion}. An item taken out waits under {@code removed} and {@code data/museum/removed/} until
- * its withdrawal is settled, so a crash can put it back. Used on the writer thread only.
+ * DataVersion}. An item taken out waits under {@code removed} and {@code data/museum/removed/}
+ * until its withdrawal is settled, so a crash can put it back. Used on the writer thread only.
  *
  * <pre>
  * schema-version: 1
@@ -72,7 +72,9 @@ public final class MuseumFiles {
   /** A trophy's item, if it has one. */
   public Optional<NeutralItem> item(String anchor) throws IOException {
     Path at = itemPath(anchor);
-    return Files.exists(at) ? Optional.of(new NeutralItem(Files.readAllBytes(at))) : Optional.empty();
+    return Files.exists(at)
+        ? Optional.of(new NeutralItem(Files.readAllBytes(at)))
+        : Optional.empty();
   }
 
   /** Puts a trophy on its plinth: the item first, then its line in museum.yml. */
@@ -107,7 +109,9 @@ public final class MuseumFiles {
     ConfigurationNode root = load();
     root.node("trophies").removeChild(anchor);
     Trophy t = trophy.get();
-    set(root.node("removed", id), new Trophy(t.anchor(), t.label(), t.season(), t.credit(), t.at(), id));
+    set(
+        root.node("removed", id),
+        new Trophy(t.anchor(), t.label(), t.season(), t.credit(), t.at(), id));
     save(root);
     Files.deleteIfExists(itemPath(anchor));
     return item;

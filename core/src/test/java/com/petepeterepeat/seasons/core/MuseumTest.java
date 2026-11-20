@@ -181,7 +181,8 @@ class MuseumTest {
         .containsExactly("Put minecraft:heavy_core in museum:core.");
 
     assertThat(held(peter)).isEmpty();
-    assertThat(shown("core")).isEqualTo(new Shown(Optional.of(CORE), Optional.of("Heavy core · Season 2 · Peter")));
+    assertThat(shown("core"))
+        .isEqualTo(new Shown(Optional.of(CORE), Optional.of("Heavy core · Season 2 · Peter")));
     // The plaque stands over the plaque anchor; the trophy over its own.
     assertThat(fake.displays.values())
         .filteredOn(d -> d.tag().equals("museum/core/0/plaque"))
@@ -231,7 +232,8 @@ class MuseumTest {
         fake.commands.stream().filter(c -> c.name().equals("museum")).findFirst().orElseThrow(),
         console,
         "/museum add museum:core");
-    assertThat(console.text()).containsExactly("Only a player can move items in and out of the museum.");
+    assertThat(console.text())
+        .containsExactly("Only a player can move items in and out of the museum.");
   }
 
   @Test
@@ -256,7 +258,8 @@ class MuseumTest {
         .containsExactly("Took minecraft:heavy_core from museum:core.");
     assertThat(held(peter)).contains(CORE);
     assertThat(shown("core")).isEqualTo(new Shown(Optional.empty(), Optional.empty()));
-    assertThat(as(peter, "/museum remove museum:core")).containsExactly("museum:core holds nothing.");
+    assertThat(as(peter, "/museum remove museum:core"))
+        .containsExactly("museum:core holds nothing.");
     assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
   }
 

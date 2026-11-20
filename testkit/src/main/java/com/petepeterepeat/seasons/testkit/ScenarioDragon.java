@@ -78,7 +78,8 @@ final class ScenarioDragon {
 
   /** The egg on top of the exit portal, where the game puts it, as a position or {@code none}. */
   private static String egg(World end, Location portal) {
-    Block top = end.getHighestBlockAt(portal.getBlockX(), portal.getBlockZ(), HeightMap.MOTION_BLOCKING);
+    Block top =
+        end.getHighestBlockAt(portal.getBlockX(), portal.getBlockZ(), HeightMap.MOTION_BLOCKING);
     return top.getType() == Material.DRAGON_EGG ? describe(top) : "none";
   }
 
@@ -103,21 +104,29 @@ final class ScenarioDragon {
     sender.sendMessage(started ? "Respawning the dragon" : "The dragon can't respawn now");
   }
 
-  private static void hurt(Plugin plugin, CommandSender sender, DragonBattle battle, String[] args) {
+  private static void hurt(
+      Plugin plugin, CommandSender sender, DragonBattle battle, String[] args) {
     Player player = plugin.getServer().getPlayerExact(args[2]);
     EnderDragon dragon = alive(battle);
     if (player == null || dragon == null) {
-      sender.sendMessage("Hurt nothing: " + (player == null ? args[2] + " isn't online" : "no dragon"));
+      sender.sendMessage(
+          "Hurt nothing: " + (player == null ? args[2] + " isn't online" : "no dragon"));
       return;
     }
     double amount = Double.parseDouble(args[3]);
     double before = dragon.getHealth();
     if (args[4].equals("arrow")) {
       Location from = dragon.getLocation().add(0, 3, 0);
-      Arrow arrow = dragon.getWorld().spawn(from, Arrow.class, a -> {
-        a.setShooter(player);
-        a.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
-      });
+      Arrow arrow =
+          dragon
+              .getWorld()
+              .spawn(
+                  from,
+                  Arrow.class,
+                  a -> {
+                    a.setShooter(player);
+                    a.setPickupStatus(AbstractArrow.PickupStatus.DISALLOWED);
+                  });
       dragon.damage(
           amount,
           DamageSource.builder(DamageType.ARROW)
@@ -148,7 +157,8 @@ final class ScenarioDragon {
     Player player = plugin.getServer().getPlayerExact(args[2]);
     EnderDragon dragon = alive(battle);
     if (player == null || dragon == null) {
-      sender.sendMessage("No crystal: " + (player == null ? args[2] + " isn't online" : "no dragon"));
+      sender.sendMessage(
+          "No crystal: " + (player == null ? args[2] + " isn't online" : "no dragon"));
       return;
     }
     double before = dragon.getHealth();
@@ -168,8 +178,8 @@ final class ScenarioDragon {
   }
 
   /**
-   * The fight's dragon while it can still be hurt: a blow that would kill it leaves it at one health
-   * point in its dying phase, which counts as dead.
+   * The fight's dragon while it can still be hurt: a blow that would kill it leaves it at one
+   * health point in its dying phase, which counts as dead.
    */
   private static @Nullable EnderDragon alive(DragonBattle battle) {
     EnderDragon dragon = battle.getEnderDragon();

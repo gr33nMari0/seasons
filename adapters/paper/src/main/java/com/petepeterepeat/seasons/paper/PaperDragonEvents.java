@@ -56,7 +56,8 @@ final class PaperDragonEvents implements Listener {
   @EventHandler(priority = EventPriority.MONITOR)
   void onWorldLoad(WorldLoadEvent event) {
     DragonEvents listening = listener;
-    if (listening != null && event.getWorld().getKey().asString().equals(PaperDragonFight.THE_END)) {
+    if (listening != null
+        && event.getWorld().getKey().asString().equals(PaperDragonFight.THE_END)) {
       listening.endLoaded();
     }
   }

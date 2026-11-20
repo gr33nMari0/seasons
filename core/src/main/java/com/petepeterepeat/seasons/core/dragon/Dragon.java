@@ -232,8 +232,7 @@ public final class Dragon implements DragonEvents {
         egg == Egg.WAITING ? platform.dragonFight().eggOnPortal() : Optional.empty();
     Kill kill = new Kill(slayer, name, clock.instant(), egg, before, Optional.empty());
     update(d -> d.withKill(kill));
-    seasons()
-        .addFirst(new SeasonFirst(season, FirstsTracker.DRAGON, "", who, name, kill.at()));
+    seasons().addFirst(new SeasonFirst(season, FirstsTracker.DRAGON, "", who, name, kill.at()));
     audit.record(
         AuditLog.SEASONS,
         "dragon",
@@ -264,7 +263,9 @@ public final class Dragon implements DragonEvents {
       platform
           .players()
           .celebrate(
-              online.id(), messages.get("dragon.title"), messages.get("dragon.subtitle", "name", name));
+              online.id(),
+              messages.get("dragon.title"),
+              messages.get("dragon.subtitle", "name", name));
     }
     platform
         .dragonFight()
@@ -279,7 +280,8 @@ public final class Dragon implements DragonEvents {
           for (int i = 0; i < FIREWORKS; i++) {
             platform
                 .scheduler()
-                .runGlobalLater(FIREWORK_GAP.multipliedBy(i), () -> platform.players().fireworks(above));
+                .runGlobalLater(
+                    FIREWORK_GAP.multipliedBy(i), () -> platform.players().fireworks(above));
           }
         });
     announcer.broadcast("dragon.slain", "name", name);

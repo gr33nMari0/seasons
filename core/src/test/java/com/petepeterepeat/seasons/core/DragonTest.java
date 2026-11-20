@@ -144,7 +144,8 @@ class DragonTest {
   /** The season state as saved, which is as it stands: test writes happen at once. */
   private SeasonState season() {
     try {
-      return new SeasonStore(dir.resolve("world/seasons/data/season.json"), new SerialWriter(Runnable::run))
+      return new SeasonStore(
+              dir.resolve("world/seasons/data/season.json"), new SerialWriter(Runnable::run))
           .load()
           .orElseThrow();
     } catch (IOException e) {
@@ -271,7 +272,8 @@ class DragonTest {
         .hasSize(5)
         .allMatch(at -> at.y() == 77);
     assertThat(dragonFirst()).map(SeasonFirst::name).contains("Pat");
-    assertThat(run("/season firsts")).anyMatch(line -> line.startsWith("Pat slew the ender dragon ("));
+    assertThat(run("/season firsts"))
+        .anyMatch(line -> line.startsWith("Pat slew the ender dragon ("));
   }
 
   @Test
@@ -573,7 +575,10 @@ class DragonTest {
 
   private List<com.petepeterepeat.seasons.core.store.JournalEntry> journal() {
     try {
-      return Journal.open(dir.resolve("world/seasons/data/journal.log"), new SerialWriter(Runnable::run), Clock.systemUTC())
+      return Journal.open(
+              dir.resolve("world/seasons/data/journal.log"),
+              new SerialWriter(Runnable::run),
+              Clock.systemUTC())
           .entries();
     } catch (IOException e) {
       throw new IllegalStateException(e);

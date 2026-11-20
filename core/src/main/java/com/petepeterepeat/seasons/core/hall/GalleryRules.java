@@ -56,10 +56,7 @@ public final class GalleryRules {
                 new Problem(
                     gallery.id(),
                     "cells." + cell.id() + ".anchors",
-                    "Season "
-                        + anchor.egg().getAsInt()
-                        + " already has its egg plinth at "
-                        + was));
+                    "Season " + anchor.egg().getAsInt() + " already has its egg plinth at " + was));
           }
         }
       }

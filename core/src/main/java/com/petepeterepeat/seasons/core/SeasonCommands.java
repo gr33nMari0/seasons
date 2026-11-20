@@ -869,7 +869,8 @@ final class SeasonCommands {
               String.join(", ", names)));
     }
     hallDryRun(source, messages);
-    if (!Museum.hasEggPlinth(services.hall().galleries(), seasons.state().map(SeasonState::season).orElse(0))) {
+    if (!Museum.hasEggPlinth(
+        services.hall().galleries(), seasons.state().map(SeasonState::season).orElse(0))) {
       source.reply(messages.get("end.dry-run.no-egg-plinth", "season", season()));
     }
     spawnDryRun(source, messages);
