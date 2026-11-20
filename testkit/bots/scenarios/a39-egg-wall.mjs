@@ -2,7 +2,8 @@
 // @isolated the End's dragon fight, which the reset can't put back
 // A39. At season end, the museum's egg plinth for that season shows a display egg with the slayer's
 // name. Also: the dry run warns while the season has no egg plinth; a season without a slayer
-// shows nothing on its plinth; the display is a copy tagged as archived, never a real egg;
+// shows no egg on its plinth, only its plaque with the season's award winners (questions 201); the
+// display is a copy tagged as archived, never a real egg;
 // reconciliation leaves it alone and draws it again when it is gone.
 import { SECOND, assert } from '../lib/context.mjs'
 import { PLINTHS, plaqueText, shownItem, shownItemData, writeMuseum } from '../lib/museum.mjs'
@@ -40,15 +41,19 @@ export default {
     assert(/Season 3 · slain by Pat/.test(plaque), `the plaque names the slayer: ${plaque}`)
     const data = await shownItemData(ctx, admin, PLINTHS.eggS3)
     assert(/seasons:archived/.test(data), `the egg shown is a copy tagged as archived: ${data}`)
-    // Season 2 had no slayer, so its plinth stays empty.
-    assert(await shownItem(ctx, admin, PLINTHS.eggS2) === null, 'the Season 2 plinth is empty')
+    // Season 2 had no slayer, so its plinth shows no egg, only the plaque with its awards.
+    assert(await shownItem(ctx, admin, PLINTHS.eggS2) === null, 'no egg on the Season 2 plinth')
+    const s2 = await plaqueText(ctx, admin, PLINTHS.eggS2) ?? ''
+    assert(/Season 2/.test(s2) && /Most dedicated: /.test(s2), `the Season 2 plaque lists its awards: ${s2}`)
 
     // Reconciliation keeps the egg, and draws it again when it is gone.
     await ctx.command(admin, '/hof reconcile museum', /^Reconciled museum: 0 repairs\.$/, 20 * SECOND)
     await ctx.command(admin, '/kill @e[type=minecraft:item_display]', /^Killed /)
     await ctx.command(admin, '/kill @e[type=minecraft:text_display]', /^Killed /)
-    await ctx.command(admin, '/hof reconcile museum', /^Reconciled museum: 2 repairs\.$/, 20 * SECOND)
+    // The egg and both plaques; the reconciler's own sweep may draw some of them first.
+    await ctx.command(admin, '/hof reconcile museum', /^Reconciled museum: (1 repair|[23] repairs)\.$/, 20 * SECOND)
     assert(await shownItem(ctx, admin, PLINTHS.eggS3) === 'minecraft:dragon_egg', 'the egg is back')
     assert(/Season 3 · slain by Pat/.test(await plaqueText(ctx, admin, PLINTHS.eggS3)), 'the plaque is back')
+    assert(/Season 2/.test(await plaqueText(ctx, admin, PLINTHS.eggS2) ?? ''), 'the Season 2 plaque is back')
   }
 }
