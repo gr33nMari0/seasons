@@ -342,6 +342,78 @@ class MuseumTest {
     assertThat(run("/season end --dry-run")).noneMatch(line -> line.startsWith("Museum:"));
   }
 
+  @Test
+  void aPlinthACrashLeftUnsettledTakesNoOtherChangeUntilItSettles() throws IOException {
+    PlayerRef peter = withMuseum();
+    InventorySnapshot saved = fake.player(peter).inventory;
+    hooks.arm(CrashPoint.MUSEUM_STORED, peter.id());
+    crash(() -> as(peter, "/museum add museum:core"));
+    fake.player(peter).inventory = saved;
+    fake.leave(peter);
+    restart();
+    PlayerRef sam = fake.join("Sam");
+    fake.player(sam).inventory = FakeItems.EMPTY;
+
+    // The store holds the heavy core Peter still has, until he is back.
+    assertThat(as(sam, "/museum remove museum:core"))
+        .containsExactly(
+            "Something is still moving in or out of museum:core. If a restart interrupted it, it"
+                + " settles when the op who started it is back online.");
+    assertThat(fake.player(sam).inventory.storage()).allMatch(Optional::isEmpty);
+
+    fake.join("Peter");
+    fake.sessions.joined(peter, true);
+    assertThat(held(peter)).contains(CORE);
+    assertThat(as(sam, "/museum remove museum:core")).containsExactly("museum:core holds nothing.");
+    assertThat(fake.player(sam).inventory.storage()).allMatch(Optional::isEmpty);
+  }
+
+  @Test
+  void eachEggPlinthInACellShowsItsOwnEgg() throws IOException {
+    PlayerRef peter = withMuseum();
+    Files.writeString(
+        dir.resolve("world/seasons/galleries/museum.yml"),
+        """
+        schema-version: 1
+        id: museum
+        kind: museum
+        dimension: minecraft:overworld
+        bounds: { min: [200, -61, 300], max: [214, -50, 310] }
+        cells:
+          wall:
+            bounds: { min: [202, -61, 304], max: [208, -55, 306] }
+            anchors:
+              - { type: trophy, pos: [203, -59, 305], egg: 2 }
+              - { type: trophy, pos: [207, -59, 305], egg: 3 }
+        """);
+    run("/season reload");
+    run("/season end --now");
+    TestCommands.run(
+        fake.commands.getFirst(), new TestSource(Optional.of(peter.id())), "/season spawn set");
+    run("/season launch");
+    PlayerRef pat = fake.join("Pat");
+    fake.dragonKilled = true;
+    fake.dragonEvents.died(UUID.randomUUID(), Optional.of(pat.id()));
+
+    run("/season end --now");
+
+    // Season 2 had no slayer; Season 3's egg stands on the second trophy, its plaque over it.
+    assertThat(fake.displays.entrySet())
+        .filteredOn(e -> e.getValue().tag().equals("museum/wall/0/trophy"))
+        .singleElement()
+        .satisfies(e -> {
+          assertThat(e.getValue().at())
+              .isEqualTo(Position.of("minecraft:overworld", 207.5, -58.5, 305.5));
+          assertThat(fake.items.get(e.getKey())).isEqualTo(EGG);
+        });
+    assertThat(shown("wall").plaque()).contains("Season 3 · slain by Pat");
+    assertThat(fake.displays.values())
+        .filteredOn(d -> d.tag().equals("museum/wall/0/plaque"))
+        .singleElement()
+        .extracting(FakePlatform.Drawn::at)
+        .isEqualTo(Position.of("minecraft:overworld", 207.5, -57.7, 305.5));
+  }
+
   /** Runs something that reaches an armed crash point, as the server stopping dead there. */
   private void crash(Runnable action) {
     try {

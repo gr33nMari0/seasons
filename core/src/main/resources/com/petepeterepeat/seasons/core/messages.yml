@@ -382,6 +382,7 @@ museum:
   removed: "<green>Took <item> from <anchor>.</green>"
   full: "<red>Your inventory is full, so <item> stays in <anchor>.</red>"
   busy: "<red>You're being archived or unarchived right now. Try again in a moment.</red>"
+  unsettled: "<red>Something is still moving in or out of <anchor>. If a restart interrupted it, it settles when the op who started it is back online.</red>"
   failed: "<red>That didn't work: <error>. See the server log.</red>"
   plaque: "<label> · Season <season> · <credit>"
   plaque-unlabelled: "Season <season> · <credit>"

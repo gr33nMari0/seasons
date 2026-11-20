@@ -25,7 +25,9 @@ import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
+import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.OpenOperation;
+import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.RecoveryHandler;
 import com.petepeterepeat.seasons.core.store.RecoveryOutcome;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
@@ -36,7 +38,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
@@ -46,16 +50,19 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The museum (see Ender vault, museum and dragon egg in the spec): galleries of kind {@code museum}
- * whose cells are plinths, each with one trophy anchor, no owners and display-only forever. {@code
- * /museum add <anchor> [label]} takes the op's held item into the store and shows a copy of it with
- * a plaque line; {@code /museum remove <anchor>} gives it back. A trophy anchor tagged {@code egg:
- * <season>} is that season's egg plinth: once the season has ended, it shows a dragon egg with the
- * slayer's name, unless something was put there by hand (questions 187 to 192).
+ * whose cells are plinths with one or more trophy anchors, no owners and display-only forever.
+ * {@code /museum add <anchor> [label]} takes the op's held item into the store and shows a copy of
+ * it with a plaque line; {@code /museum remove <anchor>} gives it back. A trophy anchor tagged
+ * {@code egg: <season>} is that season's egg plinth: once the season has ended, it shows a dragon
+ * egg with the slayer's name, unless something was put there by hand (questions 187 to 192). In a
+ * cell with several trophy anchors, such as an egg wall, what is put in by hand shows at the first,
+ * and each egg plinth shows its own egg (question 198).
  *
  * <p>Both commands are one transaction each, journalled as the vault's withdrawals are: save the
  * op's file and journal {@code MUSEUM_STARTED} with their inventory's hash, change the store, move
  * the item, save the op's file, then journal {@code MUSEUM_DONE}. After a crash, the op's saved
- * inventory tells whether the item moved, and the store is set to match.
+ * inventory tells whether the item moved, and the store is set to match. Until then, and while one
+ * runs, nothing else moves in or out of that plinth (question 197).
  */
 public final class Museum {
   private static final Logger LOG = LoggerFactory.getLogger(Museum.class);
@@ -81,6 +88,10 @@ public final class Museum {
   private final Clock clock;
   private final Executor serverThread;
   private final AtomicLong counter = new AtomicLong();
+
+  /** Plinths with an add or remove running in this session. */
+  private final Set<String> moving = ConcurrentHashMap.newKeySet();
+
   private Supplier<Optional<SeasonState>> state = Optional::empty;
   private @Nullable Reconciler reconciler;
 
@@ -215,11 +226,15 @@ public final class Museum {
       int slot,
       NeutralItem item,
       Optional<String> label) {
+    String key = ref.key();
+    if (!claim(source, key)) {
+      return CompletableFuture.completedFuture(null);
+    }
     if (!hold.hold(op)) {
+      moving.remove(key);
       source.reply(messages().get("museum.busy"));
       return CompletableFuture.completedFuture(null);
     }
-    String key = ref.key();
     String name = name(op);
     int season = state.get().map(SeasonState::season).orElse(0);
     platform.players().saveData(op);
@@ -247,6 +262,7 @@ public final class Museum {
         .whenCompleteAsync(
             (kept, failure) -> {
               hold.release(op);
+              moving.remove(key);
               if (failure != null) {
                 failed(source, "Adding to " + key, failure);
                 return;
@@ -320,11 +336,15 @@ public final class Museum {
   /** The remove transaction, on the server thread with the op held throughout. */
   private CompletableFuture<Void> takeOut(
       CommandSource source, PlayerId op, HallService.CellRef ref) {
+    String key = ref.key();
+    if (!claim(source, key)) {
+      return CompletableFuture.completedFuture(null);
+    }
     if (!hold.hold(op)) {
+      moving.remove(key);
       source.reply(messages().get("museum.busy"));
       return CompletableFuture.completedFuture(null);
     }
-    String key = ref.key();
     String name = name(op);
     int season = state.get().map(SeasonState::season).orElse(0);
     platform.players().saveData(op);
@@ -358,6 +378,7 @@ public final class Museum {
         .whenCompleteAsync(
             (removal, failure) -> {
               hold.release(op);
+              moving.remove(key);
               if (failure != null) {
                 failed(source, "Removing from " + key, failure);
                 return;
@@ -374,6 +395,28 @@ public final class Museum {
             },
             serverThread)
         .thenApply(removal -> null);
+  }
+
+  /**
+   * Claims a plinth for one add or remove, on the server thread. Refused while another runs on it,
+   * or while the journal shows one a crash left open: until recovery settles that one, the store
+   * may hold an item the op still has, or none while the op hasn't got it back.
+   */
+  private boolean claim(CommandSource source, String key) {
+    if (unsettled(key) || !moving.add(key)) {
+      source.reply(messages().get("museum.unsettled", "anchor", key));
+      return false;
+    }
+    return true;
+  }
+
+  /** Whether the journal shows an add or remove on a plinth that hasn't finished. */
+  private boolean unsettled(String key) {
+    return journal.isPresent()
+        && JournalRecovery.openOperations(journal.get().entries()).stream()
+            .filter(open -> open.operation() == Operation.MUSEUM)
+            .map(open -> open.steps().getFirst().payloadHash().split("/", 4))
+            .anyMatch(payload -> payload.length == 4 && payload[2].equals(key));
   }
 
   /** What a removal did: whether the item was given, and the item. */
@@ -449,77 +492,87 @@ public final class Museum {
   }
 
   /**
-   * What a museum plinth shows: its trophy and plaque, or on an egg plinth whose season has ended,
-   * a dragon egg with the slayer's name. Completes on the server thread.
+   * What a museum plinth shows: what was put in by hand, with its plaque, over its first trophy
+   * anchor; and on each egg plinth whose season has ended, a dragon egg with the slayer's name,
+   * unless the hand-placed item stands there. Completes on the server thread.
    */
   CompletableFuture<List<HallRenderer.Planned>> plan(HallService.CellRef ref) {
-    Optional<Anchor> trophy = ref.cell().anchor(AnchorType.TROPHY);
-    if (trophy.isEmpty()) {
+    if (ref.cell().anchors(AnchorType.TROPHY).isEmpty()) {
       return CompletableFuture.completedFuture(List.of());
     }
     String key = ref.key();
     return writer
         .submit(() -> new Stored(files.trophy(key), files.item(key)))
-        .thenApplyAsync(stored -> plan(ref, trophy.get(), stored), serverThread);
+        .thenApplyAsync(stored -> plan(ref, stored), serverThread);
   }
 
   private record Stored(Optional<MuseumFiles.Trophy> trophy, Optional<NeutralItem> item) {}
 
-  private List<HallRenderer.Planned> plan(HallService.CellRef ref, Anchor trophy, Stored stored) {
+  private List<HallRenderer.Planned> plan(HallService.CellRef ref, Stored stored) {
     Messages messages = messages();
-    Optional<NeutralItem> item = stored.item();
-    Optional<Message> plaque = Optional.empty();
-    if (item.isPresent() && stored.trophy().isPresent()) {
-      MuseumFiles.Trophy t = stored.trophy().get();
-      String season = Integer.toString(t.season());
-      plaque =
-          Optional.of(
-              t.label().isPresent()
-                  ? messages.get(
-                      "museum.plaque",
-                      "label",
-                      t.label().get(),
-                      "season",
-                      season,
-                      "credit",
-                      t.credit())
-                  : messages.get(
-                      "museum.plaque-unlabelled", "season", season, "credit", t.credit()));
-    } else if (trophy.egg().isPresent()) {
-      Optional<SeasonFirst> slain = slayer(trophy.egg().getAsInt());
-      if (slain.isPresent()) {
-        item = Optional.of(platform.dragonFight().eggItem());
-        plaque =
-            Optional.of(
-                messages.get(
-                    "museum.egg-plaque",
+    List<Anchor> trophies = ref.cell().anchors(AnchorType.TROPHY);
+    boolean byHand = stored.item().isPresent() && stored.trophy().isPresent();
+    List<HallRenderer.Planned> planned = new ArrayList<>();
+    for (int i = 0; i < trophies.size(); i++) {
+      Anchor trophy = trophies.get(i);
+      if (i == 0 && byHand) {
+        MuseumFiles.Trophy t = stored.trophy().get();
+        String season = Integer.toString(t.season());
+        Message plaque =
+            t.label().isPresent()
+                ? messages.get(
+                    "museum.plaque",
+                    "label",
+                    t.label().get(),
                     "season",
-                    Integer.toString(slain.get().season()),
-                    "name",
-                    slain.get().name()));
+                    season,
+                    "credit",
+                    t.credit())
+                : messages.get("museum.plaque-unlabelled", "season", season, "credit", t.credit());
+        show(ref, trophy, true, stored.item().get(), plaque, planned);
+      } else if (trophy.egg().isPresent()) {
+        Optional<SeasonFirst> slain = slayer(trophy.egg().getAsInt());
+        if (slain.isPresent()) {
+          Message plaque =
+              messages.get(
+                  "museum.egg-plaque",
+                  "season",
+                  Integer.toString(slain.get().season()),
+                  "name",
+                  slain.get().name());
+          show(ref, trophy, i == 0, platform.dragonFight().eggItem(), plaque, planned);
+        }
       }
     }
-    List<HallRenderer.Planned> planned = new ArrayList<>();
+    return planned;
+  }
+
+  /**
+   * One trophy and its plaque: over the cell's plaque anchor for the first trophy anchor, if the
+   * cell has one, and otherwise over the trophy itself.
+   */
+  private static void show(
+      HallService.CellRef ref,
+      Anchor trophy,
+      boolean first,
+      NeutralItem item,
+      Message plaque,
+      List<HallRenderer.Planned> planned) {
     String gallery = ref.gallery().id();
     String cell = ref.cell().id();
-    if (item.isPresent()) {
-      planned.add(
-          new HallRenderer.Planned.Item(
-              above(trophy.at(), TROPHY_HEIGHT),
-              item.get(),
-              new DisplayTag(gallery, cell, 0, DisplayTag.TROPHY).toString()));
-    }
-    if (plaque.isPresent()) {
-      Position at =
-          ref.cell()
-              .anchor(AnchorType.PLAQUE)
-              .map(p -> above(p.at(), PLAQUE_HEIGHT))
-              .orElseGet(() -> above(trophy.at(), PLAQUE_OVER_TROPHY));
-      planned.add(
-          new HallRenderer.Planned.Text(
-              at, plaque.get(), new DisplayTag(gallery, cell, 0, DisplayTag.PLAQUE).toString()));
-    }
-    return planned;
+    planned.add(
+        new HallRenderer.Planned.Item(
+            above(trophy.at(), TROPHY_HEIGHT),
+            item,
+            new DisplayTag(gallery, cell, 0, DisplayTag.TROPHY).toString()));
+    Optional<Anchor> plaqueAnchor = first ? ref.cell().anchor(AnchorType.PLAQUE) : Optional.empty();
+    Position at =
+        plaqueAnchor
+            .map(p -> above(p.at(), PLAQUE_HEIGHT))
+            .orElseGet(() -> above(trophy.at(), PLAQUE_OVER_TROPHY));
+    planned.add(
+        new HallRenderer.Planned.Text(
+            at, plaque, new DisplayTag(gallery, cell, 0, DisplayTag.PLAQUE).toString()));
   }
 
   /** The slayer of a season that has ended, if it had one. */
