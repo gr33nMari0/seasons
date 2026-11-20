@@ -104,6 +104,7 @@ end:
     spawn-in-zone: "<red>Season <next>'s spawn at <x>, <y>, <z> is inside zone <zone>. /season launch is refused until it moves.</red>"
     spawn-far: "<yellow>Season <next>'s spawn at <x>, <y>, <z> is <distance> blocks from 0, 0, beyond 24,000: strongholds may be out of reach.</yellow>"
     refused: "<red>/season end would be refused:</red> <reason>"
+    no-egg-plinth: "<yellow>Museum: no egg plinth for Season <season>, so its dragon egg won't be shown. Add egg: <season> to a trophy anchor in a museum gallery.</yellow>"
 
 cancel:
   too-late: "<red>Archiving has started and can't be cancelled.</red>"
@@ -367,6 +368,24 @@ firsts:
     end: "reached the End"
     item: "found <subject>"
     dragon: "slew the ender dragon"
+
+museum:
+  player-only: "<red>Only a player can move items in and out of the museum.</red>"
+  unknown: "<red>There is no museum anchor <anchor>.</red>"
+  unavailable: "<red>The journal is unavailable, so nothing can move in or out of the museum.</red>"
+  no-item: "<red>Hold the item you want to put in the museum.</red>"
+  archived: "<red>Archived items can't go in the museum.</red>"
+  occupied: "<red><anchor> already holds <item>. Take it out first with /museum remove <anchor>.</red>"
+  added: "<green>Put <item> in <anchor>.</green>"
+  changed: "<red>What you hold changed, so nothing went in the museum.</red>"
+  empty: "<gray><anchor> holds nothing.</gray>"
+  removed: "<green>Took <item> from <anchor>.</green>"
+  full: "<red>Your inventory is full, so <item> stays in <anchor>.</red>"
+  busy: "<red>You're being archived or unarchived right now. Try again in a moment.</red>"
+  failed: "<red>That didn't work: <error>. See the server log.</red>"
+  plaque: "<label> · Season <season> · <credit>"
+  plaque-unlabelled: "Season <season> · <credit>"
+  egg-plaque: "Season <season> · slain by <name>"
 
 dragon:
   title: "<gold>The dragon is slain!</gold>"

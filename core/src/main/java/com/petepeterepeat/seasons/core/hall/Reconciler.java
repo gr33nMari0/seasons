@@ -58,6 +58,7 @@ public final class Reconciler {
   private final AuditLog audit;
   private final LongSupplier nanoTime;
   private final Executor serverThread;
+  private final Museum museum;
 
   /** Cell keys queued, waiting for their record or to be compared. */
   private final Set<String> queued = new HashSet<>();
@@ -67,11 +68,11 @@ public final class Reconciler {
   private final List<ScheduledTask> tasks = new ArrayList<>();
 
   /**
-   * A cell's record, read.
+   * What a cell should show, worked out from its record, or a museum plinth's from the museum.
    *
-   * @param record empty when the cell has no owner or the owner no record
+   * @param expected empty when the cell has no owner or the owner no record
    */
-  private record Read(String key, Optional<ArchiveRecord> record) {}
+  private record Read(String key, List<HallRenderer.Planned> expected) {}
 
   /**
    * @param nanoTime a monotonic clock in nanoseconds, for the budget
@@ -83,8 +84,10 @@ public final class Reconciler {
       ArchiveFiles archives,
       SerialWriter writer,
       AuditLog audit,
+      Museum museum,
       LongSupplier nanoTime) {
     this.platform = platform;
+    this.museum = museum;
     this.halls = halls;
     this.renderer = renderer;
     this.archives = archives;
@@ -153,7 +156,7 @@ public final class Reconciler {
         if (ref.isPresent()
             && ref.get().cell().bounds().isPresent()
             && loaded(ref.get().cell().bounds().get())) {
-          reconcile(ref.get(), read.record());
+          reconcile(ref.get(), read.expected());
         }
         continue;
       }
@@ -171,15 +174,15 @@ public final class Reconciler {
       return;
     }
     var _ =
-        record(ref.get())
+        planned(ref.get())
             .whenCompleteAsync(
-                (record, failure) -> {
+                (expected, failure) -> {
                   if (failure != null) {
                     // Without its record nothing in the cell can be judged, so nothing is touched.
                     LOG.warn("Can't read the record for cell {}; not reconciled", key, failure);
                     queued.remove(key);
                   } else {
-                    ready.add(new Read(key, record));
+                    ready.add(new Read(key, expected));
                   }
                 },
                 serverThread);
@@ -195,15 +198,32 @@ public final class Reconciler {
       if (bounds.isEmpty()) {
         continue;
       }
-      HallService.CellRef ref = new HallService.CellRef(gallery, cell);
-      cells.add(
-          renderer
-              .loaded(bounds.get())
-              .thenCompose(loaded -> record(ref))
-              .thenApplyAsync(record -> reconcile(ref, record), serverThread));
+      cells.add(reconcile(new HallService.CellRef(gallery, cell)));
     }
     return CompletableFuture.allOf(cells.toArray(CompletableFuture[]::new))
         .thenApply(done -> cells.stream().mapToInt(CompletableFuture::join).sum());
+  }
+
+  /** Loads one cell's chunks, then reconciles it. Completes with its repairs. */
+  public CompletableFuture<Integer> reconcile(HallService.CellRef ref) {
+    Optional<Bounds> bounds = ref.cell().bounds();
+    if (bounds.isEmpty()) {
+      return CompletableFuture.completedFuture(0);
+    }
+    return renderer
+        .loaded(bounds.get())
+        .thenCompose(loaded -> planned(ref))
+        .thenApplyAsync(expected -> reconcile(ref, expected), serverThread);
+  }
+
+  /** What a cell should show: from its record, or a museum plinth's from the museum. */
+  private CompletableFuture<List<HallRenderer.Planned>> planned(HallService.CellRef ref) {
+    if (ref.gallery().kind() == Gallery.Kind.MUSEUM) {
+      return museum.plan(ref);
+    }
+    return record(ref)
+        .thenApplyAsync(
+            record -> record.map(r -> renderer.plan(ref, r)).orElse(List.of()), serverThread);
   }
 
   private CompletableFuture<Optional<ArchiveRecord>> record(HallService.CellRef ref) {
@@ -216,12 +236,12 @@ public final class Reconciler {
   }
 
   /**
-   * Compares a cell's displays with what its record draws and repairs the difference. Its chunks
-   * are loaded.
+   * Compares a cell's displays with what it should show and repairs the difference. Its chunks are
+   * loaded.
    *
    * @return how many repairs it made
    */
-  int reconcile(HallService.CellRef ref, Optional<ArchiveRecord> record) {
+  int reconcile(HallService.CellRef ref, List<HallRenderer.Planned> expected) {
     Bounds bounds = ref.cell().bounds().orElseThrow();
     Displays displays = platform.displays();
     // Every display in the cell, and every one of the cell's own anywhere in its chunks, so one
@@ -234,7 +254,6 @@ public final class Reconciler {
         shown.add(display);
       }
     }
-    List<HallRenderer.Planned> expected = record.map(r -> renderer.plan(ref, r)).orElse(List.of());
     int repairs = 0;
     for (HallRenderer.Planned planned : expected) {
       Displays.Shown match = take(shown, planned);

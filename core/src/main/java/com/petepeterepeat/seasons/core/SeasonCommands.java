@@ -23,6 +23,7 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
@@ -868,6 +869,9 @@ final class SeasonCommands {
               String.join(", ", names)));
     }
     hallDryRun(source, messages);
+    if (!Museum.hasEggPlinth(services.hall().galleries(), seasons.state().map(SeasonState::season).orElse(0))) {
+      source.reply(messages.get("end.dry-run.no-egg-plinth", "season", season()));
+    }
     spawnDryRun(source, messages);
     source.reply(messages.get("end.dry-run.next", "season", season()));
   }

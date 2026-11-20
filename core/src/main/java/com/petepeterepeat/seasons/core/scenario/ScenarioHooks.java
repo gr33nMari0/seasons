@@ -146,7 +146,8 @@ public final class ScenarioHooks implements CrashPoints {
 
   /**
    * Two lines: what the archive holds ({@code stacks= items= ender= vault= completed= visible=
-   * pages=}, or {@code vault= none}), and the record ({@code archivedThrough= pending=}).
+   * pages=}, or {@code vault= none}), and the record ({@code archivedThrough= pending= returned=},
+   * the last what waits on their Returned page).
    */
   public CompletableFuture<List<String>> summary(PlayerId player, String name, int season) {
     Wiring w = wired();
@@ -183,8 +184,21 @@ public final class ScenarioHooks implements CrashPoints {
           int pending = w.recovery().open(player).size();
           return List.of(
               first,
-              "Record of %s: archivedThrough=%d pending=%d".formatted(name, through, pending));
+              "Record of %s: archivedThrough=%d pending=%d returned=%d"
+                  .formatted(name, through, pending, returned(w, player)));
         });
+  }
+
+  /** How many items wait on a player's Returned page. */
+  private static int returned(Wiring w, PlayerId player) {
+    try {
+      return w.vaults().read(player).returned().stream()
+          .flatMap(Optional::stream)
+          .mapToInt(ScenarioHooks::count)
+          .sum();
+    } catch (java.io.IOException e) {
+      throw new java.io.UncheckedIOException(e);
+    }
   }
 
   /** Hands an item back to a player on their vault's Returned page. */

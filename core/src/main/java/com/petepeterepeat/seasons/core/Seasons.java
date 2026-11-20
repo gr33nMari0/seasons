@@ -32,6 +32,8 @@ import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.Museum;
+import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
@@ -226,8 +228,20 @@ public final class Seasons implements SeasonsApi {
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     Hall hall = halls.hall(renderer);
+    Museum museum =
+        new Museum(
+            platform,
+            config,
+            halls,
+            new MuseumFiles(world.resolve("museum.yml"), world.resolve("data/museum")),
+            writer,
+            Optional.ofNullable(journal),
+            hold,
+            audit,
+            crash,
+            clock);
     Reconciler reconciling =
-        new Reconciler(platform, halls, renderer, archives, writer, audit, nanoTime);
+        new Reconciler(platform, halls, renderer, archives, writer, audit, museum, nanoTime);
     reconciler = reconciling;
     HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
@@ -259,6 +273,7 @@ public final class Seasons implements SeasonsApi {
           new Vault(
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      replay.register(Operation.MUSEUM, museum.recovery());
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
@@ -321,6 +336,8 @@ public final class Seasons implements SeasonsApi {
     zoning.bind(seasons);
     pets.bind(seasons::state, zoning::decide);
     fight.bind(seasons);
+    museum.bind(seasons::state, reconciling);
+    seasons.onEnding(museum::seasonEnded);
     seasons.start();
     fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);
@@ -454,6 +471,7 @@ public final class Seasons implements SeasonsApi {
             List.of("halloffame"));
     vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
     platform.commands().register(pets.command(), List.of());
+    platform.commands().register(museum.command(), List.of());
     platform.events().pets(pets);
     platform.events().dragon(fight);
     login.ifPresent(l -> l.markPlaying(platform.players().online()));

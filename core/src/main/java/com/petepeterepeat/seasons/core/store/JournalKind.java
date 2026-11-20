@@ -19,5 +19,8 @@ public enum JournalKind {
   EGG_DELIVERED,
   PET_TRAVELLED,
   /** A cell's gate plane set open or shut (questions 169). Needs no recovery. */
-  GATE_SET
+  GATE_SET,
+  /** {@code /museum add} or {@code remove} started: the op's inventory hash before it. */
+  MUSEUM_STARTED,
+  MUSEUM_DONE
 }

@@ -37,6 +37,9 @@ public interface Inventories {
    */
   boolean give(PlayerId player, NeutralItem item);
 
+  /** Whether an item carries the {@code seasons:archived} tag, as copies shown in the Hall do. */
+  boolean isArchived(NeutralItem item);
+
   /** Puts a snapshot back into the player's slots, replacing what is there. */
   void restore(PlayerId player, InventorySnapshot snapshot);
 

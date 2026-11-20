@@ -162,6 +162,11 @@ public final class FakePlatform {
   public @Nullable HallGuard guard;
   public com.petepeterepeat.seasons.core.port.@Nullable ZoneGuard zoneGuard;
 
+  /** What each text display says and each item display shows, by display id. */
+  public final Map<java.util.UUID, Message> texts = new HashMap<>();
+
+  public final Map<java.util.UUID, NeutralItem> items = new HashMap<>();
+
   /** Fireworks set off at positions, such as Homecoming's at the spawn. */
   public final List<Position> fireworks = new ArrayList<>();
 
@@ -215,6 +220,9 @@ public final class FakePlatform {
   }
 
   public boolean dragonKilled = true;
+
+  /** Items a test says carry the {@code seasons:archived} tag. */
+  public final Set<NeutralItem> archivedItems = new java.util.HashSet<>();
 
   /** Whether the End is loaded, with a dragon fight to set the flag on. */
   public boolean endLoaded = true;
@@ -591,6 +599,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean isArchived(NeutralItem item) {
+            return archivedItems.contains(item);
+          }
+
+          @Override
           public List<String> purgeArchived(PlayerId player) {
             return List.of();
           }
@@ -842,7 +855,9 @@ public final class FakePlatform {
         new Displays() {
           @Override
           public java.util.UUID spawnText(Position position, Message text, String tag) {
-            return add(new Drawn(tag, position, List.of(), "text"));
+            java.util.UUID id = add(new Drawn(tag, position, List.of(), "text"));
+            texts.put(id, text);
+            return id;
           }
 
           @Override
@@ -854,7 +869,9 @@ public final class FakePlatform {
 
           @Override
           public java.util.UUID spawnItem(Position position, NeutralItem item, String tag) {
-            return add(new Drawn(tag, position, List.of(), "item"));
+            java.util.UUID id = add(new Drawn(tag, position, List.of(), "item"));
+            items.put(id, item);
+            return id;
           }
 
           private java.util.UUID add(Drawn shown) {
