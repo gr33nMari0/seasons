@@ -436,7 +436,9 @@ final class ScenarioWorld implements Listener {
 
   /**
    * Writes a chunk's blocks, section by section: whether the section is empty, else its palette of
-   * block states and an index into it for each of its 4096 blocks.
+   * block states and an index into it for each of its 4096 blocks. The copy is written beside its
+   * place and moved in whole, so a crash scenario's halt mid-write leaves no half copy for the next
+   * reset to trip on.
    */
   private void keepPristine(Chunk chunk) {
     World world = chunk.getWorld();
@@ -445,8 +447,9 @@ final class ScenarioWorld implements Listener {
     Path file = pristineFile(world, chunk.getX(), chunk.getZ());
     try {
       Files.createDirectories(file.getParent());
+      Path partial = file.resolveSibling(file.getFileName() + ".partial");
       try (DataOutputStream out =
-          new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(file)))) {
+          new DataOutputStream(new java.io.BufferedOutputStream(Files.newOutputStream(partial)))) {
         out.writeInt(sections);
         for (int s = 0; s < sections; s++) {
           if (snapshot.isSectionEmpty(s)) {
@@ -471,6 +474,11 @@ final class ScenarioWorld implements Listener {
           }
         }
       }
+      Files.move(
+          partial,
+          file,
+          java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+          java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }

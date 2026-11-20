@@ -248,6 +248,8 @@ Built: `DragonState` in `season.json` (the fight's tally, the season's first kil
 
 Built: the `awards` section of config.yml (`SeasonsConfig.Award`, `config/AwardMeasure`), validated with `deaths.display`, and award settings reachable by `/season config`; `season/Awards`, which works the awards out when the Intermission begins (`SeasonService#onIntermission`, and at startup), saves them in `season.json` (`SeasonAwards`), draws them, copies them into the winners' archives (`ArchiveFiles#all`, `#update`, `ArchiveRecord.Honours`, format-version 3) and announces them with the firsts recap (`Announcer#broadcast(List)`, `#discord(List)`); the archiver copies each player's firsts and awards; trophies and the plaque line in `HallRenderer`, the season plaque in `Museum`, the Awards section and dragon credit on `SeasonCard`, the awards in `/season firsts`; `World#item` for trophies; `LaunchSequence#showDeaths`, run again on reload, with earlier seasons' objectives taken off the screen. The test plugin gains `/scenario stat` (ADR 0003). Decisions: `docs/questions.md` 199 to 211.
 
+After #23 opened: CI failed the reset after `m3-vault-crash-started`'s halt with an `EOFException`, as a local run had once after `m3-shape-commands`. The test plugin copies each chunk the first time it loads, to put it back between scenarios; a crash scenario's halt mid-copy left half a copy, which the next reset couldn't read. Copies are now written beside their place and moved in whole (`ScenarioWorld#keepPristine`).
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
