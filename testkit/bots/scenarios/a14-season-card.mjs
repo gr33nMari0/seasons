@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A14. The season card has the highlights, every General-tab statistic as a season difference, the
 // player's firsts and their furthest block. It opens as a book from the plaque anchor in their cell.
+// Its awards are listed too: Carda built furthest out (from 0, 0, as Season 2 has no spawn).
 import { SECOND, assert } from '../lib/context.mjs'
 import { buildGallery, cellOf, place, use } from '../lib/hall.mjs'
 
@@ -30,7 +31,7 @@ export default {
       /^Play time: \d/, /^Deaths: \d+$/, /^Mobs killed: \d+$/, /^Players killed: \d+$/, /^Travelled: [\d,]+ blocks$/,
       /^Diamonds mined: \d+$/, /^Ancient debris mined: \d+$/, /^Blocks placed: [\d,]+$/, /^Blocks mined: [\d,]+$/,
       /^Advancements: \d+ \/ \d+$/, /^Furthest block: 500 blocks, at 500, 0$/, /^Ended at -?\d+, -?\d+, -?\d+ in minecraft:overworld$/,
-      /^Season firsts$/, /^completed \[Stone Age\]$/, /^Statistics$/, /^minecraft:leave_game: \d+$/, /^minecraft:play_time: /, /^minecraft:open_chest: \d+$/]) {
+      /^Season firsts$/, /^completed \[Stone Age\]$/, /^Awards$/, /^Furthest builder \(500 blocks\)$/, /^Statistics$/, /^minecraft:leave_game: \d+$/, /^minecraft:play_time: /, /^minecraft:open_chest: \d+$/]) {
       assert(lines.some((l) => expected.test(l)), `the card has a line matching ${expected}`)
     }
     const general = lines.filter((l) => /^minecraft:[a-z_]+: /.test(l))
