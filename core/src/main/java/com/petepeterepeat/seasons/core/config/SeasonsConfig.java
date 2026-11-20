@@ -2,7 +2,11 @@
 package com.petepeterepeat.seasons.core.config;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 
 /**
@@ -21,7 +25,11 @@ public record SeasonsConfig(
     Hof hof,
     Zones zones,
     Dragon dragon,
-    Deaths deaths) {
+    Deaths deaths,
+    Map<String, Award> awards) {
+  public SeasonsConfig {
+    awards = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(awards));
+  }
 
   /**
    * When the season ends and how players are reminded.
@@ -120,8 +128,36 @@ public record SeasonsConfig(
   @ConfigSerializable
   public record Dragon(boolean newEggEachSeason, EggTo eggTo) {}
 
+  /**
+   * The deaths display.
+   *
+   * @param display the scoreboard slot each season's deaths objective is shown in
+   */
   @ConfigSerializable
-  public record Deaths(String display) {}
+  public record Deaths(String display) {
+    /** The slots {@code display} may name. */
+    public static final List<String> SLOTS = List.of("list", "sidebar", "below_name", "none");
+  }
+
+  /**
+   * One award (see Stats, season cards and awards in the spec), by its id in the {@code awards}
+   * section, in the order the section lists them.
+   *
+   * @param measure what it counts, as {@link AwardMeasure} reads it
+   * @param item the item each winner's trophy shows
+   */
+  @ConfigSerializable
+  public record Award(@Nullable String measure, @Nullable String item) {
+    /** The measure, if it is one Seasons knows. */
+    public Optional<AwardMeasure> parsed() {
+      return Optional.ofNullable(measure).flatMap(AwardMeasure::parse);
+    }
+
+    /** Whether the award is given at all. */
+    public boolean on() {
+      return parsed().filter(m -> m != AwardMeasure.Named.OFF).isPresent();
+    }
+  }
 
   public enum ResetMode {
     RESET,

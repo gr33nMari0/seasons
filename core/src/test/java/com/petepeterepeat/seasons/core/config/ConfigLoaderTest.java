@@ -147,6 +147,104 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void deathsDisplayIsOneOfFour() throws IOException {
+    for (String slot : List.of("list", "sidebar", "below_name", "none")) {
+      write("config.yml", "schema-version: 1\ndeaths:\n  display: " + slot + "\n");
+      assertThat(loader(Map.of()).load().snapshot())
+          .get()
+          .extracting(s -> s.config().deaths().display())
+          .isEqualTo(slot);
+    }
+    write("config.yml", "schema-version: 1\ndeaths:\n  display: tab\n");
+
+    ConfigLoader.Result result = loader(Map.of()).load();
+
+    assertThat(result.snapshot()).isEmpty();
+    assertThat(result.problems())
+        .extracting(ConfigProblem::path, ConfigProblem::message)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("deaths.display"),
+                "must be list, sidebar, below_name or none, not tab"));
+  }
+
+  @Test
+  void awardsLoadAndBadOnesSayWhere() throws IOException {
+    ConfigLoader.Result bundled = loader(Map.of()).load();
+    assertThat(bundled.snapshot().get().config().awards())
+        .containsOnlyKeys(
+            "most-deaths",
+            "furthest-travelled",
+            "most-dedicated",
+            "deepest-pockets",
+            "dragon-slayer",
+            "furthest-builder",
+            "most-advancements");
+    assertThat(bundled.snapshot().get().config().awards().get("most-dedicated").parsed())
+        .contains(AwardMeasure.Named.PLAY_TIME);
+
+    write(
+        "config.yml",
+        """
+        schema-version: 1
+        awards:
+          deepest-pockets: { measure: off }
+          most-jumps: { measure: minecraft:jump, item: rabbit_foot }
+        """);
+    ConfigLoader.Result ours = loader(Map.of()).load();
+    assertThat(ours.problems()).isEmpty();
+    assertThat(ours.warnings()).isEmpty();
+    var awards = ours.snapshot().get().config().awards();
+    assertThat(awards.get("deepest-pockets").on()).isFalse();
+    assertThat(awards.get("most-jumps").parsed())
+        .contains(new AwardMeasure.Statistic("minecraft:jump"));
+    // The server's own award is a setting too, for /season config.
+    assertThat(ours.snapshot().get().settings())
+        .containsEntry("awards.most-jumps.measure", "minecraft:jump")
+        .containsEntry("awards.most-jumps.item", "rabbit_foot")
+        // YAML reads a bare off as false, which is off too.
+        .containsEntry("awards.deepest-pockets.measure", "false");
+
+    write(
+        "config.yml",
+        """
+        schema-version: 1
+        awards:
+          most-deaths: { measure: kills }
+          Most Hops: { measure: minecraft:jump, item: rabbit_foot }
+          no-item: { measure: deaths }
+          bad-item: { measure: deaths, item: not_a_thing }
+          odd: { measure: deaths, item: stick, colour: red }
+        """);
+    ConfigLoader.Result bad =
+        new ConfigLoader(
+                configDir(),
+                worldDir(),
+                Map.of(),
+                dimension -> true,
+                id -> !id.contains("not_"),
+                id -> true)
+            .load();
+
+    assertThat(bad.snapshot()).isEmpty();
+    assertThat(bad.problems())
+        .extracting(ConfigProblem::path, ConfigProblem::message)
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("awards.most-deaths.measure"),
+                "kills isn't a measure: use deaths, travelled, play-time, diamonds, dragon,"
+                    + " furthest-builder, advancements, off or a statistic id such as"
+                    + " minecraft:jump"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("awards.Most Hops"),
+                "award ids are lower-case letters, digits and dashes, such as most-deaths"),
+            org.assertj.core.groups.Tuple.tuple(Optional.of("awards.no-item.item"), "is missing"),
+            org.assertj.core.groups.Tuple.tuple(
+                Optional.of("awards.bad-item.item"), "not_a_thing isn't an item this server knows"));
+    assertThat(bad.warnings()).contains("config.yml: unknown key awards.odd.colour is ignored");
+  }
+
+  @Test
   void aSyntaxErrorReportsFileLineAndColumn() throws IOException {
     write("config.yml", "schema-version: 1\nschedule:\n  endCountdown: 3m\n  reminders: [7d, 1d\n");
 
