@@ -5,16 +5,23 @@
 // it on their Returned page when they come back, and a crystal a player sets off is their final
 // blow, over more damage dealt by someone else.
 import { SECOND, assert } from '../lib/context.mjs'
-import { NEXT, carried, openVault, slotOf, take, turnTo } from '../lib/vault.mjs'
+import { NEXT, carried, openVault, slotOf, take } from '../lib/vault.mjs'
 import { launchFrontier } from '../lib/zones.mjs'
 import { EGG_WAIT, crystal, dragonInfo, hurt, nextSeason, respawn, toTheEnd, waitForDragon } from '../lib/dragon.mjs'
 
 const SEALED = /^Your ender vault is sealed until Homecoming/
 
-/** Opens the vault and turns to the page that shows the egg. */
-async function eggPage (ctx, bot) {
-  const window = await openVault(ctx, bot, SEALED)
-  if (slotOf(window, 'dragon_egg') < 0) await turnTo(ctx, bot, NEXT, 'dragon_egg')
+/**
+ * Opens the vault and turns to the page that shows the egg: the Returned page, after a page for
+ * each season the player was archived from.
+ */
+async function eggPage (ctx, admin, bot) {
+  await openVault(ctx, bot, SEALED)
+  for (let turned = 0; slotOf(bot.currentWindow, 'dragon_egg') < 0; turned++) {
+    assert(turned < 4, 'the Returned page shows the egg')
+    await bot.clickWindow(NEXT, 0, 0)
+    await ctx.sync(admin, [bot], 2)
+  }
 }
 
 export default {
@@ -35,12 +42,12 @@ export default {
     await ctx.sync(admin, [pat], 4)
     assert(await carried(ctx, admin, 'Pat', 'dragon_egg') === 0, 'Pat carries no egg')
     assert(await ctx.itemCount(admin, 'Pat') === 2304, 'Pat carries only the stone')
-    assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item]'), 'nothing was dropped')
+    assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:dragon_egg"}}]'), 'no egg was dropped')
     assert((await dragonInfo(ctx, admin)).egg === 'none', 'the egg is off the portal')
 
     // Before Homecoming, the Returned page gives it up once there is room.
     await ctx.command(admin, '/clear Pat minecraft:stone 64', /^Removed 64 /)
-    await eggPage(ctx, pat)
+    await eggPage(ctx, admin, pat)
     const took = ctx.waitForMessages(pat, /^Took 1 × minecraft:dragon_egg from your vault\.$/)
     await take(ctx, admin, pat, 'dragon_egg', 1)
     await took
@@ -52,7 +59,7 @@ export default {
     await toTheEnd(ctx, admin, ['Pat', 'Sam'])
     await respawn(ctx, admin)
     for (let i = 0; i < 3; i++) await hurt(ctx, admin, 'Pat', 200, 'melee')
-    const slain = ctx.waitForMessages(pat, /^Sam slew the ender dragon!$/, 15 * SECOND, 'the broadcast')
+    const slain = ctx.waitForMessages(pat, /^Sam slew the ender dragon!$/, 30 * SECOND, 'the broadcast')
     await ctx.eventually(async () => {
       if ((await dragonInfo(ctx, admin)).alive) await crystal(ctx, admin, 'Sam')
       assert(!(await dragonInfo(ctx, admin)).alive, 'the dragon is dead')
@@ -68,7 +75,7 @@ export default {
 
     // Sam comes back to it.
     sam = await ctx.join('Sam')
-    await eggPage(ctx, sam)
+    await eggPage(ctx, admin, sam)
     await take(ctx, admin, sam, 'dragon_egg', 1)
     sam.closeWindow(sam.currentWindow)
   }

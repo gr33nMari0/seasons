@@ -31,6 +31,8 @@ export function museumCrashScenario (name, point, stored) {
       async (ctx) => {
         const admin = await ctx.admin()
         await forceload(ctx, admin, { x: 207, y: -60, z: 305 }, 16)
+        // Recovery waits for the op, whose saved inventory says whether the item moved.
+        await ctx.eventually(async () => assert((await ctx.archive(admin, 'SeasonsAdmin', 2)).pending === 0, 'the museum change is settled'), 20_000)
         await ctx.command(admin, '/season status', /^Journal: .*, 0 waiting for recovery$/)
         const onOp = await carried(ctx, admin, 'SeasonsAdmin', 'heavy_core')
         assert(onOp === (stored ? 0 : 1), `the heavy core is ${stored ? "the museum's" : "the op's"}: ${onOp} on the op`)

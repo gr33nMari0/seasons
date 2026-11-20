@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  *       fight's dragon, the previously-killed flag, the respawn phase, the exit portal and the
  *       dragon egg on top of it, as positions or {@code none}
  *   <li>{@code respawn} puts four end crystals on the exit portal, as players place them, and
- *       starts the respawn
+ *       starts the respawn, whatever the previously-killed flag says
  *   <li>{@code hurt <player> <amount> <melee|arrow>} hurts the dragon by a player's hit, or by an
  *       arrow the player shot
  *   <li>{@code crystal <player>} puts an end crystal by the dragon's head and has the player break
@@ -63,7 +63,7 @@ final class ScenarioDragon {
     Location portal = battle.getEndPortalLocation();
     sender.sendMessage(
         "Dragon alive="
-            + (dragon != null && !dragon.isDead() && dragon.getHealth() > 0)
+            + (alive(battle) != null)
             + " health="
             + (dragon == null ? "none" : String.format(Locale.ROOT, "%.1f", dragon.getHealth()))
             + " killed="
@@ -94,7 +94,12 @@ final class ScenarioDragon {
       Location at = portal.clone().add(side[0] + 0.5, 1, side[1] + 0.5);
       crystals.add(end.spawn(at, EnderCrystal.class, crystal -> crystal.setShowingBottom(false)));
     }
+    // Paper starts a respawn only once the flag says a dragon was killed, where the game's own
+    // crystals ask only that the dragon is dead; the flag is put back at once, as the egg needs it.
+    boolean killed = battle.hasBeenPreviouslyKilled();
+    battle.setPreviouslyKilled(true);
     boolean started = battle.initiateRespawn(crystals);
+    battle.setPreviouslyKilled(killed);
     sender.sendMessage(started ? "Respawning the dragon" : "The dragon can't respawn now");
   }
 
@@ -162,9 +167,18 @@ final class ScenarioDragon {
             dragon.getHealth()));
   }
 
+  /**
+   * The fight's dragon while it can still be hurt: a blow that would kill it leaves it at one health
+   * point in its dying phase, which counts as dead.
+   */
   private static @Nullable EnderDragon alive(DragonBattle battle) {
     EnderDragon dragon = battle.getEnderDragon();
-    return dragon == null || dragon.isDead() || dragon.getHealth() <= 0 ? null : dragon;
+    return dragon == null
+            || dragon.isDead()
+            || dragon.getHealth() <= 0
+            || dragon.getPhase() == EnderDragon.Phase.DYING
+        ? null
+        : dragon;
   }
 
   private static String describe(Block block) {

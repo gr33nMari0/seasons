@@ -28,11 +28,10 @@ export function eggCrashScenario (name, point) {
       async (ctx) => {
         const admin = await ctx.admin()
         await ctx.join('Pat')
-        // The Returned page is page 0 of the vault.
-        await ctx.eventually(async () => assert((await ctx.archive(admin, 'Pat', 0)).vault === 1, 'the egg is on the Returned page'), 30_000)
+        await ctx.eventually(async () => assert((await ctx.archive(admin, 'Pat', 3)).returned === 1, 'the egg is on the Returned page'), 30_000)
         assert(await carried(ctx, admin, 'Pat', 'dragon_egg') === 0, 'and not on Pat as well')
         assert((await dragonInfo(ctx, admin)).egg === 'none', 'nor on the portal')
-        assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item]'), 'nothing was dropped')
+        assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:dragon_egg"}}]'), 'no egg was dropped')
         await ctx.command(admin, '/season status', /^Journal: .*, 0 waiting for recovery$/)
       }
     ]

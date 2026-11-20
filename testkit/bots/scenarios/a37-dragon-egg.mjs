@@ -59,7 +59,8 @@ export default {
     assert(await carried(ctx, admin, 'Sam', 'dragon_egg') === 0, 'Sam has none')
     info = await dragonInfo(ctx, admin)
     assert(info.egg === oldEgg, `only the Season 2 egg is on the portal: ${info.egg}, was ${oldEgg}`)
-    assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item]'), 'no egg was dropped')
+    // The respawn blows the tops off the pillars, which drops blocks; no egg is among them.
+    assert(!await ctx.holds(admin, 'entity @e[type=minecraft:item,nbt={Item:{id:"minecraft:dragon_egg"}}]'), 'no egg was dropped')
     await ctx.command(admin, '/season firsts', [/^Season 3 firsts:$/, /^Pat slew the ender dragon \(/])
 
     // A second kill in Season 3: no egg, as in vanilla, and no fanfare.

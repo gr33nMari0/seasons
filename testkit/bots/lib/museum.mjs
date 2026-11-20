@@ -58,9 +58,19 @@ export async function shownItem (ctx, admin, plinth) {
   return id === null ? null : id.replace(/"/g, '')
 }
 
-/** The /data text of the plaque's text near a plinth, or null if there is none. */
+/** The plaque's text near a plinth as plain text, or null if there is none. */
 export async function plaqueText (ctx, admin, plinth) {
-  return selectorData(ctx, admin, near('text_display', plinth.plaque ?? plinth.trophy, 2.5), 'text')
+  const data = await selectorData(ctx, admin, near('text_display', plinth.plaque ?? plinth.trophy, 2.5), 'text')
+  return data === null ? null : plain(data)
+}
+
+/**
+ * The words of a text component as /data prints it: its style keys dropped and its strings
+ * joined, since placeholders and colours can split one line into several parts.
+ */
+export function plain (snbt) {
+  const unstyled = snbt.replace(/\b(color|font|shadow_color|bold|italic|underlined|strikethrough|obfuscated|type)\s*:\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[\w.#-]+)/g, '')
+  return [...unstyled.matchAll(/"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'/g)].map((m) => m[1] ?? m[2]).join('')
 }
 
 /** The /data text of the item an item display shows at a plinth, components and all. */
