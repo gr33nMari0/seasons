@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.message.Message;
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -112,7 +113,7 @@ public final class HallRules implements HallGuard {
   }
 
   private Optional<Decision> place(PlayerId player, Position block, String type) {
-    if (!halls.inHall(block)) {
+    if (!halls.guarded(block)) {
       return Optional.empty();
     }
     if (bypasses(player)) {
@@ -134,7 +135,7 @@ public final class HallRules implements HallGuard {
   }
 
   private Optional<Decision> breakBlock(PlayerId player, Position block) {
-    if (!halls.inHall(block)) {
+    if (!halls.guarded(block)) {
       return Optional.empty();
     }
     String type = platform.world().block(block).type();
@@ -183,7 +184,7 @@ public final class HallRules implements HallGuard {
   /** Any other change at a position: allowed only to a decorating owner in their own cell. */
   private Optional<Decision> change(
       PlayerId player, Position at, String verb, String what, String messageKey) {
-    if (!halls.inHall(at)) {
+    if (!halls.guarded(at)) {
       return Optional.empty();
     }
     if (bypasses(player)) {
@@ -330,12 +331,7 @@ public final class HallRules implements HallGuard {
 
   @Override
   public boolean protects(Position block) {
-    for (Gallery gallery : halls.galleries()) {
-      if (gallery.contains(block)) {
-        return true;
-      }
-    }
-    return false;
+    return halls.guarded(block);
   }
 
   @Override
@@ -393,8 +389,14 @@ public final class HallRules implements HallGuard {
         .allMatch(block -> halls.cellAt(block).filter(ref -> ref.key().equals(key)).isPresent());
   }
 
+  /**
+   * Whether a player builds anywhere in the Hall: a bypass holder, or a player in creative mode
+   * while {@code hof.creativeBuilds} is on (questions 252).
+   */
   private boolean bypasses(PlayerId player) {
-    return platform.permissions().has(player, HallService.BYPASS);
+    return platform.permissions().has(player, HallService.BYPASS)
+        || (config.get().config().hof().creativeBuilds()
+            && platform.players().gameMode(player) == GameMode.CREATIVE);
   }
 
   /** Whether a block is a container cells may hold, by {@code cells.containers}. */
