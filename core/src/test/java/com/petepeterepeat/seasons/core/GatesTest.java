@@ -47,6 +47,8 @@ class GatesTest {
 
   @TempDir Path dir;
   private final FakePlatform fake = new FakePlatform();
+  private String mode = "auto";
+  private boolean moveOut = true;
   private Seasons seasons;
   private PlayerRef alex;
 
@@ -80,6 +82,11 @@ class GatesTest {
               - { type: gate, pos: [5, 64, 5] }
               - { type: gate, pos: [6, 65, 5] }
         """);
+    // Gates as before the hub (questions 250): shut while the cell is locked, moving people out.
+    Files.createDirectories(dir.resolve("plugins/Seasons"));
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\ncells:\n  gates: " + mode + "\n  moveOut: " + moveOut + "\n");
     seasons =
         new Seasons(
             fake.platform(new Capabilities(EnumSet.allOf(Capability.class)), dir),
@@ -282,5 +289,96 @@ class GatesTest {
     assertThat(GalleryRules.check(other))
         .extracting(GalleryRules.Problem::message)
         .containsExactly("the gate must be a plane one block thick");
+  }
+
+  /** The defaults since the hub (questions 250): open unless shut, nobody moved. */
+  private void openGates() throws IOException {
+    Files.writeString(dir.resolve("plugins/Seasons/config.yml"), "schema-version: 1\n");
+    run("/season reload");
+  }
+
+  private List<String> heard(PlayerRef player) {
+    return fake.sent.stream()
+        .filter(s -> s.player().equals(player.id()))
+        .map(s -> Messages.plain(s.message()))
+        .toList();
+  }
+
+  @Test
+  void aGateIsOpenUnlessShutOnPurpose() throws IOException {
+    openGates();
+    fake.tick();
+    assertThat(gateIs("minecraft:air")).as("open with the cell locked").isTrue();
+
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell gate c1 shut");
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("an admin shut it").isTrue();
+
+    run("/season decorate open");
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("decorating doesn't open it").isTrue();
+
+    TestCommands.run(
+        fake.commands.get(1), new TestSource(Optional.of(alex.id())), "/hof gate open");
+    fake.tick();
+    assertThat(gateIs("minecraft:air")).as("the owner opened it").isTrue();
+    TestCommands.run(
+        fake.commands.get(1), new TestSource(Optional.of(alex.id())), "/hof gate shut");
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("the owner shut it").isTrue();
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof gallery gate season-2 open");
+    fake.tick();
+    assertThat(gateIs("minecraft:air")).as("an admin opened the gallery's gates").isTrue();
+  }
+
+  @Test
+  void aShuttingGateWaitsForAnEmptyCell() throws IOException {
+    openGates();
+    fake.tick();
+    fake.player(alex).position = INSIDE;
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell gate c1 shut");
+    fake.tick();
+    fake.tick();
+
+    assertThat(gateIs("minecraft:air")).as("nobody is shut in").isTrue();
+    assertThat(fake.player(alex).position).as("nobody is moved").isEqualTo(INSIDE);
+    assertThat(heard(alex)).doesNotContain("The cell's gate shut, so you're at the gallery entry.");
+
+    fake.player(alex).position = Position.of(OVERWORLD, 20.5, 64, 15.5);
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("shut once they left").isTrue();
+  }
+
+  @Test
+  void aGateCornerMaySitInTheDoorwayBesideItsCell() {
+    Bounds bounds = Bounds.between(OVERWORLD, 4, 64, 4, 10, 69, 10);
+    Cell doorway =
+        Cell.create("c1")
+            .withBounds(bounds)
+            .withAnchor(Anchor.of(AnchorType.FIGURE, Position.of(OVERWORLD, 7, 64, 9)))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 4, 64, 3)))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 10, 69, 3)));
+    Cell stray =
+        Cell.create("c2")
+            .withBounds(Bounds.between(OVERWORLD, 14, 64, 4, 20, 69, 10))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 14, 64, 1)))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 20, 65, 1)));
+    Cell reaching =
+        Cell.create("c3")
+            .withBounds(Bounds.between(OVERWORLD, 11, 64, 4, 13, 69, 10))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 10, 64, 4)))
+            .withAnchor(Anchor.of(AnchorType.GATE, Position.of(OVERWORLD, 10, 65, 6)));
+    Gallery gallery =
+        Gallery.create("g", 2, OVERWORLD)
+            .withBounds(Bounds.between(OVERWORLD, 0, 60, 0, 30, 80, 30))
+            .withCell(doorway);
+
+    assertThat(GalleryRules.check(gallery)).as("a 7 x 6 doorway gate").isEmpty();
+    assertThat(GalleryRules.check(gallery.withCell(stray)))
+        .extracting(GalleryRules.Problem::message)
+        .contains("a gate corner must sit inside the cell's bounds or right beside them");
+    assertThat(GalleryRules.check(gallery.withCell(reaching)))
+        .extracting(GalleryRules.Problem::message)
+        .contains("the gate reaches into cell c1");
   }
 }
