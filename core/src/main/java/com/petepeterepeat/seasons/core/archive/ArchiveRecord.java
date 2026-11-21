@@ -232,6 +232,146 @@ public record ArchiveRecord(
     return index < slots.size() ? slots.get(index) : Optional.empty();
   }
 
+  /** The item in one slot, if the slot exists and holds one. */
+  public Optional<NeutralItem> item(ArchiveSlot at) {
+    return switch (at.section()) {
+      case ArchiveSlot.STORAGE -> slot(inventory.storage(), at.index());
+      case ArchiveSlot.ARMOUR -> slot(inventory.armour(), at.index());
+      case ArchiveSlot.OFFHAND -> at.index() == 0 ? inventory.offHand() : Optional.empty();
+      case ArchiveSlot.OVERFLOW -> slot(overflow, at.index());
+      case ArchiveSlot.ENDER -> slot(inventory.enderChest(), at.index());
+      case ArchiveSlot.STAND ->
+          imported
+              .flatMap(ImportedCell::stand)
+              .flatMap(stand -> slot(stand.equipment(), at.index()));
+      case ArchiveSlot.CONTAINER ->
+          imported
+              .filter(i -> at.index() < i.containers().size())
+              .flatMap(i -> slot(i.containers().get(at.index()).slots(), at.slot()));
+      case ArchiveSlot.FRAME ->
+          imported
+              .filter(i -> at.index() < i.frames().size())
+              .flatMap(i -> i.frames().get(at.index()).item());
+      default -> Optional.empty();
+    };
+  }
+
+  /**
+   * This record with one slot changed, and its content hash worked out again over what it holds
+   * now, as archiving or {@code /hof import} would have. Only for a slot the record has.
+   *
+   * @throws IllegalArgumentException if the record has no such slot
+   */
+  public ArchiveRecord with(ArchiveSlot at, Optional<NeutralItem> item) {
+    InventorySnapshot inv = inventory;
+    List<Optional<NeutralItem>> over = overflow;
+    Optional<ImportedCell> cell = imported;
+    switch (at.section()) {
+      case ArchiveSlot.STORAGE ->
+          inv =
+              new InventorySnapshot(
+                  set(inv.storage(), at.index(), item),
+                  inv.armour(),
+                  inv.offHand(),
+                  inv.enderChest());
+      case ArchiveSlot.ARMOUR ->
+          inv =
+              new InventorySnapshot(
+                  inv.storage(),
+                  set(inv.armour(), at.index(), item),
+                  inv.offHand(),
+                  inv.enderChest());
+      case ArchiveSlot.OFFHAND -> {
+        if (at.index() != 0) {
+          throw new IllegalArgumentException("No such slot " + at.key());
+        }
+        inv = new InventorySnapshot(inv.storage(), inv.armour(), item, inv.enderChest());
+      }
+      case ArchiveSlot.OVERFLOW -> over = set(over, at.index(), item);
+      case ArchiveSlot.ENDER ->
+          inv =
+              new InventorySnapshot(
+                  inv.storage(),
+                  inv.armour(),
+                  inv.offHand(),
+                  set(inv.enderChest(), at.index(), item));
+      case ArchiveSlot.STAND, ArchiveSlot.CONTAINER, ArchiveSlot.FRAME ->
+          cell = Optional.of(withImported(at, item));
+      default -> throw new IllegalArgumentException("No such slot " + at.key());
+    }
+    String hash =
+        cell.isPresent()
+            ? ArchiveHash.ofImported(cell.get())
+            : ArchiveHash.of(inv, clearsEnderChest());
+    return new ArchiveRecord(
+        player,
+        name,
+        season,
+        created,
+        inv,
+        over,
+        enderChestPolicy,
+        advancements,
+        experience,
+        statistics,
+        furthest,
+        finalPosition,
+        skin,
+        hash,
+        heldSlot,
+        cell,
+        honours);
+  }
+
+  private ImportedCell withImported(ArchiveSlot at, Optional<NeutralItem> item) {
+    ImportedCell cell =
+        imported.orElseThrow(() -> new IllegalArgumentException("No such slot " + at.key()));
+    Optional<ImportedCell.Stand> stand = cell.stand();
+    List<ImportedCell.Container> containers = cell.containers();
+    List<ImportedCell.Frame> frames = cell.frames();
+    switch (at.section()) {
+      case ArchiveSlot.STAND -> {
+        ImportedCell.Stand s =
+            stand.orElseThrow(() -> new IllegalArgumentException("No such slot " + at.key()));
+        stand =
+            Optional.of(
+                new ImportedCell.Stand(
+                    s.at(), set(s.equipment(), at.index(), item), s.properties()));
+      }
+      case ArchiveSlot.CONTAINER -> {
+        if (at.index() >= containers.size()) {
+          throw new IllegalArgumentException("No such slot " + at.key());
+        }
+        ImportedCell.Container c = containers.get(at.index());
+        List<ImportedCell.Container> next = new java.util.ArrayList<>(containers);
+        next.set(
+            at.index(),
+            new ImportedCell.Container(c.block(), c.type(), set(c.slots(), at.slot(), item)));
+        containers = next;
+      }
+      default -> {
+        if (at.index() >= frames.size()) {
+          throw new IllegalArgumentException("No such slot " + at.key());
+        }
+        ImportedCell.Frame f = frames.get(at.index());
+        List<ImportedCell.Frame> next = new java.util.ArrayList<>(frames);
+        next.set(at.index(), new ImportedCell.Frame(f.at(), item, f.properties()));
+        frames = next;
+      }
+    }
+    return new ImportedCell(cell.gallery(), cell.cell(), stand, containers, frames, cell.signs());
+  }
+
+  private static List<Optional<NeutralItem>> set(
+      List<Optional<NeutralItem>> slots, int index, Optional<NeutralItem> item) {
+    if (index >= slots.size()) {
+      throw new IllegalArgumentException("No such slot " + index);
+    }
+    List<Optional<NeutralItem>> next = new java.util.ArrayList<>(slots);
+    next.set(index, item);
+    return next;
+  }
+
   /** Whether the ender chest is cleared by archiving, and so part of the content hash. */
   public boolean clearsEnderChest() {
     return enderChestPolicy != EnderChestPolicy.KEEP;

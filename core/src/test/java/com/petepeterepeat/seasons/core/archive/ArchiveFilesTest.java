@@ -150,4 +150,29 @@ class ArchiveFilesTest {
     assertThat(found.damaged()).containsExactly(other + ".dat");
     assertThat(files.players(2)).containsExactlyInAnyOrder(ALEX, other);
   }
+
+  @Test
+  void aRewriteChangesTheRecordInPlaceAndKeepsItsDataVersion() throws IOException {
+    ArchiveFiles files = new ArchiveFiles(dir);
+    files.write(archive(), 1234);
+    ArchiveRecord changed =
+        archive().with(ArchiveSlot.of(ArchiveSlot.STORAGE, 0), Optional.empty());
+
+    files.rewrite(changed);
+
+    assertThat(files.read(ALEX, 2)).contains(changed);
+    assertThat(Nbt.read(Files.readAllBytes(files.path(ALEX, 2))).get("DataVersion"))
+        .isEqualTo(1234);
+    try (var listed = Files.list(dir.resolve("s2"))) {
+      assertThat(listed).hasSize(1);
+    }
+  }
+
+  @Test
+  void aRewriteNeedsAnArchive() {
+    ArchiveFiles files = new ArchiveFiles(dir);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> files.rewrite(archive()))
+        .isInstanceOf(IOException.class);
+  }
 }

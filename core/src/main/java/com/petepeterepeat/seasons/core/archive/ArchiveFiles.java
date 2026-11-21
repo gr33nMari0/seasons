@@ -68,6 +68,23 @@ public final class ArchiveFiles {
     AtomicFiles.write(file, encode(record, dataVersion));
   }
 
+  /**
+   * Writes a changed record over its archive in place, as a curator's change does, keeping the
+   * {@code DataVersion} the archive was written with, since its items are the ones it already held.
+   * Atomic and fsynced.
+   *
+   * @throws IOException if there is no archive to change
+   */
+  public void rewrite(ArchiveRecord record) throws IOException {
+    Path file = path(record.player(), record.season());
+    if (Files.notExists(file)) {
+      throw new IOException("No archive of " + record.player() + " for Season " + record.season());
+    }
+    Map<String, Object> root = Nbt.read(Files.readAllBytes(file));
+    int dataVersion = root.get("DataVersion") instanceof Integer version ? version : 0;
+    AtomicFiles.write(file, encode(record, dataVersion));
+  }
+
   /** Writes a record beside the archive under another name, such as displaced items. */
   public Path writeBeside(ArchiveRecord record, int dataVersion, String suffix) throws IOException {
     Path file =
