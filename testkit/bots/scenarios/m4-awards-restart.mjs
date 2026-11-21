@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // @sessions 2
-// Awards are worked out once, when the Intermission begins, and kept: a restart neither announces
-// them again nor changes them; a player archived later at login, with more deaths than the winner,
-// doesn't take the award (questions 199); reconciliation draws a removed trophy again.
+// Awards are worked out when the Intermission begins, and kept: a restart neither announces them
+// again nor changes them. A player offline at season end is counted once archived at login: with
+// more deaths than the winner, they take the award, announced as a change, and the trophy moves to
+// their cell (questions 212). Reconciliation draws a removed trophy again.
 import { SECOND, assert } from '../lib/context.mjs'
 import { buildGallery, cellOf, layout } from '../lib/hall.mjs'
 import { shownItem } from '../lib/museum.mjs'
@@ -39,18 +40,27 @@ export default {
       quiet.verify()
       await ctx.command(admin, '/season firsts', [/^Season 2 awards:$/, /^Most deaths: Alex \(3\)$/])
 
-      // Late is archived at login during the Intermission; the award stays with Alex.
+      // Late is archived at login during the Intermission, and takes the award from Alex.
+      const changed = ctx.waitForMessages(admin, [/^Season 2 awards have changed:$/, /^Most deaths: Late \(50\)$/], 30 * SECOND, 'the change')
       await ctx.join('Late')
       await ctx.eventually(async () => assert((await ctx.archive(admin, 'Late', 2)).present, 'Late is archived'), 20 * SECOND)
-      await ctx.command(admin, '/season firsts', [/^Season 2 awards:$/, /^Most deaths: Alex \(3\)$/])
+      await changed
+      await ctx.command(admin, '/season firsts', [/^Season 2 awards:$/, /^Most deaths: Late \(50\)$/])
       const card = await ctx.command(admin, '/scenario card Late 2', /^Card of Late for Season 2: /)
-      assert(card.includes(' | Awards | None this season'), `Late's card has no awards: ${card}`)
+      assert(card.includes(' | Awards | Most deaths (50)'), `Late's card has the award: ${card}`)
+      const alexs = await ctx.command(admin, '/scenario card Alex 2', /^Card of Alex for Season 2: /)
+      assert(alexs.includes(' | Awards | None this season'), `Alex's card has none now: ${alexs}`)
+      const alexCell = await cellOf(ctx, admin, 'season-2', cells, 'Alex')
+      const lateCell = await cellOf(ctx, admin, 'season-2', cells, 'Late')
+      await ctx.eventually(async () => {
+        assert(await shownItem(ctx, admin, { trophy: trophies(lateCell).first }) === 'minecraft:skeleton_skull', 'Late has the trophy')
+        assert(await shownItem(ctx, admin, { trophy: trophies(alexCell).first }) === null, 'Alex has none')
+      }, 10 * SECOND)
 
       // Reconciliation draws a removed trophy again.
-      const cell = await cellOf(ctx, admin, 'season-2', cells, 'Alex')
       await ctx.command(admin, '/kill @e[type=minecraft:item_display]', /^Killed /)
       await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: (1 repair|[2-9]\d* repairs|1\d+ repairs)\.$/, 20 * SECOND)
-      assert(await shownItem(ctx, admin, { trophy: trophies(cell).first }) === 'minecraft:skeleton_skull', 'the trophy is back')
+      assert(await shownItem(ctx, admin, { trophy: trophies(lateCell).first }) === 'minecraft:skeleton_skull', 'the trophy is back')
     }
   ]
 }
