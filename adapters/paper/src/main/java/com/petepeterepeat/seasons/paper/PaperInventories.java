@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
@@ -13,6 +14,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
@@ -23,18 +25,57 @@ import org.bukkit.inventory.CraftingInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.persistence.PersistentDataType;
 import org.jspecify.annotations.Nullable;
 
 final class PaperInventories implements Inventories {
   private final PaperPlayers players;
   private final PaperItemCodec codec;
   private final NamespacedKey archivedKey;
+  private final NamespacedKey wandKey;
+  private final PaperText text;
   private int dataVersion;
 
-  PaperInventories(PaperPlayers players, PaperItemCodec codec, NamespacedKey archivedKey) {
+  /**
+   * @param wandKey the mark on the Seasons wand (questions 226)
+   */
+  PaperInventories(
+      PaperPlayers players,
+      PaperItemCodec codec,
+      NamespacedKey archivedKey,
+      NamespacedKey wandKey,
+      PaperText text) {
     this.players = players;
     this.codec = codec;
     this.archivedKey = archivedKey;
+    this.wandKey = wandKey;
+    this.text = text;
+  }
+
+  /** One of the item, named and marked as the Seasons wand; nothing if no slot is free. */
+  @Override
+  public boolean giveWand(PlayerId id, String item, Message name, Message lore) {
+    Player player = online(id);
+    Material material = Material.matchMaterial(item);
+    ItemStack wand =
+        ItemStack.of(material != null && material.isItem() ? material : Material.BLAZE_ROD);
+    wand.editMeta(meta -> {
+      meta.displayName(text.render(name).decoration(TextDecoration.ITALIC, false));
+      meta.lore(List.of(text.render(lore).decoration(TextDecoration.ITALIC, false)));
+      meta.getPersistentDataContainer().set(wandKey, PersistentDataType.BYTE, (byte) 1);
+    });
+    if (player.getInventory().firstEmpty() < 0) {
+      return false;
+    }
+    return player.getInventory().addItem(wand).isEmpty();
+  }
+
+  /** Whether an item is the Seasons wand: marked as Seasons' own, whatever its kind. */
+  boolean isWand(@Nullable ItemStack item) {
+    return item != null
+        && !item.isEmpty()
+        && item.hasItemMeta()
+        && item.getItemMeta().getPersistentDataContainer().has(wandKey, PersistentDataType.BYTE);
   }
 
   @Override

@@ -27,6 +27,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
@@ -128,6 +129,9 @@ final class PaperEvents implements Events, Listener {
   private @Nullable Sessions sessions;
   private @Nullable TripwireReport tripwire;
   private volatile ChatInput chat = ChatInput.NONE;
+
+  /** The tick each player's last wand click was Seasons', so its off-hand twin is dropped too. */
+  private final java.util.Map<java.util.UUID, Integer> wandTicks = new java.util.HashMap<>();
 
   PaperEvents(
       Plugin plugin,
@@ -275,6 +279,7 @@ final class PaperEvents implements Events, Listener {
 
   @EventHandler(priority = EventPriority.MONITOR)
   void onQuit(PlayerQuitEvent event) {
+    wandTicks.remove(event.getPlayer().getUniqueId());
     Sessions listening = sessions;
     if (listening != null) {
       listening.left(id(event.getPlayer()));
@@ -364,6 +369,9 @@ final class PaperEvents implements Events, Listener {
     Player player = event.getPlayer();
     Block clicked = event.getClickedBlock();
     ItemStack item = event.getItem();
+    if (clicked != null && wandClick(event, player, clicked)) {
+      return;
+    }
     if (event.getAction().isRightClick() && item != null && !item.isEmpty()) {
       // Using the item itself, such as throwing an ender pearl.
       if (handler.decide(new Intent.UseItem(id(player), item.getType().getKey().asString()))
@@ -390,6 +398,55 @@ final class PaperEvents implements Events, Listener {
       event.setUseItemInHand(Event.Result.DENY);
       deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
     }
+  }
+
+  /**
+   * A click on a block with the Seasons wand in the main hand (questions 226): the core says
+   * whether it was Seasons'; if so the block is neither broken, opened nor used, and the off hand's
+   * click in the same tick goes no further either. Returns whether the event is dealt with.
+   */
+  private boolean wandClick(PlayerInteractEvent event, Player player, Block clicked) {
+    Action action = event.getAction();
+    if ((action != Action.LEFT_CLICK_BLOCK && action != Action.RIGHT_CLICK_BLOCK)
+        || !inventories.isWand(player.getInventory().getItemInMainHand())) {
+      return false;
+    }
+    int tick = plugin.getServer().getCurrentTick();
+    if (event.getHand() == EquipmentSlot.OFF_HAND) {
+      if (wandTicks.getOrDefault(player.getUniqueId(), -1) == tick) {
+        event.setUseInteractedBlock(Event.Result.DENY);
+        event.setUseItemInHand(Event.Result.DENY);
+        return true;
+      }
+      return false;
+    }
+    Decision decision =
+        handler.decide(
+            new Intent.UseWand(
+                id(player),
+                PaperPositions.toPosition(clicked.getLocation()),
+                face(event.getBlockFace()),
+                action == Action.LEFT_CLICK_BLOCK,
+                player.isSneaking()));
+    if (decision instanceof Decision.Deny deny) {
+      event.setUseInteractedBlock(Event.Result.DENY);
+      event.setUseItemInHand(Event.Result.DENY);
+      deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
+      wandTicks.put(player.getUniqueId(), tick);
+      return true;
+    }
+    return false;
+  }
+
+  private static String face(BlockFace face) {
+    return switch (face) {
+      case DOWN -> "down";
+      case NORTH -> "north";
+      case SOUTH -> "south";
+      case EAST -> "east";
+      case WEST -> "west";
+      default -> "up";
+    };
   }
 
   /** Every interaction with one of Seasons' displays is cancelled; a figure opens its archive. */

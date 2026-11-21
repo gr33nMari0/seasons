@@ -85,7 +85,12 @@ class PaperZoneGuardTest {
         new PaperEvents(
             MockBukkit.createMockPlugin(),
             text,
-            new PaperInventories(players, codec, archived),
+            new PaperInventories(
+                players,
+                codec,
+                archived,
+                new org.bukkit.NamespacedKey("seasons", "wand"),
+                new PaperText()),
             players,
             new PaperDisplays(server, text, codec, new NamespacedKey("seasons", "d"), archived),
             new PaperAdvancements(server, players),

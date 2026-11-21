@@ -144,7 +144,12 @@ class PaperPortsTest {
   }
 
   private PaperInventories inventories() {
-    return new PaperInventories(players, new PaperItemCodec(), ARCHIVED);
+    return new PaperInventories(
+        players,
+        new PaperItemCodec(),
+        ARCHIVED,
+        new org.bukkit.NamespacedKey("seasons", "wand"),
+        new PaperText());
   }
 
   @Test

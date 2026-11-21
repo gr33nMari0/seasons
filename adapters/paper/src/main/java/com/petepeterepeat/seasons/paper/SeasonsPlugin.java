@@ -52,7 +52,8 @@ public final class SeasonsPlugin extends JavaPlugin {
     PaperItemCodec codec = new PaperItemCodec();
     PaperPlayers players = new PaperPlayers(server, text, new NamespacedKey(this, "celebration"));
     NamespacedKey archived = new NamespacedKey(this, "archived");
-    PaperInventories inventories = new PaperInventories(players, codec, archived);
+    PaperInventories inventories =
+        new PaperInventories(players, codec, archived, new NamespacedKey(this, "wand"), text);
     PaperDisplays displays =
         new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
     PaperAdvancements advancements = new PaperAdvancements(server, players);
@@ -92,7 +93,8 @@ public final class SeasonsPlugin extends JavaPlugin {
             dragonFight,
             new PaperStatistics(players),
             storage,
-            new PaperImports(this, server, codec));
+            new PaperImports(this, server, codec),
+            new PaperTemplates(server));
 
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(events.hallGuard(), this);
