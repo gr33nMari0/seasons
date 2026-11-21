@@ -45,23 +45,26 @@ export default {
     await discord.waitFor(/^1 × minecraft:diamond_sword from Owner's Season 2 archive was returned to them\.$/)
 
     // Take: the real item, without the archived tag.
+    const toldTake = ctx.waitForMessages(owner, /^A curator took 64 × minecraft:dirt from your Season 2 archive: Needed for repairs$/)
     await curate(ctx, admin, 'Owner', 'dirt', 'take', 'Needed for repairs', /^Took 64 × minecraft:dirt\.$/)
     assert(await carried(ctx, admin, 'SeasonsAdmin', 'dirt') === 64, 'the curator has the dirt')
     assert(!/seasons:archived/.test(await ctx.entityData(admin, 'SeasonsAdmin', 'Inventory')), 'it carries no archived tag')
-    await ctx.waitForMessages(owner, /^A curator took 64 × minecraft:dirt from your Season 2 archive: Needed for repairs$/)
+    await toldTake
     await alerts.waitFor(/^Curation: SeasonsAdmin took 64 × minecraft:dirt from Owner's Season 2 archive \(storage\.1\) to SeasonsAdmin's inventory\. Reason: Needed for repairs$/)
 
     // Museum: straight onto a free plinth, with a plaque crediting the owner.
+    const toldMuseum = ctx.waitForMessages(owner, /^A curator put 32 × minecraft:torch from your Season 2 archive in the museum: For the museum$/)
     await curate(ctx, admin, 'Owner', 'torch', 'museum', 'For the museum', /^Put 32 × minecraft:torch in museum:core\.$/)
     await ctx.eventually(async () => assert(await shownItem(ctx, admin, PLINTHS.core) === 'minecraft:torch', 'the plinth shows the torches'))
     assert(/Season 2 · Owner/.test(await plaqueText(ctx, admin, PLINTHS.core)), 'the plaque credits the owner')
     assert(await carried(ctx, admin, 'SeasonsAdmin', 'torch') === 0, 'the torches never passed through the curator')
-    await ctx.waitForMessages(owner, /^A curator put 32 × minecraft:torch from your Season 2 archive in the museum: For the museum$/)
+    await toldMuseum
 
     // Destroy: into the recycle bin, with an id to undo it by.
+    const toldDestroy = ctx.waitForMessages(owner, /^A curator removed 1 × minecraft:iron_helmet from your Season 2 archive: Broken$/)
     const destroyed = await curate(ctx, admin, 'Owner', 'iron_helmet', 'destroy', 'Broken', /^Destroyed 1 × minecraft:iron_helmet\. \/hof curate undo \S+ brings it back within 30 days\.$/)
     const id = /undo (\S+) brings/.exec(destroyed)[1]
-    await ctx.waitForMessages(owner, /^A curator removed 1 × minecraft:iron_helmet from your Season 2 archive: Broken$/)
+    await toldDestroy
     await alerts.waitFor(new RegExp(`^Curation: SeasonsAdmin destroyed 1 × minecraft:iron_helmet from Owner's Season 2 archive \\(armour\\.3\\) to the recycle bin as ${id}\\. Reason: Broken$`))
     record = await ctx.archive(admin, 'Owner', 2)
     assert(record.items === GEAR_ITEMS - 1 - 64 - 32 - 1, `four stacks left the archive: ${JSON.stringify(record)}`)

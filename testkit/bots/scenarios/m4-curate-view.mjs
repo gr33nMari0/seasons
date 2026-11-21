@@ -70,19 +70,18 @@ export default {
     assert(/Owner · Season 2/.test(JSON.stringify(window.title)) && !/Curating/.test(JSON.stringify(window.title)), `a plain click opens the archive view: ${JSON.stringify(window.title)}`)
     admin.closeWindow(window)
 
-    // Sneak-clicking the figure, as the bot itself does; the test plugin sets the sneaking, which
-    // a bot standing still doesn't send (docs/adr/0003).
+    // Sneak-clicking the figure, as the bot itself does. The click says whether the player sneaks,
+    // and Mineflayer's own activateEntity always says not, so the packet is written here.
     await ctx.command(admin, `/tp SeasonsAdmin ${cell.figure.x + 0.5} ${cell.figure.y} ${cell.figure.z - 1.5}`, /^Teleported /)
     const figure = await ctx.eventually(async () => {
       const found = Object.values(admin.entities).find((e) => e.name === 'mannequin' && Math.floor(e.position.x) === cell.figure.x && Math.floor(e.position.z) === cell.figure.z)
       assert(found, 'the admin sees the figure')
       return found
     })
-    await ctx.command(admin, '/scenario sneak SeasonsAdmin on', /^SeasonsAdmin is sneaking$/)
     opened = new Promise((resolve) => admin.once('windowOpen', resolve))
-    await admin.activateEntity(figure)
+    await admin.lookAt(figure.position.offset(0, 1, 0), true)
+    admin._client.write('use_entity', { target: figure.id, mouse: 0, sneaking: true, hand: 0, location: figure.position })
     window = await opened
-    await ctx.command(admin, '/scenario sneak SeasonsAdmin off', /^SeasonsAdmin isn't sneaking$/)
     assert(/Curating Owner · Season 2/.test(JSON.stringify(window.title)), `sneak-clicking the figure opens the curator view: ${JSON.stringify(window.title)}`)
     admin.closeWindow(window)
 

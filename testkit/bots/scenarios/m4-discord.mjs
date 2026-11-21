@@ -21,7 +21,8 @@ export default {
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
     await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     await discord.waitFor(/^Season 2 has ended\. Welcome to the Intermission!$/, 20_000)
-    assert(discord.attempts.length === 3, `two refusals, then the post: ${discord.attempts.length} attempts`)
+    const tries = discord.attempts.filter((p) => /^Season 2 has ended/.test(p.content ?? '')).length
+    assert(tries === 3, `two refusals, then the post: ${tries} attempts`)
 
     await ctx.command(admin, '/tp SeasonsAdmin 2000 -60 -1500', /^Teleported /)
     await ctx.eventually(async () => assert(Math.floor((await ctx.position(admin, 'SeasonsAdmin')).x) === 2000, 'admin moved'))

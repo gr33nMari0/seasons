@@ -52,8 +52,8 @@ export default {
       await ctx.command(admin, '/season reload', /^Reloaded /)
       const before = alerts.attempts.length
       await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: 0 repairs\.$/, 20_000)
-      await ctx.command(admin, '/kill @e[type=minecraft:mannequin]', /^Killed /)
-      await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: [1-9]\d* repairs?\.$/, 20_000)
+      await ctx.command(admin, '/item replace entity @e[type=minecraft:mannequin,limit=1] weapon.mainhand with minecraft:dirt', /^Replaced /)
+      await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: 1 repair\.$/, 20_000)
       await ctx.sync(admin, [], 120)
       assert(alerts.attempts.length === before, 'no admin webhook, no alert posted')
       assert(!discord.posts.some((p) => /Reconciliation/.test(p.content)), 'and none on the public channel')

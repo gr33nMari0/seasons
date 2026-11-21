@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A9. An item tagged seasons:archived found in a real inventory or on the ground is deleted
-// within 30 s and audited. (Reporting it to the admin webhook waits for M4; it is logged.) One in
+// within 30 s and audited (and posted to the admin webhook: m4-discord). One in
 // an item frame, on an armour stand or in a container in the Hall is found as its chunk loads.
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, blockItems, selectorData } from '../lib/hall.mjs'

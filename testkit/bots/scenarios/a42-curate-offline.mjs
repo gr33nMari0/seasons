@@ -32,7 +32,8 @@ export default {
 
     // The Returned page is withdrawable at once, before Homecoming.
     await ctx.command(admin, '/clear Away', /./)
-    await openVault(ctx, away, /^Your ender vault is sealed until Homecoming/)
+    // Between seasons the season pages are read-only; the Returned page never is.
+    await openVault(ctx, away, /^Your ender vault is (sealed until Homecoming|read-only until the next season starts)/)
     await turnTo(ctx, away, NEXT, 'diamond_sword')
     await take(ctx, admin, away, 'diamond_sword', 1)
     assert(await carried(ctx, admin, 'Away', 'diamond_sword') === 1, 'Away has the sword back')
