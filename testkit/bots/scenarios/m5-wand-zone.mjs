@@ -29,7 +29,7 @@ export default {
     await ctx.command(admin, '/season zone add far-base box', /^Added zone far-base: a box from 480, -64, 480 to 520, 0, 520 in minecraft:overworld, block until Homecoming and off after\.$/)
     const outside = { x: 476, y: FLOOR, z: 500 }
     await standAt(ctx, admin, 'Pat', outside)
-    const told = ctx.waitForMessages(pat, LOCKED('far-base'), 10 * SECOND, 'the refusal')
+    const told = ctx.waitForMessages(pat, LOCKED('far base'), 10 * SECOND, 'the refusal')
     await move(ctx, admin, 'Pat', middle({ x: 490, y: FLOOR, z: 500 }), 'walk')
     await told
     await ctx.sync(admin, [pat], 20)

@@ -10,7 +10,10 @@ import java.util.TreeMap;
 
 /**
  * Writes vanilla structure files (the format a structure block saves) with the plain NBT writer:
- * for the default templates and for tests. Blocks set later replace earlier ones at a position.
+ * for the default templates and for tests. Since 26.3 a palette entry names its block under {@code
+ * id} and its state under {@code properties}; files of an older data version are upgraded by the
+ * game, but these carry 26.3's, so they must be written the new way. Blocks set later replace
+ * earlier ones at a position.
  */
 public final class StructureBuilder {
   /** Minecraft 26.3's data version, which the default templates carry. */
@@ -107,9 +110,9 @@ public final class StructureBuilder {
         state = keys.size();
         keys.add(key);
         Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("Name", block.get("name"));
+        entry.put("id", block.get("name"));
         if (!properties.isEmpty()) {
-          entry.put("Properties", new LinkedHashMap<String, Object>(properties));
+          entry.put("properties", new LinkedHashMap<String, Object>(properties));
         }
         palette.add(entry);
       }

@@ -55,7 +55,7 @@ public final class FakeTemplates implements Templates {
     for (Map<String, Object> block : list(root.get("blocks"))) {
       int[] pos = ints(block.get("pos"));
       Map<String, Object> state = palette.get((Integer) block.get("state"));
-      String name = (String) state.get("Name");
+      String name = (String) state.get("id");
       @SuppressWarnings("unchecked")
       Map<String, Object> nbt = (Map<String, Object>) block.getOrDefault("nbt", Map.of());
       boolean structureBlock = name.equals("minecraft:structure_block");
