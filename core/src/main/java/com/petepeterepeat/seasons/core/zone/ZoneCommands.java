@@ -10,8 +10,10 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.SeasonFiles;
+import com.petepeterepeat.seasons.core.hall.Bounds;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.Transition;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.function.Function;
 
 /**
  * {@code /season zone}, {@code /season unlock} and {@code /season lock}. Zone edits go to the
@@ -43,9 +46,12 @@ public final class ZoneCommands {
   private final SeasonService seasons;
   private final Zones zones;
   private final Path backups;
+  private final Function<PlayerId, Optional<Bounds>> selection;
 
   /**
    * @param backups {@code <world>/seasons/backups}
+   * @param selection a player's complete wand selection, which {@code box} and {@code outside box}
+   *     take when given no corners (questions 229)
    */
   public ZoneCommands(
       Platform platform,
@@ -54,8 +60,10 @@ public final class ZoneCommands {
       ConfigEdits edits,
       SeasonService seasons,
       Zones zones,
-      Path backups) {
+      Path backups,
+      Function<PlayerId, Optional<Bounds>> selection) {
     this.platform = platform;
+    this.selection = selection;
     this.config = config;
     this.loader = loader;
     this.edits = edits;
@@ -126,6 +134,7 @@ public final class ZoneCommands {
     List<String> words = List.of(arguments.string("shape").trim().split("\\s+"));
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+    Optional<Bounds> selected = source.player().flatMap(selection);
     Optional<ZoneShape> shape;
     switch (words.getFirst()) {
       case "cylinder" -> {
@@ -137,10 +146,19 @@ public final class ZoneCommands {
       }
       case "box" -> {
         if (words.size() == 1) {
-          source.reply(messages.get("zone.box-corners", "id", id));
-          return;
+          if (selected.isEmpty()) {
+            source.reply(messages.get("zone.box-corners", "id", id));
+            return;
+          }
+          Bounds b = selected.get();
+          dimension = b.dimension();
+          shape =
+              Optional.of(
+                  ZoneShape.Box.between(
+                      b.minX(), b.minY(), b.minZ(), b.maxX(), b.maxY(), b.maxZ()));
+        } else {
+          shape = box(words);
         }
-        shape = box(words);
       }
       case "outside" -> {
         if (words.size() >= 2 && words.get(1).equals("circle")) {
@@ -150,8 +168,13 @@ public final class ZoneCommands {
           }
           shape = outsideCircle(platform.players().position(source.player().get()), words);
         } else if (words.size() == 2 && words.get(1).equals("box")) {
-          source.reply(messages.get("zone.outside-corners", "id", id));
-          return;
+          if (selected.isEmpty()) {
+            source.reply(messages.get("zone.outside-corners", "id", id));
+            return;
+          }
+          Bounds b = selected.get();
+          dimension = b.dimension();
+          shape = Optional.of(ZoneShape.OutsideBox.between(b.minX(), b.minZ(), b.maxX(), b.maxZ()));
         } else {
           shape = outsideBox(words);
         }
@@ -215,7 +238,7 @@ public final class ZoneCommands {
                         "shape",
                         describe(zone.shape()),
                         "dimension",
-                        dimension,
+                        zone.dimension(),
                         "mode",
                         zone.mode().id(),
                         "after",

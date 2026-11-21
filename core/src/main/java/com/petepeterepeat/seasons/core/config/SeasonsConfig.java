@@ -27,6 +27,7 @@ public record SeasonsConfig(
     Dragon dragon,
     Deaths deaths,
     Curate curate,
+    Wand wand,
     Map<String, Award> awards) {
   public SeasonsConfig {
     awards = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(awards));
@@ -136,6 +137,14 @@ public record SeasonsConfig(
    */
   @ConfigSerializable
   public record Curate(boolean requireReason) {}
+
+  /**
+   * The Hall admins' wand (questions 226).
+   *
+   * @param item the item {@code /hof wand} gives, marked as Seasons' own
+   */
+  @ConfigSerializable
+  public record Wand(String item) {}
 
   /**
    * The deaths display.

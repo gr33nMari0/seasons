@@ -26,8 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The {@code /hof} command tree: tagging galleries and cells (the wand comes in M5), assigning and
- * swapping cells, redrawing displays, and the Season 1 import.
+ * The {@code /hof} command tree: tagging galleries and cells by command or with the wand, stamping
+ * templates, assigning and swapping cells, redrawing displays, and the Season 1 import.
  */
 public final class HallCommands {
   /** Permission for the admin commands: galleries, cells, import, reconcile. */
@@ -64,6 +64,9 @@ public final class HallCommands {
   private final Reconciler reconciler;
   private final Optional<HallImporter> importer;
   private final PlayerStore players;
+  private final CellEdits edits;
+  private final Wand wand;
+  private final Optional<Stamper> stamper;
 
   /**
    * @param importer empty when the journal couldn't be opened, so imports are refused
@@ -76,7 +79,10 @@ public final class HallCommands {
       HallRenderer renderer,
       Reconciler reconciler,
       Optional<HallImporter> importer,
-      PlayerStore players) {
+      PlayerStore players,
+      CellEdits edits,
+      Wand wand,
+      Optional<Stamper> stamper) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
@@ -85,6 +91,9 @@ public final class HallCommands {
     this.reconciler = reconciler;
     this.importer = importer;
     this.players = players;
+    this.edits = edits;
+    this.wand = wand;
+    this.stamper = stamper;
   }
 
   public CommandNode root() {
@@ -107,6 +116,7 @@ public final class HallCommands {
                     CommandNode.literal("bounds")
                         .then(
                             CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::galleryBounds)
                                 .then(
                                     CommandNode.argument("corners", ArgumentType.greedy())
                                         .executes(this::galleryBounds))))
@@ -153,6 +163,7 @@ public final class HallCommands {
                     CommandNode.literal("bounds")
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
+                                .executes(this::cellBounds)
                                 .then(
                                     CommandNode.argument("corners", ArgumentType.greedy())
                                         .executes(this::cellBounds))))
@@ -199,6 +210,20 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
                                 .executes(this::cellInfo))))
+        .then(CommandNode.literal("wand").permission(PERMISSION_ADMIN).executes(wand::give))
+        .then(
+            CommandNode.literal("stamp")
+                .permission(PERMISSION_ADMIN)
+                .then(
+                    CommandNode.argument("template", ArgumentType.word())
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .then(
+                                    CommandNode.argument("count", ArgumentType.integer(1, 64))
+                                        .executes(this::stamp)
+                                        .then(
+                                            CommandNode.argument("options", ArgumentType.greedy())
+                                                .executes(this::stamp))))))
         .then(
             CommandNode.literal("claim")
                 .permission(PERMISSION_CLAIM)
@@ -270,45 +295,48 @@ public final class HallCommands {
 
   void galleryBounds(CommandSource source, Arguments arguments) {
     Optional<Gallery> found = gallery(source, arguments);
-    Optional<int[]> corners = numbers(arguments.string("corners"), 6);
     if (found.isEmpty()) {
       return;
     }
-    if (corners.isEmpty()) {
-      source.reply(messages().get("hof.cell.anchor-where"));
-      return;
-    }
     Gallery gallery = found.get();
-    int[] c = corners.get();
-    Bounds bounds = Bounds.between(gallery.dimension(), c[0], c[1], c[2], c[3], c[4], c[5]);
-    for (Gallery other : hall.galleries()) {
-      if (!other.id().equals(gallery.id())
-          && other.bounds().map(b -> b.overlaps(bounds)).orElse(false)) {
-        source.reply(
-            messages().get("hof.gallery.overlaps", "gallery", gallery.id(), "other", other.id()));
-        return;
+    corners(source, arguments, gallery)
+        .ifPresent(bounds -> edits.galleryBounds(source, gallery, bounds));
+  }
+
+  /**
+   * The box from a {@code corners} argument, or with none, the player's wand selection (questions
+   * 228), in the gallery's dimension.
+   */
+  private Optional<Bounds> corners(CommandSource source, Arguments arguments, Gallery gallery) {
+    Optional<String> given = arguments.optionalString("corners");
+    if (given.isPresent() && !given.get().isBlank()) {
+      Optional<int[]> corners = numbers(given.get(), 6);
+      if (corners.isEmpty()) {
+        source.reply(messages().get("hof.cell.corners"));
+        return Optional.empty();
       }
+      int[] c = corners.get();
+      return Optional.of(Bounds.between(gallery.dimension(), c[0], c[1], c[2], c[3], c[4], c[5]));
     }
-    for (Cell cell : gallery.cells()) {
-      if (cell.bounds().isPresent() && !bounds.contains(cell.bounds().get())) {
-        source.reply(
-            messages()
-                .get("hof.gallery.cells-outside", "gallery", gallery.id(), "cell", cell.id()));
-        return;
-      }
+    Optional<Bounds> selected = source.player().flatMap(wand::selection);
+    if (selected.isEmpty()) {
+      source.reply(messages().get("hof.cell.corners"));
+      return Optional.empty();
     }
-    saved(
-        source,
-        hall.save(gallery.withBounds(bounds)),
-        messages()
-            .get(
-                "hof.gallery.bounds",
-                "gallery",
-                gallery.id(),
-                "from",
-                corner(bounds.min()),
-                "to",
-                corner(bounds.max())));
+    if (!selected.get().dimension().equals(gallery.dimension())) {
+      source.reply(
+          messages()
+              .get(
+                  "hof.wand.other-dimension",
+                  "dimension",
+                  selected.get().dimension(),
+                  "gallery",
+                  gallery.id(),
+                  "other",
+                  gallery.dimension()));
+      return Optional.empty();
+    }
+    return selected;
   }
 
   void galleryEntry(CommandSource source, Arguments arguments) {
@@ -415,9 +443,12 @@ public final class HallCommands {
       source.reply(messages().get("hof.cell.exists", "cell", gallery.id() + ":" + id));
       return;
     }
+    Cell cell = Cell.create(id);
+    Gallery next = gallery.withCell(cell);
+    source.player().ifPresent(p -> wand.focus(p, new HallService.CellRef(next, cell)));
     saved(
         source,
-        hall.save(gallery.withCell(Cell.create(id))),
+        hall.save(next),
         messages().get("hof.cell.created", "cell", id, "gallery", gallery.id()));
   }
 
@@ -426,46 +457,9 @@ public final class HallCommands {
     if (found.isEmpty()) {
       return;
     }
-    Optional<int[]> corners = numbers(arguments.string("corners"), 6);
-    if (corners.isEmpty()) {
-      source.reply(messages().get("hof.cell.anchor-where"));
-      return;
-    }
     HallService.CellRef ref = found.get();
-    Gallery gallery = ref.gallery();
-    int[] c = corners.get();
-    Bounds bounds = Bounds.between(gallery.dimension(), c[0], c[1], c[2], c[3], c[4], c[5]);
-    if (gallery.bounds().isEmpty() || !gallery.bounds().get().contains(bounds)) {
-      source.reply(
-          messages().get("hof.cell.outside-gallery", "cell", ref.key(), "gallery", gallery.id()));
-      return;
-    }
-    for (Cell other : gallery.cells()) {
-      if (!other.id().equals(ref.cell().id())
-          && other.bounds().map(b -> b.overlaps(bounds)).orElse(false)) {
-        source.reply(
-            messages()
-                .get(
-                    "hof.cell.overlaps",
-                    "cell",
-                    ref.key(),
-                    "other",
-                    gallery.id() + ":" + other.id()));
-        return;
-      }
-    }
-    saved(
-        source,
-        hall.save(gallery.withCell(ref.cell().withBounds(bounds))),
-        messages()
-            .get(
-                "hof.cell.bounds",
-                "cell",
-                ref.key(),
-                "from",
-                corner(bounds.min()),
-                "to",
-                corner(bounds.max())));
+    corners(source, arguments, ref.gallery())
+        .ifPresent(bounds -> edits.cellBounds(source, ref, bounds));
   }
 
   void cellAnchor(CommandSource source, Arguments arguments) {
@@ -488,20 +482,7 @@ public final class HallCommands {
     if (at.isEmpty()) {
       return;
     }
-    if (!ref.cell().contains(at.get())) {
-      source.reply(messages().get("hof.cell.anchor-outside", "cell", ref.key()));
-      return;
-    }
-    CompletableFuture<Void> save =
-        hall.save(ref.gallery().withCell(ref.cell().withAnchor(Anchor.of(type.get(), at.get()))));
-    String name = type.get().id();
-    String key = "aeiou".indexOf(name.charAt(0)) >= 0 ? "hof.cell.anchor-an" : "hof.cell.anchor";
-    String[] placeholders = place("cell", ref.key(), at.get());
-    String[] all = new String[placeholders.length + 2];
-    System.arraycopy(placeholders, 0, all, 0, placeholders.length);
-    all[placeholders.length] = "type";
-    all[placeholders.length + 1] = name;
-    saved(source, save, messages().get(key, all));
+    edits.anchor(source, ref, Anchor.of(type.get(), at.get()));
   }
 
   void cellUnanchor(CommandSource source, Arguments arguments) {
@@ -593,6 +574,7 @@ public final class HallCommands {
       return;
     }
     HallService.CellRef ref = found.get();
+    source.player().ifPresent(p -> wand.focus(p, ref));
     int season = ref.gallery().season();
     Messages messages = messages();
     String owner =
@@ -896,23 +878,21 @@ public final class HallCommands {
         });
   }
 
+  // Stamping
+
+  void stamp(CommandSource source, Arguments arguments) {
+    if (stamper.isEmpty()) {
+      source.reply(messages().get("hof.stamp.unavailable"));
+      return;
+    }
+    stamper.get().stamp(source, arguments);
+  }
+
   // Helpers
 
   /** Replies once the gallery file is written, so the file on disk matches what was said. */
   private void saved(CommandSource source, CompletableFuture<Void> save, Message message) {
-    var _ =
-        save.whenComplete((done, failure) ->
-            platform
-                .scheduler()
-                .runGlobal(() ->
-                    source.reply(
-                        failure == null
-                            ? message
-                            : messages()
-                                .get(
-                                    "hof.save-failed",
-                                    "error",
-                                    String.valueOf(failure.getMessage())))));
+    edits.saved(source, save, message);
   }
 
   private Optional<Gallery> gallery(CommandSource source, Arguments arguments) {
@@ -988,10 +968,6 @@ public final class HallCommands {
       return Optional.empty();
     }
     return Optional.of(values);
-  }
-
-  private static String corner(Position at) {
-    return at.blockX() + ", " + at.blockY() + ", " + at.blockZ();
   }
 
   private static String[] place(String key, String value, Position at) {

@@ -93,6 +93,9 @@ public interface Players {
   /** The bed block an online player's respawn point is at, if it is a bed. */
   Optional<Position> bed(PlayerId id);
 
+  /** A line on one player's action bar. */
+  void actionBar(PlayerId id, Message line);
+
   /** A title, with no subtitle, and a line on the action bar for one player. */
   void alert(PlayerId id, Message title, Message actionBar);
 

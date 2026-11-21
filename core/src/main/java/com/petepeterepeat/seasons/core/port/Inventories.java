@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.port;
 
+import com.petepeterepeat.seasons.core.message.Message;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,6 +37,14 @@ public interface Inventories {
    * @return whether it was given
    */
   boolean give(PlayerId player, NeutralItem item);
+
+  /**
+   * Gives an online player the Seasons wand (questions 226): one of {@code item}, named and marked
+   * {@code seasons:wand}, which the adapter raises {@code UseWand} for. Nothing if it doesn't fit.
+   *
+   * @return whether it was given
+   */
+  boolean giveWand(PlayerId player, String item, Message name, Message lore);
 
   /** Whether an item carries the {@code seasons:archived} tag, as copies shown in the Hall do. */
   boolean isArchived(NeutralItem item);

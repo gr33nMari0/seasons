@@ -336,6 +336,55 @@ class ZonesTest {
         .containsExactly("Stand at the zone's centre and run this in game.");
   }
 
+  /** Clicks a block with the wand as Pat, sneaking: a left click for corner 1, else corner 2. */
+  private void corner(String dimension, int x, int y, int z, boolean left) {
+    fake.handler.decide(
+        new Intent.UseWand(pat.id(), Position.of(dimension, x, y, z), "up", left, true));
+  }
+
+  @Test
+  void aBoxWithNoCornersTakesTheWandSelectionInItsDimension() throws IOException {
+    TestSource admin = new TestSource(Optional.of(pat.id()));
+    fake.player(pat).position = SPAWN;
+    assertThat(run("/season zone add far box").text())
+        .singleElement()
+        .asString()
+        .startsWith("Give both corners: /season zone add far box");
+    corner("minecraft:the_nether", 90, 30, 90, true);
+    corner("minecraft:the_nether", 110, 100, 110, false);
+    TestCommands.run(fake.commands.getFirst(), admin, "/season zone add far box");
+    assertThat(admin.text())
+        .containsExactly(
+            "Added zone far: a box from 90, 30, 90 to 110, 100, 110 in minecraft:the_nether, block"
+                + " until Homecoming and off after.");
+    // Corners typed in win over the selection.
+    admin.replies.clear();
+    TestCommands.run(
+        fake.commands.getFirst(), admin, "/season zone add typed box 600 0 600 610 9 610");
+    assertThat(admin.text())
+        .singleElement()
+        .asString()
+        .contains("a box from 600, 0, 600 to 610, 9, 610 in minecraft:overworld");
+    // outside box takes the selection's x and z.
+    corner(OVERWORLD, 2900, 0, -100, true);
+    corner(OVERWORLD, 3100, 80, 100, false);
+    admin.replies.clear();
+    TestCommands.run(fake.commands.getFirst(), admin, "/season zone add edge outside box");
+    assertThat(admin.text())
+        .containsExactly(
+            "Added zone edge: everywhere beyond a box from 2900, -100 to 3100, 100 in"
+                + " minecraft:overworld, block until Homecoming and off after.");
+    // A selection around the spawn is refused as typed corners are.
+    corner(OVERWORLD, 2990, 0, -10, true);
+    corner(OVERWORLD, 3010, 80, 10, false);
+    admin.replies.clear();
+    TestCommands.run(fake.commands.getFirst(), admin, "/season zone add around box");
+    assertThat(admin.text())
+        .singleElement()
+        .asString()
+        .startsWith("That zone would hold Season 3's spawn");
+  }
+
   @Test
   void theFrontierBorderIsShownAroundABlockingOutsideCircleOnlyWhenTurnedOn() throws IOException {
     writeSeasonFile(
