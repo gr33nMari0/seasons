@@ -122,7 +122,10 @@ export default {
     await ctx.command(admin, `/setblock ${PLATE_BACK.x} ${PLATE_BACK.y} ${PLATE_BACK.z} minecraft:stone_pressure_plate`, /^Changed the block/)
     await addLink(ctx, admin, 'plate-back', PLATE_BACK, 'hall')
     await ctx.advance(admin, 6_000)
+    // Once the trip has finished, as the welcome says: until then /hof leave is ignored.
+    const welcomed = ctx.waitForMessages(visitor, /^Welcome to the Hall of Fame\. \/hof leave takes you back\.$/)
     await standAt(ctx, admin, 'Visitor', PLATE_BACK)
+    await welcomed
     await waitNear(ctx, admin, 'Visitor', middle(HALL_SPAWN))
     await ctx.advance(admin, 6_000)
     await hof(ctx, visitor, '/hof leave', /^Back where you left\.$/)
