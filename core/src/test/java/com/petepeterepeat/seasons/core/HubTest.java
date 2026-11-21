@@ -50,6 +50,18 @@ class HubTest {
   private Seasons seasons;
   private PlayerRef alex;
 
+  /** While true, the writer queues its work instead of doing it, as a slow disk would. */
+  private boolean deferring;
+
+  private final java.util.ArrayDeque<Runnable> deferred = new java.util.ArrayDeque<>();
+
+  private void flush() {
+    deferring = false;
+    while (!deferred.isEmpty()) {
+      deferred.poll().run();
+    }
+  }
+
   private final Webhooks webhooks =
       new Webhooks() {
         @Override
@@ -100,7 +112,13 @@ class HubTest {
             webhooks,
             MapPublisher.NONE,
             Map.of(),
-            new SerialWriter(Runnable::run),
+            new SerialWriter(task -> {
+              if (deferring) {
+                deferred.add(task);
+              } else {
+                task.run();
+              }
+            }),
             Optional.empty());
     seasons.start();
     run("/season init 2");
@@ -363,6 +381,66 @@ class HubTest {
     assertThat(lastHeard(alex))
         .isEqualTo("Links out of the Hall wait for the next season to launch.");
     assertThat(at(alex)).isEqualTo(IN_HUB);
+  }
+
+  @Test
+  void leavingBackOntoAPlateLinkDoesntTakeItAgain() {
+    fake.setBlock(200, 64, 200, FakePlatform.STONE);
+    hof("/hof link add plate hall 200 64 200");
+    Position onPlate = Position.of(OVERWORLD, 200.5, 65, 200.5);
+
+    fake.player(alex).position = onPlate;
+    fake.tick();
+    assertThat(at(alex)).as("the plate took them in").isEqualTo(SPAWN);
+    fake.tick();
+
+    as(alex, "/hof leave");
+    assertThat(at(alex)).as("back on the plate they came by").isEqualTo(onPlate);
+    fake.tick();
+    fake.tick();
+    assertThat(at(alex)).as("and it doesn't take them in again").isEqualTo(onPlate);
+
+    // Stepping off and back on takes it again.
+    fake.player(alex).position = Position.of(OVERWORLD, 203.5, 65, 200.5);
+    fake.tick();
+    fake.clock.advance(Duration.ofSeconds(6));
+    fake.player(alex).position = onPlate;
+    fake.tick();
+    assertThat(at(alex)).isEqualTo(SPAWN);
+  }
+
+  @Test
+  void aPlayerHeldForArchivingIsntTakenByAPlateLink() {
+    fake.setBlock(200, 64, 200, FakePlatform.STONE);
+    hof("/hof link add plate hall 200 64 200");
+    Position onPlate = Position.of(OVERWORLD, 200.5, 65, 200.5);
+    fake.player(alex).position = onPlate;
+    fake.tick();
+    fake.player(alex).position = Position.of(OVERWORLD, 203.5, 65, 200.5);
+    fake.clock.advance(Duration.ofSeconds(6));
+    fake.tick();
+
+    // Season end, one disk write at a time, until archiving holds Alex (who can then do nothing).
+    deferring = true;
+    run("/season end --now");
+    while (decide(new Intent.Interact(alex.id())).equals(Decision.allow())) {
+      assertThat(deferred).as("archiving reaches Alex").isNotEmpty();
+      deferred.poll().run();
+    }
+    fake.player(alex).position = onPlate;
+    fake.tick();
+    fake.tick();
+    flush();
+    fake.tick();
+    assertThat(
+            fake.sent.stream()
+                .filter(s -> s.player().equals(alex.id()))
+                .map(s -> Messages.plain(s.message()))
+                .filter(text -> text.startsWith("Welcome to the Hall of Fame."))
+                .count())
+        .as("the plate took Alex in once, before the end, and not while they were archived")
+        .isEqualTo(1);
+    assertThat(at(alex)).as("archived to their cell, not the Hall spawn").isNotEqualTo(SPAWN);
   }
 
   @Test

@@ -432,6 +432,7 @@ public final class Seasons implements SeasonsApi {
     }
     visiting.bind(seasons::state);
     visiting.bindZones(zoning::lockedFor);
+    visiting.bindHold(hold::isHeld);
     visiting.start();
     reconciling.start();
     hallRules.start();

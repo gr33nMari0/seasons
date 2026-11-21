@@ -37,6 +37,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
@@ -73,6 +74,9 @@ public final class HallVisits {
 
   /** Until when a position is locked to a player, if a zone blocks it now (questions 249). */
   private BiFunction<PlayerId, Position, Optional<String>> locked = (p, at) -> Optional.empty();
+
+  /** Whether a player is held for archiving, when no link may take them anywhere. */
+  private Predicate<PlayerId> held = player -> false;
 
   /** The link each player last stood on, so standing on one takes it once. */
   private final Map<PlayerId, String> standingOnLink = new HashMap<>();
@@ -127,6 +131,14 @@ public final class HallVisits {
   /** Connects the season state, once the season service exists. */
   public void bind(Supplier<Optional<SeasonState>> state) {
     this.state = state;
+  }
+
+  /**
+   * Connects the archive hold. Clicks reach a held player's links only through the intent router,
+   * which refuses them, but standing on a link is noticed by the sweep, so it asks here too.
+   */
+  public void bindHold(Predicate<PlayerId> held) {
+    this.held = held;
   }
 
   /** Connects the zones, which say where a link may not go. */
@@ -338,7 +350,7 @@ public final class HallVisits {
    * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked.
    */
   public void takeLink(PlayerId player, HallLayout.Link link) {
-    if (moving.contains(player) || !attempt(player)) {
+    if (held.test(player) || moving.contains(player) || !attempt(player)) {
       return;
     }
     if (link.to().isEmpty()) {
@@ -450,6 +462,7 @@ public final class HallVisits {
                   }
                   inside.add(player);
                   lastOutside.remove(player);
+                  arrived(player);
                   immunity.grant(player, config.get().config().hof().arrivalImmunity());
                   tell(player, messageKey);
                 },
@@ -583,6 +596,7 @@ public final class HallVisits {
                     return;
                   }
                   inside.remove(player);
+                  arrived(player);
                   immunity.grant(player, config.get().config().hof().arrivalImmunity());
                   if (platform.players().gameMode(player) != back.mode()) {
                     platform.players().setGameMode(player, back.mode());
@@ -856,6 +870,16 @@ public final class HallVisits {
                   tell(player, "hof.sealed.no-riding");
                 },
                 serverThread);
+  }
+
+  /**
+   * After one of Seasons' own moves: a link the player landed on counts as already stood on, so
+   * {@code /hof leave} back to the pressure plate they came by doesn't send them in again.
+   */
+  private void arrived(PlayerId player) {
+    linkUnder(platform.players().position(player))
+        .ifPresentOrElse(
+            link -> standingOnLink.put(player, link.id()), () -> standingOnLink.remove(player));
   }
 
   /** Takes the link a player has just stepped onto, once until they step off it. */
