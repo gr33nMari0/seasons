@@ -41,7 +41,13 @@ class PaperMenusTest {
         new PaperPlayers(server, text, new NamespacedKey("seasons", "celebration"));
     codec = new PaperItemCodec();
     menus = new PaperMenus(server, players, codec, text, ARCHIVED);
-    inventories = new PaperInventories(players, codec, ARCHIVED);
+    inventories =
+        new PaperInventories(
+            players,
+            codec,
+            ARCHIVED,
+            new org.bukkit.NamespacedKey("seasons", "wand"),
+            new PaperText());
     viewer = server.addPlayer("Viewer");
   }
 

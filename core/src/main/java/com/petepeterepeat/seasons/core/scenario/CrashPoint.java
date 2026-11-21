@@ -55,5 +55,14 @@ public enum CrashPoint {
    * The item is delivered (for a take, given and the curator's file saved); {@code CURATE_DONE}
    * isn't written. Armed by the curator.
    */
-  CURATE_DELIVERED
+  CURATE_DELIVERED,
+  /**
+   * {@code STAMP_STARTED} is on disk and the plan saved; nothing is placed. Armed by who stamps.
+   */
+  STAMP_STARTED,
+  /**
+   * Every copy is placed, its markers air and the dimension saved; the gallery file and {@code
+   * STAMP_DONE} aren't written. Armed by who stamps.
+   */
+  STAMP_PLACED
 }

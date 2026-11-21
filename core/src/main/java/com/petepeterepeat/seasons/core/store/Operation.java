@@ -30,15 +30,20 @@ public enum Operation {
    * {@code /museum add} or {@code remove}: an item moved between an op and a museum plinth; the
    * season is the one being played then.
    */
-  MUSEUM(JournalKind.MUSEUM_STARTED, JournalKind.MUSEUM_DONE);
+  MUSEUM(JournalKind.MUSEUM_STARTED, JournalKind.MUSEUM_DONE),
+  /**
+   * {@code /hof stamp}: copies of a template placed and their cells written (questions 234). The
+   * player is who stamped, if a player did; the season the one being played then, or 0.
+   */
+  STAMP(JournalKind.STAMP_STARTED, JournalKind.STAMP_DONE);
 
   /**
    * What tells two of this operation for the same player and season apart: a vault withdrawal's,
-   * museum change's or curation's id, the start of each of its entries' payload, since a player
-   * makes many of them; empty for the rest, which run once per player and season.
+   * museum change's, curation's or stamp's id, the start of each of its entries' payload, since a
+   * player makes many of them; empty for the rest, which run once per player and season.
    */
   public String instance(JournalEntry entry) {
-    return this == VAULT_WITHDRAW || this == MUSEUM || this == CURATE
+    return this == VAULT_WITHDRAW || this == MUSEUM || this == CURATE || this == STAMP
         ? entry.payloadHash().split("/", 2)[0]
         : "";
   }
@@ -71,6 +76,7 @@ public enum Operation {
       case IMPORT_UNDO_STARTED, IMPORT_UNDO_DONE -> Optional.of(IMPORT_UNDO);
       case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
       case MUSEUM_STARTED, MUSEUM_DONE -> Optional.of(MUSEUM);
+      case STAMP_STARTED, STAMP_DONE -> Optional.of(STAMP);
       case EGG_DELIVERED, PET_TRAVELLED, GATE_SET -> Optional.empty();
     };
   }

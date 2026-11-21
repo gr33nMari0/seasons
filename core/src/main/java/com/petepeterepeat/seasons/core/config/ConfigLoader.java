@@ -734,6 +734,11 @@ public final class ConfigLoader {
                     CONFIG, "awards." + id + ".item", item + " isn't an item this server knows"));
           }
         });
+    if (!isItem.test(namespaced(config.wand().item()))) {
+      problems.add(
+          ConfigProblem.atPath(
+              CONFIG, "wand.item", config.wand().item() + " isn't an item this server knows"));
+    }
     String gate = config.cells().gateBlock();
     if (!isGateBlock.test(namespaced(gate))) {
       problems.add(

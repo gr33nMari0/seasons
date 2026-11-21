@@ -22,5 +22,8 @@ public enum JournalKind {
   GATE_SET,
   /** {@code /museum add} or {@code remove} started: the op's inventory hash before it. */
   MUSEUM_STARTED,
-  MUSEUM_DONE
+  MUSEUM_DONE,
+  /** {@code /hof stamp} started: its id, with its plan saved under {@code data/stamps/}. */
+  STAMP_STARTED,
+  STAMP_DONE
 }

@@ -87,6 +87,18 @@ public sealed interface Intent {
   }
 
   /**
+   * Clicking a block with the Seasons wand in the main hand (questions 226). The adapter raises
+   * this instead of its usual intents; a decision to allow it means the click wasn't Seasons', so
+   * the adapter goes on as if no wand were held.
+   *
+   * @param face the side of the block clicked: {@code up}, {@code down}, {@code north}, {@code
+   *     south}, {@code east} or {@code west}
+   * @param left whether it is a left click
+   */
+  record UseWand(PlayerId player, Position block, String face, boolean left, boolean sneaking)
+      implements Intent {}
+
+  /**
    * Opening the inventory of a block, such as a chest.
    *
    * @param blocks every block whose inventory opens: one, or both halves of a double chest

@@ -83,8 +83,11 @@ export default {
     await move(ctx, admin, 'Pat', middle(BASE), 'walk')
     await told
 
-    // Every change is in the audit log, with who made it.
-    const audit = ctx.readFile(`world/dimensions/minecraft/overworld/seasons/audit/${new Date().toISOString().slice(0, 7)}.jsonl`)
+    // Every change is in the audit log, with who made it. The log is written by the writer thread,
+    // so the last entry can land just after the message the player sees.
+    const auditFile = `world/dimensions/minecraft/overworld/seasons/audit/${new Date().toISOString().slice(0, 7)}.jsonl`
+    await ctx.eventually(async () => assert(/"actor":"Pat","action":"zone-blocked"/.test(ctx.readFile(auditFile)), 'Pat\'s blocked walk is audited'))
+    const audit = ctx.readFile(auditFile)
     for (const entry of [
       /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.tower","result":"ok","details":"none -> a cylinder /,
       /"actor":"SeasonsAdmin","action":"config","target":"seasons\/3\.yml zones\.mine\.mode","result":"ok","details":"block -> announce"/,

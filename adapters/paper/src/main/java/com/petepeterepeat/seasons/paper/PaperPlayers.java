@@ -315,6 +315,11 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public void actionBar(PlayerId id, Message line) {
+    player(id).ifPresent(player -> player.sendActionBar(text.render(line)));
+  }
+
+  @Override
   public void alert(PlayerId id, Message title, Message actionBar) {
     player(id)
         .ifPresent(player -> {

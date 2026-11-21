@@ -419,6 +419,12 @@ public final class FakePlatform {
     }
   }
 
+  /** Who was given the wand. */
+  public final List<PlayerId> wands = new ArrayList<>();
+
+  /** Templates: structure files read and placed as the game would (see FakeTemplates). */
+  public final FakeTemplates templates = new FakeTemplates(this);
+
   /** The Season 1 import's view of the world; null unless a test sets it. */
   public com.petepeterepeat.seasons.core.port.@org.jspecify.annotations.Nullable Imports imports;
 
@@ -566,6 +572,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public void actionBar(PlayerId id, Message line) {
+            state(id).actionBars.add(line);
+          }
+
+          @Override
           public void alert(PlayerId id, Message title, Message actionBar) {
             state(id).titles.add(title);
             state(id).actionBars.add(actionBar);
@@ -658,6 +669,12 @@ public final class FakePlatform {
           @Override
           public void restore(PlayerId player, InventorySnapshot snapshot) {
             state(player).inventory = snapshot;
+          }
+
+          @Override
+          public boolean giveWand(PlayerId player, String item, Message name, Message lore) {
+            wands.add(player);
+            return true;
           }
 
           @Override
@@ -1132,7 +1149,8 @@ public final class FakePlatform {
         dragon,
         statistics,
         storage,
-        imports);
+        imports,
+        templates);
   }
 
   private Optional<FakePet> loadedPet(java.util.UUID id) {

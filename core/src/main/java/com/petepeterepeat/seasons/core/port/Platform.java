@@ -19,4 +19,5 @@ public record Platform(
     DragonFight dragonFight,
     Statistics statistics,
     Storage storage,
-    Imports imports) {}
+    Imports imports,
+    Templates templates) {}

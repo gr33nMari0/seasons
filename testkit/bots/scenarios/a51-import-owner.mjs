@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A51. A cell whose stand has no head, or a head of someone else, is flagged by the dry run and
-// skipped by the import until an admin assigns its owner.
+// skipped by the import until an admin assigns its owner. The cells are tagged as the spec's import
+// steps say, with /hof cell new and the wand's two corners for each cell's bounds (M5; A50 keeps
+// tagging by command).
 import { assert } from '../lib/context.mjs'
 import { blockItems, buildSeasonOneCell } from '../lib/hall.mjs'
+import { giveWand, select } from '../lib/wand.mjs'
 
 const REPORT = 'world/dimensions/minecraft/overworld/seasons/import-season-1.txt'
 
@@ -20,9 +23,13 @@ export default {
 
     await ctx.command(admin, '/hof gallery create season-1 1', /^Created gallery season-1 for Season 1\.$/)
     await ctx.command(admin, '/hof gallery bounds season-1 58 -61 38 116 -50 50', /^Gallery season-1 now spans /)
+    await giveWand(ctx, admin)
     for (const [id, x] of [['good', 59], ['headless', 79], ['stranger', 99]]) {
       await ctx.command(admin, `/hof cell new season-1 ${id}`, new RegExp(`^Created cell ${id} in gallery season-1\\.$`))
-      await ctx.command(admin, `/hof cell bounds season-1:${id} ${x} -61 39 ${x + 16} -52 49`, new RegExp(`^Cell season-1:${id} now spans `))
+      await Promise.all([
+        ctx.waitForMessages(admin, new RegExp(`^Cell season-1:${id} now spans ${x}, -61, 39 to ${x + 16}, -52, 49\\.$`)),
+        select(ctx, admin, admin, { x, y: -61, z: 39 }, { x: x + 16, y: -52, z: 49 })
+      ])
     }
 
     await ctx.command(admin, '/hof import season-1 --dry-run', /^Dry run of the season-1 import: 1 cell ready, 2 flagged\. See import-season-1\.txt\.$/, 20_000)

@@ -26,6 +26,7 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.CellEdits;
 import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
@@ -39,6 +40,9 @@ import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
+import com.petepeterepeat.seasons.core.hall.Stamper;
+import com.petepeterepeat.seasons.core.hall.TemplateLibrary;
+import com.petepeterepeat.seasons.core.hall.Wand;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.map.MapService;
 import com.petepeterepeat.seasons.core.map.MarkerCommands;
@@ -119,6 +123,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Dragon dragon;
   private @Nullable AdminAlerts alerts;
   private @Nullable Curation curation;
+  private @Nullable Wand wand;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -255,6 +260,10 @@ public final class Seasons implements SeasonsApi {
     HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
     Optional<HallImporter> importer = Optional.empty();
+    CellEdits cellEdits = new CellEdits(platform, config, halls);
+    Wand wanding = new Wand(platform, config, halls, cellEdits, this::currentSeason);
+    wand = wanding;
+    Optional<Stamper> stamper = Optional.empty();
 
     Optional<Archiver> archiver = Optional.empty();
     Optional<Unarchiver> unarchiver = Optional.empty();
@@ -318,6 +327,21 @@ public final class Seasons implements SeasonsApi {
                   vaulting.returnItem(
                       back.owner(), back.item(), back.why(), Optional.of(back.ref())));
       replay.register(Operation.CURATE, curating.recovery());
+      Stamper stamping =
+          new Stamper(
+              platform,
+              config,
+              halls,
+              new TemplateLibrary(world.resolve("templates"), platform.templates()),
+              journal,
+              writer,
+              audit,
+              crash,
+              world.resolve("data/stamps"),
+              this::currentSeason,
+              clock);
+      replay.register(Operation.STAMP, stamping.recovery());
+      stamper = Optional.of(stamping);
       curation = curating;
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
@@ -504,8 +528,9 @@ public final class Seasons implements SeasonsApi {
                 immunity,
                 furthest,
                 intent ->
-                    visiting
+                    wanding
                         .decide(intent)
+                        .or(() -> visiting.decide(intent))
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
                         .or(() -> zoning.decide(intent)),
@@ -519,7 +544,9 @@ public final class Seasons implements SeasonsApi {
     List<CommandNode> nodes = new ArrayList<>();
     nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
     nodes.addAll(
-        new ZoneCommands(platform, config, loader, edits, seasons, zoning, seasonBackups).nodes());
+        new ZoneCommands(
+                platform, config, loader, edits, seasons, zoning, seasonBackups, wanding::selection)
+            .nodes());
     nodes.add(
         new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
             .node());
@@ -527,7 +554,17 @@ public final class Seasons implements SeasonsApi {
     platform.commands().register(built.root(nodes));
     CommandNode hof =
         new HallCommands(
-                platform, config, halls, visiting, renderer, reconciling, importer, players)
+                platform,
+                config,
+                halls,
+                visiting,
+                renderer,
+                reconciling,
+                importer,
+                players,
+                cellEdits,
+                wanding,
+                stamper)
             .root();
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
@@ -612,6 +649,9 @@ public final class Seasons implements SeasonsApi {
       @Override
       public void left(PlayerId player) {
         login.ifPresent(l -> l.left(player));
+        if (wand != null) {
+          wand.left(player);
+        }
         if (curation != null) {
           curation.left(player);
         }
