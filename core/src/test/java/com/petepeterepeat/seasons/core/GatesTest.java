@@ -52,6 +52,18 @@ class GatesTest {
   private Seasons seasons;
   private PlayerRef alex;
 
+  /** While true, the writer queues its work instead of doing it, as a slow disk would. */
+  private boolean deferring;
+
+  private final java.util.ArrayDeque<Runnable> deferred = new java.util.ArrayDeque<>();
+
+  private void flush() {
+    deferring = false;
+    while (!deferred.isEmpty()) {
+      deferred.poll().run();
+    }
+  }
+
   private final Webhooks webhooks =
       new Webhooks() {
         @Override
@@ -95,7 +107,13 @@ class GatesTest {
             webhooks,
             MapPublisher.NONE,
             Map.of(),
-            new SerialWriter(Runnable::run),
+            new SerialWriter(task -> {
+              if (deferring) {
+                deferred.add(task);
+              } else {
+                task.run();
+              }
+            }),
             Optional.empty());
     seasons.start();
     run("/season init 2");
@@ -347,6 +365,42 @@ class GatesTest {
     fake.player(alex).position = Position.of(OVERWORLD, 20.5, 64, 15.5);
     fake.tick();
     assertThat(gateIs("minecraft:iron_bars")).as("shut once they left").isTrue();
+  }
+
+  @Test
+  void aGateDoesntShutOnSomeoneWhoSteppedInWhileItWasJournalled() throws IOException {
+    openGates();
+    fake.tick();
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell gate c1 shut");
+
+    // The pass finds the cell empty and journals the gate; Alex walks in before the disk answers.
+    deferring = true;
+    fake.tick();
+    fake.player(alex).position = INSIDE;
+    flush();
+
+    assertThat(gateIs("minecraft:air")).as("nobody is shut in").isTrue();
+    assertThat(fake.player(alex).position).as("nobody is moved").isEqualTo(INSIDE);
+
+    fake.player(alex).position = Position.of(OVERWORLD, 20.5, 64, 15.5);
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("shut once they left").isTrue();
+  }
+
+  @Test
+  void aGateWaitsForSomeoneOnlyPartlyInItsCell() throws IOException {
+    openGates();
+    fake.tick();
+    // Feet in the block outside the cell's z = 4 edge, but their side reaching over it.
+    fake.player(alex).position = Position.of(OVERWORLD, 6.5, 64, 3.8);
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof cell gate c1 shut");
+    fake.tick();
+    fake.tick();
+    assertThat(gateIs("minecraft:air")).as("the gate waits for them").isTrue();
+
+    fake.player(alex).position = Position.of(OVERWORLD, 6.5, 64, 3.5);
+    fake.tick();
+    assertThat(gateIs("minecraft:iron_bars")).as("clear of the cell, it shuts").isTrue();
   }
 
   @Test

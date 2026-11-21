@@ -200,7 +200,15 @@ public final class Gates {
     waiting.retainAll(seen);
   }
 
-  /** Whether anyone but a bypass holder has their feet or head in a cell or its gate's plane. */
+  /** Half a player's width, and their height: the box a player fills. */
+  private static final double HALF_WIDTH = 0.3;
+
+  private static final double HEIGHT = 1.8;
+
+  /**
+   * Whether anyone but a bypass holder is partly in a cell or its gate's plane: their whole box,
+   * not just the blocks their feet and head are in, so nobody at the edge of a block is caught.
+   */
   private boolean occupied(HallService.CellRef ref, Bounds plane) {
     for (PlayerRef online : platform.players().online()) {
       PlayerId player = online.id();
@@ -208,14 +216,22 @@ public final class Gates {
         continue;
       }
       Position feet = platform.players().position(player);
-      Position head = Position.of(feet.dimension(), feet.x(), feet.y() + 1, feet.z());
-      for (Position at : List.of(feet, head)) {
-        if (ref.cell().contains(at) || plane.contains(at)) {
-          return true;
-        }
+      if (touches(plane, feet) || ref.cell().bounds().map(b -> touches(b, feet)).orElse(false)) {
+        return true;
       }
     }
     return false;
+  }
+
+  /** Whether a player standing at {@code feet} overlaps any block of a box. */
+  static boolean touches(Bounds box, Position feet) {
+    return box.dimension().equals(feet.dimension())
+        && feet.x() + HALF_WIDTH > box.minX()
+        && feet.x() - HALF_WIDTH < box.maxX() + 1
+        && feet.y() + HEIGHT > box.minY()
+        && feet.y() < box.maxY() + 1
+        && feet.z() + HALF_WIDTH > box.minZ()
+        && feet.z() - HALF_WIDTH < box.maxZ() + 1;
   }
 
   /**
@@ -272,6 +288,17 @@ public final class Gates {
                   owner.ifPresent(o -> crash.reached(CrashPoint.GATE_SET, o));
                   // Checked again: something with contents may have been put there meanwhile.
                   if (blocks.stream().anyMatch(platform.world()::holdsContents)) {
+                    return;
+                  }
+                  // And someone may have stepped in while the journal was written: the gate
+                  // waits for them, as the pass would (questions 250).
+                  if (!open
+                      && !config.get().config().cells().moveOut()
+                      && ref.cell().gate().map(plane -> occupied(ref, plane)).orElse(false)) {
+                    if (waiting.add(key)) {
+                      announcer.admins(
+                          HallCommands.PERMISSION_ADMIN, "hof.gate.waiting", "cell", key);
+                    }
                     return;
                   }
                   try {
