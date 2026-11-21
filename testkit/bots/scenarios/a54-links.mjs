@@ -3,7 +3,9 @@
 // zone is refused before Homecoming and works after it; a link at a season's spawn takes a player
 // to the Hall spawn with no bed near, and /hof leave returns them to it; a link block outside the
 // Hall can't be broken; stepping on a pressure plate link works (questions 248 and 249). Season 2
-// ends and Season 3 launches at SPAWN; the base zone stands in for Season 1's locked land.
+// ends and Season 3 launches at SPAWN; the base zone stands in for Season 1's locked land. From
+// review of #26: a link outside the Hall stays when the block holding it up is broken, and /hof
+// leave back onto a pressure plate link doesn't take it again.
 import { assert } from '../lib/context.mjs'
 import { FLOOR, breakBlock, buildGallery, gameMode, use } from '../lib/hall.mjs'
 import { HALL_SPAWN, HUB, addLink, hallFile, inBox, markHub } from '../lib/hub.mjs'
@@ -58,6 +60,12 @@ export default {
     await ctx.advance(admin, 6_000) // past the launch's arrival immunity and the rate limit
     // The link block outside the Hall can't be broken.
     assert(!await breakBlock(ctx, admin, 'Visitor', BACK), 'a visitor can\'t break a link block outside the Hall')
+    // Nor knock it off by breaking the block it sits on.
+    const under = { x: BACK.x, y: BACK.y - 1, z: BACK.z }
+    assert(await breakBlock(ctx, admin, 'Visitor', under), 'the block under the link is anyone\'s to break')
+    await ctx.sync(admin, [visitor], 10)
+    assert(await ctx.holds(admin, `block ${BACK.x} ${BACK.y} ${BACK.z} minecraft:stone_button`), 'the link button stays')
+    await ctx.command(admin, `/setblock ${under.x} ${under.y} ${under.z} minecraft:stone`, /^Changed the block/)
     const line = await click(ctx, admin, 'Visitor', BACK)
     assert(TAKEN.test(line), `the button click is taken over: ${line}`)
     await ctx.waitForMessages(visitor, /^Welcome to the Hall of Fame\. \/hof leave takes you back\.$/)
@@ -107,5 +115,22 @@ export default {
     await ctx.advance(admin, 6_000)
     await standAt(ctx, admin, 'Visitor', PLATE)
     await waitNear(ctx, admin, 'Visitor', middle(SPAWN), 3)
+
+    // A pressure plate back to the Hall at the spawn: /hof leave returns the visitor onto it, and
+    // it doesn't take them in again until they step off and on.
+    const PLATE_BACK = { x: SPAWN.x - 3, y: FLOOR, z: SPAWN.z }
+    await ctx.command(admin, `/setblock ${PLATE_BACK.x} ${PLATE_BACK.y} ${PLATE_BACK.z} minecraft:stone_pressure_plate`, /^Changed the block/)
+    await addLink(ctx, admin, 'plate-back', PLATE_BACK, 'hall')
+    await ctx.advance(admin, 6_000)
+    await standAt(ctx, admin, 'Visitor', PLATE_BACK)
+    await waitNear(ctx, admin, 'Visitor', middle(HALL_SPAWN))
+    await ctx.advance(admin, 6_000)
+    await hof(ctx, visitor, '/hof leave', /^Back where you left\.$/)
+    await waitNear(ctx, admin, 'Visitor', middle(PLATE_BACK))
+    const stays = ctx.quiet(visitor, /^Welcome to the Hall of Fame/)
+    await ctx.advance(admin, 6_000)
+    await ctx.sync(admin, [visitor], 40)
+    stays.verify()
+    await waitNear(ctx, admin, 'Visitor', middle(PLATE_BACK))
   }
 }

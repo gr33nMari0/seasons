@@ -335,6 +335,11 @@ public final class HallRules implements HallGuard {
   }
 
   @Override
+  public boolean holdsLink(Position block) {
+    return halls.layout().linkAt(block).isPresent();
+  }
+
+  @Override
   public boolean allows(List<Position> blocks) {
     HallService.@Nullable CellRef only = null;
     boolean inHall = false;
