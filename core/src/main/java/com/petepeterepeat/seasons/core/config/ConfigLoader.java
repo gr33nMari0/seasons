@@ -4,6 +4,8 @@ package com.petepeterepeat.seasons.core.config;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.GalleryFiles;
 import com.petepeterepeat.seasons.core.hall.GalleryRules;
+import com.petepeterepeat.seasons.core.hall.HallFiles;
+import com.petepeterepeat.seasons.core.hall.HallLayout;
 import com.petepeterepeat.seasons.core.map.Waypoints;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -22,6 +24,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +55,7 @@ public final class ConfigLoader {
   public static final String MESSAGES = "messages.yml";
   public static final String SECRETS = "secrets.yml";
   public static final String MARKERS = "markers.yml";
+  public static final String HALL = "hall.yml";
   private static final String SECRETS_TEMPLATE = "secrets.template.yml";
   public static final String DISCORD_WEBHOOK_ENV = "SEASONS_DISCORD_WEBHOOK";
   public static final String ADMIN_WEBHOOK_ENV = "SEASONS_ADMIN_WEBHOOK";
@@ -70,6 +74,7 @@ public final class ConfigLoader {
   private final Path seasonsDirectory;
   private final Path galleriesDirectory;
   private final Path markersFile;
+  private final Path hallFile;
   private final Map<String, String> environment;
   private final Predicate<String> dimensionExists;
   private final Predicate<String> isItem;
@@ -118,6 +123,7 @@ public final class ConfigLoader {
     this.seasonsDirectory = worldDataDirectory.resolve("seasons");
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
     this.markersFile = worldDataDirectory.resolve(MARKERS);
+    this.hallFile = worldDataDirectory.resolve(HALL);
     this.environment = Map.copyOf(environment);
     this.dimensionExists = dimensionExists;
   }
@@ -159,6 +165,11 @@ public final class ConfigLoader {
   /** {@code <world>/seasons/markers.yml}, the shared waypoints. */
   public Path markersFile() {
     return markersFile;
+  }
+
+  /** {@code <world>/seasons/hall.yml}, the hub, the Hall spawn, exits and links. */
+  public Path hallFile() {
+    return hallFile;
   }
 
   /** {@code plugins/Seasons/config.yml}. */
@@ -210,12 +221,17 @@ public final class ConfigLoader {
     Waypoints waypoints = loadWaypoints(markersLeftOut);
     Map<String, List<ConfigProblem>> leftOut = new HashMap<>();
     Map<String, Gallery> galleries = loadGalleries(leftOut);
+    List<ConfigProblem> hallLeftOut = new ArrayList<>();
+    HallLayout hall = loadHall(galleries.values(), hallLeftOut);
     if (!atStartup) {
       problems.addAll(markersLeftOut);
       markersLeftOut.clear();
       leftOut.values().forEach(problems::addAll);
       leftOut.clear();
+      problems.addAll(hallLeftOut);
+      hallLeftOut.clear();
     }
+    warnings.addAll(spawnsInHall(seasons, galleries.values(), hall));
 
     if (!problems.isEmpty() || config == null || messages == null || secrets == null) {
       return new Result(Optional.empty(), problems, warnings);
@@ -231,9 +247,90 @@ public final class ConfigLoader {
                 leftOut,
                 waypoints,
                 markersLeftOut,
-                settings)),
+                settings,
+                hall,
+                hallLeftOut)),
         problems,
         warnings);
+  }
+
+  /**
+   * hall.yml, or no Hall parts if the server has none yet. One with problems, or that breaks a rule
+   * with the galleries, gives none and its problems go in {@code problems} (questions 243).
+   */
+  private HallLayout loadHall(Collection<Gallery> galleries, List<ConfigProblem> problems) {
+    if (Files.notExists(hallFile)) {
+      return HallLayout.NONE;
+    }
+    try {
+      ConfigurationNode node = yaml(hallFile).load();
+      if (!checkSchema(HALL, node, problems)) {
+        return HallLayout.NONE;
+      }
+      HallLayout hall = HallFiles.read(node);
+      List<GalleryRules.Problem> broken = GalleryRules.check(hall, galleries);
+      if (broken.isEmpty()) {
+        return hall;
+      }
+      for (GalleryRules.Problem problem : broken) {
+        problems.add(ConfigProblem.atPath(HALL, problem.path(), problem.message()));
+      }
+    } catch (GalleryFiles.Invalid e) {
+      problems.add(ConfigProblem.atPath(HALL, e.path(), Objects.requireNonNull(e.getMessage())));
+    } catch (ParsingException e) {
+      problems.add(syntax(HALL, e));
+    } catch (IOException e) {
+      problems.add(ConfigProblem.inFile(HALL, String.valueOf(e.getMessage())));
+    }
+    return HallLayout.NONE;
+  }
+
+  /**
+   * A season's spawn or spawn candidate inside the Hall: a warning, as one inside a zone is
+   * (questions 256).
+   */
+  private static List<String> spawnsInHall(
+      Map<Integer, SeasonFile> seasons, Collection<Gallery> galleries, HallLayout hall) {
+    List<String> warnings = new ArrayList<>();
+    Predicate<Position> inHall =
+        at -> hall.inHub(at) || galleries.stream().anyMatch(g -> g.contains(at));
+    for (SeasonFile season : new java.util.TreeMap<>(seasons).values()) {
+      String name = "seasons/" + season.season() + ".yml";
+      season
+          .spawn()
+          .filter(inHall)
+          .ifPresent(at -> warnings.add(spawnInHall(name, season.season(), at)));
+      season
+          .spawnCandidates()
+          .forEach((candidate, at) -> {
+            if (inHall.test(at)) {
+              warnings.add(
+                  name
+                      + ": Season "
+                      + season.season()
+                      + "'s spawn candidate "
+                      + candidate
+                      + " at "
+                      + xyz(at)
+                      + " is inside the Hall of Fame; every candidate must stay outside it");
+            }
+          });
+    }
+    return warnings;
+  }
+
+  /** The warning for a spawn inside the Hall, as reload and validate report it. */
+  public static String spawnInHall(String file, int season, Position at) {
+    return file
+        + ": Season "
+        + season
+        + "'s spawn at "
+        + xyz(at)
+        + " is inside the Hall of Fame; /season launch is refused until it moves";
+  }
+
+  private static String xyz(Position at) {
+    return at.blockX() + ", " + at.blockY() + ", " + at.blockZ();
   }
 
   /** {@code <world>/seasons/galleries/<id>.yml}. */

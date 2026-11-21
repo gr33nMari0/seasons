@@ -58,6 +58,33 @@ public record Bounds(String dimension, int minX, int minY, int minZ, int maxX, i
         && other.maxZ >= minZ;
   }
 
+  /** The box grown by {@code n} blocks on every side. */
+  public Bounds grown(int n) {
+    return new Bounds(dimension, minX - n, minY - n, minZ - n, maxX + n, maxY + n, maxZ + n);
+  }
+
+  /**
+   * Whether two boxes that don't overlap share part of a face, so a player can step from one into
+   * the other: next to each other along one axis, overlapping along the other two.
+   */
+  public boolean touches(Bounds other) {
+    if (!other.dimension.equals(dimension) || overlaps(other)) {
+      return false;
+    }
+    boolean x = other.minX <= maxX && other.maxX >= minX;
+    boolean y = other.minY <= maxY && other.maxY >= minY;
+    boolean z = other.minZ <= maxZ && other.maxZ >= minZ;
+    boolean nextX = other.minX == maxX + 1 || other.maxX == minX - 1;
+    boolean nextY = other.minY == maxY + 1 || other.maxY == minY - 1;
+    boolean nextZ = other.minZ == maxZ + 1 || other.maxZ == minZ - 1;
+    return (nextX && y && z) || (nextY && x && z) || (nextZ && x && y);
+  }
+
+  /** Its size, such as "7 × 6 × 7": x, then y, then z. */
+  public String size() {
+    return (maxX - minX + 1) + " × " + (maxY - minY + 1) + " × " + (maxZ - minZ + 1);
+  }
+
   /** Every block inside, as positions. */
   public java.util.List<Position> blocks() {
     java.util.List<Position> out = new java.util.ArrayList<>();

@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.map;
 
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
+import com.petepeterepeat.seasons.core.hall.Bounds;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.map.MapModel.Area;
 import com.petepeterepeat.seasons.core.map.MapModel.Outline;
@@ -76,7 +77,11 @@ public final class MapModels {
                               messages.text("map.candidate", "name", name.replace('-', ' ')),
                               middle(at)))));
     });
-    hall(snapshot.allGalleries())
+    snapshot
+        .hall()
+        .spawn()
+        .map(MapModels::middle)
+        .or(() -> hall(snapshot.allGalleries()))
         .ifPresent(at -> points.add(new Point("hall", messages.text("map.hall"), at)));
     for (Gallery gallery : snapshot.allGalleries()) {
       if (gallery.kind() == Gallery.Kind.MUSEUM) {
@@ -86,9 +91,13 @@ public final class MapModels {
       }
     }
 
+    // The Hall's boxes, the hub's included, are cut out of every zone (questions 243).
+    List<Bounds> hallBoxes = new ArrayList<>();
+    snapshot.hall().hub().ifPresent(hallBoxes::add);
+    snapshot.allGalleries().forEach(g -> g.bounds().ifPresent(hallBoxes::add));
     List<Area> areas = new ArrayList<>();
     for (Zones.InForce zone : zones) {
-      area(zone, until, world, messages, snapshot.allGalleries()).ifPresent(areas::add);
+      area(zone, until, world, messages, hallBoxes).ifPresent(areas::add);
     }
 
     List<WaypointSet> sets = new ArrayList<>();
@@ -110,7 +119,7 @@ public final class MapModels {
     return seasons.values().stream().sorted(Comparator.comparingInt(SeasonFile::season)).toList();
   }
 
-  /** The Hall: where plain {@code /hof} lands, the newest season gallery's entry. */
+  /** With no Hall spawn, the Hall's point: the newest season gallery's entry. */
   private static Optional<Position> hall(java.util.Collection<Gallery> galleries) {
     List<Gallery> seasons =
         galleries.stream()
@@ -145,7 +154,7 @@ public final class MapModels {
       Function<Zone, String> until,
       World world,
       Messages messages,
-      java.util.Collection<Gallery> galleries) {
+      List<Bounds> hallBoxes) {
     Zone zone = inForce.zone();
     String name = zone.displayName();
     Optional<Style> style =
@@ -199,9 +208,8 @@ public final class MapModels {
         holes.add(hole);
       }
     }
-    for (Gallery gallery : galleries) {
-      gallery
-          .bounds()
+    for (Bounds box : hallBoxes) {
+      Optional.of(box)
           .filter(b ->
               b.dimension().equals(zone.dimension())
                   && zone.shape().reaches(b.minX(), b.minZ(), b.maxX(), b.maxZ()))

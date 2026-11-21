@@ -17,6 +17,7 @@ import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 public record SeasonsConfig(
     Schedule schedule,
     Launch launch,
+    Archive archive,
     Resets resets,
     Cells cells,
     Decorating decorating,
@@ -47,8 +48,23 @@ public record SeasonsConfig(
     }
   }
 
+  /**
+   * Launching the next season.
+   *
+   * @param requireManual only {@code /season launch} or the launch button launches
+   * @param setWorldSpawn whether launch moves the world spawn to the new season's spawn; false
+   *     keeps it where it is, such as at the Hall spawn (questions 258)
+   */
   @ConfigSerializable
-  public record Launch(boolean requireManual) {}
+  public record Launch(boolean requireManual, boolean setWorldSpawn) {}
+
+  /**
+   * Archiving at season end.
+   *
+   * @param arrival where archiving sends everyone: their cell, or the Hall spawn (questions 257)
+   */
+  @ConfigSerializable
+  public record Archive(Arrival arrival) {}
 
   @ConfigSerializable
   public record Resets(
@@ -65,7 +81,9 @@ public record SeasonsConfig(
       Duration minPlaytime,
       CellAccess access,
       List<String> containers,
-      String gateBlock) {
+      String gateBlock,
+      GateMode gates,
+      boolean moveOut) {
     public Cells {
       containers = List.copyOf(containers);
     }
@@ -84,8 +102,33 @@ public record SeasonsConfig(
     }
   }
 
+  /**
+   * Visiting the Hall.
+   *
+   * @param sealed what leaving the Hall's bounds does (questions 245)
+   * @param leaveWithoutSpot what {@code /hof leave} does with no saved spot (questions 246)
+   * @param links taking links (questions 249)
+   * @param creativeBuilds whether players in creative mode build in the Hall as bypass holders do
+   *     (questions 252)
+   */
   @ConfigSerializable
-  public record Hof(Entry entry, ReturnSafety returnSafety, Duration arrivalImmunity) {
+  public record Hof(
+      Entry entry,
+      ReturnSafety returnSafety,
+      Duration arrivalImmunity,
+      Sealing sealed,
+      LeaveWithoutSpot leaveWithoutSpot,
+      Links links,
+      boolean creativeBuilds) {
+    /**
+     * Links.
+     *
+     * @param returnToLink whether {@code /hof leave} after taking a link to the Hall goes back to
+     *     it
+     */
+    @ConfigSerializable
+    public record Links(boolean returnToLink) {}
+
     /**
      * Where and when /hof works.
      *
@@ -214,6 +257,36 @@ public record SeasonsConfig(
     OPEN,
     BOUNDS,
     GATE
+  }
+
+  /** How a cell's gate is set in a {@code gate} gallery (questions 250). */
+  public enum GateMode {
+    /** Open unless an admin or the owner shut it. */
+    OPEN,
+    /** Shut whenever its cell is locked, open while its owner may decorate it. */
+    AUTO
+  }
+
+  /** What leaving the Hall's bounds does (questions 245). */
+  public enum Sealing {
+    /** Just leave, except during the Intermission, when everyone goes back to the Hall spawn. */
+    INTERMISSION,
+    /** Back to the saved spot, or the Hall spawn. */
+    ALWAYS,
+    /** Just leave. */
+    NEVER
+  }
+
+  /** What {@code /hof leave} does with no saved spot (questions 246). */
+  public enum LeaveWithoutSpot {
+    SEASON_SPAWN,
+    REFUSE
+  }
+
+  /** Where archiving sends everyone at season end (questions 257). */
+  public enum Arrival {
+    CELL,
+    HUB
   }
 
   public enum ReturnFallback {

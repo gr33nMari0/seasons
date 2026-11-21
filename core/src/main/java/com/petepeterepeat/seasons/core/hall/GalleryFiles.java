@@ -62,7 +62,7 @@ public final class GalleryFiles {
   /** Gallery and cell ids: lower-case letters, digits, dashes and underscores. */
   public static final Pattern ID = Pattern.compile("[a-z0-9_-]{1,32}");
 
-  private static final Pattern DIMENSION = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
+  static final Pattern DIMENSION = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
   private GalleryFiles() {}
 
@@ -243,10 +243,19 @@ public final class GalleryFiles {
       }
       pose = name.equals("standing") ? Optional.empty() : Optional.of(name);
     }
-    return new Cell(id, bounds, anchors, owners, node.node("imported").getBoolean(false), pose);
+    boolean shut = false;
+    if (!node.node("gate").virtual()) {
+      String gate = node.node("gate").getString("");
+      if (!gate.equals("shut") && !gate.equals("open")) {
+        throw new Invalid(path + ".gate", "is open or shut, not '" + gate + "'");
+      }
+      shut = gate.equals("shut");
+    }
+    return new Cell(
+        id, bounds, anchors, owners, node.node("imported").getBoolean(false), pose, shut);
   }
 
-  private static Optional<Bounds> bounds(ConfigurationNode node, String dimension, String path)
+  static Optional<Bounds> bounds(ConfigurationNode node, String dimension, String path)
       throws Invalid {
     if (node.virtual() || node.isNull()) {
       return Optional.empty();
@@ -265,12 +274,11 @@ public final class GalleryFiles {
   }
 
   /** {@code { pos: [x, y, z], yaw: 180 }}. */
-  private static Position point(ConfigurationNode node, String dimension, String path)
-      throws Invalid {
+  static Position point(ConfigurationNode node, String dimension, String path) throws Invalid {
     return xyz(node.node("pos"), dimension, (float) node.node("yaw").getDouble(0), path + ".pos");
   }
 
-  private static Position xyz(ConfigurationNode node, String dimension, float yaw, String path)
+  static Position xyz(ConfigurationNode node, String dimension, float yaw, String path)
       throws Invalid {
     List<? extends ConfigurationNode> parts = node.childrenList();
     if (parts.size() != 3) {
@@ -334,6 +342,9 @@ public final class GalleryFiles {
       if (cell.pose().isPresent()) {
         at.node("pose").set(cell.pose().get());
       }
+      if (cell.gateShut()) {
+        at.node("gate").set("shut");
+      }
       for (Anchor anchor : cell.anchors()) {
         ConfigurationNode a = at.node("anchors").appendListNode();
         a.node("type").set(anchor.type().id());
@@ -361,20 +372,19 @@ public final class GalleryFiles {
     AtomicFiles.writeKeepingBackups(file, out.toString().getBytes(UTF_8), backupDir);
   }
 
-  private static void setBounds(ConfigurationNode node, Bounds bounds)
-      throws SerializationException {
+  static void setBounds(ConfigurationNode node, Bounds bounds) throws SerializationException {
     setXyz(node.node("min"), bounds.min());
     setXyz(node.node("max"), bounds.max());
   }
 
-  private static void setPoint(ConfigurationNode node, Position at) throws SerializationException {
+  static void setPoint(ConfigurationNode node, Position at) throws SerializationException {
     setXyz(node.node("pos"), at);
     if (at.yaw() != 0f) {
       node.node("yaw").set(Math.round(at.yaw()));
     }
   }
 
-  private static void setXyz(ConfigurationNode node, Position at) throws SerializationException {
+  static void setXyz(ConfigurationNode node, Position at) throws SerializationException {
     node.setList(Integer.class, List.of(at.blockX(), at.blockY(), at.blockZ()));
   }
 }

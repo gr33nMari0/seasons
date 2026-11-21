@@ -101,6 +101,49 @@ public final class GalleryRules {
     return at.blockX() + ", " + at.blockY() + ", " + at.blockZ();
   }
 
+  /**
+   * Whether an anchor sits where its cell's bounds allow: inside them, or for a gate corner, inside
+   * or right beside them, in the doorway (questions 250).
+   */
+  public static boolean fits(Bounds bounds, Anchor anchor) {
+    return anchor.type() == AnchorType.GATE
+        ? bounds.grown(1).contains(anchor.at())
+        : bounds.contains(anchor.at());
+  }
+
+  /**
+   * The rules the Hall's own parts keep with the galleries (questions 243): the hub overlaps no
+   * gallery, the Hall spawn sits inside the hub, and no two links share a block.
+   */
+  public static List<Problem> check(HallLayout hall, Collection<Gallery> galleries) {
+    List<Problem> problems = new ArrayList<>();
+    if (hall.hub().isPresent()) {
+      Bounds hub = hall.hub().get();
+      for (Gallery gallery : galleries) {
+        if (gallery.bounds().map(hub::overlaps).orElse(false)) {
+          problems.add(new Problem(HALL, "hub", "overlaps gallery " + gallery.id()));
+        }
+      }
+    }
+    if (hall.spawn().isPresent() && !hall.inHub(hall.spawn().get())) {
+      problems.add(new Problem(HALL, "spawn", "the Hall spawn must sit inside the hub"));
+    }
+    List<HallLayout.Link> seen = new ArrayList<>();
+    for (HallLayout.Link link : hall.links().values()) {
+      for (HallLayout.Link other : seen) {
+        if (other.isAt(link.block())) {
+          problems.add(
+              new Problem(HALL, "links." + link.id(), "shares its block with link " + other.id()));
+        }
+      }
+      seen.add(link);
+    }
+    return problems;
+  }
+
+  /** The name {@link Problem#gallery()} has for {@code hall.yml}'s problems. */
+  public static final String HALL = "hall";
+
   /** The rules one gallery keeps by itself. */
   public static List<Problem> check(Gallery gallery) {
     List<Problem> problems = new ArrayList<>();
@@ -129,12 +172,16 @@ public final class GalleryRules {
                 new Problem(
                     gallery.id(), path + ".anchors", "only a museum can have an egg plinth"));
           }
-          if (!bounds.contains(anchor.at())) {
+          if (!fits(bounds, anchor)) {
             problems.add(
                 new Problem(
                     gallery.id(),
                     path + ".anchors",
-                    "the " + anchor.type().id() + " anchor must sit inside the cell's bounds"));
+                    anchor.type() == AnchorType.GATE
+                        ? "a gate corner must sit inside the cell's bounds or right beside them"
+                        : "the "
+                            + anchor.type().id()
+                            + " anchor must sit inside the cell's bounds"));
           }
         }
       }
@@ -166,6 +213,21 @@ public final class GalleryRules {
                       + " blocks; at most "
                       + MAX_GATE
                       + " are allowed"));
+        }
+        if (gallery.bounds().isPresent() && !gallery.bounds().get().contains(plane)) {
+          problems.add(
+              new Problem(
+                  gallery.id(),
+                  path + ".anchors",
+                  "the gate must sit inside the gallery's bounds"));
+        }
+        for (Cell other : gallery.cells()) {
+          if (!other.id().equals(cell.id())
+              && other.bounds().map(b -> b.overlaps(plane)).orElse(false)) {
+            problems.add(
+                new Problem(
+                    gallery.id(), path + ".anchors", "the gate reaches into cell " + other.id()));
+          }
         }
         for (String what : covered(gallery, cell, plane)) {
           problems.add(
