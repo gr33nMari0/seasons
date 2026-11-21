@@ -212,7 +212,8 @@ class StampTest {
         .containsExactly("Another stamp is still going; wait for it to finish.");
     loading.complete(null);
     assertThat(file()).contains("c1:", "c2:");
-    assertThat(hof("cell new season-2 other")).containsExactly("Created cell other in gallery season-2.");
+    assertThat(hof("cell new season-2 other"))
+        .containsExactly("Created cell other in gallery season-2.");
   }
 
   @Test
@@ -233,7 +234,8 @@ class StampTest {
     seasons.stop();
     start();
     assertThat(file()).contains("c1:");
-    assertThat(hof("cell new season-2 other")).containsExactly("Created cell other in gallery season-2.");
+    assertThat(hof("cell new season-2 other"))
+        .containsExactly("Created cell other in gallery season-2.");
   }
 
   @Test

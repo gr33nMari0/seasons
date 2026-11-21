@@ -78,7 +78,9 @@ public final class HallService {
   private final RandomGenerator random;
   private final Map<PlayerId, SwapRequest> swaps = new HashMap<>();
 
-  /** Galleries a stamp is placing copies in, or one a crash or failure left open (questions 242). */
+  /**
+   * Galleries a stamp is placing copies in, or one a crash or failure left open (questions 242).
+   */
   private final Set<String> stamping = new HashSet<>();
 
   /** Players without a record yet (before /season init) whom Seasons switched to adventure. */
