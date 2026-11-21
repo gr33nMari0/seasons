@@ -12,6 +12,8 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +85,54 @@ class DiscordWebhooksTest {
     failuresLeft.set(10);
     webhooks.post(url(), "lost");
     webhooks.close();
+
+    assertThat(bodies).isEmpty();
+  }
+
+  @Test
+  void eachWebhookHasItsOwnLane() throws Exception {
+    // The admin webhook stalls; the public one's post goes out all the same.
+    CountDownLatch release = new CountDownLatch(1);
+    server.stop(0);
+    server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+    server.setExecutor(Executors.newFixedThreadPool(4));
+    server.createContext(
+        "/stalled",
+        exchange -> {
+          try {
+            release.await();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+          exchange.sendResponseHeaders(204, -1);
+          exchange.close();
+        });
+    server.createContext(
+        "/hook",
+        exchange -> {
+          bodies.add(new String(exchange.getRequestBody().readAllBytes(), UTF_8));
+          exchange.sendResponseHeaders(204, -1);
+          exchange.close();
+        });
+    server.start();
+    URI stalled = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/stalled");
+
+    webhooks.post(stalled, "alert");
+    webhooks.post(url(), "public");
+    long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+    while (bodies.isEmpty() && System.nanoTime() < deadline) {
+      Thread.sleep(10);
+    }
+    release.countDown();
+
+    assertThat(bodies).singleElement().asString().contains("\"public\"");
+    assertThat(webhooks.lanes()).isEqualTo(2);
+  }
+
+  @Test
+  void aPostAfterCloseIsDropped() {
+    webhooks.close();
+    webhooks.post(url(), "late");
 
     assertThat(bodies).isEmpty();
   }

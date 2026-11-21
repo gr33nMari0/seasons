@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.hall;
 
+import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
@@ -56,6 +57,7 @@ public final class Reconciler {
   private final ArchiveFiles archives;
   private final SerialWriter writer;
   private final AuditLog audit;
+  private final AdminAlerts alerts;
   private final LongSupplier nanoTime;
   private final Executor serverThread;
   private final Museum museum;
@@ -85,7 +87,9 @@ public final class Reconciler {
       SerialWriter writer,
       AuditLog audit,
       Museum museum,
-      LongSupplier nanoTime) {
+      LongSupplier nanoTime,
+      AdminAlerts alerts) {
+    this.alerts = alerts;
     this.platform = platform;
     this.museum = museum;
     this.halls = halls;
@@ -298,6 +302,7 @@ public final class Reconciler {
   private void repaired(HallService.CellRef ref, String what) {
     LOG.info("Reconciled cell {}: {}", ref.key(), what);
     audit.record(AuditLog.SEASONS, "reconcile", ref.key(), "repaired", what);
+    alerts.alert("alerts.reconcile", "cell", ref.key(), "what", what);
   }
 
   private static String kind(String tag) {

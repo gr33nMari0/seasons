@@ -85,6 +85,7 @@ end:
   now: "<gold>Ending Season <season> now: archiving <count> online players.</gold>"
   cancelled: "<green>The end of Season <season> was cancelled. Play on!</green>"
   intermission: "<gold>Season <season> has ended. Welcome to the Intermission.</gold>"
+  discord: "Season <season> has ended. Welcome to the Intermission!"
   interrupted: "<yellow>The server restarted during the end countdown of Season <season>, so it was cancelled. Run /season end to start it again.</yellow>"
   archiving-failed: "<red>Archiving for Season <season> stopped: <error>. See the server log.</red>"
   not-saved: "<red>Season <season> wasn't ended: season.json couldn't be saved, so nobody was archived. Fix the problem in the server log, restart, then run /season end again.</red>"
@@ -122,6 +123,7 @@ launch:
   failed: "<red>Launching Season <season> stopped: <error>. See the server log; it is finished at the next restart.</red>"
   loading: "<gray>Loading the spawn at <x>, <y>, <z>...</gray>"
   done: "<gold>Season <season> has begun!</gold>"
+  discord: "Season <season> has begun!"
   title: "<gold>Season <season></gold>"
   subtitle: "<yellow>has begun!</yellow>"
   deaths: "Deaths, Season <season>"
@@ -349,6 +351,13 @@ hof:
     undone: "<green>Put back <count> cell of <gallery>.</green>"
     undone-many: "<green>Put back <count> cells of <gallery>.</green>"
     undo-stopped: "<red>Undoing the import of cell <cell> stopped: <reason>.</red>"
+
+# Posted to the admin webhook (secrets.yml), never to the public channel.
+alerts:
+  tripwire: "Tripwire: <details> (<name>)"
+  reconcile: "Reconciliation repaired <cell>: <what>"
+  recovery-finished: "Journal recovery: <operation> for <name>, Season <season>: finished"
+  recovery-failed: "Journal recovery: <operation> for <name>, Season <season>: failed: <reason>"
 
 audit:
   header: "<gold>The last <count> audit entries:</gold>"

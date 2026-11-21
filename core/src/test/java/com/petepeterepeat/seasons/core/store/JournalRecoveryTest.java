@@ -134,6 +134,34 @@ class JournalRecoveryTest {
   }
 
   @Test
+  void theReporterHearsHowEachAttemptEnded() throws Exception {
+    Journal journal = Journal.open(dir.resolve("journal.log"), writer, CLOCK);
+    journal.append(ARCHIVE_STARTED, ALEX, 2, "a").join();
+    journal.append(ARCHIVE_STARTED, SAM, 2, "s").join();
+    List<String> heard = new ArrayList<>();
+    JournalRecovery recovery =
+        new JournalRecovery(
+            journal,
+            Runnable::run,
+            (op, outcome) ->
+                heard.add(
+                    op.player().orElseThrow().equals(ALEX)
+                        ? "alex " + outcome.getClass().getSimpleName()
+                        : "sam " + outcome.getClass().getSimpleName()));
+    recovery.register(
+        Operation.ARCHIVE,
+        op ->
+            CompletableFuture.completedFuture(
+                op.player().orElseThrow().equals(ALEX)
+                    ? RecoveryOutcome.finished()
+                    : RecoveryOutcome.waitForPlayer()));
+
+    recovery.recoverAll().join();
+
+    assertThat(heard).containsExactlyInAnyOrder("alex Finished", "sam WaitForPlayer");
+  }
+
+  @Test
   void anOperationWithNoHandlerOrAFailingOneStaysPending() throws Exception {
     Journal journal = Journal.open(dir.resolve("journal.log"), writer, CLOCK);
     journal.append(ARCHIVE_STARTED, ALEX, 2, "a").join();

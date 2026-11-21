@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
+import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
@@ -114,6 +115,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable FirstsTracker firsts;
   private @Nullable Pets pets;
   private @Nullable Dragon dragon;
+  private @Nullable AdminAlerts alerts;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -196,6 +198,8 @@ public final class Seasons implements SeasonsApi {
     Immunity immunity = new Immunity(clock);
     Announcer announcer =
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
+    AdminAlerts adminAlerts = new AdminAlerts(platform.scheduler(), webhooks, config);
+    alerts = adminAlerts;
     CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
     Pets pets = new Pets(platform, config, players, audit, Optional.ofNullable(journal));
     this.pets = pets;
@@ -242,7 +246,8 @@ public final class Seasons implements SeasonsApi {
             crash,
             clock);
     Reconciler reconciling =
-        new Reconciler(platform, halls, renderer, archives, writer, audit, museum, nanoTime);
+        new Reconciler(
+            platform, halls, renderer, archives, writer, audit, museum, nanoTime, adminAlerts);
     reconciler = reconciling;
     HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
@@ -254,7 +259,8 @@ public final class Seasons implements SeasonsApi {
     Optional<Vault> vault = Optional.empty();
     RolloverArchiver rollover = refusingArchiver();
     if (journal != null) {
-      JournalRecovery replay = new JournalRecovery(journal, serverThread);
+      JournalRecovery replay =
+          new JournalRecovery(journal, serverThread, recoveryAlerts(adminAlerts));
       Archiver archiving =
           new Archiver(
               platform, config, clock, writer, journal, replay, archives, vaults, players, hall,
@@ -383,7 +389,8 @@ public final class Seasons implements SeasonsApi {
                 clock,
                 pets::loggedIn));
     Tripwire wire =
-        new Tripwire(platform.players(), platform.inventories(), platform.scheduler(), audit);
+        new Tripwire(
+            platform.players(), platform.inventories(), platform.scheduler(), audit, adminAlerts);
     tripwire = wire;
     wire.start();
     FirstsTracker firstsTracker =
@@ -563,6 +570,36 @@ public final class Seasons implements SeasonsApi {
     };
   }
 
+  /** Recovery runs for the admin webhook: each operation finished, and each that failed. */
+  private JournalRecovery.Reporter recoveryAlerts(AdminAlerts adminAlerts) {
+    return (operation, outcome) -> {
+      String name =
+          operation
+              .player()
+              .map(p -> platform.players().knownName(p).orElse(p.toString()))
+              .orElse("nobody");
+      String kind = operation.operation().name().toLowerCase(java.util.Locale.ROOT);
+      String season = Integer.toString(operation.season());
+      switch (outcome) {
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.Finished f ->
+            adminAlerts.alert(
+                "alerts.recovery-finished", "operation", kind, "name", name, "season", season);
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.Failed f ->
+            adminAlerts.alert(
+                "alerts.recovery-failed",
+                "operation",
+                kind,
+                "name",
+                name,
+                "season",
+                season,
+                "reason",
+                f.reason());
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.WaitForPlayer w -> {}
+      }
+    };
+  }
+
   /** Milestones for season firsts and for the zones' unlock conditions. */
   private static Milestones both(Milestones first, Milestones second) {
     return new Milestones() {
@@ -647,6 +684,9 @@ public final class Seasons implements SeasonsApi {
       logFailure(store.flush());
     }
     writer.close();
+    if (alerts != null) {
+      alerts.flush();
+    }
     webhooks.close();
     maps.close();
   }

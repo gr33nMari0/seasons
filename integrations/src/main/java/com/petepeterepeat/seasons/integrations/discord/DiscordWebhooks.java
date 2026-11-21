@@ -9,19 +9,24 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Posts to Discord webhooks on its own thread, one post at a time and in order, with a bounded
- * queue and backoff on failure. Every post disables mentions, so text such as {@code @everyone}
- * can't ping anyone. The URL is never logged: it is the secret.
+ * Posts to Discord webhooks off the server thread. Each webhook has a lane of its own: one thread,
+ * one post at a time and in order, with a bounded queue and backoff on failure, so a webhook
+ * Discord is rate-limiting, such as the admin one during a burst of alerts, never holds up the
+ * public channel's posts. Every post disables mentions, so text such as {@code @everyone} can't
+ * ping anyone. The URL is never logged: it is the secret.
  */
 public final class DiscordWebhooks implements Webhooks {
   private static final Logger LOG = LoggerFactory.getLogger(DiscordWebhooks.class);
@@ -31,7 +36,9 @@ public final class DiscordWebhooks implements Webhooks {
 
   private final HttpClient client;
   private final List<Duration> backoff;
-  private final ThreadPoolExecutor executor;
+  private final Map<URI, ThreadPoolExecutor> lanes = new ConcurrentHashMap<>();
+  private final AtomicInteger lanesMade = new AtomicInteger();
+  private volatile boolean closed;
 
   public DiscordWebhooks() {
     this(
@@ -49,31 +56,55 @@ public final class DiscordWebhooks implements Webhooks {
   DiscordWebhooks(HttpClient client, List<Duration> backoff) {
     this.client = client;
     this.backoff = List.copyOf(backoff);
-    this.executor =
-        new ThreadPoolExecutor(
-            1,
-            1,
-            0,
-            TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(QUEUE),
-            Thread.ofPlatform().name("seasons-discord").daemon(true).factory(),
-            (task, pool) -> LOG.warn("Discord queue is full; dropping a post"));
   }
 
   @Override
   public void post(URI webhook, String content) {
+    if (closed) {
+      return;
+    }
     String body = body(content);
-    executor.execute(() -> send(webhook, body));
+    lanes.computeIfAbsent(webhook, url -> lane()).execute(() -> send(webhook, body));
+  }
+
+  /** One webhook's thread and queue. */
+  private ThreadPoolExecutor lane() {
+    return new ThreadPoolExecutor(
+        1,
+        1,
+        0,
+        TimeUnit.SECONDS,
+        new ArrayBlockingQueue<>(QUEUE),
+        Thread.ofPlatform()
+            .name("seasons-discord-" + lanesMade.incrementAndGet())
+            .daemon(true)
+            .factory(),
+        (task, pool) -> {
+          if (!pool.isShutdown()) {
+            LOG.warn("A Discord webhook's queue is full; dropping a post");
+          }
+        });
+  }
+
+  /** How many webhooks have a lane, for tests. */
+  int lanes() {
+    return lanes.size();
   }
 
   @Override
   public void close() {
-    executor.shutdown();
+    closed = true;
+    lanes.values().forEach(ThreadPoolExecutor::shutdown);
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     try {
-      if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-        executor.shutdownNow();
+      for (ThreadPoolExecutor lane : lanes.values()) {
+        long left = deadline - System.nanoTime();
+        if (left <= 0 || !lane.awaitTermination(left, TimeUnit.NANOSECONDS)) {
+          lane.shutdownNow();
+        }
       }
     } catch (InterruptedException e) {
+      lanes.values().forEach(ThreadPoolExecutor::shutdownNow);
       Thread.currentThread().interrupt();
     }
   }
