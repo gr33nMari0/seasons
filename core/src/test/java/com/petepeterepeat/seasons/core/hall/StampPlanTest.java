@@ -55,6 +55,13 @@ class StampPlanTest {
             List.of("c4", "c5"),
             "Admin");
     assertThat(StampPlan.read(plan.write())).isEqualTo(plan);
+    assertThat(plan.write()).startsWith("format-version=1\n");
+    assertThatThrownBy(
+            () -> StampPlan.read(plan.write().replace("format-version=1", "format-version=2")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("format-version 2");
+    assertThatThrownBy(() -> StampPlan.read(plan.write().replace("format-version=1\n", "")))
+        .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> StampPlan.read("gallery=x\n"))
         .isInstanceOf(IllegalArgumentException.class);
   }

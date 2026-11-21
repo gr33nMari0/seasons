@@ -34,6 +34,9 @@ public record StampPlan(
     String actor) {
   private static final java.util.regex.Pattern COMMA = java.util.regex.Pattern.compile(",");
 
+  /** The plan file's format, written first; a plan of another format isn't read. */
+  public static final int FORMAT_VERSION = 1;
+
   public StampPlan {
     cells = List.copyOf(cells);
     if (rotation % 90 != 0 || rotation < 0 || rotation >= 360) {
@@ -124,6 +127,7 @@ public record StampPlan(
   /** The plan as lines of {@code key=value}, for {@code data/stamps/<id>.plan}. */
   public String write() {
     Map<String, String> lines = new LinkedHashMap<>();
+    lines.put("format-version", Integer.toString(FORMAT_VERSION));
     lines.put("gallery", gallery);
     lines.put("template", template);
     lines.put("source", source.name());
@@ -153,6 +157,10 @@ public record StampPlan(
       }
     }
     try {
+      int format = Integer.parseInt(required(lines, "format-version"));
+      if (format != FORMAT_VERSION) {
+        throw new IllegalArgumentException("format-version " + format + " isn't one this reads");
+      }
       int[] origin = ints(required(lines, "origin"));
       int[] step = ints(required(lines, "step"));
       return new StampPlan(

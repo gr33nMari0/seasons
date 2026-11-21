@@ -3,8 +3,8 @@
 // in DATA mode for its markers and saves it with a structure block as seasons:<name>; /hof stamp
 // finds it by name. A file of that name in templates/ wins over it. A template is refused, with
 // the reason and nothing changed, when it has no figure marker, two plaques, one gate corner, an
-// unknown seasons: marker, an archive marker over nothing, a container holding items, or a block
-// the Hall doesn't allow. An unknown name lists the templates there are.
+// unknown seasons: marker, an archive marker over nothing, a container holding items or a loot
+// table, a dropped item, or a block the Hall doesn't allow (a hopper, a spawner). An unknown name lists the templates there are.
 import { copyFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -24,15 +24,24 @@ const SIZE = { x: 3, y: 3, z: 3 }
 async function template (ctx, admin, name, at, extras) {
   await ctx.command(admin, `/fill ${at.x} ${at.y} ${at.z} ${at.x + 2} ${at.y + 2} ${at.z + 2} minecraft:air`, /^(Successfully filled|No blocks were filled)/)
   await ctx.command(admin, `/fill ${at.x} ${at.y} ${at.z} ${at.x + 2} ${at.y} ${at.z + 2} minecraft:smooth_stone`, /^Successfully filled/)
+  let entities = false
   for (const [x, y, z, what] of extras) {
     const pos = { x: at.x + x, y: at.y + y, z: at.z + z }
-    if (what.startsWith('minecraft:')) {
+    if (what.startsWith('summon ')) {
+      // An entity, saved with the template: `summon <type> <nbt>`.
+      const [, type, nbt] = /^summon (\S+) (.*)$/.exec(what)
+      await ctx.command(admin, `/summon ${type} ${pos.x + 0.5} ${pos.y} ${pos.z + 0.5} ${nbt}`, /^Summoned /)
+      entities = true
+    } else if (what.startsWith('minecraft:')) {
       await ctx.command(admin, `/setblock ${pos.x} ${pos.y} ${pos.z} ${what}`, /^Changed the block/)
     } else {
       await marker(ctx, admin, pos, what)
     }
   }
-  await saveStructure(ctx, admin, name, at, SIZE)
+  await saveStructure(ctx, admin, name, at, SIZE, { entities })
+  if (entities) {
+    await ctx.command(admin, `/kill @e[type=!player,x=${at.x},y=${at.y},z=${at.z},dx=2,dy=2,dz=2]`, /^Killed /)
+  }
 }
 
 export default {
@@ -88,7 +97,12 @@ export default {
       ['podium', [[1, 1, 1, 'figure'], [0, 1, 0, 'seasons:podium']], 'seasons:podium at 0, 1, 0 isn\'t a marker Seasons knows'],
       ['floating', [[1, 1, 1, 'figure'], [0, 2, 0, 'archive']], 'the seasons:archive marker at 0, 2, 0 must sit on the block it anchors'],
       ['stash', [[1, 1, 1, 'figure'], [0, 1, 0, 'minecraft:chest{Items:[{Slot:0b,id:"minecraft:diamond",count:3}]}']], 'the minecraft:chest at 0, 1, 0 holds items; templates hold none'],
-      ['hopper', [[1, 1, 1, 'figure'], [0, 1, 0, 'minecraft:hopper']], 'it has a minecraft:hopper at 0, 1, 0, which the Hall doesn\'t allow']
+      ['hopper', [[1, 1, 1, 'figure'], [0, 1, 0, 'minecraft:hopper']], 'it has a minecraft:hopper at 0, 1, 0, which the Hall doesn\'t allow'],
+      // Items from nothing: a loot table fills the chest when it is first opened; a dropped item,
+      // and a spawner.
+      ['loot', [[1, 1, 1, 'figure'], [0, 1, 0, 'minecraft:chest{LootTable:"minecraft:chests/simple_dungeon"}']], 'the minecraft:chest at 0, 1, 0 holds items; templates hold none'],
+      ['dropped', [[1, 1, 1, 'figure'], [0, 1, 2, 'summon minecraft:item {Item:{id:"minecraft:diamond",count:1},NoGravity:1b,PickupDelay:32767s,Age:-32768s}']], 'a minecraft:item in it carries items; templates hold none'],
+      ['spawner', [[1, 1, 1, 'figure'], [0, 1, 0, 'minecraft:spawner']], 'it has a minecraft:spawner at 0, 1, 0, which the Hall doesn\'t allow']
     ]
     const before = ctx.readFile(GALLERY_FILE())
     await standAt(ctx, admin, 'SeasonsAdmin', { x: 50, y: FLOOR, z: 30 })

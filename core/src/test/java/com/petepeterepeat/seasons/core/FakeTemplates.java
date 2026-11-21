@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Structure files read with the plain NBT reader and placed into the fake world as the game places
@@ -63,7 +64,9 @@ public final class FakeTemplates implements Templates {
           structureBlock && "DATA".equals(nbt.get("mode"))
               ? Optional.of(String.valueOf(nbt.getOrDefault("metadata", "")))
               : Optional.empty();
-      int items = nbt.containsKey("Items") ? list(nbt.get("Items")).size() : 0;
+      int items =
+          (nbt.containsKey("Items") ? list(nbt.get("Items")).size() : 0)
+              + (nbt.containsKey("LootTable") ? 1 : 0);
       blocks.add(
           new TemplateScan.Block(pos[0], pos[1], pos[2], name, items, marker, structureBlock));
     }
@@ -77,8 +80,13 @@ public final class FakeTemplates implements Templates {
     return new TemplateScan(size[0], size[1], size[2], blocks, entities);
   }
 
+  /**
+   * Places as the game does, after taking away the entities an earlier placement under the same tag
+   * left, as the adapter does; the entities are counted by tag.
+   */
   @Override
-  public void place(byte[] structure, Position origin, int rotation) {
+  public CompletableFuture<Void> place(
+      byte[] structure, Position origin, int rotation, Position min, Position max, String tag) {
     TemplateScan scan = scan(structure);
     placed.add(new Position(origin.dimension(), origin.x(), origin.y(), origin.z(), rotation, 0f));
     for (TemplateScan.Block block : scan.blocks()) {
@@ -90,7 +98,12 @@ public final class FakeTemplates implements Templates {
           origin.blockZ() + turned[1],
           new BlockInfo(block.type(), !air, air, false));
     }
+    entities.put(tag, scan.entities().size());
+    return CompletableFuture.completedFuture(null);
   }
+
+  /** How many entities each placement left in the world, by its tag. */
+  public final Map<String, Integer> entities = new HashMap<>();
 
   private static Nbt.NbtList emptyList() {
     return new Nbt.NbtList(Nbt.compoundType(), List.of());

@@ -94,7 +94,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             new PaperStatistics(players),
             storage,
             new PaperImports(this, server, codec),
-            new PaperTemplates(server));
+            new PaperTemplates(this, server, new NamespacedKey(this, "stamp")));
 
     server.getPluginManager().registerEvents(events, this);
     server.getPluginManager().registerEvents(events.hallGuard(), this);

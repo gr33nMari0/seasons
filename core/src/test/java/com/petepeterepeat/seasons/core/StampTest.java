@@ -15,6 +15,7 @@ import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import com.petepeterepeat.seasons.core.store.nbt.Nbt;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -204,6 +205,42 @@ class StampTest {
                 booth()
                     .marker(1, 1, 1, "seasons:figure")
                     .block(0, 1, 0, "minecraft:structure_block"));
+    // Items from nothing, in every form a structure can hold them (questions 235).
+    Map<String, StructureBuilder> more =
+        Map.of(
+            "loot",
+                booth()
+                    .marker(1, 1, 1, "seasons:figure")
+                    .block(
+                        0,
+                        1,
+                        0,
+                        "minecraft:chest",
+                        Map.of(),
+                        Map.of(
+                            "id",
+                            "minecraft:chest",
+                            "LootTable",
+                            "minecraft:chests/simple_dungeon")),
+            "dropped",
+                booth()
+                    .marker(1, 1, 1, "seasons:figure")
+                    .entity(
+                        Map.of(
+                            "id",
+                            "minecraft:item",
+                            "Item",
+                            Map.of("id", "minecraft:diamond", "count", 1))),
+            "spawner",
+                booth().marker(1, 1, 1, "seasons:figure").block(0, 1, 0, "minecraft:spawner"),
+            "spawnercart",
+                booth()
+                    .marker(1, 1, 1, "seasons:figure")
+                    .entity(Map.of("id", "minecraft:spawner_minecart")),
+            "hoppercart",
+                booth()
+                    .marker(1, 1, 1, "seasons:figure")
+                    .entity(Map.of("id", "minecraft:hopper_minecart")));
     Map<String, String> reasons =
         Map.of(
             "nofigure", "it has no seasons:figure marker",
@@ -216,8 +253,18 @@ class StampTest {
             "plain",
                 "the structure block at 0, 1, 0 isn't a Seasons marker: only one in DATA mode with"
                     + " seasons: metadata is");
+    Map<String, String> moreReasons =
+        Map.of(
+            "loot", "the minecraft:chest at 0, 1, 0 holds items; templates hold none",
+            "dropped", "a minecraft:item in it carries items; templates hold none",
+            "spawner", "it has a minecraft:spawner at 0, 1, 0, which the Hall doesn't allow",
+            "spawnercart", "it has a minecraft:spawner_minecart, which the Hall doesn't allow",
+            "hoppercart", "it has a minecraft:hopper_minecart, which the Hall doesn't allow");
     templates.forEach((name, builder) -> fake.templates.saved.put(name, builder.build()));
-    reasons.forEach((name, reason) ->
+    more.forEach((name, builder) -> fake.templates.saved.put(name, builder.build()));
+    Map<String, String> all = new java.util.HashMap<>(reasons);
+    all.putAll(moreReasons);
+    all.forEach((name, reason) ->
         assertThat(stamp(name + " season-2 1"))
             .as(name)
             .containsExactly("Template " + name + " can't be stamped: " + reason + "."));
@@ -274,7 +321,9 @@ class StampTest {
             List.of("c1", "c2"),
             "Admin");
     Files.writeString(stamps.resolve("abc-1.plan"), plan.write());
-    Files.write(stamps.resolve("abc-1.nbt"), DefaultTemplates.alcove());
+    // The alcove with an armour stand in it, which a second placement mustn't double.
+    byte[] withStand = alcoveWithStand();
+    Files.write(stamps.resolve("abc-1.nbt"), withStand);
     Journal journal =
         Journal.open(
             dir.resolve("world/seasons/data/journal.log"),
@@ -282,9 +331,21 @@ class StampTest {
             fake.clock);
     journal.append(JournalKind.STAMP_STARTED, admin.id(), 2, "abc-1").join();
     // The first copy was placed before the crash; recovery places it again over itself.
-    fake.templates.place(DefaultTemplates.alcove(), Position.of(OVERWORLD, 2, 64, 2), 0);
+    fake.templates
+        .place(
+            withStand,
+            Position.of(OVERWORLD, 2, 64, 2),
+            0,
+            Position.of(OVERWORLD, 2, 64, 2),
+            Position.of(OVERWORLD, 6, 68, 6),
+            "abc-1/0")
+        .join();
 
     start();
+
+    // Each copy's entities once: the first copy's taken away and placed again under its own tag.
+    assertThat(fake.templates.entities)
+        .containsOnly(Map.entry("abc-1/0", 1), Map.entry("abc-1/1", 1));
 
     assertThat(file()).contains("c1:", "c2:");
     assertThat(type(3, 65, 3)).isEqualTo("minecraft:barrel");
@@ -293,6 +354,17 @@ class StampTest {
     assertThat(Files.readString(dir.resolve("world/seasons/data/journal.log")))
         .contains("STAMP_DONE");
     assertThat(files(stamps)).isEmpty();
+  }
+
+  /** The built-in alcove with an armour stand added to its entities. */
+  private static byte[] alcoveWithStand() throws IOException {
+    Map<String, Object> root = new java.util.LinkedHashMap<>(Nbt.read(DefaultTemplates.alcove()));
+    Map<String, Object> stand = new java.util.LinkedHashMap<>();
+    stand.put("pos", new Nbt.NbtList(6, List.of(3.5, 1.0, 3.5)));
+    stand.put("blockPos", new Nbt.NbtList(3, List.of(3, 1, 3)));
+    stand.put("nbt", Map.of("id", "minecraft:armor_stand"));
+    root.put("entities", Nbt.NbtList.ofCompounds(List.of(stand)));
+    return Nbt.writeCompressed(root);
   }
 
   /** The import port, of which a stamp uses only saving the world. */

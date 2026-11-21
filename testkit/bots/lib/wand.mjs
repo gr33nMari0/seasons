@@ -143,11 +143,12 @@ export function anchorOf (ctx, cell, type, gallery = 'season-2') {
 /**
  * Saves the box from `from` of `size` as the structure `seasons:<name>` with a real structure
  * block in SAVE mode, powered by a redstone block as a builder could, then takes both away. The
- * structure block stands just below the box's minimum corner.
+ * structure block stands just below the box's minimum corner. With `entities` the entities in the
+ * box are saved too.
  */
-export async function saveStructure (ctx, admin, name, from, size) {
+export async function saveStructure (ctx, admin, name, from, size, { entities = false } = {}) {
   const block = { x: from.x, y: from.y - 1, z: from.z - 1 }
-  const nbt = `{mode:"SAVE",name:"seasons:${name}",posX:0,posY:1,posZ:1,sizeX:${size.x},sizeY:${size.y},sizeZ:${size.z},ignoreEntities:1b}`
+  const nbt = `{mode:"SAVE",name:"seasons:${name}",posX:0,posY:1,posZ:1,sizeX:${size.x},sizeY:${size.y},sizeZ:${size.z},ignoreEntities:${entities ? '0b' : '1b'}}`
   await ctx.command(admin, `/setblock ${block.x} ${block.y} ${block.z} minecraft:structure_block[mode=save]${nbt}`, /^Changed the block/)
   await ctx.command(admin, `/setblock ${block.x} ${block.y - 1} ${block.z} minecraft:redstone_block`, /^Changed the block/)
   await ctx.sync(admin, [], 2)

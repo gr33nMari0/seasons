@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.port;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Cell templates (questions 230 to 235): vanilla structure files, which the core finds and checks,
@@ -28,7 +29,15 @@ public interface Templates {
   /**
    * Places a structure with its minimum corner (before turning) at a block, turned clockwise seen
    * from above by {@code rotation} degrees (0, 90, 180 or 270) about that corner, as the game turns
-   * structures, entities included. Call on the server thread, with its chunks loaded.
+   * structures, entities included. Placing the same copy again leaves it as one copy: first every
+   * entity an earlier placement under {@code tag} left (around the box between {@code min} and
+   * {@code max}, the copy's footprint) is removed, once the entities there have loaded, then the
+   * structure is placed and every entity it added is marked with {@code tag} (questions 234).
+   *
+   * @param tag the stamp's id and the copy's index, such as {@code abc-1/0}
+   * @return completes on the server thread, in the tick the structure was placed in; fails, having
+   *     placed nothing, if the entities around the copy can't be loaded
    */
-  void place(byte[] structure, Position origin, int rotation);
+  CompletableFuture<Void> place(
+      byte[] structure, Position origin, int rotation, Position min, Position max, String tag);
 }

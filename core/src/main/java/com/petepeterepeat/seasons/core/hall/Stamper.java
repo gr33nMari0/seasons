@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.TemplateScan;
 import com.petepeterepeat.seasons.core.scenario.CrashPoint;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
+import com.petepeterepeat.seasons.core.store.AtomicFiles;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.OpenOperation;
@@ -434,16 +435,17 @@ public final class Stamper {
     var _ =
         writer
             .submit(() -> {
-              Files.createDirectories(stamps);
-              Files.write(stamps.resolve(id + ".nbt"), template.data());
-              Files.writeString(stamps.resolve(id + ".plan"), plan.write(), StandardCharsets.UTF_8);
+              // Both fsynced before STAMP_STARTED, so recovery always finds them whole.
+              AtomicFiles.write(stamps.resolve(id + ".nbt"), template.data());
+              AtomicFiles.write(
+                  stamps.resolve(id + ".plan"), plan.write().getBytes(StandardCharsets.UTF_8));
               return Boolean.TRUE;
             })
             .thenCompose(saved -> journal.append(JournalKind.STAMP_STARTED, player, playing, id))
             .thenComposeAsync(
                 started -> {
                   crash.reached(CrashPoint.STAMP_STARTED, player);
-                  return place(plan, template, copies, player);
+                  return place(id, plan, template, copies, player);
                 },
                 serverThread)
             .thenCompose(placed -> finish(id, plan, copies, player, playing, "done"))
@@ -477,16 +479,21 @@ public final class Stamper {
   }
 
   /**
-   * Places each copy a tick apart, turns its markers to air, then saves the dimension. Completes on
-   * the server thread.
+   * Places each copy a tick apart, turns its markers to air, then saves the dimension. Each copy's
+   * entities are marked with the stamp's id and the copy's index, so placing it again in recovery
+   * replaces them rather than adding more. Completes on the server thread.
    */
   private CompletableFuture<Void> place(
-      StampPlan plan, Template template, List<StampPlan.Copy> copies, @Nullable PlayerId player) {
+      String id,
+      StampPlan plan,
+      Template template,
+      List<StampPlan.Copy> copies,
+      @Nullable PlayerId player) {
     CompletableFuture<Void> done = new CompletableFuture<>();
     byte[] data = template.data();
     var _ =
         loadChunks(copies)
-            .thenRunAsync(() -> placeFrom(0, plan, data, copies, player, done), serverThread)
+            .thenRunAsync(() -> placeFrom(id, 0, plan, data, copies, player, done), serverThread)
             .exceptionally(failure -> {
               done.completeExceptionally(failure);
               return null;
@@ -495,6 +502,7 @@ public final class Stamper {
   }
 
   private void placeFrom(
+      String id,
       int index,
       StampPlan plan,
       byte[] data,
@@ -511,12 +519,29 @@ public final class Stamper {
         return;
       }
       StampPlan.Copy copy = copies.get(index);
-      platform.templates().place(data, copy.origin(), plan.rotation());
-      platform.world().setBlocks(copy.markers(), AIR);
-      platform
-          .scheduler()
-          .runGlobalLater(
-              BETWEEN_COPIES, () -> placeFrom(index + 1, plan, data, copies, player, done));
+      var _ =
+          platform
+              .templates()
+              .place(
+                  data,
+                  copy.origin(),
+                  plan.rotation(),
+                  copy.bounds().min(),
+                  copy.bounds().max(),
+                  id + "/" + index)
+              // In the tick the copy was placed in, on the server thread.
+              .thenRun(() -> {
+                platform.world().setBlocks(copy.markers(), AIR);
+                platform
+                    .scheduler()
+                    .runGlobalLater(
+                        BETWEEN_COPIES,
+                        () -> placeFrom(id, index + 1, plan, data, copies, player, done));
+              })
+              .exceptionally(failure -> {
+                done.completeExceptionally(failure);
+                return null;
+              });
     } catch (RuntimeException e) {
       done.completeExceptionally(e);
     }
@@ -601,7 +626,7 @@ public final class Stamper {
     }
     List<StampPlan.Copy> copies = plan.copies(template);
     busy = true;
-    return place(plan, template, copies, null)
+    return place(id, plan, template, copies, null)
         .thenCompose(placed -> finish(id, plan, copies, player, operation.season(), "recovered"))
         .handle((done, failure) -> {
           serverThread.execute(() -> busy = false);

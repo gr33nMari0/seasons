@@ -27,10 +27,15 @@ public final class Template {
           "minecraft:dispenser",
           "minecraft:crafter",
           "minecraft:ender_chest",
-          "minecraft:lava");
+          "minecraft:lava",
+          // Each makes items or mobs from nothing (questions 235).
+          "minecraft:spawner",
+          "minecraft:trial_spawner",
+          "minecraft:vault");
 
   /** Entities the Hall doesn't allow. */
-  static final Set<String> ENTITIES_NOT_ALLOWED = Set.of("minecraft:hopper_minecart");
+  static final Set<String> ENTITIES_NOT_ALLOWED =
+      Set.of("minecraft:hopper_minecart", "minecraft:spawner_minecart");
 
   /** Where a template came from, in the order they are looked for. */
   public enum Source {
