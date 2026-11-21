@@ -272,6 +272,41 @@ class WandTest {
   }
 
   @Test
+  void aLinkMadeWithTheWandNeverWritesOverALeftOutHallYml() throws IOException {
+    seasons.stop();
+    Path hallYml = dir.resolve("world/seasons/hall.yml");
+    String broken = "schema-version: 1\nhub: { min: [-8, 60, 0], max: [-1, 80] }\n";
+    Files.writeString(hallYml, broken);
+    FakePlatform again = new FakePlatform();
+    seasons =
+        new Seasons(
+            again.platform(new Capabilities(EnumSet.allOf(Capability.class)), dir),
+            "1.2.3",
+            again.clock,
+            webhooks,
+            MapPublisher.NONE,
+            Map.of(),
+            new SerialWriter(Runnable::run),
+            Optional.empty());
+    seasons.start();
+    PlayerRef op = again.join("Admin");
+    again.player(op).position = new Position(OVERWORLD, 30.5, 64, 15.5, 0f, 0f);
+
+    again.handler.decide(
+        new Intent.UseWand(op.id(), Position.of(OVERWORLD, 30, 63, 15), "up", false, false));
+    again.choices.getLast().click("minecraft:lodestone");
+
+    assertThat(
+            again.sent.stream()
+                .filter(s -> s.player().equals(op.id()))
+                .map(s -> TestSource.plain(s.message())))
+        .contains(
+            "hall.yml failed to load at startup, so changing the hub, the Hall spawn or links would"
+                + " write over it. Fix the file and run /season reload.");
+    assertThat(Files.readString(hallYml)).as("the admin's file is untouched").isEqualTo(broken);
+  }
+
+  @Test
   void aWandClickOutsideTheHallIsRefusedAndTakenOver() {
     assertThat(click(60, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
     assertThat(said()).containsExactly("That block isn't in any cell.");

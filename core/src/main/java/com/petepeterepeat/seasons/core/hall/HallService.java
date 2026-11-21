@@ -242,8 +242,14 @@ public final class HallService {
 
   /**
    * Saves hall.yml: the live config has it at once, and the file is written on the writer thread.
+   * Refused while hall.yml is left out, since writing it would replace the admin's hub, spawn and
+   * links with what little the live config holds.
    */
   public CompletableFuture<Void> saveHall(HallLayout hall) {
+    if (hallLeftOut()) {
+      return CompletableFuture.failedFuture(
+          new IllegalStateException("hall.yml was left out at startup; fix it and /season reload"));
+    }
     config.set(config.get().withHall(hall));
     Path file = hallFile;
     Path backupDir = backups.resolve("hall");

@@ -796,6 +796,10 @@ public final class HallCommands {
   /** Adds a link, or moves the one with its id, telling the source where it leads. */
   public void addLink(
       CommandSource source, String id, Position block, Optional<HallLayout.Target> to) {
+    // The wand comes here too, not only /hof link add: never write over a left-out hall.yml.
+    if (hallLeftOut(source)) {
+      return;
+    }
     HallLayout layout = hall.layout();
     Optional<HallLayout.Link> there = layout.linkAt(block);
     if (there.isPresent() && !there.get().id().equals(id)) {
