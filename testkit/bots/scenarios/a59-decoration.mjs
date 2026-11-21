@@ -21,7 +21,7 @@ export default {
     await ctx.join('Builder')
     await ctx.join('Bea')
     await ctx.join('Oscar')
-    const cells = await hallToVisit(ctx, admin, { cells: 4, sealed: null })
+    const cells = await hallToVisit(ctx, admin, { cells: 5, sealed: null })
 
     // A builder in creative mode places anything in the hub, and breaks it again.
     await standAt(ctx, admin, 'Builder', { x: 12, y: FLOOR, z: 25 })
@@ -39,7 +39,6 @@ export default {
     // An op in survival without the bypass changes nothing.
     await ctx.command(admin, '/op Oscar', /Made Oscar a server operator|already is an operator/)
     await standAt(ctx, admin, 'Oscar', { x: 14, y: FLOOR, z: 27 })
-    await ctx.command(admin, '/gamemode survival Oscar', /^Set Oscar's game mode|^Oscar.*game mode/)
     assert(!await place(ctx, admin, 'Oscar', STONE, 'minecraft:stone'), 'an op in survival can\'t place in the hub')
     assert(!await breakBlock(ctx, admin, 'Oscar', TABLE), 'nor break the crafting table')
 

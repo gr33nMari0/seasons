@@ -242,9 +242,7 @@ public final class HallVisits {
       return;
     }
     Optional<HallReturn> back =
-        save
-            ? Optional.of(new HallReturn(at, platform.players().gameMode(player)))
-            : Optional.empty();
+        save ? Optional.of(new HallReturn(at, modeOutside(player))) : Optional.empty();
     moving.add(player);
     var _ =
         saveReturn(player, back)
@@ -394,6 +392,21 @@ public final class HallVisits {
     GameMode mode = platform.players().gameMode(player);
     boolean switched = players.find(player).map(PlayerRecord::hallAdventure).orElse(false);
     return mode == GameMode.ADVENTURE && switched ? GameMode.SURVIVAL : mode;
+  }
+
+  /**
+   * Gives a player who just left the Hall their game mode back now, rather than at the next sweep,
+   * so a quick way back in doesn't remember adventure as the mode to go back to.
+   */
+  private void restoreMode(PlayerId player) {
+    GameMode back = modeOutside(player);
+    if (platform.players().gameMode(player) != back) {
+      platform.players().setGameMode(player, back);
+    }
+    players
+        .find(player)
+        .filter(PlayerRecord::hallAdventure)
+        .ifPresent(r -> players.put(r.withHallAdventure(false)));
   }
 
   /** Right-clicking a link takes it; Seasons takes over the click either way. */
@@ -596,9 +609,15 @@ public final class HallVisits {
       return;
     }
     if (!kept()) {
+      if (halls.inHall(platform.players().position(player))) {
+        // Back in already, such as by a teleport straight after: nothing to let go of.
+        inside.add(player);
+        return;
+      }
       // They just leave (questions 245): the saved spot is done with, and the sweep gives back
       // survival if Seasons put them in adventure.
       dropStaleReturn(player);
+      restoreMode(player);
       tell(player, "hof.leave.walked-out");
       return;
     }
@@ -758,8 +777,7 @@ public final class HallVisits {
         || state.get().map(s -> !playing(s)).orElse(true)) {
       return;
     }
-    var _ =
-        saveReturn(player, Optional.of(new HallReturn(from, platform.players().gameMode(player))));
+    var _ = saveReturn(player, Optional.of(new HallReturn(from, modeOutside(player))));
   }
 
   /**

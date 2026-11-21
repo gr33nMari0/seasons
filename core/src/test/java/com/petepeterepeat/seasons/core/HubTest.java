@@ -330,6 +330,8 @@ class HubTest {
     assertThat(saved(alex))
         .map(PlayerRecord.HallReturn::at)
         .contains(Position.of(OVERWORLD, 201.5, 64, 200.5));
+    fake.tick();
+    assertThat(fake.player(alex).gameMode).isEqualTo(GameMode.ADVENTURE);
     fake.clock.advance(Duration.ofSeconds(6));
 
     // Season 3 has no spawn yet.

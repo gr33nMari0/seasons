@@ -9,7 +9,7 @@ import { FLOOR, breakBlock, buildGallery, gameMode, use } from '../lib/hall.mjs'
 import { HALL_SPAWN, HUB, addLink, hallFile, inBox, markHub } from '../lib/hub.mjs'
 import { hof, middle, standAt, waitNear } from '../lib/visits.mjs'
 import { click } from '../lib/wand.mjs'
-import { BASE, INSIDE, SPAWN, drawBase, endSeason2, forceload, inBase } from '../lib/zones.mjs'
+import { BASE, INSIDE, SPAWN, drawBase, forceload, inBase } from '../lib/zones.mjs'
 
 const TO_S3 = { x: 10, y: FLOOR, z: 22 }
 const TO_S1 = { x: 10, y: FLOOR, z: 24 }
@@ -41,7 +41,11 @@ export default {
     assert(hallFile(ctx).links?.s3?.to?.season === 3, `hall.yml has the links: ${JSON.stringify(hallFile(ctx))}`)
 
     // Season 3 launches at SPAWN, with the base locked until Homecoming.
-    await endSeason2(ctx, admin)
+    // Season 3's spawn before the end: in the Intermission everyone stays in the Hall.
+    await standAt(ctx, admin, 'SeasonsAdmin', SPAWN)
+    await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now /)
+    await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
+    await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     await drawBase(ctx, admin)
     await standAt(ctx, admin, 'SeasonsAdmin', { x: SPAWN.x - 5, y: FLOOR, z: SPAWN.z })
@@ -52,16 +56,13 @@ export default {
     const home = { x: SPAWN.x + 2, y: FLOOR, z: SPAWN.z }
     await standAt(ctx, admin, 'Visitor', home)
     await ctx.advance(admin, 6_000) // past the launch's arrival immunity and the rate limit
+    // The link block outside the Hall can't be broken.
+    assert(!await breakBlock(ctx, admin, 'Visitor', BACK), 'a visitor can\'t break a link block outside the Hall')
     const line = await click(ctx, admin, 'Visitor', BACK)
     assert(TAKEN.test(line), `the button click is taken over: ${line}`)
     await ctx.waitForMessages(visitor, /^Welcome to the Hall of Fame\. \/hof leave takes you back\.$/)
     await waitNear(ctx, admin, 'Visitor', middle(HALL_SPAWN))
     await ctx.eventually(async () => assert(await gameMode(ctx, admin, 'Visitor') === 2, 'adventure in the Hall'))
-
-    // The link block outside the Hall can't be broken.
-    await standAt(ctx, admin, 'Visitor', home)
-    assert(!await breakBlock(ctx, admin, 'Visitor', BACK), 'a visitor can\'t break a link block outside the Hall')
-    await standAt(ctx, admin, 'Visitor', HALL_SPAWN)
 
     // /hof leave returns them to the link they came from.
     await hof(ctx, visitor, '/hof leave', /^Back where you left\.$/)

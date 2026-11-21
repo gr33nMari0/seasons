@@ -61,7 +61,8 @@ export default {
     await ctx.command(admin, '/season config set hof.sealed intermission', /^Set hof\.sealed to intermission in config\.yml/)
     await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
     await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
-    await waitInHall(ctx, admin, 'Visitor')
+    // In their cell, where they may arrange it for a while, so in survival.
+    await ctx.eventually(async () => assert(inGallery(await ctx.position(admin, 'Visitor')), 'the visitor is in the Hall'))
     await standAt(ctx, admin, 'Visitor', { x: 25, y: FLOOR, z: 21 })
     told = ctx.waitForMessages(visitor, /^Everyone stays in the Hall of Fame until the next season launches\.$/)
     await move(ctx, admin, 'Visitor', OUT, 'walk')

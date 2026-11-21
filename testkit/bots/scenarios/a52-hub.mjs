@@ -72,7 +72,6 @@ export default {
     // Nor for an op in survival without the bypass.
     await ctx.command(admin, '/op Opal', /^Made Opal a server operator$/)
     await standAt(ctx, admin, 'Opal', { x: 14, y: FLOOR, z: 27 })
-    await ctx.command(admin, '/gamemode survival Opal', /(Set Opal's game mode|game mode)/)
     assert(!await place(ctx, admin, 'Opal', { x: 15, y: FLOOR, z: 27 }), 'an op in survival can\'t place in the hub')
     assert(opal)
 

@@ -159,7 +159,7 @@ public final class LoginService implements Sessions {
       case LoginPlan.Plan.ToCell cell -> archiver.followUp(id, Archiver.Destination.CELL);
       case LoginPlan.Plan.NewPlayer newPlayer -> {
         if (isPlaying(current.phase()) && current.launchedAt().isPresent()) {
-          yield entry.enter(id, newPlayer.season()).thenApply(done -> null);
+          yield entry.welcome(id, newPlayer.season()).thenApply(done -> null);
         }
         if (isPlaying(current.phase())) {
           entry.takeBaseline(id, newPlayer.season());

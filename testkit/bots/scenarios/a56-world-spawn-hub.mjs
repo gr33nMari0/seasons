@@ -7,7 +7,7 @@ import { assert } from '../lib/context.mjs'
 import { FLOOR, buildGallery, gameMode } from '../lib/hall.mjs'
 import { inBox, markHub } from '../lib/hub.mjs'
 import { middle, standAt, waitNear } from '../lib/visits.mjs'
-import { SPAWN, endSeason2, forceload } from '../lib/zones.mjs'
+import { SPAWN, forceload } from '../lib/zones.mjs'
 
 const CENTRE = { x: -60, y: FLOOR, z: 25 }
 const HUB = { x1: CENTRE.x - 15, y1: FLOOR - 1, z1: CENTRE.z - 15, x2: CENTRE.x + 15, y2: FLOOR + 10, z2: CENTRE.z + 15 }
@@ -25,7 +25,11 @@ export default {
     await ctx.command(admin, '/season config set launch.setWorldSpawn false', /^Set launch\.setWorldSpawn to false in config\.yml \(it was true\)\.$/)
 
     // Launch keeps the world spawn at the Hall spawn.
-    await endSeason2(ctx, admin)
+    // Season 3's spawn before the end: in the Intermission everyone stays in the Hall.
+    await standAt(ctx, admin, 'SeasonsAdmin', SPAWN)
+    await ctx.command(admin, '/season spawn set', /^Season 3's spawn is now /)
+    await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
+    await ctx.waitForMessages(admin, /^Season 2 has ended\./, 20_000)
     await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     await waitNear(ctx, admin, 'Dee', middle(SPAWN), 4)
 
