@@ -9,7 +9,8 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M2 Hall protection | Done (#11, #12) | A22 to A29, A44 (its no-build half with M3), A9 widened |
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
 | M4 Season extras | Done (#22, #23, #24) | A37 to A39, A42; A6, A9, A13 and A14 widened |
-| M5 Cell tooling | On `m5-cell-tooling` | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
+| M5 Cell tooling | Done (#25) | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
+| Post-M5 Hub, links and decoration | On `post-m5-hof-preparation` | A52 to A59; A4, A6, A20, A23 and A41 widened |
 | M6 and M7 | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
