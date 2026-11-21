@@ -113,6 +113,11 @@ final class SpawnCommands {
               "zone.spawn-inside", "season", Integer.toString(season), "zone", holding.get().id()));
       return;
     }
+    if (config.get().inHall(at)) {
+      // Launch would put everyone in the Hall (questions 256).
+      source.reply(messages.get("spawn.in-hall", "season", Integer.toString(season)));
+      return;
+    }
     edits.edit(
         source,
         new ConfigEdits.Change(
@@ -166,6 +171,10 @@ final class SpawnCommands {
               Integer.toString(season),
               "zone",
               holding.get().id()));
+      return;
+    }
+    if (config.get().inHall(at)) {
+      source.reply(messages.get("spawn.candidate.in-hall", "season", Integer.toString(season)));
       return;
     }
     edits.edit(

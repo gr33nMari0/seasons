@@ -78,6 +78,9 @@ public final class LaunchSequence implements SeasonService.Launcher {
     if (config.get().season(nextSeason).flatMap(file -> file.zoneHoldingSpawn()).isPresent()) {
       return Optional.of("launch.spawn-in-zone");
     }
+    if (config.get().inHall(spawn.get())) {
+      return Optional.of("launch.spawn-in-hall");
+    }
     if (!busy.get().isEmpty()) {
       return Optional.of("launch.busy");
     }
@@ -114,7 +117,9 @@ public final class LaunchSequence implements SeasonService.Launcher {
         entry
             .spawn(season)
             .orElseThrow(() -> new IllegalStateException("Season " + season + " has no spawn"));
-    platform.world().setSpawn(spawn);
+    if (config.get().config().launch().setWorldSpawn()) {
+      platform.world().setSpawn(spawn);
+    }
     dragonFlag.run();
     showDeaths(launched);
     announcer.admins(
