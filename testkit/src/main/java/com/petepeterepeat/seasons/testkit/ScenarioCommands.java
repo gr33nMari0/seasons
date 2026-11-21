@@ -405,7 +405,17 @@ final class ScenarioCommands implements BasicCommand, Listener {
       return;
     }
     Block block = loaded(player.getWorld(), args);
-    boolean sneak = args.length > 5 && args[5].equals("sneak");
+    // Words after the position: sneak, left (a left click) and face=<side> (default up).
+    java.util.List<String> words =
+        java.util.Arrays.asList(args).subList(Math.min(5, args.length), args.length);
+    boolean sneak = words.contains("sneak");
+    boolean left = words.contains("left");
+    BlockFace face =
+        words.stream()
+            .filter(w -> w.startsWith("face="))
+            .map(w -> BlockFace.valueOf(w.substring(5).toUpperCase(java.util.Locale.ROOT)))
+            .findFirst()
+            .orElse(BlockFace.UP);
     boolean wasSneaking = player.isSneaking();
     if (sneak) {
       player.setSneaking(true);
@@ -413,10 +423,10 @@ final class ScenarioCommands implements BasicCommand, Listener {
     PlayerInteractEvent event =
         new PlayerInteractEvent(
             player,
-            Action.RIGHT_CLICK_BLOCK,
+            left ? Action.LEFT_CLICK_BLOCK : Action.RIGHT_CLICK_BLOCK,
             player.getInventory().getItemInMainHand(),
             block,
-            BlockFace.UP,
+            face,
             EquipmentSlot.HAND);
     plugin.getServer().getPluginManager().callEvent(event);
     if (sneak) {
