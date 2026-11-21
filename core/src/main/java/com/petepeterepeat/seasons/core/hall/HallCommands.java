@@ -574,7 +574,6 @@ public final class HallCommands {
       return;
     }
     HallService.CellRef ref = found.get();
-    source.player().ifPresent(p -> wand.focus(p, ref));
     int season = ref.gallery().season();
     Messages messages = messages();
     String owner =

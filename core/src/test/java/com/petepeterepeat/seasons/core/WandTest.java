@@ -96,6 +96,19 @@ class WandTest {
         .toList();
   }
 
+  /** A cell's minimum corner as the gallery file has it, as "x, y, z". */
+  private String minOf(String cell) throws IOException {
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile(
+                "\\n    "
+                    + cell
+                    + ":\\n        bounds:\\n            min:\\n"
+                    + "            - (-?\\d+)\\n            - (-?\\d+)\\n            - (-?\\d+)")
+            .matcher(file());
+    assertThat(m.find()).as(cell + " has bounds in the file").isTrue();
+    return m.group(1) + ", " + m.group(2) + ", " + m.group(3);
+  }
+
   private String file() throws IOException {
     return Files.readString(dir.resolve("world/seasons/galleries/season-2.yml"));
   }
@@ -156,6 +169,41 @@ class WandTest {
     click(4, 63, 4, "up", true, true);
     click(9, 70, 9, "up", false, true);
     assertThat(said()).contains("Cell season-2:c2 would overlap season-2:c1.");
+  }
+
+  @Test
+  void theWandCellTakesOneSelectionOnlyAndNeverMovesBoundsItHas() throws IOException {
+    hof("/hof cell new season-2 c1");
+    click(2, 63, 2, "up", true, true);
+    click(6, 70, 8, "up", false, true);
+    assertThat(said()).contains("Cell season-2:c1 now spans 2, 63, 2 to 6, 70, 8.");
+    // A second selection, and a corner 2 that reuses corner 1, leave c1 as it is.
+    click(20, 63, 2, "up", true, true);
+    click(24, 70, 8, "up", false, true);
+    click(26, 70, 9, "up", false, true);
+    assertThat(minOf("c1")).isEqualTo("2, 63, 2");
+    // /hof cell info doesn't make a cell the wand's either.
+    hof("/hof cell new season-2 c2");
+    hof("/hof cell bounds season-2:c2 10 63 2 14 70 8");
+    hof("/hof cell new season-2 c3");
+    hof("/hof cell info season-2:c2");
+    click(30, 63, 2, "up", true, true);
+    click(34, 70, 8, "up", false, true);
+    assertThat(minOf("c2")).isEqualTo("10, 63, 2");
+    assertThat(minOf("c3")).isEqualTo("30, 63, 2");
+    assertThat(said()).contains("Cell season-2:c3 now spans 30, 63, 2 to 34, 70, 8.");
+  }
+
+  @Test
+  void newBoundsMustHoldEveryAnchorTheCellHas() throws IOException {
+    hof("/hof cell new season-2 c1");
+    hof("/hof cell bounds season-2:c1 2 63 2 6 70 8");
+    hof("/hof cell anchor season-2:c1 figure 4 64 4 0");
+    assertThat(hof("/hof cell bounds season-2:c1 10 63 2 14 70 8").text())
+        .containsExactly(
+            "Cell season-2:c1's figure anchor at 4, 64, 4 would be outside those bounds. Move or"
+                + " remove it first.");
+    assertThat(minOf("c1")).isEqualTo("2, 63, 2");
   }
 
   @Test

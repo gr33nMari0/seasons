@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The wand (M5, questions 226 to 229 and 236): /hof wand for Hall admins only. Sneaking, a left
-// click and a right click select two corners; a selection inside the gallery of the cell last
-// named by /hof cell new becomes its bounds, with the same refusals as /hof cell bounds, and
+// click and a right click select two corners; the first selection inside the gallery of the cell
+// just made by /hof cell new becomes its bounds, once, with the same refusals as /hof cell bounds
+// (bounds never leave an anchor outside), and
 // /hof cell bounds or /hof gallery bounds with no corners take it. A plain right click opens the
 // anchor menu, and each choice writes what /hof cell anchor writes. A wand click never breaks or
 // opens anything; a plain blaze rod, or a wand held by someone who isn't a Hall admin, is just an
@@ -54,6 +55,12 @@ export default {
       select(ctx, admin, admin, { x: 22, y: GROUND, z: 22 }, { x: 26, y: -55, z: 30 })
     ])
     assert(JSON.stringify(cellInFile(ctx, 'c1').bounds) === JSON.stringify({ min: [22, -61, 22], max: [26, -55, 30] }), 'c1\'s bounds are in the file')
+    // Once only: a second selection in the gallery is just a selection, and c1 keeps its bounds.
+    const once = ctx.quiet(admin, /^Cell season-2:c1 /)
+    await select(ctx, admin, admin, { x: 44, y: GROUND, z: 22 }, { x: 48, y: -55, z: 30 })
+    await ctx.sync(admin, [admin])
+    once.verify()
+    assert(JSON.stringify(cellInFile(ctx, 'c1').bounds) === JSON.stringify({ min: [22, -61, 22], max: [26, -55, 30] }), 'a second selection left c1 where it was')
 
     // The same refusals as the command: an overlap, then a selection reaching outside the gallery,
     // which stays only a selection until the command is asked to use it.
@@ -100,6 +107,13 @@ export default {
     await anchorMenu(ctx, admin, admin, { x: 25, y: FLOOR, z: 22 })
     await pickAnchor(ctx, admin, 'gate', /^Added a gate anchor to season-2:c1 at 25, -59, 22\.$/)
     await ctx.command(admin, '/hof cell info season-2:c1', /^Cell season-2:c1: free for Season 2; anchors: figure 1, archive 1, plaque 1, trophy 1, entry 1, gate 2$/)
+    // /hof cell info doesn't hand c1 to the wand, and no bounds may leave an anchor outside.
+    const untouched = ctx.quiet(admin, /^Cell season-2:c1 /)
+    await select(ctx, admin, admin, { x: 44, y: GROUND, z: 22 }, { x: 48, y: -55, z: 30 })
+    await ctx.sync(admin, [admin])
+    untouched.verify()
+    await ctx.command(admin, '/hof cell bounds season-2:c1', /^Cell season-2:c1's \w+ anchor at -?\d+, -?\d+, -?\d+ would be outside those bounds\. Move or remove it first\.$/)
+    assert(JSON.stringify(cellInFile(ctx, 'c1').bounds) === JSON.stringify({ min: [22, -61, 22], max: [26, -55, 30] }), 'c1 kept the bounds around its anchors')
     // Clicking the barrel opens the anchor menu, not the barrel.
     const barrel = await anchorMenu(ctx, admin, admin, { x: 23, y: FLOOR, z: 29 })
     assert(/Anchor in season-2:c1/.test(JSON.stringify(barrel.title)), `the barrel click is the wand's: ${JSON.stringify(barrel.title)}`)

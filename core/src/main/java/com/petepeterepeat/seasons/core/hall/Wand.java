@@ -94,7 +94,10 @@ public final class Wand {
     source.reply(messages().get(given ? "hof.wand.given" : "hof.wand.full"));
   }
 
-  /** The cell a selection should become the bounds of, set by {@code /hof cell new} and info. */
+  /**
+   * The cell just made by {@code /hof cell new}, whose bounds the admin's next selection inside its
+   * gallery becomes, once, while it has none (questions 228).
+   */
   public void focus(PlayerId player, HallService.CellRef ref) {
     cells.put(player, ref.key());
   }
@@ -171,14 +174,22 @@ public final class Wand {
                     "sz",
                     Integer.toString(box.maxZ() - box.minZ() + 1)));
     Optional<HallService.CellRef> focused = focused(player);
-    if (focused.isPresent()) {
-      Gallery gallery = focused.get().gallery();
-      Optional<Bounds> galleryBounds = gallery.bounds();
-      if (galleryBounds.isPresent()
-          && galleryBounds.get().contains(box.min())
-          && galleryBounds.get().contains(box.max())) {
-        edits.cellBounds(source(player), focused.get(), box);
-      }
+    if (focused.isEmpty() || !platform.permissions().has(player, HallCommands.PERMISSION_ADMIN)) {
+      return;
+    }
+    if (focused.get().cell().bounds().isPresent()) {
+      // Bounds set some other way since /hof cell new: the wand never moves them.
+      cells.remove(player);
+      return;
+    }
+    Gallery gallery = focused.get().gallery();
+    Optional<Bounds> galleryBounds = gallery.bounds();
+    if (galleryBounds.isPresent()
+        && galleryBounds.get().contains(box.min())
+        && galleryBounds.get().contains(box.max())
+        && edits.cellBounds(source(player), focused.get(), box)) {
+      // Once only: later selections are only selections (questions 228).
+      cells.remove(player);
     }
   }
 

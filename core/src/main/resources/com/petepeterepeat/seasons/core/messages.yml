@@ -247,6 +247,7 @@ hof:
     bounds: "<green>Cell <cell> now spans <from> to <to>.</green>"
     outside-gallery: "<red>Cell <cell> must sit inside gallery <gallery>.</red>"
     overlaps: "<red>Cell <cell> would overlap <other>.</red>"
+    anchors-outside: "<red>Cell <cell>'s <type> anchor at <x>, <y>, <z> would be outside those bounds. Move or remove it first.</red>"
     unknown-anchor: "<red>Anchor types are figure, archive, plaque, trophy, entry and gate.</red>"
     anchor: "<green>Added a <type> anchor to <cell> at <x>, <y>, <z>.</green>"
     anchor-an: "<green>Added an <type> anchor to <cell> at <x>, <y>, <z>.</green>"

@@ -59,13 +59,18 @@ public final class CellEdits {
                 corner(bounds.max())));
   }
 
-  /** A cell's new bounds: inside its gallery and clear of every other cell. */
-  public void cellBounds(CommandSource source, HallService.CellRef ref, Bounds bounds) {
+  /**
+   * A cell's new bounds: inside its gallery, clear of every other cell, and around every anchor it
+   * already has, so the gallery file stays valid (GalleryRules).
+   *
+   * @return whether the bounds were taken, and are being saved
+   */
+  public boolean cellBounds(CommandSource source, HallService.CellRef ref, Bounds bounds) {
     Gallery gallery = ref.gallery();
     if (gallery.bounds().isEmpty() || !gallery.bounds().get().contains(bounds)) {
       source.reply(
           messages().get("hof.cell.outside-gallery", "cell", ref.key(), "gallery", gallery.id()));
-      return;
+      return false;
     }
     for (Cell other : gallery.cells()) {
       if (!other.id().equals(ref.cell().id())
@@ -78,7 +83,17 @@ public final class CellEdits {
                     ref.key(),
                     "other",
                     gallery.id() + ":" + other.id()));
-        return;
+        return false;
+      }
+    }
+    for (Anchor anchor : ref.cell().anchors()) {
+      if (!bounds.contains(anchor.at())) {
+        source.reply(
+            messages()
+                .get(
+                    "hof.cell.anchors-outside",
+                    with(place("cell", ref.key(), anchor.at()), "type", anchor.type().id())));
+        return false;
       }
     }
     saved(
@@ -93,6 +108,7 @@ public final class CellEdits {
                 corner(bounds.min()),
                 "to",
                 corner(bounds.max())));
+    return true;
   }
 
   /** Adds an anchor inside a cell that has bounds. */
