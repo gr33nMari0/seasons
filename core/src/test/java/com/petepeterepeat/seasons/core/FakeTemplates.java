@@ -28,6 +28,12 @@ public final class FakeTemplates implements Templates {
   /** Each placement: the origin and the rotation. */
   public final List<Position> placed = new ArrayList<>();
 
+  /**
+   * What each placement waits for before placing, as the adapter waits for entities to load; a test
+   * can hold it open, or fail it.
+   */
+  public CompletableFuture<Void> loaded = CompletableFuture.completedFuture(null);
+
   FakeTemplates(FakePlatform fake) {
     this.fake = fake;
   }
@@ -87,6 +93,10 @@ public final class FakeTemplates implements Templates {
   @Override
   public CompletableFuture<Void> place(
       byte[] structure, Position origin, int rotation, Position min, Position max, String tag) {
+    return loaded.thenRun(() -> placeNow(structure, origin, rotation, tag));
+  }
+
+  private void placeNow(byte[] structure, Position origin, int rotation, String tag) {
     TemplateScan scan = scan(structure);
     placed.add(new Position(origin.dimension(), origin.x(), origin.y(), origin.z(), rotation, 0f));
     for (TemplateScan.Block block : scan.blocks()) {
@@ -99,7 +109,6 @@ public final class FakeTemplates implements Templates {
           new BlockInfo(block.type(), !air, air, false));
     }
     entities.put(tag, scan.entities().size());
-    return CompletableFuture.completedFuture(null);
   }
 
   /** How many entities each placement left in the world, by its tag. */

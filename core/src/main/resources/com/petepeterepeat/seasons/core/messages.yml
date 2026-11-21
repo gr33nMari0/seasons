@@ -307,6 +307,7 @@ hof:
     unknown-flag: "<red>Unknown option <flag>. /hof stamp takes --step <x> <y> <z> and --rotate <degrees>.</red>"
     player-only: "<red>Only a player can stamp: the first copy goes where they stand.</red>"
     busy: "<red>Another stamp is still going; wait for it to finish.</red>"
+    held: "<red>A stamp into gallery <gallery> hasn't finished, so its bounds and cells can't change yet. Try again once it has; one that stopped finishes at the next start.</red>"
     unavailable: "<red>The journal is unavailable, so nothing can be stamped.</red>"
     failed: "<red>The stamp stopped: <error>. It finishes at the next start; see the server log.</red>"
     no-ids: "<red>Gallery <gallery> has no free cell ids left.</red>"

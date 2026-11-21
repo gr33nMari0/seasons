@@ -344,6 +344,9 @@ public final class HallCommands {
     if (found.isEmpty()) {
       return;
     }
+    if (edits.held(source, found.get())) {
+      return;
+    }
     Optional<Position> at =
         position(source, arguments.optionalString("at"), found.get().dimension());
     if (at.isEmpty()) {
@@ -358,6 +361,9 @@ public final class HallCommands {
   void galleryExit(CommandSource source, Arguments arguments) {
     Optional<Gallery> found = gallery(source, arguments);
     if (found.isEmpty()) {
+      return;
+    }
+    if (edits.held(source, found.get())) {
       return;
     }
     Optional<Position> at =
@@ -378,6 +384,9 @@ public final class HallCommands {
       return;
     }
     Gallery gallery = found.get();
+    if (edits.held(source, gallery)) {
+      return;
+    }
     if (arguments.optionalString("at").map(String::trim).filter("none"::equals).isPresent()) {
       saved(
           source,
@@ -439,6 +448,9 @@ public final class HallCommands {
       return;
     }
     Gallery gallery = found.get();
+    if (edits.held(source, gallery)) {
+      return;
+    }
     if (gallery.cell(id).isPresent()) {
       source.reply(messages().get("hof.cell.exists", "cell", gallery.id() + ":" + id));
       return;

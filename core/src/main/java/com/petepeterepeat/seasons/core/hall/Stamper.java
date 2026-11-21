@@ -35,6 +35,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -131,6 +132,10 @@ public final class Stamper {
       source.reply(messages.get("hof.stamp.busy"));
       return;
     }
+    if (hall.heldForStamp(gallery.id())) {
+      source.reply(messages.get("hof.stamp.held", "gallery", gallery.id()));
+      return;
+    }
     int count = arguments.integer("count");
     List<String> ids = nextIds(gallery, count);
     Position at = platform.players().position(player);
@@ -159,7 +164,9 @@ public final class Stamper {
     if (!fits(source, gallery, copies)) {
       return;
     }
+    // Held from the checks above until the cells are written, so nothing they checked can change.
     busy = true;
+    hall.holdForStamp(gallery.id());
     var _ =
         loadChunks(copies)
             .thenRunAsync(
@@ -168,12 +175,14 @@ public final class Stamper {
                     start(source, player, plan, template.get(), copies);
                   } else {
                     busy = false;
+                    hall.releaseStamp(gallery.id());
                   }
                 },
                 serverThread)
             .exceptionally(failure -> {
               serverThread.execute(() -> {
                 busy = false;
+                hall.releaseStamp(gallery.id());
                 LOG.error("A stamp couldn't load its chunks", failure);
                 source.reply(messages().get("hof.stamp.failed", "error", String.valueOf(failure)));
               });
@@ -432,6 +441,9 @@ public final class Stamper {
       List<StampPlan.Copy> copies) {
     String id = Long.toString(clock.millis(), 36) + "-" + counter.incrementAndGet();
     int playing = season.get().orElse(0);
+    // Once STAMP_STARTED may be in the journal, a stamp that stops keeps its gallery held until
+    // recovery finishes it at the next start (questions 242).
+    AtomicBoolean journalled = new AtomicBoolean();
     var _ =
         writer
             .submit(() -> {
@@ -441,7 +453,10 @@ public final class Stamper {
                   stamps.resolve(id + ".plan"), plan.write().getBytes(StandardCharsets.UTF_8));
               return Boolean.TRUE;
             })
-            .thenCompose(saved -> journal.append(JournalKind.STAMP_STARTED, player, playing, id))
+            .thenCompose(saved -> {
+              journalled.set(true);
+              return journal.append(JournalKind.STAMP_STARTED, player, playing, id);
+            })
             .thenComposeAsync(
                 started -> {
                   crash.reached(CrashPoint.STAMP_STARTED, player);
@@ -452,6 +467,9 @@ public final class Stamper {
             .whenCompleteAsync(
                 (done, failure) -> {
                   busy = false;
+                  if (failure == null || !journalled.get()) {
+                    hall.releaseStamp(plan.gallery());
+                  }
                   if (failure != null) {
                     LOG.error("Stamp {} stopped; it finishes at the next start", id, failure);
                     source.reply(
@@ -626,10 +644,17 @@ public final class Stamper {
     }
     List<StampPlan.Copy> copies = plan.copies(template);
     busy = true;
+    hall.holdForStamp(plan.gallery());
     return place(id, plan, template, copies, null)
         .thenCompose(placed -> finish(id, plan, copies, player, operation.season(), "recovered"))
         .handle((done, failure) -> {
-          serverThread.execute(() -> busy = false);
+          serverThread.execute(() -> {
+            busy = false;
+            // A stamp recovery couldn't finish stays held: it is tried again at the next start.
+            if (failure == null) {
+              hall.releaseStamp(plan.gallery());
+            }
+          });
           if (failure != null) {
             LOG.error("Couldn't finish stamp {}", id, failure);
             return RecoveryOutcome.failed(String.valueOf(failure.getMessage()));

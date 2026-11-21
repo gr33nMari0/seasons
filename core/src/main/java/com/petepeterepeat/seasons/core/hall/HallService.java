@@ -78,6 +78,9 @@ public final class HallService {
   private final RandomGenerator random;
   private final Map<PlayerId, SwapRequest> swaps = new HashMap<>();
 
+  /** Galleries a stamp is placing copies in, or one a crash or failure left open (questions 242). */
+  private final Set<String> stamping = new HashSet<>();
+
   /** Players without a record yet (before /season init) whom Seasons switched to adventure. */
   private final Set<PlayerId> switchedWithoutRecord = new HashSet<>();
 
@@ -192,6 +195,24 @@ public final class HallService {
     return galleries().stream()
         .filter(g -> g.kind() == Gallery.Kind.SEASON && g.season() == season)
         .toList();
+  }
+
+  /**
+   * Holds a gallery for a stamp: until it is released, the gallery's bounds, entry, exits and
+   * launch button and its cells' bounds can't change, nor cells be made in it (questions 242).
+   */
+  public void holdForStamp(String gallery) {
+    stamping.add(gallery);
+  }
+
+  /** Lets go of a gallery a stamp held, once the stamp is finished or refused. */
+  public void releaseStamp(String gallery) {
+    stamping.remove(gallery);
+  }
+
+  /** Whether a stamp holds a gallery. */
+  public boolean heldForStamp(String gallery) {
+    return stamping.contains(gallery);
   }
 
   /**

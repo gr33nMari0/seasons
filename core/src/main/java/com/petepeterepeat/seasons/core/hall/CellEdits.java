@@ -27,8 +27,23 @@ public final class CellEdits {
     this.hall = hall;
   }
 
+  /**
+   * Whether a stamp holds a gallery, so its bounds, points and cells can't change (questions 242);
+   * if so, says why.
+   */
+  public boolean held(CommandSource source, Gallery gallery) {
+    if (!hall.heldForStamp(gallery.id())) {
+      return false;
+    }
+    source.reply(messages().get("hof.stamp.held", "gallery", gallery.id()));
+    return true;
+  }
+
   /** A gallery's new bounds: no overlap with another gallery, and every cell still inside. */
   public void galleryBounds(CommandSource source, Gallery gallery, Bounds bounds) {
+    if (held(source, gallery)) {
+      return;
+    }
     for (Gallery other : hall.galleries()) {
       if (!other.id().equals(gallery.id())
           && other.bounds().map(b -> b.overlaps(bounds)).orElse(false)) {
@@ -67,6 +82,9 @@ public final class CellEdits {
    */
   public boolean cellBounds(CommandSource source, HallService.CellRef ref, Bounds bounds) {
     Gallery gallery = ref.gallery();
+    if (held(source, gallery)) {
+      return false;
+    }
     if (gallery.bounds().isEmpty() || !gallery.bounds().get().contains(bounds)) {
       source.reply(
           messages().get("hof.cell.outside-gallery", "cell", ref.key(), "gallery", gallery.id()));

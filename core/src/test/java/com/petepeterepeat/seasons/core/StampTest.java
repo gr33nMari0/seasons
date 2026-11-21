@@ -184,6 +184,58 @@ class StampTest {
     assertThat(fake.templates.placed).hasSize(1);
   }
 
+  private List<String> hof(String command) {
+    TestSource source = new TestSource(Optional.of(admin.id()));
+    // The newest /hof, as a restart registers the commands again.
+    TestCommands.run(
+        fake.commands.reversed().stream().filter(n -> n.name().equals("hof")).findFirst().get(),
+        source,
+        "/hof " + command);
+    return source.text();
+  }
+
+  @Test
+  void whileAStampRunsItsGalleryCantChangeUnderIt() throws IOException {
+    java.util.concurrent.CompletableFuture<Void> loading =
+        new java.util.concurrent.CompletableFuture<>();
+    fake.templates.loaded = loading;
+    assertThat(stamp("alcove season-2 2")).isEmpty();
+    String held =
+        "A stamp into gallery season-2 hasn't finished, so its bounds and cells can't change yet."
+            + " Try again once it has; one that stopped finishes at the next start.";
+    // What the stamp checked: a cell taking its next id, bounds over its copies, the gallery's.
+    assertThat(hof("cell new season-2 c1")).containsExactly(held);
+    assertThat(hof("cell new season-2 other")).containsExactly(held);
+    assertThat(hof("gallery bounds season-2 0 63 0 8 90 8")).containsExactly(held);
+    assertThat(hof("gallery entry season-2 3 65 3")).containsExactly(held);
+    assertThat(stamp("plinth season-2 1"))
+        .containsExactly("Another stamp is still going; wait for it to finish.");
+    loading.complete(null);
+    assertThat(file()).contains("c1:", "c2:");
+    assertThat(hof("cell new season-2 other")).containsExactly("Created cell other in gallery season-2.");
+  }
+
+  @Test
+  void aStampThatStopsKeepsItsGalleryHeldUntilRecoveryFinishesIt() throws IOException {
+    fake.templates.loaded =
+        java.util.concurrent.CompletableFuture.failedFuture(
+            new IllegalStateException("the entities didn't load"));
+    assertThat(stamp("alcove season-2 1"))
+        .singleElement()
+        .asString()
+        .startsWith("The stamp stopped:");
+    // Its cell ids and footprint are still the plan's, which recovery places at the next start.
+    assertThat(hof("cell new season-2 c1"))
+        .singleElement()
+        .asString()
+        .startsWith("A stamp into gallery season-2 hasn't finished");
+    fake.templates.loaded = java.util.concurrent.CompletableFuture.completedFuture(null);
+    seasons.stop();
+    start();
+    assertThat(file()).contains("c1:");
+    assertThat(hof("cell new season-2 other")).containsExactly("Created cell other in gallery season-2.");
+  }
+
   @Test
   void eachTemplateRefusal() {
     Map<String, StructureBuilder> templates =
