@@ -135,6 +135,8 @@ class DragonTest {
     fake.leave(admin);
     fake.dragonKilled = true;
     run("/season launch");
+    // The end and the launch are posted too; these tests watch the dragon's posts.
+    posts.clear();
   }
 
   private DragonEvents dragon() {

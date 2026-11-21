@@ -19,6 +19,8 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.curate.CurateFiles;
+import com.petepeterepeat.seasons.core.curate.Curation;
 import com.petepeterepeat.seasons.core.dragon.Dragon;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
@@ -116,6 +118,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Pets pets;
   private @Nullable Dragon dragon;
   private @Nullable AdminAlerts alerts;
+  private @Nullable Curation curation;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -281,6 +284,30 @@ public final class Seasons implements SeasonsApi {
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
       replay.register(Operation.MUSEUM, museum.recovery());
+      Curation curating =
+          new Curation(
+              platform,
+              config,
+              archives,
+              vaults,
+              new CurateFiles(world.resolve("data")),
+              museum,
+              renderer,
+              players,
+              writer,
+              journal,
+              replay,
+              hold,
+              audit,
+              announcer,
+              adminAlerts,
+              crash,
+              clock,
+              back ->
+                  vaulting.returnItem(
+                      back.owner(), back.item(), back.why(), Optional.of(back.ref())));
+      replay.register(Operation.CURATE, curating.recovery());
+      curation = curating;
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
@@ -358,6 +385,11 @@ public final class Seasons implements SeasonsApi {
     seasons.start();
     fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);
+    if (curation != null) {
+      halls.bindCuration(curation);
+      curation.start();
+      platform.events().chat(curation);
+    }
     halls.start();
     if (gates != null) {
       gates.start();
@@ -482,13 +514,16 @@ public final class Seasons implements SeasonsApi {
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
     platform.commands().register(built.root(nodes));
-    platform
-        .commands()
-        .register(
-            new HallCommands(
-                    platform, config, halls, visiting, renderer, reconciling, importer, players)
-                .root(),
-            List.of("halloffame"));
+    CommandNode hof =
+        new HallCommands(
+                platform, config, halls, visiting, renderer, reconciling, importer, players)
+            .root();
+    if (curation != null) {
+      List<CommandNode> children = new ArrayList<>(hof.children());
+      children.add(curation.command());
+      hof = new CommandNode(hof.name(), hof.argument(), hof.permission(), children, hof.action());
+    }
+    platform.commands().register(hof, List.of("halloffame"));
     vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
     platform.commands().register(pets.command(), List.of());
     platform.commands().register(museum.command(), List.of());
@@ -566,6 +601,9 @@ public final class Seasons implements SeasonsApi {
       @Override
       public void left(PlayerId player) {
         login.ifPresent(l -> l.left(player));
+        if (curation != null) {
+          curation.left(player);
+        }
       }
     };
   }
@@ -676,6 +714,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (dragon != null) {
       dragon.stop();
+    }
+    if (curation != null) {
+      curation.stop();
     }
     if (flusher != null) {
       flusher.cancel();

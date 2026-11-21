@@ -2,8 +2,8 @@
 package com.petepeterepeat.seasons.core.scenario;
 
 /**
- * The moments in archiving, importing, a vault withdrawal, handing over the dragon egg or {@code
- * /museum add} a scenario can stop the server at, each right after its write.
+ * The moments in archiving, importing, a vault withdrawal, handing over the dragon egg, {@code
+ * /museum add} or a curation a scenario can stop the server at, each right after its write.
  */
 public enum CrashPoint {
   /** The archive file is written and fsynced; the journal says nothing yet. */
@@ -43,5 +43,17 @@ public enum CrashPoint {
    */
   MUSEUM_STORED,
   /** The item is taken from the op and their file saved; {@code MUSEUM_DONE} isn't written. */
-  MUSEUM_TAKEN
+  MUSEUM_TAKEN,
+  /**
+   * {@code CURATE_STARTED} is on disk and the item kept aside; the archive still holds it. Armed by
+   * the curator.
+   */
+  CURATE_JOURNALLED,
+  /** The archive is saved without the item; it hasn't been delivered. Armed by the curator. */
+  CURATE_REMOVED,
+  /**
+   * The item is delivered (for a take, given and the curator's file saved); {@code CURATE_DONE}
+   * isn't written. Armed by the curator.
+   */
+  CURATE_DELIVERED
 }

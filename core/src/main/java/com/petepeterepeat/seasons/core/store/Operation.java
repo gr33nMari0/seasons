@@ -12,7 +12,10 @@ public enum Operation {
   ARCHIVE(JournalKind.ARCHIVE_STARTED, JournalKind.ARCHIVE_DONE),
   /** {@code /season unarchive}: one archive restored to its player. */
   UNARCHIVE(JournalKind.UNARCHIVE_STARTED, JournalKind.UNARCHIVE_DONE),
-  /** A curator's change to one archive. */
+  /**
+   * A curator's change to one archive: one item out of it, or back from the recycle bin. The player
+   * is the curator and the season the archive's.
+   */
   CURATE(JournalKind.CURATE_STARTED, JournalKind.CURATE_DONE),
   /** {@code /hof import}: one Season 1 cell turned into its owner's record. */
   IMPORT(JournalKind.IMPORT_STARTED, JournalKind.IMPORT_DONE),
@@ -30,12 +33,14 @@ public enum Operation {
   MUSEUM(JournalKind.MUSEUM_STARTED, JournalKind.MUSEUM_DONE);
 
   /**
-   * What tells two of this operation for the same player and season apart: a vault withdrawal's or
-   * museum change's id, the start of each of its entries' payload, since a player makes many of
-   * them; empty for the rest, which run once per player and season.
+   * What tells two of this operation for the same player and season apart: a vault withdrawal's,
+   * museum change's or curation's id, the start of each of its entries' payload, since a player
+   * makes many of them; empty for the rest, which run once per player and season.
    */
   public String instance(JournalEntry entry) {
-    return this == VAULT_WITHDRAW || this == MUSEUM ? entry.payloadHash().split("/", 2)[0] : "";
+    return this == VAULT_WITHDRAW || this == MUSEUM || this == CURATE
+        ? entry.payloadHash().split("/", 2)[0]
+        : "";
   }
 
   private final JournalKind started;

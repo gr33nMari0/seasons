@@ -26,6 +26,7 @@ public record SeasonsConfig(
     Zones zones,
     Dragon dragon,
     Deaths deaths,
+    Curate curate,
     Map<String, Award> awards) {
   public SeasonsConfig {
     awards = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(awards));
@@ -127,6 +128,14 @@ public record SeasonsConfig(
 
   @ConfigSerializable
   public record Dragon(boolean newEggEachSeason, EggTo eggTo) {}
+
+  /**
+   * Curation.
+   *
+   * @param requireReason whether every curation action needs a reason typed in chat
+   */
+  @ConfigSerializable
+  public record Curate(boolean requireReason) {}
 
   /**
    * The deaths display.

@@ -932,7 +932,8 @@ public final class HallService {
         }
         for (Anchor anchor : cell.anchors(AnchorType.ARCHIVE)) {
           if (anchor.isAt(use.block())) {
-            if (use.mainHand()) {
+            if (use.mainHand()
+                && !(use.sneaking() && curate(use.player(), new CellRef(gallery, cell)))) {
               openArchive(use.player(), new CellRef(gallery, cell), anchor.page().orElse(0));
             }
             return Optional.of(new Decision.Deny(Optional.empty()));
@@ -992,10 +993,48 @@ public final class HallService {
       Optional<Gallery> gallery = gallery(tag.get().gallery());
       Optional<Cell> cell = gallery.flatMap(g -> g.cell(tag.get().cell()));
       if (cell.isPresent()) {
-        openArchive(use.player(), new CellRef(gallery.get(), cell.get()), 0);
+        CellRef ref = new CellRef(gallery.get(), cell.get());
+        if (!(use.sneaking() && curate(use.player(), ref))) {
+          openArchive(use.player(), ref, 0);
+        }
       }
     }
     return Optional.of(new Decision.Deny(Optional.empty()));
+  }
+
+  /**
+   * Hands a cell to the curator view instead of the archive view, for a curator who sneak-clicks
+   * its archive anchor or figure.
+   */
+  public interface CuratorView {
+    /** Whether a player may open the curator view. */
+    boolean mayView(PlayerId player);
+
+    /** Opens the curator view of one archive. */
+    void openFor(PlayerId viewer, PlayerId owner, int season);
+  }
+
+  private @Nullable CuratorView curator;
+
+  /** The curator view, once curation is ready; before any intent arrives. */
+  public void bindCuration(CuratorView view) {
+    this.curator = view;
+  }
+
+  /** Opens the curator view if the player may, and says whether it did. */
+  private boolean curate(PlayerId player, CellRef ref) {
+    CuratorView view = curator;
+    if (view == null || !view.mayView(player)) {
+      return false;
+    }
+    int season = ref.gallery().season();
+    Optional<PlayerId> owner = ref.cell().owner(season);
+    if (owner.isEmpty()) {
+      platform.players().sendMessage(player, messages().get("hof.nothing-archived"));
+      return true;
+    }
+    view.openFor(player, owner.get(), season);
+    return true;
   }
 
   /** Opens the archive view of a cell's owner for its gallery's season, at a page. */

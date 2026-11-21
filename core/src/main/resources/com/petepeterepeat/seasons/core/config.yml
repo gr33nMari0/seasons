@@ -80,6 +80,12 @@ deaths:
   # sidebar, below_name or none. A new objective is made at each launch; earlier ones are kept.
   display: list
 
+# Curation (/hof curate): every action, museum, return, take or destroy, is audited, posted to the
+# admin webhook and told to the owner. With requireReason the curator types the reason in chat,
+# which nobody else sees; without it, "no reason given" is recorded.
+curate:
+  requireReason: true
+
 # Awards, worked out when the season ends and announced at the Intermission. Each winner gets a
 # trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose
 # best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon,
