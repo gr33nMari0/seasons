@@ -83,6 +83,11 @@ public final class Messages {
     return new Message(template, values);
   }
 
+  /** Whether messages.yml has a key, such as an award's name for an award of the server's own. */
+  public boolean has(String key) {
+    return templates.containsKey(key);
+  }
+
   /**
    * A message as plain text, for Discord posts, logs and text placed inside another message's
    * placeholder. Placeholders are substituted as written; MiniMessage tags in the template are left

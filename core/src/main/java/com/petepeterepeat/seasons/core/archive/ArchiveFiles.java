@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Skin;
+import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import com.petepeterepeat.seasons.core.store.AtomicFiles;
 import com.petepeterepeat.seasons.core.store.nbt.Nbt;
 import com.petepeterepeat.seasons.core.store.nbt.Nbt.NbtList;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 
 /**
  * Archive files: one NBT compound per player and season, gzipped like vanilla's own files. Each
@@ -34,7 +36,7 @@ import java.util.UUID;
  */
 public final class ArchiveFiles {
   /** The {@code format-version} this build reads and writes. */
-  public static final int FORMAT_VERSION = 2;
+  public static final int FORMAT_VERSION = 3;
 
   private final Path directory;
 
@@ -81,6 +83,100 @@ public final class ArchiveFiles {
       return Optional.empty();
     }
     return Optional.of(decode(Files.readAllBytes(file)));
+  }
+
+  /**
+   * Every archive of a season that reads: one per player, leaving out records moved aside and
+   * anything else beside them.
+   *
+   * @param records the archives, by file name
+   * @param damaged the file names of archives that couldn't be read, which are left out
+   */
+  public record SeasonArchives(List<ArchiveRecord> records, List<String> damaged) {
+    public SeasonArchives {
+      records = List.copyOf(records);
+      damaged = List.copyOf(damaged);
+    }
+  }
+
+  /** Every archive of a season. One that can't be read is named, not thrown on. */
+  public SeasonArchives all(int season) throws IOException {
+    List<ArchiveRecord> records = new ArrayList<>();
+    List<String> damaged = new ArrayList<>();
+    for (Path file : files(season)) {
+      try {
+        records.add(decode(Files.readAllBytes(file)));
+      } catch (IOException e) {
+        damaged.add(file.getFileName().toString());
+      }
+    }
+    return new SeasonArchives(records, damaged);
+  }
+
+  /** The players with an archive of a season, by file name alone: nothing is read. */
+  public List<PlayerId> players(int season) throws IOException {
+    List<PlayerId> players = new ArrayList<>();
+    for (Path file : files(season)) {
+      String name = file.getFileName().toString();
+      players.add(new PlayerId(UUID.fromString(name.substring(0, name.length() - 4))));
+    }
+    return players;
+  }
+
+  private List<Path> files(int season) throws IOException {
+    Path folder = directory.resolve("s" + season);
+    if (Files.notExists(folder)) {
+      return List.of();
+    }
+    List<Path> found = new ArrayList<>();
+    try (var files = Files.list(folder)) {
+      for (Path file : files.sorted().toList()) {
+        String name = file.getFileName().toString();
+        if (name.endsWith(".dat") && isUuid(name.substring(0, name.length() - 4))) {
+          found.add(file);
+        }
+      }
+    }
+    return found;
+  }
+
+  /**
+   * Changes an archive's honours in place. Only the {@code honours} tag is rewritten: every other
+   * tag, items included, is written back exactly as it was read. Atomic and fsynced.
+   *
+   * @return false if there is no archive
+   */
+  public boolean updateHonours(
+      PlayerId player, int season, UnaryOperator<ArchiveRecord.Honours> change) throws IOException {
+    Path file = path(player, season);
+    if (Files.notExists(file)) {
+      return false;
+    }
+    Map<String, Object> root = new LinkedHashMap<>(Nbt.read(Files.readAllBytes(file)));
+    int version = integer(root, "format-version");
+    if (version < 1 || version > FORMAT_VERSION) {
+      throw new IOException(
+          "Archive has format-version " + version + "; this Seasons reads " + FORMAT_VERSION);
+    }
+    ArchiveRecord.Honours before;
+    try {
+      before = honours(root.get("honours"), player, string(root, "name"), season);
+    } catch (ClassCastException | NullPointerException | IllegalArgumentException e) {
+      throw new IOException("Archive is damaged: " + e, e);
+    }
+    root.put("honours", honours(change.apply(before)));
+    // A version 2 archive now has honours, which version 3 added.
+    root.put("format-version", FORMAT_VERSION);
+    AtomicFiles.write(file, Nbt.writeCompressed(root));
+    return true;
+  }
+
+  private static boolean isUuid(String text) {
+    try {
+      return UUID.fromString(text).toString().equals(text);
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 
   /** Moves an archive aside, as {@code /season unarchive} does. Nothing is deleted. */
@@ -153,7 +249,48 @@ public final class ArchiveFiles {
         });
     record.heldSlot().ifPresent(slot -> root.put("heldSlot", slot));
     record.imported().ifPresent(imported -> root.put("imported", imported(imported)));
+    root.put("honours", honours(record.honours()));
     return Nbt.writeCompressed(root);
+  }
+
+  private static Map<String, Object> honours(ArchiveRecord.Honours honours) {
+    Map<String, Object> map = new LinkedHashMap<>();
+    List<Map<String, Object>> firsts = new ArrayList<>();
+    for (SeasonFirst first : honours.firsts()) {
+      Map<String, Object> f = new LinkedHashMap<>();
+      f.put("key", first.key());
+      f.put("label", first.label());
+      f.put("at", first.at().toEpochMilli());
+      firsts.add(f);
+    }
+    map.put("firsts", NbtList.ofCompounds(firsts));
+    map.put("awards", new NbtList(Nbt.stringType(), new ArrayList<Object>(honours.awards())));
+    return map;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static ArchiveRecord.Honours honours(
+      @org.jspecify.annotations.Nullable Object found, PlayerId player, String name, int season) {
+    if (!(found instanceof Map<?, ?>)) {
+      return ArchiveRecord.Honours.NONE;
+    }
+    Map<String, Object> map = (Map<String, Object>) found;
+    List<SeasonFirst> firsts = new ArrayList<>();
+    for (Map<String, Object> f : compounds(map.getOrDefault("firsts", ""))) {
+      firsts.add(
+          new SeasonFirst(
+              season,
+              value(f, "key", String.class),
+              value(f, "label", String.class),
+              player,
+              name,
+              Instant.ofEpochMilli(value(f, "at", Long.class))));
+    }
+    List<String> awards = new ArrayList<>();
+    if (map.get("awards") instanceof NbtList list) {
+      list.values().forEach(v -> awards.add(String.valueOf(v)));
+    }
+    return new ArchiveRecord.Honours(firsts, awards);
   }
 
   private static Map<String, Object> imported(ImportedCell imported) {
@@ -306,7 +443,8 @@ public final class ArchiveFiles {
           string(root, "contentHash"),
           root.get("heldSlot") instanceof Integer held ? OptionalInt.of(held) : OptionalInt.empty(),
           Optional.ofNullable((Map<String, Object>) root.get("imported"))
-              .map(ArchiveFiles::imported));
+              .map(ArchiveFiles::imported),
+          honours(root.get("honours"), player, string(root, "name"), integer(root, "season")));
     } catch (ClassCastException | NullPointerException | IllegalArgumentException e) {
       throw new IOException("Archive is damaged: " + e, e);
     }

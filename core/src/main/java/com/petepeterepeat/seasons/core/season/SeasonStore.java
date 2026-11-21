@@ -131,6 +131,36 @@ public final class SeasonStore {
           .setList(
               String.class, zones.reachedEnd().stream().map(PlayerId::toString).sorted().toList());
       dragon(node.node("dragon"), state.dragon());
+      for (SeasonAwards season : state.awards()) {
+        ConfigurationNode entry = node.node("awards").appendListNode();
+        entry.node("season").set(season.season());
+        entry.node("at").set(season.at().toString());
+        for (SeasonAwards.Award award : season.awards()) {
+          ConfigurationNode a = entry.node("awards").appendListNode();
+          a.node("id").set(award.id());
+          a.node("measure").set(award.measure());
+          a.node("value").set(award.value());
+          for (SeasonAwards.Winner winner : award.winners()) {
+            ConfigurationNode w = a.node("winners").appendListNode();
+            w.node("player").set(winner.player().toString());
+            w.node("name").set(winner.name());
+          }
+        }
+        entry
+            .node("counted")
+            .setList(
+                String.class, season.counted().stream().map(PlayerId::toString).sorted().toList());
+        if (season.pending().isPresent()) {
+          SeasonAwards.Pending pending = season.pending().get();
+          ConfigurationNode p = entry.node("pending");
+          p.node("first").set(pending.first());
+          p.node("announced").set(pending.announced());
+          p.node("players")
+              .setList(
+                  String.class,
+                  pending.players().stream().map(PlayerId::toString).sorted().toList());
+        }
+      }
       StringWriter out = new StringWriter();
       loader(out).save(node);
       return out.toString();
@@ -190,7 +220,60 @@ public final class SeasonStore {
         decorating(node.node("decorating")),
         firsts(node.node("firsts")),
         zones(node.node("zones")),
-        dragon(node.node("dragon")));
+        dragon(node.node("dragon")),
+        awards(node.node("awards")));
+  }
+
+  private static List<SeasonAwards> awards(ConfigurationNode node) throws IOException {
+    List<SeasonAwards> seasons = new java.util.ArrayList<>();
+    try {
+      for (ConfigurationNode entry : node.childrenList()) {
+        List<SeasonAwards.Award> awards = new java.util.ArrayList<>();
+        for (ConfigurationNode a : entry.node("awards").childrenList()) {
+          List<SeasonAwards.Winner> winners = new java.util.ArrayList<>();
+          for (ConfigurationNode w : a.node("winners").childrenList()) {
+            winners.add(
+                new SeasonAwards.Winner(
+                    new PlayerId(UUID.fromString(w.node("player").getString(""))),
+                    w.node("name").getString("")));
+          }
+          awards.add(
+              new SeasonAwards.Award(
+                  a.node("id").getString(""),
+                  a.node("measure").getString(""),
+                  a.node("value").getLong(0),
+                  winners));
+        }
+        Optional<SeasonAwards.Pending> pending = Optional.empty();
+        ConfigurationNode p = entry.node("pending");
+        if (!p.virtual()) {
+          pending =
+              Optional.of(
+                  new SeasonAwards.Pending(
+                      p.node("first").getBoolean(false),
+                      players(p.node("players")),
+                      p.node("announced").getBoolean(false)));
+        }
+        seasons.add(
+            new SeasonAwards(
+                entry.node("season").getInt(),
+                instant(entry.node("at")),
+                awards,
+                players(entry.node("counted")),
+                pending));
+      }
+    } catch (IllegalArgumentException e) {
+      throw new IOException("season.json has damaged awards", e);
+    }
+    return seasons;
+  }
+
+  private static Set<PlayerId> players(ConfigurationNode node) throws IOException {
+    Set<PlayerId> players = new HashSet<>();
+    for (String id : node.getList(String.class, List.of())) {
+      players.add(new PlayerId(UUID.fromString(id)));
+    }
+    return players;
   }
 
   private static void dragon(ConfigurationNode node, DragonState dragon)

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A13. The first player to complete an advancement in a season is broadcast as a season first; the
 // second is not. Reaching the Nether and carrying a rare item are firsts too, each posted to
-// Discord and listed by /season firsts.
+// Discord and listed by /season firsts. When the season ends, the Intermission recaps them: the
+// Nether, the End, the first diamond and elytra and the dragon slayer by name, and the rest counted
+// per player, in chat and in the Discord post with the awards.
 import { SECOND, assert } from '../lib/context.mjs'
 
 const STONE_AGE = /^Season first! Alex completed \[(.+)\]\.$/
@@ -57,5 +59,18 @@ export default {
       assert(posted.filter((c) => c === `Season first! ${first}.`).length === 1, `posted once: ${first}`)
     }
     assert(!posted.some((c) => c.startsWith('Season first! Sam completed [Stone Age]')), `the second to Stone Age is not a first: ${JSON.stringify(posted)}`)
+
+    // The recap at the Intermission.
+    const recap = ctx.waitForMessages(alex, [
+      /^Season 2 firsts:$/,
+      /^Sam reached the Nether$/,
+      /^Alex was first to 1 advancement and 1 item\.$/,
+      /^Sam was first to \d+ advancements?\.$/
+    ], 30 * SECOND, 'the recap')
+    await ctx.command(admin, '/season end --now', /^Ending Season 2 now/)
+    ctx.log((await recap).join('\n'))
+    const post = await discord.waitFor(/^Season 2 awards:/, 15 * SECOND)
+    assert(/\nSeason 2 firsts:\nSam reached the Nether\n/.test(post.content), `the post has the recap: ${post.content}`)
+    assert(/\nAlex was first to 1 advancement and 1 item\./.test(post.content), `the post counts Alex's: ${post.content}`)
   }
 }

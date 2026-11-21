@@ -112,7 +112,8 @@ public interface Players {
   void celebrate(PlayerId id, Message title, Message subtitle);
 
   /**
-   * Creates a scoreboard objective counting deaths, if it doesn't exist, and shows it.
+   * Creates a scoreboard objective counting deaths, if it doesn't exist, and shows it. Any other
+   * Seasons deaths objective shown in a slot is taken off the screen, and kept.
    *
    * @param slot where it shows: {@code list}, {@code sidebar}, {@code below_name} or {@code none}
    */

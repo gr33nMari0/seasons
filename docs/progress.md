@@ -8,7 +8,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M1 Core rollover | Done (#8, #9, #10) | A1 to A15, A20, A21, A40, A46, A47, A50, A51 (A6's zone lock with M3) |
 | M2 Hall protection | Done (#11, #12) | A22 to A29, A44 (its no-build half with M3), A9 widened |
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
-| M4 Season extras | In progress: part 1 on `m4-dragon-museum` | A37 to A39 |
+| M4 Season extras | In progress: part 1 (#22), part 2 on `m4-stats-awards` | A37 to A39; A6, A13 and A14 widened |
 | M5 to M7 | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
@@ -233,16 +233,35 @@ Built: `Gallery.Settings` and `FigureRenderer`, read and written by `GalleryFile
 
 Built: `DragonState` in `season.json` (the fight's tally, the season's first kill and where its egg went, a flag reset waiting for the End); `dragon/Dragon`, which clears the flag at launch with `dragon.newEggEachSeason`, tracks damage, chooses the slayer, runs the fanfare and records the dragon slayer first, watches the exit portal for the egg and hands it over through the vault (`EGG_DELIVERED`, then the Returned page under `egg-s<season>`, then the vault's own withdrawal), and finishes a hand-over a crash interrupted; `Vault#deliver` and references on the Returned page; on Paper `PaperDragonEvents` (damage by causing player, the death's final blow, the End loading) and the egg on `PaperDragonFight`. The museum: egg plinths (`egg: <season>`) in gallery files and their rules; `MuseumFiles` (`museum.yml`, `data/museum/`); `Museum` with `/museum add|remove` as journalled transactions (`MUSEUM_STARTED`, `MUSEUM_DONE`) and their recovery, plinth plans drawn by reconciliation, and the egg wall at season end; the end dry run's egg plinth warning; `Inventories#isArchived`. The test plugin gains `/scenario dragon info|respawn|hurt|crystal`, four crash points and `returned=` on the record line (ADR 0003); the dragon scenarios are the suite's first isolated ones. Decisions: `docs/questions.md` 178 to 194.
 
+**Part 2: stats, season cards and awards** (branch `m4-stats-awards`). Most of Stats, season cards and awards was built in M1 part 4 (firsts, the card, baselines) and the deaths objective with launch; this part adds what was left. None of M4's own scenarios (A37 to A39 from part 1, A42 with curation) is this part's; it widens three M1 scenarios and adds its own. Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A14 (widened) the card lists the player's awards, and the dragon credit for the slayer | `a14-season-card.mjs` (Furthest builder for a block 500 blocks out); unit: `AwardsTest#theCardListsAwardsAndTheDragonCredit`, `#computedOnceAndKeptAcrossARestart` |
+| A13 (widened) at the Intermission, the firsts are recapped: the Nether by name, the rest counted per player, in chat and in the Discord post with the awards | `a13-firsts.mjs`; unit: `AwardsTest#computedOnceAndKeptAcrossARestart` |
+| A6 (widened) one deaths objective per season: a death counts in `seasons_deaths_s3`, the next launch puts `_s4` at zero in its slot and keeps `_s3` off the screen; `deaths.display` moves it at once to the sidebar or below names, `none` takes it off, anything else is refused | `m4-deaths-display.mjs` (the bot reads the display slots from the packets); unit: `LaunchSequenceTest#eachLaunchMakesItsOwnDeathsObjective`, `ConfigLoaderTest#deathsDisplayIsOneOfFour` |
+| Awards at season end: a tie on deaths shared; nobody Deepest pockets or Dragon slayer at 0; trophies in award order on each winner's trophy anchors; the award line on the plaque and the card; the museum's Season 2 plaque lists the winners with no egg; one broadcast and one Discord post; `/season firsts` lists them | `m4-awards.mjs`; unit: `AwardsTest#tiesShareTheAward`, `#aZeroBestWinsNothing`, `#eachMeasure`, `#importedArchivesTakeNoPart` |
+| Awards kept: a restart neither announces nor works them out again; a player offline at season end and archived later at login with more deaths takes the award, announced as a change, and the trophy moves to their cell; an archive that changes nothing is quiet; reconciliation draws a removed trophy again | `m4-awards-restart.mjs` (two sessions); unit: `AwardsTest#computedOnceAndKeptAcrossARestart`, `#aLateArchiveIsCountedAndOneThatChangesNothingIsQuiet`, `SeasonStoreTest#awardsRoundTripAndOutliveTheirSeason` |
+| A crash after the awards are saved: the restart draws, announces and copies them, and the next restart is quiet; the dragon slayer wins before they are archived | unit: `AwardsTest#aRestartFinishesWhatACrashLeftUndone`, `#theSlayerWinsBeforeTheyAreArchived` |
+| The award list: an award of the server's own by hand edit, named after its id; a default turned off; `/season config get|set` on award settings; a bad measure, an unknown item and an id that isn't a slug refused with the key path | `m4-awards-config.mjs`; unit: `ConfigLoaderTest#awardsLoadAndBadOnesSayWhere`, `YamlEditsTest#anAwardsSettingIsSetInsideItsFlowMappingOrAddedAsANewAward` |
+| Archives carry the player's firsts and awards; a version 2 archive still reads; an update rewrites only the honours tag, every other tag as it was; a damaged archive is named and left out | unit: `ArchiveFilesTest` |
+| An armour-stand cell's helmet keeps the first trophy anchor and the awards take the next | unit: `FiguresTest#awardTrophiesTakeAnchorsAfterTheHelmet` |
+
+Built: the `awards` section of config.yml (`SeasonsConfig.Award`, `config/AwardMeasure`), validated with `deaths.display`, and award settings reachable by `/season config`; `season/Awards`, which works the awards out when the Intermission begins (`SeasonService#onIntermission`, and at startup), saves them in `season.json` (`SeasonAwards`), draws them, copies them into the winners' archives (`ArchiveFiles#all`, `#update`, `ArchiveRecord.Honours`, format-version 3) and announces them with the firsts recap (`Announcer#broadcast(List)`, `#discord(List)`); the archiver copies each player's firsts and awards; trophies and the plaque line in `HallRenderer`, the season plaque in `Museum`, the Awards section and dragon credit on `SeasonCard`, the awards in `/season firsts`; `World#item` for trophies; `LaunchSequence#showDeaths`, run again on reload, with earlier seasons' objectives taken off the screen. The test plugin gains `/scenario stat` (ADR 0003). Decisions: `docs/questions.md` 199 to 213.
+
+After #23 opened: CI failed the reset after `m3-vault-crash-started`'s halt with an `EOFException`, as a local run had once after `m3-shape-commands`. The test plugin copies each chunk the first time it loads, to put it back between scenarios; a crash scenario's halt mid-copy left half a copy, which the next reset couldn't read. Copies are now written beside their place and moved in whole (`ScenarioWorld#keepPristine`).
+
+Review of #23: a late archive counts toward the season's awards, worked out again with the list they were first worked out with and announced as a change (`Archiver#onArchived`, `SeasonAwards#counted`); the dragon slayer award comes from the season's own firsts, so a slayer offline at the end, or a launch while the awards are read, no longer loses it; what is left after the awards are saved is kept as `pending` in `season.json` and finished at startup (`Awards#start`); copying into archives rewrites only the `honours` tag (`ArchiveFiles#updateHonours`); a damaged archive is left out and named to admins instead of stopping the awards (`ArchiveFiles.SeasonArchives`). Questions 212 and 213.
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
 
 | Item | Milestone | Why then |
 | --- | --- | --- |
-| The dragon credit on the season card, the dragon slayer award, the `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
-| Awards, on the plaque's trophies and in the archive record | M4 | Milestone list; the award list is still an open decision |
+| The `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
 | Curation: `/hof curate`, `/hof curate undo`, the `seasons.curate.*` nodes, `CURATE_STARTED` and `CURATE_DONE`, curator returns to the vault's Returned page, the curator's museum action, recovering `--force` displaced items | M4 | Milestone list ("curation"); questions 4, 23, 194 |
-| Discord posts for the season end, launch and awards; the admin webhook, tripwire hits included | M4 | Milestone list ("Discord webhooks"); questions 14, 28 |
+| Discord posts for the season end and launch; the admin webhook, tripwire hits included | M4 | Milestone list ("Discord webhooks"); questions 14, 28 |
 | The wand (`/hof wand`, anchors and bounds by click, `/season zone add <id> box` and `outside box` with no corners) | M5 | Milestone list ("wand"); questions 92, 156 |
 | Templates and `/hof stamp`, the `alcove` and `plinth` templates in the jar, `templates/` | M5 | Milestone list ("templates and stamping") |
 | bStats, with a plugin id per jar | M6 | Question 3 |

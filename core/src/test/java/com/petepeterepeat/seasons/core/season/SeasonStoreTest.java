@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -84,6 +85,41 @@ class SeasonStoreTest {
     SeasonState next = state.next(NOW);
     assertThat(next.firsts(2)).containsExactly(first);
     assertThat(next.first("advancement:minecraft:story/mine_stone")).isEmpty();
+  }
+
+  @Test
+  void awardsRoundTripAndOutliveTheirSeason() throws IOException {
+    PlayerId alex = new PlayerId(UUID.randomUUID());
+    PlayerId sam = new PlayerId(UUID.randomUUID());
+    SeasonAwards awards =
+        new SeasonAwards(
+            2,
+            NOW,
+            List.of(
+                new SeasonAwards.Award(
+                    "most-deaths",
+                    "deaths",
+                    5,
+                    List.of(
+                        new SeasonAwards.Winner(alex, "Alex"),
+                        new SeasonAwards.Winner(sam, "Sam"))),
+                new SeasonAwards.Award("deepest-pockets", "diamonds", 0, List.of())));
+    SeasonState state = SeasonState.start(2, Stage.OPEN, Optional.empty()).withAwards(awards);
+    store().save(state).join();
+
+    assertThat(store().load()).contains(state);
+    assertThat(state.next(NOW).awards(2)).contains(awards);
+    assertThat(state.next(NOW).awards(3)).isEmpty();
+
+    // Who was counted, and what a crash left to do.
+    SeasonState pending =
+        state.withAwards(
+            awards
+                .withCounted(java.util.Set.of(alex, sam))
+                .withPending(
+                    Optional.of(new SeasonAwards.Pending(false, java.util.Set.of(alex), true))));
+    store().save(pending).join();
+    assertThat(store().load()).contains(pending);
   }
 
   @Test

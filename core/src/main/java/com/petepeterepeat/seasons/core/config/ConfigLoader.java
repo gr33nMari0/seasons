@@ -63,6 +63,8 @@ public final class ConfigLoader {
   private static final String BUNDLED = "/com/petepeterepeat/seasons/core/";
   private static final Pattern SEASON_FILE = Pattern.compile("(\\d+)\\.yml");
   private static final Pattern MARK = Pattern.compile("line (\\d+), column (\\d+):");
+  private static final Pattern AWARD_ID = Pattern.compile("[a-z0-9]+(-[a-z0-9]+)*");
+  private static final String AWARDS = "awards";
 
   private final Path configDirectory;
   private final Path seasonsDirectory;
@@ -669,6 +671,37 @@ public final class ConfigLoader {
           ConfigProblem.atPath(
               CONFIG, "pets.maxPerPlayer", "must be between 0 and 10, not " + pets));
     }
+    String display = config.deaths().display();
+    if (!SeasonsConfig.Deaths.SLOTS.contains(display)) {
+      problems.add(
+          ConfigProblem.atPath(
+              CONFIG,
+              "deaths.display",
+              "must be list, sidebar, below_name or none, not " + display));
+    }
+    config
+        .awards()
+        .forEach((id, award) -> {
+          String path = "awards." + id;
+          if (!AWARD_ID.matcher(id).matches()) {
+            problems.add(
+                ConfigProblem.atPath(
+                    CONFIG,
+                    path,
+                    "award ids are lower-case letters, digits and dashes, such as most-deaths"));
+          }
+          if (award.measure() == null) {
+            problems.add(ConfigProblem.atPath(CONFIG, path + ".measure", "is missing"));
+          } else if (award.parsed().isEmpty()) {
+            problems.add(
+                ConfigProblem.atPath(
+                    CONFIG,
+                    path + ".measure",
+                    award.measure() + " isn't a measure: use " + AwardMeasure.choices()));
+          } else if (award.on() && award.item() == null) {
+            problems.add(ConfigProblem.atPath(CONFIG, path + ".item", "is missing"));
+          }
+        });
   }
 
   /**
@@ -691,6 +724,16 @@ public final class ConfigLoader {
                 CONFIG, "cells.containers", item + " isn't an item this server knows"));
       }
     }
+    config
+        .awards()
+        .forEach((id, award) -> {
+          String item = award.item();
+          if (item != null && !isItem.test(namespaced(item))) {
+            problems.add(
+                ConfigProblem.atPath(
+                    CONFIG, "awards." + id + ".item", item + " isn't an item this server knows"));
+          }
+        });
     String gate = config.cells().gateBlock();
     if (!isGateBlock.test(namespaced(gate))) {
       problems.add(
@@ -746,6 +789,25 @@ public final class ConfigLoader {
         out.put(dotted(child.getValue()), text(value));
       }
     }
+    if (isAwards(defaults)) {
+      // A server's own awards are settings too, shaped like the bundled ones.
+      ConfigurationNode shape = defaults.childrenMap().values().iterator().next();
+      for (Map.Entry<Object, ? extends ConfigurationNode> child : merged.childrenMap().entrySet()) {
+        if (defaults.node(child.getKey()).virtual()) {
+          for (Object key : shape.childrenMap().keySet()) {
+            out.put(dotted(child.getValue()) + "." + key, text(child.getValue().node(key)));
+          }
+        }
+      }
+    }
+  }
+
+  /** The awards section, whose ids are a server's to choose. */
+  private static boolean isAwards(ConfigurationNode node) {
+    return node.path().size() == 1
+        && AWARDS.equals(node.key())
+        && node.isMap()
+        && !node.childrenMap().isEmpty();
   }
 
   /** A setting's value as admins read it. */
@@ -769,7 +831,10 @@ public final class ConfigLoader {
     node.childrenMap()
         .forEach((key, child) -> {
           ConfigurationNode known = defaults.node(key);
-          if (known.virtual()) {
+          if (known.virtual() && isAwards(defaults)) {
+            // An award of the server's own: its keys are checked against a bundled award's.
+            unknownKeys(child, defaults.childrenMap().values().iterator().next(), warnings);
+          } else if (known.virtual()) {
             warnings.add(CONFIG + ": unknown key " + dotted(child) + " is ignored");
           } else if (known.isMap()) {
             unknownKeys(child, known, warnings);

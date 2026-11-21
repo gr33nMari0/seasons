@@ -8,8 +8,10 @@ import com.petepeterepeat.seasons.core.player.FurthestBlock;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Statistics;
+import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.HumanTime;
+import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import java.time.Duration;
 import java.time.Instant;
@@ -27,8 +29,9 @@ import java.util.regex.Pattern;
 /**
  * The season card (see Stats, season cards and awards in the spec): a written book opened from the
  * plaque anchor, built from the player's archive. The first page has the highlights, then their
- * season firsts, then every General-tab statistic as this season's difference. A card for an
- * imported Season 1 cell says so and shows the cell's signs, since its statistics are unknown.
+ * season firsts and the awards they won, then every General-tab statistic as this season's
+ * difference. A card for an imported Season 1 cell says so and shows the cell's signs, since its
+ * statistics are unknown.
  *
  * @param pages each page's lines
  */
@@ -47,8 +50,8 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
           "minecraft:time_since_rest",
           "minecraft:sneak_time");
 
-  /** The distances the card's "travelled" adds up. */
-  private static final List<String> TRAVEL =
+  /** The distances the card's "travelled" adds up, which the furthest-travelled award counts. */
+  public static final List<String> TRAVEL =
       List.of(
           "minecraft:walk_one_cm",
           "minecraft:walk_on_water_one_cm",
@@ -87,11 +90,13 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
    *
    * @param record the player's record, for the days they played; empty if there is none
    * @param firsts the season firsts this player earned that season
+   * @param awards the season's awards, once its Intermission has worked them out
    */
   public static SeasonCard of(
       ArchiveRecord archive,
       Optional<PlayerRecord> record,
       List<SeasonFirst> firsts,
+      Optional<SeasonAwards> awards,
       Messages messages) {
     String season = Integer.toString(archive.season());
     Message title = messages.get("card.title", "name", archive.name(), "season", season);
@@ -151,6 +156,10 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
                     "z",
                     Integer.toString(best.at().blockZ())))
             .orElseGet(() -> line(messages, "card.furthest-none")));
+    if (firsts.stream().anyMatch(f -> f.key().equals(FirstsTracker.DRAGON))) {
+      // The dragon credit (questions 206).
+      head.add(line(messages, "card.dragon"));
+    }
     Position end = archive.finalPosition();
     head.add(
         line(
@@ -176,6 +185,23 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
       earned.add(new Line(what, Messages.plain(what)));
     }
     paged(pages, earned);
+
+    if (awards.isPresent()) {
+      List<Line> won = new ArrayList<>();
+      won.add(line(messages, "card.awards"));
+      List<SeasonAwards.Award> theirs = awards.get().wonBy(archive.player());
+      if (theirs.isEmpty()) {
+        won.add(line(messages, "card.awards-none"));
+      }
+      for (SeasonAwards.Award award : theirs) {
+        String name = Awards.name(messages, award.id());
+        won.add(
+            Awards.valueText(messages, award)
+                .map(value -> line(messages, "card.award", "award", name, "value", value))
+                .orElseGet(() -> line(messages, "card.award-plain", "award", name)));
+      }
+      paged(pages, won);
+    }
 
     List<Line> general = new ArrayList<>();
     general.add(line(messages, "card.general"));
@@ -218,7 +244,8 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
     return new Line(message, Messages.plain(message));
   }
 
-  private static String value(Messages messages, String id, long value) {
+  /** A statistic's value as the card shows it: ticks as time, centimetres as blocks. */
+  public static String value(Messages messages, String id, long value) {
     if (TICKS.contains(id)) {
       return time(messages, value);
     }
@@ -236,12 +263,13 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
     return group(stats.getOrDefault(id, 0L));
   }
 
-  private static String group(long value) {
+  /** A number with thousands separators. */
+  public static String group(long value) {
     return String.format(Locale.ROOT, "%,d", value);
   }
 
   /** Ticks as hours and minutes. */
-  private static String time(Messages messages, long ticks) {
+  public static String time(Messages messages, long ticks) {
     Duration duration = Duration.ofSeconds(ticks / 20);
     long hours = duration.toHours();
     long minutes = duration.toMinutesPart();
@@ -253,7 +281,7 @@ public record SeasonCard(Message title, List<List<Line>> pages) {
   }
 
   /** Centimetres as blocks. */
-  private static String distance(Messages messages, long centimetres) {
+  public static String distance(Messages messages, long centimetres) {
     return messages.text("card.blocks", "n", group(centimetres / 100));
   }
 

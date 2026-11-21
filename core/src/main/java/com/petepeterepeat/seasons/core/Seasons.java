@@ -53,6 +53,7 @@ import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
+import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.LaunchSequence;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
@@ -338,6 +339,16 @@ public final class Seasons implements SeasonsApi {
     fight.bind(seasons);
     museum.bind(seasons::state, reconciling);
     seasons.onEnding(museum::seasonEnded);
+    archiver.ifPresent(a -> a.bind(seasons::state));
+    Awards awarding = new Awards(config, archives, writer, seasons, announcer, clock, serverThread);
+    awarding.bind((season, winners) -> {
+      for (PlayerId player : winners) {
+        var _ = renderer.render(player, season);
+      }
+      museum.seasonEnded(season);
+    });
+    archiver.ifPresent(a -> a.onArchived(awarding::archived));
+    seasons.onIntermission(awarding::intermission);
     seasons.start();
     fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);
@@ -350,6 +361,8 @@ public final class Seasons implements SeasonsApi {
     reconciling.start();
     hallRules.start();
     zoning.start();
+    // Once the Hall can draw what a crash left undrawn.
+    awarding.start();
     MapService mapping = new MapService(platform, config, seasons::state, zoning, maps);
     map = mapping;
     mapping.start();

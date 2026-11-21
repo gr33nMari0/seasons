@@ -45,6 +45,17 @@ class YamlEditsTest {
   }
 
   @Test
+  void anAwardsSettingIsSetInsideItsFlowMappingOrAddedAsANewAward() throws Exception {
+    String file =
+        "schema-version: 1\nawards:\n  most-jumps: { measure: minecraft:jump, item: rabbit_foot }\n";
+    assertThat(set(file, "awards.most-jumps.item", "stick"))
+        .isEqualTo(
+            "schema-version: 1\nawards:\n  most-jumps: { measure: minecraft:jump, item: stick }\n");
+    assertThat(set(file, "awards.most-deaths.item", "wither_skeleton_skull"))
+        .isEqualTo(file + "  most-deaths:\n    item: wither_skeleton_skull\n");
+  }
+
+  @Test
   void aMissingKeyGoesUnderItsSectionWhichIsMadeIfMissing() throws Exception {
     String file = "schema-version: 1\n# Ours.\nschedule:\n  endCountdown: 2m   # short\n";
     String once = set(file, "schedule.autoEnd", "true");

@@ -76,4 +76,21 @@ dragon:
   eggTo: slayer                  # slayer, portal
 
 deaths:
+  # Where each season's deaths objective (seasons_deaths_s3) is shown: list (the tab list),
+  # sidebar, below_name or none. A new objective is made at each launch; earlier ones are kept.
   display: list
+
+# Awards, worked out when the season ends and announced at the Intermission. Each winner gets a
+# trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose
+# best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon,
+# furthest-builder (from the season spawn), advancements, or any General-tab statistic id such as
+# minecraft:jump; off turns an award off. A new id adds an award, named in messages.yml under
+# awards.names, or after its id.
+awards:
+  most-deaths: { measure: deaths, item: skeleton_skull }
+  furthest-travelled: { measure: travelled, item: compass }
+  most-dedicated: { measure: play-time, item: clock }
+  deepest-pockets: { measure: diamonds, item: diamond }
+  dragon-slayer: { measure: dragon, item: dragon_head }
+  furthest-builder: { measure: furthest-builder, item: spyglass }
+  most-advancements: { measure: advancements, item: knowledge_book }

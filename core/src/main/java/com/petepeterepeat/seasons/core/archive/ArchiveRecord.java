@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.port.NeutralItem;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Skin;
+import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,8 @@ import java.util.OptionalInt;
  * @param heldSlot the hotbar slot in the player's main hand, which the figure holds
  * @param imported for a cell {@code /hof import} converted, what it took and from where; such a
  *     record has an empty inventory and its hash covers the imported items
+ * @param honours the season firsts the player earned and the awards they won, copied from the
+ *     season state when they are known; not part of the content hash
  */
 public record ArchiveRecord(
     PlayerId player,
@@ -49,10 +52,64 @@ public record ArchiveRecord(
     Optional<Skin> skin,
     String contentHash,
     OptionalInt heldSlot,
-    Optional<ImportedCell> imported) {
+    Optional<ImportedCell> imported,
+    Honours honours) {
   public ArchiveRecord {
     overflow = List.copyOf(overflow);
     statistics = Map.copyOf(statistics);
+  }
+
+  /**
+   * What the player earned in the season besides their gear.
+   *
+   * @param firsts each season first's key and how it reads, such as {@code nether}
+   * @param awards the ids of the awards they won, such as {@code most-deaths}
+   */
+  public record Honours(List<SeasonFirst> firsts, List<String> awards) {
+    public static final Honours NONE = new Honours(List.of(), List.of());
+
+    public Honours {
+      firsts = List.copyOf(firsts);
+      awards = List.copyOf(awards);
+    }
+  }
+
+  /** A record with no honours copied in yet. */
+  public ArchiveRecord(
+      PlayerId player,
+      String name,
+      int season,
+      Instant created,
+      InventorySnapshot inventory,
+      List<Optional<NeutralItem>> overflow,
+      EnderChestPolicy enderChestPolicy,
+      AdvancementSnapshot advancements,
+      Experience experience,
+      Map<String, Long> statistics,
+      Optional<FurthestBlock> furthest,
+      Position finalPosition,
+      Optional<Skin> skin,
+      String contentHash,
+      OptionalInt heldSlot,
+      Optional<ImportedCell> imported) {
+    this(
+        player,
+        name,
+        season,
+        created,
+        inventory,
+        overflow,
+        enderChestPolicy,
+        advancements,
+        experience,
+        statistics,
+        furthest,
+        finalPosition,
+        skin,
+        contentHash,
+        heldSlot,
+        imported,
+        Honours.NONE);
   }
 
   /** A record made by archiving a player, with no held slot known. */
@@ -108,7 +165,30 @@ public record ArchiveRecord(
         skin,
         contentHash,
         OptionalInt.of(slot),
-        imported);
+        imported,
+        honours);
+  }
+
+  /** The same record with its honours. */
+  public ArchiveRecord withHonours(Honours next) {
+    return new ArchiveRecord(
+        player,
+        name,
+        season,
+        created,
+        inventory,
+        overflow,
+        enderChestPolicy,
+        advancements,
+        experience,
+        statistics,
+        furthest,
+        finalPosition,
+        skin,
+        contentHash,
+        heldSlot,
+        imported,
+        next);
   }
 
   /**
