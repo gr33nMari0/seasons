@@ -132,6 +132,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code sneak <player> <on|off>} sets whether the player is sneaking, as their client would,
+ *       for a bot standing still, which sends no input of its own
  *   <li>{@code vault-return <player> <item> <count>} hands a stack back to the player on their
  *       vault's Returned page, as a curator's return or an undelivered dragon egg will
  *   <li>{@code tame <tag> <player>} tames the entity with a scoreboard tag to a player
@@ -268,6 +270,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "sneak" -> sneak(sender, args);
         case "vault-return" -> vaultReturn(sender, hooks, args);
         case "tame" -> tame(sender, args);
         case "stat" -> stat(sender, args);
@@ -887,6 +890,16 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     player.addAttachment(plugin, args[2], true);
     sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  private void sneak(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't set sneaking for " + args[1]);
+      return;
+    }
+    player.setSneaking(args.length > 2 && args[2].equals("on"));
+    sender.sendMessage(args[1] + (player.isSneaking() ? " is sneaking" : " isn't sneaking"));
   }
 
   private void vaultReturn(CommandSender sender, ScenarioHooks hooks, String[] args) {
