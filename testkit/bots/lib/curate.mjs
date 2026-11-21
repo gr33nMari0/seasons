@@ -43,13 +43,22 @@ export async function archiveWithGear (ctx, admin, names, { cells = names.length
   return found
 }
 
-/** Runs /hof curate as a bot and resolves with the curator view once it opens. */
+/**
+ * Resolves once a menu that just opened shows its items: the game sends them after the window
+ * itself, so a busy server can open the window a moment before it is filled.
+ */
+async function filled (ctx, bot, slots) {
+  await ctx.eventually(async () => assert(shown(bot.currentWindow, slots).length > 0, 'the menu shows its items'))
+  return bot.currentWindow
+}
+
+/** Runs /hof curate as a bot and resolves with the curator view once it opens and is filled. */
 export async function openCurate (ctx, bot, owner, season = 2) {
   const opened = new Promise((resolve) => bot.once('windowOpen', resolve))
   await ctx.command(bot, `/hof curate ${owner} ${season}`, new RegExp(`^Curating ${owner}'s Season ${season} archive\\.`))
   const window = await opened
   assert(new RegExp(`Curating ${owner} · Season ${season}`).test(JSON.stringify(window.title)), `the curator view is titled: ${JSON.stringify(window.title)}`)
-  return window
+  return filled(ctx, bot, VIEW_SLOTS)
 }
 
 /** The slot of the first item with a name in a menu's item slots, or -1. */
@@ -71,7 +80,7 @@ export async function pick (ctx, bot, item) {
   await bot.clickWindow(slot, 0, 0)
   const menu = await opened
   assert(/what happens to it\?/.test(JSON.stringify(menu.title)), `the action menu is titled: ${JSON.stringify(menu.title)}`)
-  return menu
+  return filled(ctx, bot, 9)
 }
 
 /** The actions an action menu offers, by name, from their icons. */
@@ -93,7 +102,7 @@ export async function choose (ctx, bot, action, { asked = true } = {}) {
     await bot.clickWindow(slot, 0, 0)
     const picker = await opened
     assert(/Which museum plinth\?/.test(JSON.stringify(picker.title)), `the plinth picker is titled: ${JSON.stringify(picker.title)}`)
-    return picker
+    return filled(ctx, bot, 9)
   }
   const prompt = asked ? ctx.waitForMessages(bot, /^Type the reason/) : null
   await bot.clickWindow(slot, 0, 0)

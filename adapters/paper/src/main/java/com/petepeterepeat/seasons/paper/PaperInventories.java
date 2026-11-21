@@ -169,8 +169,8 @@ final class PaperInventories implements Inventories {
       player.setItemOnCursor(null);
     }
     Inventory top = player.getOpenInventory().getTopInventory();
-    if (!(top.getHolder(false) instanceof PaperMenus.PagedHolder)
-        && !(top.getHolder(false) instanceof PaperMenus.ViewOnlyHolder)) {
+    // Seasons' own menus show tagged copies on purpose: the view, the vault and choice menus.
+    if (!PaperMenus.isViewOnly(top)) {
       purge(top, removed);
     }
     return removed;
