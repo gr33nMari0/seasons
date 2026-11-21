@@ -61,7 +61,17 @@ public final class EntryChecks {
   }
 
   public static Optional<Failure> check(SeasonsConfig.Hof.Entry rules, Situation s) {
-    Optional<Failure> bed = bed(rules, s);
+    return check(rules, s, true);
+  }
+
+  /**
+   * The first check that fails, if any.
+   *
+   * @param needsBed whether the bed check applies: not for a link to the Hall (questions 249)
+   */
+  public static Optional<Failure> check(
+      SeasonsConfig.Hof.Entry rules, Situation s, boolean needsBed) {
+    Optional<Failure> bed = needsBed ? bed(rules, s) : Optional.empty();
     if (bed.isPresent()) {
       return bed;
     }
