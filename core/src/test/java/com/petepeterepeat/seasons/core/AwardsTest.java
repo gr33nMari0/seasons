@@ -25,6 +25,8 @@ import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
 import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonFirst;
+import com.petepeterepeat.seasons.core.season.SeasonState;
+import com.petepeterepeat.seasons.core.season.SeasonStore;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.core.store.nbt.Nbt;
 import java.io.IOException;
@@ -39,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -425,28 +428,111 @@ class AwardsTest {
         .hasSize(2);
     assertThat(hooks.card(alex.id(), 2).join()).containsSubsequence("Awards", "Most deaths (5)");
 
-    // A restart neither announces them again nor works them out again; Late, archived at login,
-    // doesn't take the award.
+    // A restart neither announces them again nor works them out again.
     restart();
-    join("Late");
-    assertThat(broadcasts()).noneMatch(line -> line.endsWith("awards:"));
+    assertThat(broadcasts()).noneMatch(line -> line.contains("awards"));
     assertThat(run("/season firsts")).contains("Season 2 awards:", "Most deaths: Alex and Sam (5)");
-    assertThat(hooks.card(late.id(), 2).join()).containsSubsequence("Awards", "None this season");
+
+    // Late, offline at season end, is counted once archived at login, and takes the award.
+    join("Late");
+    assertThat(broadcasts())
+        .containsSubsequence("Season 2 awards have changed:", "Most deaths: Late (50)");
+    assertThat(run("/season firsts")).contains("Most deaths: Late (50)");
+    assertThat(hooks.card(late.id(), 2).join()).containsSubsequence("Awards", "Most deaths (50)");
+    assertThat(hooks.card(alex.id(), 2).join()).containsSubsequence("Awards", "None this season");
+    // The archives and trophies follow: Alex and Sam lose theirs, Late gets one.
+    assertThat(archives.read(alex.id(), 2).orElseThrow().honours().awards()).isEmpty();
+    assertThat(archives.read(late.id(), 2).orElseThrow().honours().awards())
+        .containsExactly("most-deaths");
+    List<String> after = new ArrayList<>();
+    for (int x = 6; x < 40; x += 10) {
+      after.addAll(shownAt(x, 6));
+    }
+    assertThat(after).containsExactly("minecraft:skeleton_skull");
   }
 
   @Test
-  void aLateArchiveChangesNothing() {
+  void aLateArchiveIsCountedAndOneThatChangesNothingIsQuiet() {
     start();
     run("/season init 2");
     PlayerRef alex = join("Alex");
     fake.player(alex).statistics.put("minecraft:deaths", 1L);
     PlayerRef late = join("Late");
     fake.player(late).statistics.put("minecraft:deaths", 9L);
+    PlayerRef quiet = join("Quiet");
     fake.leave(late);
+    fake.leave(quiet);
     run("/season end --now");
-    join("Late");
-
     assertThat(run("/season firsts")).contains("Most deaths: Alex (1)");
+
+    join("Late");
+    assertThat(run("/season firsts")).contains("Most deaths: Late (9)");
+    join("Quiet");
+
     assertThat(posts.stream().filter(p -> p.startsWith("Season 2 awards:"))).hasSize(1);
+    assertThat(posts.stream().filter(p -> p.startsWith("Season 2 awards have changed:")))
+        .singleElement()
+        .asString()
+        .contains("Most deaths: Late (9)");
+  }
+
+  @Test
+  void theSlayerWinsBeforeTheyAreArchived() {
+    SeasonFirst slain =
+        new SeasonFirst(2, FirstsTracker.DRAGON, "", id("Pat"), "Pat", Instant.EPOCH);
+
+    List<SeasonAwards.Award> awards =
+        Awards.compute(DEFAULTS, List.of(archive("Alex", Map.of(), 0)), Optional.of(slain));
+
+    assertThat(winners(awards, "dragon-slayer")).containsExactly("Pat");
+  }
+
+  @Test
+  void aRestartFinishesWhatACrashLeftUndone() throws IOException {
+    writeGallery();
+    start();
+    run("/season init 2");
+    PlayerRef alex = join("Alex");
+    run("/season decorate open");
+    fake.player(alex).statistics.put("minecraft:deaths", 3L);
+    run("/season end --now");
+    seasons.stop();
+    seasons = null;
+
+    // As if the server stopped right after the awards were saved: nothing copied or announced.
+    SeasonStore store =
+        new SeasonStore(
+            dir.resolve("world/seasons/data/season.json"), new SerialWriter(Runnable::run));
+    SeasonState saved = store.load().orElseThrow();
+    SeasonAwards worked = saved.awards(2).orElseThrow();
+    store
+        .save(
+            saved.withAwards(
+                worked.withPending(
+                    Optional.of(new SeasonAwards.Pending(true, Set.of(alex.id()), false)))))
+        .join();
+    ArchiveFiles archives = new ArchiveFiles(dir.resolve("world/seasons/data/archives"));
+    archives.updateHonours(alex.id(), 2, h -> new ArchiveRecord.Honours(h.firsts(), List.of()));
+    FakePlatform before = fake;
+    fake = new FakePlatform();
+    fake.players.putAll(before.players);
+    posts.clear();
+
+    start();
+
+    assertThat(broadcasts()).containsSubsequence("Season 2 awards:", "Most deaths: Alex (3)");
+    assertThat(posts.stream().filter(p -> p.startsWith("Season 2 awards:"))).hasSize(1);
+    assertThat(archives.read(alex.id(), 2).orElseThrow().honours().awards())
+        .containsExactly("most-deaths");
+    assertThat(store.load().orElseThrow().awards(2).orElseThrow().pending()).isEmpty();
+    List<String> trophies = new ArrayList<>();
+    for (int x = 6; x < 40; x += 10) {
+      trophies.addAll(shownAt(x, 6));
+    }
+    assertThat(trophies).containsExactly("minecraft:skeleton_skull");
+
+    // Settled, so the next restart is quiet.
+    restart();
+    assertThat(broadcasts()).noneMatch(line -> line.contains("awards"));
   }
 }

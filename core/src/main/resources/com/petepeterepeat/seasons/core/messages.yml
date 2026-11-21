@@ -382,6 +382,10 @@ firsts:
 awards:
   heading: "<gold>Season <season> awards:</gold>"
   none: "<gray>No awards in Season <season>.</gray>"
+  changed: "<gold>Season <season> awards have changed:</gold>"
+  unreadable: "<red>Season <season>'s archives can't be read, so its awards weren't worked out: <error></red>"
+  damaged: "<red>Season <season>'s awards leave out archives that can't be read: <files></red>"
+  copy-failed: "<red>Season <season>'s awards weren't copied into every winner's archive; Seasons tries again at the next start. See the server log.</red>"
   line: "<yellow><award></yellow>: <winners> <gray>(<value>)</gray>"
   line-plain: "<yellow><award></yellow>: <winners>"
   and: " and "

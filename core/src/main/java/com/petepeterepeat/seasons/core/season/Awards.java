@@ -20,25 +20,30 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Awards (see Stats, season cards and awards in the spec): worked out once, when a season's
- * Intermission begins, from the archives made by then (questions 199), in the order config.yml
- * lists them. Ties share an award, and an award whose best is 0 goes to nobody. They are saved in
- * the season state first; then they are drawn (trophies and a plaque line in each winner's cell,
- * lines on the museum's plaque for the season), copied into the winners' archives, and, unless
- * nothing was earned at all, announced with a recap of the season's firsts, in chat and in one
- * Discord post.
+ * Awards (see Stats, season cards and awards in the spec): worked out when a season's Intermission
+ * begins, from the archives made by then, in the order config.yml lists them, and worked out again,
+ * with the same list, whenever a player is archived into the season later, so a player offline at
+ * season end takes part once they are (questions 212). Ties share an award, and an award whose best
+ * is 0 goes to nobody; the dragon slayer is the season's slayer, archived or not. Each result is
+ * saved in the season state with what is left to do; then it is drawn (trophies and a plaque line
+ * in each winner's cell, lines on the museum's plaque for the season), copied into the archives it
+ * changes, and announced: in full with a recap of the season's firsts the first time, unless
+ * nothing was earned at all, and as a change after that, in chat and in one Discord post. A restart
+ * finishes whatever is left (questions 213).
  */
 public final class Awards {
   private static final Logger LOG = LoggerFactory.getLogger(Awards.class);
@@ -59,8 +64,17 @@ public final class Awards {
   private final Announcer announcer;
   private final Clock clock;
   private final Executor serverThread;
+
+  /** Seasons whose archives are being read; one at a time per season. */
   private final Set<Integer> working = new HashSet<>();
-  private Consumer<SeasonAwards> draw = awards -> {};
+
+  /** Seasons archived into while they were being worked out, to work out again after. */
+  private final Set<Integer> again = new HashSet<>();
+
+  /** Seasons whose awards are being settled; one at a time per season. */
+  private final Set<Integer> settling = new HashSet<>();
+
+  private BiConsumer<Integer, Set<PlayerId>> draw = (season, players) -> {};
 
   public Awards(
       Supplier<ConfigSnapshot> config,
@@ -79,8 +93,8 @@ public final class Awards {
     this.serverThread = serverThread;
   }
 
-  /** Draws a season's awards once they are saved: the winners' cells and the museum. */
-  public void bind(Consumer<SeasonAwards> drawing) {
+  /** Draws a season's awards in these players' cells, and on the museum's plaque. */
+  public void bind(BiConsumer<Integer, Set<PlayerId>> drawing) {
     this.draw = drawing;
   }
 
@@ -93,8 +107,58 @@ public final class Awards {
     if (current.isEmpty()
         || current.get().season() != season
         || !(current.get().phase() instanceof Phase.Intermission)
-        || current.get().awards(season).isPresent()
-        || !working.add(season)) {
+        || current.get().awards(season).isPresent()) {
+      return;
+    }
+    refresh(season);
+  }
+
+  /**
+   * A player's archive into a season is done: if the season's awards are worked out without them,
+   * works them out again. On the server thread.
+   */
+  public void archived(PlayerId player, int season) {
+    if (working.contains(season)) {
+      again.add(season);
+      return;
+    }
+    seasons
+        .state()
+        .flatMap(s -> s.awards(season))
+        .filter(worked -> !worked.counted().contains(player))
+        .ifPresent(worked -> refresh(season));
+  }
+
+  /**
+   * At startup, on the server thread: works awards out again where an archive was made that they
+   * didn't hear of, as when a crash came just after it, and finishes what a crash left undone.
+   */
+  public void start() {
+    for (SeasonAwards worked : seasons.state().map(SeasonState::awards).orElse(List.of())) {
+      int season = worked.season();
+      var _ =
+          writer
+              .submit(() -> archives.players(season))
+              .whenCompleteAsync(
+                  (players, failure) -> {
+                    Optional<SeasonAwards> now = seasons.state().flatMap(s -> s.awards(season));
+                    if (now.isEmpty()) {
+                      return;
+                    }
+                    if (failure == null && !now.get().counted().containsAll(players)) {
+                      refresh(season);
+                    } else if (now.get().pending().isPresent()) {
+                      settle(now.get());
+                    }
+                  },
+                  serverThread);
+    }
+  }
+
+  /** Reads the season's archives and works its awards out from them. */
+  private void refresh(int season) {
+    if (!working.add(season)) {
+      again.add(season);
       return;
     }
     var _ =
@@ -103,13 +167,33 @@ public final class Awards {
             .whenCompleteAsync(
                 (found, failure) -> {
                   try {
+                    String number = Integer.toString(season);
                     if (failure != null) {
                       LOG.error("Can't read Season {}'s archives for its awards", season, failure);
+                      announcer.admins(
+                          SeasonService.ADMIN_PERMISSION,
+                          "awards.unreadable",
+                          "season",
+                          number,
+                          "error",
+                          String.valueOf(failure.getMessage()));
                       return;
                     }
-                    work(season, found);
+                    if (!found.damaged().isEmpty()) {
+                      announcer.admins(
+                          SeasonService.ADMIN_PERMISSION,
+                          "awards.damaged",
+                          "season",
+                          number,
+                          "files",
+                          String.join(", ", found.damaged()));
+                    }
+                    work(season, found.records());
                   } finally {
                     working.remove(season);
+                    if (again.remove(season)) {
+                      refresh(season);
+                    }
                   }
                 },
                 serverThread);
@@ -117,59 +201,159 @@ public final class Awards {
 
   private void work(int season, List<ArchiveRecord> found) {
     Optional<SeasonState> current = seasons.state();
-    if (current.isEmpty() || current.get().awards(season).isPresent()) {
+    if (current.isEmpty()) {
       return;
     }
-    Optional<SeasonFirst> slayer = current.get().first(FirstsTracker.DRAGON);
+    Optional<SeasonAwards> before = current.get().awards(season);
+    // Worked out again with the list they were first worked out with, not today's config.
+    Map<String, SeasonsConfig.Award> list =
+        before.map(Awards::listOf).orElseGet(() -> config.get().config().awards());
+    // The season's own slayer, even if the next season has launched meanwhile.
+    Optional<SeasonFirst> slayer =
+        current.get().firsts(season).stream()
+            .filter(f -> f.key().equals(FirstsTracker.DRAGON))
+            .findFirst();
+    List<SeasonAwards.Award> computed = compute(list, found, slayer);
+    Set<PlayerId> counted = new HashSet<>();
+    found.forEach(archive -> counted.add(archive.player()));
+    if (before.isPresent() && before.get().awards().equals(computed)) {
+      // Nothing changed: remember who was counted, and finish anything left undone.
+      SeasonAwards same = before.get().withCounted(counted);
+      if (!same.equals(before.get())) {
+        seasons.updateAwards(same);
+      }
+      if (same.pending().isPresent()) {
+        seasons.afterSave(() -> settle(same));
+      }
+      return;
+    }
+    Set<PlayerId> players = new LinkedHashSet<>();
+    before.ifPresent(b -> {
+      players.addAll(winners(b.awards()));
+      b.pending().ifPresent(p -> players.addAll(p.players()));
+    });
+    players.addAll(winners(computed));
+    boolean first = before.isEmpty() || before.get().pending().map(p -> p.first()).orElse(false);
     SeasonAwards worked =
         new SeasonAwards(
-            season, clock.instant(), compute(config.get().config().awards(), found, slayer));
-    List<SeasonFirst> firsts = current.get().firsts(season);
+            season,
+            clock.instant(),
+            computed,
+            counted,
+            Optional.of(new SeasonAwards.Pending(first, players, false)));
     seasons.updateAwards(worked);
-    // Announced only once they are on disk, so a restart neither loses nor repeats them.
-    seasons.afterSave(() -> {
-      draw.accept(worked);
-      var _ = honour(worked);
+    // Drawn, copied and announced only once they are on disk; a restart finishes what is left.
+    seasons.afterSave(() -> settle(worked));
+  }
+
+  /**
+   * Does what is left after awards were worked out: draws them, announces them, then copies them
+   * into the archives they change. Done is saved only when all of it is; until then a restart does
+   * it again, so nothing is lost, though an announcement may be made twice after a crash.
+   */
+  private void settle(SeasonAwards worked) {
+    SeasonAwards.Pending pending = worked.pending().orElseThrow();
+    int season = worked.season();
+    if (!settling.add(season)) {
+      return;
+    }
+    draw.accept(season, pending.players());
+    if (!pending.announced()) {
+      announce(worked, pending.first());
+    }
+    var _ =
+        honour(worked, pending.players())
+            .whenCompleteAsync(
+                (copied, failure) -> {
+                  settling.remove(season);
+                  Optional<SeasonAwards> now = seasons.state().flatMap(s -> s.awards(season));
+                  if (now.isEmpty()
+                      || !now.get().awards().equals(worked.awards())
+                      || !now.get().pending().equals(worked.pending())) {
+                    // Worked out again meanwhile: settle that instead.
+                    now.filter(n -> n.pending().isPresent())
+                        .ifPresent(n -> seasons.afterSave(() -> settle(n)));
+                    return;
+                  }
+                  if (failure != null || !Boolean.TRUE.equals(copied)) {
+                    LOG.error(
+                        "Season {}'s awards weren't copied into every archive", season, failure);
+                    announcer.admins(
+                        SeasonService.ADMIN_PERMISSION,
+                        "awards.copy-failed",
+                        "season",
+                        Integer.toString(season));
+                    seasons.updateAwards(
+                        now.get()
+                            .withPending(
+                                Optional.of(
+                                    new SeasonAwards.Pending(
+                                        pending.first(), pending.players(), true))));
+                    return;
+                  }
+                  seasons.updateAwards(now.get().withPending(Optional.empty()));
+                },
+                serverThread);
+  }
+
+  private void announce(SeasonAwards worked, boolean first) {
+    int season = worked.season();
+    Messages messages = config.get().messages();
+    List<Message> lines = new ArrayList<>();
+    if (first) {
+      List<SeasonFirst> firsts = seasons.state().map(s -> s.firsts(season)).orElse(List.of());
       if (worked.given().isEmpty() && firsts.isEmpty()) {
         // Nothing to tell: no award was earned and nobody was first to anything.
         return;
       }
-      Messages messages = config.get().messages();
-      List<Message> lines = new ArrayList<>(lines(messages, worked));
+      lines.addAll(lines(messages, worked));
       lines.addAll(recap(messages, season, firsts));
-      announcer.broadcast(lines);
-      announcer.discord(lines);
-    });
+    } else {
+      lines.add(messages.get("awards.changed", "season", Integer.toString(season)));
+      worked.given().forEach(award -> lines.add(line(messages, award)));
+    }
+    announcer.broadcast(lines);
+    announcer.discord(lines);
   }
 
-  /** Copies each winner's awards into their archive. */
-  private java.util.concurrent.CompletableFuture<Integer> honour(SeasonAwards worked) {
-    Map<PlayerId, List<String>> won = new LinkedHashMap<>();
-    for (SeasonAwards.Award award : worked.awards()) {
-      for (SeasonAwards.Winner winner : award.winners()) {
-        won.computeIfAbsent(winner.player(), p -> new ArrayList<>()).add(award.id());
-      }
-    }
+  /** The award list a season's awards were worked out with. */
+  private static Map<String, SeasonsConfig.Award> listOf(SeasonAwards worked) {
+    Map<String, SeasonsConfig.Award> list = new LinkedHashMap<>();
+    worked.awards().forEach(a -> list.put(a.id(), new SeasonsConfig.Award(a.measure(), null)));
+    return list;
+  }
+
+  private static Set<PlayerId> winners(List<SeasonAwards.Award> awards) {
+    Set<PlayerId> players = new LinkedHashSet<>();
+    awards.forEach(a -> a.winners().forEach(w -> players.add(w.player())));
+    return players;
+  }
+
+  /**
+   * Writes each player's awards into their archive, if they have one yet; one who doesn't gets them
+   * when they are archived. True if every archive there is was written.
+   */
+  private CompletableFuture<Boolean> honour(SeasonAwards worked, Set<PlayerId> players) {
     return writer.submit(() -> {
-      for (Map.Entry<PlayerId, List<String>> winner : won.entrySet()) {
+      boolean all = true;
+      for (PlayerId player : players) {
+        List<String> won = worked.wonBy(player).stream().map(SeasonAwards.Award::id).toList();
         try {
-          archives.update(
-              winner.getKey(),
-              worked.season(),
-              record ->
-                  record.withHonours(
-                      new ArchiveRecord.Honours(record.honours().firsts(), winner.getValue())));
+          archives.updateHonours(
+              player, worked.season(), honours -> new ArchiveRecord.Honours(honours.firsts(), won));
         } catch (IOException e) {
-          LOG.error("Can't copy awards into {}'s archive", winner.getKey(), e);
+          LOG.error("Can't copy awards into {}'s archive", player, e);
+          all = false;
         }
       }
-      return won.size();
+      return all;
     });
   }
 
   /**
    * Works out each award from a season's archives: the best value of its measure, and everyone with
-   * it. Imported archives, whose statistics are unknown, take no part.
+   * it. Imported archives, whose statistics are unknown, take no part. The dragon slayer award goes
+   * to the season's slayer.
    */
   public static List<SeasonAwards.Award> compute(
       Map<String, SeasonsConfig.Award> list,
@@ -182,10 +366,16 @@ public final class Awards {
         return;
       }
       AwardMeasure measure = setting.parsed().orElseThrow();
-      long best = 0;
       List<SeasonAwards.Winner> winners = new ArrayList<>();
+      if (measure == AwardMeasure.Named.DRAGON) {
+        // The season's slayer, whether or not they are archived yet.
+        slayer.ifPresent(s -> winners.add(new SeasonAwards.Winner(s.player(), s.name())));
+        awards.add(new SeasonAwards.Award(id, measure.text(), winners.size(), winners));
+        return;
+      }
+      long best = 0;
       for (ArchiveRecord archive : played) {
-        long value = value(measure, archive, slayer);
+        long value = value(measure, archive);
         if (value <= 0 || value < best) {
           continue;
         }
@@ -202,7 +392,7 @@ public final class Awards {
   }
 
   /** One archive's value of a measure. */
-  static long value(AwardMeasure measure, ArchiveRecord archive, Optional<SeasonFirst> slayer) {
+  static long value(AwardMeasure measure, ArchiveRecord archive) {
     Map<String, Long> stats = archive.statistics();
     return switch (measure) {
       case AwardMeasure.Named named ->
@@ -212,8 +402,8 @@ public final class Awards {
                 SeasonCard.TRAVEL.stream().mapToLong(id -> stats.getOrDefault(id, 0L)).sum();
             case PLAY_TIME -> stats.getOrDefault("minecraft:play_time", 0L);
             case DIAMONDS -> stats.getOrDefault(Statistics.DIAMONDS_MINED, 0L);
-            case DRAGON ->
-                slayer.filter(s -> s.player().equals(archive.player())).isPresent() ? 1 : 0;
+            // Not from archives: see compute.
+            case DRAGON -> 0;
             case FURTHEST_BUILDER -> furthest(archive);
             case ADVANCEMENTS -> archive.advancements().completed();
             case OFF -> 0;

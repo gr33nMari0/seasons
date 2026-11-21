@@ -115,6 +115,7 @@ public final class Archiver implements RolloverArchiver {
   private final Set<Integer> noCellNoticeSent = new HashSet<>();
   private final JournalRecovery recovery;
   private Supplier<Optional<SeasonState>> seasonState = Optional::empty;
+  private java.util.function.BiConsumer<PlayerId, Integer> archived = (player, season) -> {};
 
   public Archiver(
       Platform platform,
@@ -153,6 +154,11 @@ public final class Archiver implements RolloverArchiver {
   /** The season state, whose firsts and awards each archive copies. */
   public void bind(Supplier<Optional<SeasonState>> state) {
     this.seasonState = state;
+  }
+
+  /** Hears of each archive once it is done, on the server thread, such as a late one's awards. */
+  public void onArchived(java.util.function.BiConsumer<PlayerId, Integer> listener) {
+    this.archived = listener;
   }
 
   @Override
@@ -440,7 +446,17 @@ public final class Archiver implements RolloverArchiver {
         .thenApply(entry -> {
           crash.reached(CrashPoint.ARCHIVE_DONE, player);
           return (Outcome) new Outcome.Archived(archive);
-        });
+        })
+        .thenApplyAsync(
+            outcome -> {
+              try {
+                archived.accept(player, archive.season());
+              } catch (RuntimeException e) {
+                LOG.error("After archiving {} into Season {}", player, archive.season(), e);
+              }
+              return outcome;
+            },
+            serverThread);
   }
 
   private boolean looseMatches(PlayerId player, ArchiveRecord archive) {

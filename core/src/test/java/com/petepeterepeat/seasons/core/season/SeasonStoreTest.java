@@ -110,6 +110,16 @@ class SeasonStoreTest {
     assertThat(store().load()).contains(state);
     assertThat(state.next(NOW).awards(2)).contains(awards);
     assertThat(state.next(NOW).awards(3)).isEmpty();
+
+    // Who was counted, and what a crash left to do.
+    SeasonState pending =
+        state.withAwards(
+            awards
+                .withCounted(java.util.Set.of(alex, sam))
+                .withPending(
+                    Optional.of(new SeasonAwards.Pending(false, java.util.Set.of(alex), true))));
+    store().save(pending).join();
+    assertThat(store().load()).contains(pending);
   }
 
   @Test

@@ -146,6 +146,20 @@ public final class SeasonStore {
             w.node("name").set(winner.name());
           }
         }
+        entry
+            .node("counted")
+            .setList(
+                String.class, season.counted().stream().map(PlayerId::toString).sorted().toList());
+        if (season.pending().isPresent()) {
+          SeasonAwards.Pending pending = season.pending().get();
+          ConfigurationNode p = entry.node("pending");
+          p.node("first").set(pending.first());
+          p.node("announced").set(pending.announced());
+          p.node("players")
+              .setList(
+                  String.class,
+                  pending.players().stream().map(PlayerId::toString).sorted().toList());
+        }
       }
       StringWriter out = new StringWriter();
       loader(out).save(node);
@@ -230,13 +244,36 @@ public final class SeasonStore {
                   a.node("value").getLong(0),
                   winners));
         }
+        Optional<SeasonAwards.Pending> pending = Optional.empty();
+        ConfigurationNode p = entry.node("pending");
+        if (!p.virtual()) {
+          pending =
+              Optional.of(
+                  new SeasonAwards.Pending(
+                      p.node("first").getBoolean(false),
+                      players(p.node("players")),
+                      p.node("announced").getBoolean(false)));
+        }
         seasons.add(
-            new SeasonAwards(entry.node("season").getInt(), instant(entry.node("at")), awards));
+            new SeasonAwards(
+                entry.node("season").getInt(),
+                instant(entry.node("at")),
+                awards,
+                players(entry.node("counted")),
+                pending));
       }
     } catch (IllegalArgumentException e) {
       throw new IOException("season.json has damaged awards", e);
     }
     return seasons;
+  }
+
+  private static Set<PlayerId> players(ConfigurationNode node) throws IOException {
+    Set<PlayerId> players = new HashSet<>();
+    for (String id : node.getList(String.class, List.of())) {
+      players.add(new PlayerId(UUID.fromString(id)));
+    }
+    return players;
   }
 
   private static void dragon(ConfigurationNode node, DragonState dragon)

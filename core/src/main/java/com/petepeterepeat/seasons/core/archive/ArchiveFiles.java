@@ -86,40 +86,89 @@ public final class ArchiveFiles {
   }
 
   /**
-   * Every archive of a season: one per player, leaving out records moved aside and anything else
-   * beside them.
+   * Every archive of a season that reads: one per player, leaving out records moved aside and
+   * anything else beside them.
+   *
+   * @param records the archives, by file name
+   * @param damaged the file names of archives that couldn't be read, which are left out
    */
-  public List<ArchiveRecord> all(int season) throws IOException {
+  public record SeasonArchives(List<ArchiveRecord> records, List<String> damaged) {
+    public SeasonArchives {
+      records = List.copyOf(records);
+      damaged = List.copyOf(damaged);
+    }
+  }
+
+  /** Every archive of a season. One that can't be read is named, not thrown on. */
+  public SeasonArchives all(int season) throws IOException {
+    List<ArchiveRecord> records = new ArrayList<>();
+    List<String> damaged = new ArrayList<>();
+    for (Path file : files(season)) {
+      try {
+        records.add(decode(Files.readAllBytes(file)));
+      } catch (IOException e) {
+        damaged.add(file.getFileName().toString());
+      }
+    }
+    return new SeasonArchives(records, damaged);
+  }
+
+  /** The players with an archive of a season, by file name alone: nothing is read. */
+  public List<PlayerId> players(int season) throws IOException {
+    List<PlayerId> players = new ArrayList<>();
+    for (Path file : files(season)) {
+      String name = file.getFileName().toString();
+      players.add(new PlayerId(UUID.fromString(name.substring(0, name.length() - 4))));
+    }
+    return players;
+  }
+
+  private List<Path> files(int season) throws IOException {
     Path folder = directory.resolve("s" + season);
     if (Files.notExists(folder)) {
       return List.of();
     }
-    List<ArchiveRecord> records = new ArrayList<>();
+    List<Path> found = new ArrayList<>();
     try (var files = Files.list(folder)) {
       for (Path file : files.sorted().toList()) {
         String name = file.getFileName().toString();
         if (name.endsWith(".dat") && isUuid(name.substring(0, name.length() - 4))) {
-          records.add(decode(Files.readAllBytes(file)));
+          found.add(file);
         }
       }
     }
-    return records;
+    return found;
   }
 
   /**
-   * Changes what an archive records besides its items, such as its honours, in place: the items,
-   * the content hash and the {@code DataVersion} stay as they were. Atomic and fsynced. Does
-   * nothing if there is no archive.
+   * Changes an archive's honours in place. Only the {@code honours} tag is rewritten: every other
+   * tag, items included, is written back exactly as it was read. Atomic and fsynced.
+   *
+   * @return false if there is no archive
    */
-  public void update(PlayerId player, int season, UnaryOperator<ArchiveRecord> change)
-      throws IOException {
+  public boolean updateHonours(
+      PlayerId player, int season, UnaryOperator<ArchiveRecord.Honours> change) throws IOException {
     Path file = path(player, season);
     if (Files.notExists(file)) {
-      return;
+      return false;
     }
-    byte[] bytes = Files.readAllBytes(file);
-    int dataVersion = integer(Nbt.read(bytes), "DataVersion");
-    AtomicFiles.write(file, encode(change.apply(decode(bytes)), dataVersion));
+    Map<String, Object> root = new LinkedHashMap<>(Nbt.read(Files.readAllBytes(file)));
+    int version = integer(root, "format-version");
+    if (version < 1 || version > FORMAT_VERSION) {
+      throw new IOException(
+          "Archive has format-version " + version + "; this Seasons reads " + FORMAT_VERSION);
+    }
+    ArchiveRecord.Honours before;
+    try {
+      before = honours(root.get("honours"), player, string(root, "name"), season);
+    } catch (ClassCastException | NullPointerException | IllegalArgumentException e) {
+      throw new IOException("Archive is damaged: " + e, e);
+    }
+    root.put("honours", honours(change.apply(before)));
+    // A version 2 archive now has honours, which version 3 added.
+    root.put("format-version", FORMAT_VERSION);
+    AtomicFiles.write(file, Nbt.writeCompressed(root));
+    return true;
   }
 
   private static boolean isUuid(String text) {
