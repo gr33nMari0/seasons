@@ -24,6 +24,9 @@ permissions:
   seasons.hof.claim:
     description: Claim a free cell in galleries that use claim assignment
     default: true
+  seasons.hof.gate:
+    description: Open or shut your own cell's gate with /hof gate
+    default: true
   seasons.vault:
     description: View, or after Homecoming withdraw from, your ender vault
     default: true

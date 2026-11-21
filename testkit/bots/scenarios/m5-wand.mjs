@@ -133,10 +133,16 @@ export default {
     await pickAnchor(ctx, admin, 'remove', /^Removed the archive anchor at 23, -60, 29 from season-2:c1\.$/)
     assert(!cellInFile(ctx, 'c1').anchors.some((a) => a.type === 'archive'), 'the archive anchor is gone')
 
-    // Outside every cell.
+    // In the gallery but in no cell, the menu offers a link (questions 253).
+    const between = await anchorMenu(ctx, admin, admin, { x: 40, y: GROUND, z: 35 })
+    assert(JSON.stringify(choices(between)) === JSON.stringify(['link']), `only a link is offered outside the cells: ${choices(between)}`)
+    await pickAnchor(ctx, admin, 'link', /^Link l1 at 40, -61, 35 leads nowhere yet: stand where it should lead and run \/hof link to l1\.$/)
+    await ctx.command(admin, '/hof link remove l1', /^Removed link l1\.$/)
+
+    // Outside the Hall.
     await Promise.all([
       ctx.waitForMessages(admin, /^That block isn't in any cell\.$/),
-      click(ctx, admin, 'SeasonsAdmin', { x: 40, y: GROUND, z: 35 })
+      click(ctx, admin, 'SeasonsAdmin', { x: 65, y: GROUND, z: 35 })
     ])
 
     // A museum offers an egg plinth for a season that has none (Seasons 2 and 3 have theirs).

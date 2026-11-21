@@ -60,7 +60,20 @@ public final class SeasonEntry {
     return config.get().season(season).flatMap(file -> file.spawn()).map(SeasonEntry::centre);
   }
 
-  /** Completes with whether they reached the spawn. */
+  /**
+   * A first-time joiner after launch: to the season's spawn, unless they joined at a world spawn
+   * inside the Hall, where they stay and find their way by its links (questions 247).
+   */
+  public CompletableFuture<Boolean> welcome(PlayerId player, int season) {
+    if (platform.players().find(player).isPresent()
+        && config.get().inHall(platform.players().position(player))) {
+      takeBaseline(player, season);
+      return CompletableFuture.completedFuture(false);
+    }
+    return enter(player, season);
+  }
+
+  /** Sends a player to a season's spawn; completes with whether they reached it. */
   public CompletableFuture<Boolean> enter(PlayerId player, int season) {
     Optional<Position> spawn = spawn(season);
     if (spawn.isEmpty()) {

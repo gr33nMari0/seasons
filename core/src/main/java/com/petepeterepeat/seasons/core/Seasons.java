@@ -235,6 +235,7 @@ public final class Seasons implements SeasonsApi {
             audit,
             RandomGenerator.getDefault());
     hallService = halls;
+    halls.hallFile(loader.hallFile());
     HallAudit hallAudit = new HallAudit(audit, clock);
     HallVisits visiting =
         new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
@@ -430,6 +431,8 @@ public final class Seasons implements SeasonsApi {
       gates.start();
     }
     visiting.bind(seasons::state);
+    visiting.bindZones(zoning::lockedFor);
+    visiting.bindHold(hold::isHeld);
     visiting.start();
     reconciling.start();
     hallRules.start();
@@ -552,20 +555,21 @@ public final class Seasons implements SeasonsApi {
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
     platform.commands().register(built.root(nodes));
-    CommandNode hof =
+    HallCommands hallCommands =
         new HallCommands(
-                platform,
-                config,
-                halls,
-                visiting,
-                renderer,
-                reconciling,
-                importer,
-                players,
-                cellEdits,
-                wanding,
-                stamper)
-            .root();
+            platform,
+            config,
+            halls,
+            visiting,
+            renderer,
+            reconciling,
+            importer,
+            players,
+            cellEdits,
+            wanding,
+            stamper);
+    wanding.bindLinks(hallCommands::addLink);
+    CommandNode hof = hallCommands.root();
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
       children.add(curation.command());
@@ -643,6 +647,13 @@ public final class Seasons implements SeasonsApi {
                       .sendMessage(
                           player.id(),
                           SeasonCommands.markersLeftOut(snapshot.messages(), problem)));
+          snapshot
+              .hallLeftOut()
+              .forEach(problem ->
+                  platform
+                      .players()
+                      .sendMessage(
+                          player.id(), SeasonCommands.hallLeftOut(snapshot.messages(), problem)));
         }
       }
 
@@ -877,6 +888,16 @@ public final class Seasons implements SeasonsApi {
               LOG.error(
                   "markers.yml is left out, so no shared waypoints are shown, until it is fixed"
                       + " and /season reload succeeds: {}",
+                  problem));
+      result
+          .snapshot()
+          .get()
+          .hallLeftOut()
+          .forEach(problem ->
+              LOG.error(
+                  "hall.yml is left out, so the Hall has no hub, spawn or links, until it is"
+                      + " fixed and /season reload succeeds; /season end and /season launch are"
+                      + " refused until then: {}",
                   problem));
       return List.of();
     }

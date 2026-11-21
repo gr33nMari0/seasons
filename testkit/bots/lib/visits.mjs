@@ -4,6 +4,7 @@
 // translation (docs/adr/0001): sneak-clicking a bed, walking, using items and sitting down.
 import { SECOND, assert } from './context.mjs'
 import { FLOOR, buildGallery, gameMode } from './hall.mjs'
+import { HUB, markHub } from './hub.mjs'
 
 /** How long /hof makes a player wait between attempts (hof.entry.rateLimit). */
 export const RATE_LIMIT = 5 * SECOND
@@ -15,20 +16,26 @@ export const HOME = { x: 100, y: FLOOR, z: 100 }
 export const middle = (at) => ({ x: at.x + 0.5, y: at.y, z: at.z + 0.5 })
 
 /**
- * Records Season 2, builds its gallery (x 20 to 38, z 20 to 30, entry at 21, 21) and keeps the
- * chunks around HOME loaded. Resolves with the cells.
+ * Records Season 2, builds its gallery (x 20 to 38, z 20 to 30, entry at 21, 21) and the hub beside
+ * it (x 8 to 19, with the Hall spawn at 18, 21: see lib/hub.mjs), and keeps the chunks around HOME
+ * loaded. `sealed` sets hof.sealed: scenarios written before the hub keep the Hall sealed as it
+ * was (always); null leaves the default. Resolves with the cells.
  */
-export async function hallToVisit (ctx, admin, { cells = 2 } = {}) {
+export async function hallToVisit (ctx, admin, { cells = 2, sealed = 'always', hub = true } = {}) {
   await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
   const built = await buildGallery(ctx, admin, { cells })
+  if (hub) await markHub(ctx, admin)
   await ctx.command(admin, `/forceload add ${HOME.x - 40} ${HOME.z - 40} ${HOME.x + 40} ${HOME.z + 40}`, /^(Marked|No chunks were marked)/)
+  if (sealed) {
+    await ctx.command(admin, `/season config set hof.sealed ${sealed}`, new RegExp(`^(Set hof\\.sealed to ${sealed} in config\\.yml|hof\\.sealed is already ${sealed})`))
+  }
   return built
 }
 
-/** The gallery buildGallery makes, as bounds. */
+/** Whether a position is in the Hall hallToVisit makes: its hub or its gallery. */
 export function inGallery (at, cells = 2) {
   const width = 6 * (cells + 1)
-  return at.x >= 20 && at.x < 20 + width + 1 && at.z >= 20 && at.z < 31 && at.y >= FLOOR - 1 && at.y < FLOOR + 11
+  return at.x >= HUB.x1 && at.x < 20 + width + 1 && at.z >= 20 && at.z < 31 && at.y >= FLOOR - 1 && at.y < FLOOR + 11
 }
 
 /** Moves a player to a block, standing in its middle, and waits until the server has them there. */

@@ -272,10 +272,91 @@ class WandTest {
   }
 
   @Test
-  void aWandClickOutsideEveryCellIsRefusedAndTakenOver() {
-    assertThat(click(30, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
+  void aLinkMadeWithTheWandNeverWritesOverALeftOutHallYml() throws IOException {
+    seasons.stop();
+    Path hallYml = dir.resolve("world/seasons/hall.yml");
+    String broken = "schema-version: 1\nhub: { min: [-8, 60, 0], max: [-1, 80] }\n";
+    Files.writeString(hallYml, broken);
+    FakePlatform again = new FakePlatform();
+    seasons =
+        new Seasons(
+            again.platform(new Capabilities(EnumSet.allOf(Capability.class)), dir),
+            "1.2.3",
+            again.clock,
+            webhooks,
+            MapPublisher.NONE,
+            Map.of(),
+            new SerialWriter(Runnable::run),
+            Optional.empty());
+    seasons.start();
+    PlayerRef op = again.join("Admin");
+    again.player(op).position = new Position(OVERWORLD, 30.5, 64, 15.5, 0f, 0f);
+
+    again.handler.decide(
+        new Intent.UseWand(op.id(), Position.of(OVERWORLD, 30, 63, 15), "up", false, false));
+    again.choices.getLast().click("minecraft:lodestone");
+
+    assertThat(
+            again.sent.stream()
+                .filter(s -> s.player().equals(op.id()))
+                .map(s -> TestSource.plain(s.message())))
+        .contains(
+            "hall.yml failed to load at startup, so changing the hub, the Hall spawn or links would"
+                + " write over it. Fix the file and run /season reload.");
+    assertThat(Files.readString(hallYml)).as("the admin's file is untouched").isEqualTo(broken);
+  }
+
+  @Test
+  void aWandClickOutsideTheHallIsRefusedAndTakenOver() {
+    assertThat(click(60, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
     assertThat(said()).containsExactly("That block isn't in any cell.");
     assertThat(fake.choices).isEmpty();
+  }
+
+  @Test
+  void inTheHallButInNoCellTheMenuOffersALinkAndADoorwayGate() throws IOException {
+    hof("/hof cell new season-2 c1");
+    hof("/hof cell bounds season-2:c1 2 64 2 8 69 8");
+    assertThat(click(30, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
+    assertThat(fake.choices.getLast().icons()).containsExactly("minecraft:lodestone");
+    fake.choices.getLast().click("minecraft:lodestone");
+    assertThat(said())
+        .contains(
+            "Link l1 at 30, 63, 15 leads nowhere yet: stand where it should lead and run /hof link"
+                + " to l1.");
+    assertThat(Files.readString(dir.resolve("world/seasons/hall.yml"))).contains("l1");
+
+    // The floor of the doorway beside c1's east side: a gate corner in front of it.
+    click(9, 63, 4, "up", false, false);
+    assertThat(fake.choices.getLast().icons())
+        .containsExactly("minecraft:lodestone", "minecraft:iron_bars");
+    fake.choices.getLast().click("minecraft:iron_bars");
+    assertThat(said()).contains("Added a gate anchor to season-2:c1 at 9, 64, 4.");
+  }
+
+  @Test
+  void theCellsFloorFindsTheCellForAFigure() throws IOException {
+    hof("/hof cell new season-2 c1");
+    hof("/hof cell bounds season-2:c1 2 64 2 8 69 8");
+    click(5, 63, 5, "up", false, false);
+    fake.choices.getLast().click("minecraft:armor_stand");
+    assertThat(said()).contains("Added a figure anchor to season-2:c1 at 5, 64, 5.");
+  }
+
+  @Test
+  void boundsKeepADoorwayGate() throws IOException {
+    hof("/hof cell new season-2 c1");
+    hof("/hof cell bounds season-2:c1 2 64 2 8 69 8");
+    hof("/hof cell anchor season-2:c1 gate 9 64 3");
+    hof("/hof cell anchor season-2:c1 gate 9 69 7");
+    assertThat(hof("/hof cell bounds season-2:c1 2 64 2 8 70 8").text())
+        .containsExactly("Cell season-2:c1 now spans 2, 64, 2 to 8, 70, 8.");
+    assertThat(hof("/hof cell bounds season-2:c1 2 64 2 7 70 8").text())
+        .containsExactly(
+            "Cell season-2:c1's gate anchor at 9, 64, 3 would be outside those bounds. Move or"
+                + " remove it first.");
+    assertThat(hof("/hof cell anchor season-2:c1 gate 11 64 3").text())
+        .containsExactly("A gate corner goes inside cell season-2:c1 or right beside it.");
   }
 
   @Test

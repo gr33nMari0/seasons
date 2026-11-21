@@ -3,9 +3,11 @@ package com.petepeterepeat.seasons.paper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.destroystokyo.paper.event.block.BlockDestroyEvent;
 import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Position;
 import java.util.List;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -27,6 +29,7 @@ class PaperHallGuardTest {
   private ServerMock server;
   private World world;
   private PaperHallGuard guard;
+  private PaperEvents events;
 
   /** The Hall is every block with x below 10; it all counts as one cell being decorated. */
   private static final HallGuard BELOW_TEN =
@@ -54,7 +57,7 @@ class PaperHallGuardTest {
     PaperText text = new PaperText();
     PaperPlayers players = new PaperPlayers(server, text, new NamespacedKey("seasons", "c"));
     PaperItemCodec codec = new PaperItemCodec();
-    PaperEvents events =
+    events =
         new PaperEvents(
             MockBukkit.createMockPlugin(),
             text,
@@ -105,6 +108,43 @@ class PaperHallGuardTest {
 
     assertThat(outside.isCancelled()).isFalse();
     assertThat(in.isCancelled()).isTrue();
+  }
+
+  @Test
+  void aLinkBlockStaysWhenWhatHoldsItUpGoes() {
+    // Outside the Hall, the block at x 12 is a link; x 13 isn't.
+    events.hall(
+        new HallGuard() {
+          @Override
+          public boolean protects(Position block) {
+            return block.blockX() == 12;
+          }
+
+          @Override
+          public boolean holdsLink(Position block) {
+            return block.blockX() == 12;
+          }
+
+          @Override
+          public boolean allows(List<Position> blocks) {
+            return true;
+          }
+
+          @Override
+          public void entitiesLoaded(String dimension, int chunkX, int chunkZ) {}
+        });
+    BlockDestroyEvent link =
+        new BlockDestroyEvent(
+            at(12), Material.AIR.createBlockData(), Material.AIR.createBlockData(), 0, true);
+    BlockDestroyEvent other =
+        new BlockDestroyEvent(
+            at(13), Material.AIR.createBlockData(), Material.AIR.createBlockData(), 0, true);
+
+    guard.onDestroy(link);
+    guard.onDestroy(other);
+
+    assertThat(link.isCancelled()).isTrue();
+    assertThat(other.isCancelled()).isFalse();
   }
 
   @Test

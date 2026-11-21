@@ -106,8 +106,12 @@ Every rule in this spec follows from four scopes. What you carry becomes a troph
 | Rollover | Season end, then Intermission, then Launch. |
 | Archive | The stored record of a player's gear, advancements and stats for one season. It can never be withdrawn. |
 | Display | What the world shows of an archive: figure, trophies, plaque, archive view. Rebuilt from the archive at any time. |
-| Hall | The protected Hall of Fame area: every gallery plus shared spaces. |
-| Gallery | The part of the Hall for one season: a hallway, a room or a row of plinths. |
+| Hall | The protected Hall of Fame area: the hub plus every gallery. |
+| Hub | The Hall's shared centre, one box marked with two corners. It holds the Hall spawn, and wings lead off it. |
+| Hall spawn | The spot in the hub where plain `/hof` lands. It may also be the world spawn. |
+| Gallery | The part of the Hall for one season: a wing, a room or a row of plinths. |
+| Wing | A gallery whose box touches the hub: a hallway with cells on either side. |
+| Link | A block (a button, sign, pressure plate or anything else) that takes whoever clicks or steps on it to the Hall spawn, a season's spawn or a set spot. |
 | Cell | One player's slot in a gallery. |
 | Anchor | A typed point in a cell: figure, archive, plaque, trophy, entry or gate. |
 | Zone | A named area with a mode (off, announce, block or no-build), an unlock condition and a mode for after it unlocks. |
@@ -224,16 +228,23 @@ Players can bring tamed animals into the new season. Everything else alive stays
 
 ## Hall of Fame
 
-The Hall is made of galleries, galleries hold cells, and cells hold typed anchors. The plugin draws displays at those anchors from archive records, so it works with any build style.
+The Hall is a hub with galleries leading off it; galleries hold cells, and cells hold typed anchors. The plugin draws displays at those anchors from archive records, so it works with any build style. The Hall is a place to visit: players arrive at the hub, walk the wings, look around, and click a link or leave to go back to the world. Seasons protects the archives and items; anything that moves or holds players is a setting, and the defaults leave players free.
 
-&#91;embedded content: Hall structure · galleries, cells, anchors\]
+&#91;embedded content: Hall structure · hub, galleries, cells, anchors\]
 
-TheRanch's Season 1 hallway already exists, built by hand; `/hof import` converts it (see Importing Season 1's cells). Season 2's hallway is built new, and the first rollover fills it.
+TheRanch's Hall is a hub around 0, 256, 0, the world spawn, with one wing per season leading off it in each direction. Season 1's wing already exists, built by hand; `/hof import` converts it (see Importing Season 1's cells). Season 2's wing is built new, and the first rollover fills it.
+
+### The hub
+
+- One box, marked with two wand corners (`/hof hall hub`), in `<world>/seasons/hall.yml`. It may not overlap a gallery.
+- It holds the **Hall spawn** (`/hof hall spawn`), where plain `/hof` always lands. The Hall spawn must be inside the hub. It may also be the world spawn (TheRanch: it is, with `launch.setWorldSpawn: false`), so players who respawn without a bed, and first-time joiners, arrive there; if the Hall is built elsewhere they are distinct.
+- The Hall's own exits and its links live in the same file.
+- Players walk freely between the hub and the wings. `/hof hall check` reports a wing whose box doesn't touch the hub or another wing, since walking across a gap would be leaving the Hall.
 
 ### Galleries
 
 - Fields: id, kind (`season` or `museum`), season number, dimension, bounds, entry point, exit anchors, assignment strategy, access mode, decorating window, renderer choice.
-- A gallery can be any shape: a hallway, a room, a building, a row of plinths. Galleries may not overlap.
+- A gallery can be any shape: a wing off the hub (a hallway with cells on either side), a room, a building, a row of plinths. Galleries may not overlap each other or the hub. A gallery that doesn't touch the hub, such as a museum built elsewhere, is allowed, and `/hof hall check` warns about it.
 
 ### Anchors
 
@@ -244,15 +255,17 @@ TheRanch's Season 1 hallway already exists, built by hand; `/hof import` convert
 | plaque | No | 0 or 1 | Places the season card (a written book on a lectern, or a text display) and the advancement count |
 | trophy | No | Any | Item displays for awards, and the helmet when using armour stands |
 | entry | No | 0 or 1 | Where visitors land with `/hof <player>` |
-| gate | No | 0 or 1 | A plane of blocks the plugin opens and shuts (access mode `gate`) |
+| gate | No | 0 or 1 | A plane of blocks the plugin opens and shuts (access mode `gate`), in the cell's doorway or inside it |
 
 A cell has an id, optional bounds, an owner per season, and its anchors. Stored positions are absolute. Template anchors are relative and rotate with the template.
+
+A cell's bounds are its interior: at TheRanch 7 × 7 × 6 above the floor, the floor itself not included. Owners decorate on that floor. Every anchor sits inside the bounds, except the gate's two corners, which may sit in the layer just outside the bounds, so the gate fills the doorway under the cell's archway (7 × 6 at TheRanch). A gate plane stays inside its gallery and out of every other cell.
 
 ### Defining cells
 
 All three ways write the same gallery file.
 
-1. **Tag an existing build.** Run `/hof cell new <gallery> <id>`, then use the wand: right-click a block and pick an anchor type, or sneak-click two corners to set bounds.
+1. **Tag an existing build.** Run `/hof cell new <gallery> [id]` (with no id, the gallery's next free `c1`, `c2`, …), then use the wand: sneak-click two corners to set the new cell's bounds, and right-click a block and pick an anchor type. The same command can be repeated for every cell of a wing; tagging cells from the hub outwards puts them in the order `ordered` assignment hands them out.
 2. **Template and stamp.** Build one cell in creative. Place structure blocks in DATA mode with metadata `seasons:figure`, `seasons:archive`, `seasons:plaque`, `seasons:trophy`, `seasons:entry` or `seasons:gate` (two markers for the gate's corners). Save the cell with a structure block into `templates/`. `/hof stamp` pastes copies, registers each marker as an anchor and replaces the marker with air. Two default templates ship in the jar: `alcove` and `plinth`.
 3. **Edit the file.** Change `galleries/<id>.yml` by hand, then run `/season reload`.
 
@@ -261,6 +274,7 @@ All three ways write the same gallery file.
 - **`random` (default).** When the decorating window opens, everyone who has played the season gets a random free cell and a message saying which. Anyone who first plays later gets one at their next login, or at archive time.
 - **Swaps.** During the decorating window, two players can swap cells: both run `/hof swap <other player>` within 60 seconds. Ops can reassign with `/hof cell assign`.
 - Other strategies: `claim` (players run `/hof claim` during the window), `ordered` (by name or first join) and `manual` (ops assign).
+- **Chosen cells.** `/hof cell assign` before the window opens keeps those cells out of the draw, such as cells near the hub for the server's leaders; everyone else is dealt the rest.
 - Any play time at all earns a cell (`minPlaytime`, default 0).
 - With no free cell left, the player is archived without displays and admins are alerted. `/season end --dry-run` reports any shortfall in advance.
 
@@ -269,11 +283,13 @@ All three ways write the same gallery file.
 | Access mode | Behaviour |
 | --- | --- |
 | `open` (default) | Anyone walks in, in adventure mode. Visitors can look at everything and open view-only containers, and change nothing |
-| `bounds` | Non-owners cannot enter a cell; owners only during the decorating window |
-| `gate` | The gate plane is set to a configured block when locked, and to air when open |
+| `bounds` | Non-owners cannot enter a cell; owners only during the decorating window. Entry is refused at the edge, like a wall; nobody already inside is moved out (`cells.moveOut: false`) |
+| `gate` | The gate plane is set to a configured block when shut, and to air when open. Gates are open unless shut on purpose (`cells.gates: open`): an admin shuts one cell's gate or a whole gallery's, and an owner shuts their own; an admin can open any gate. `cells.gates: auto` shuts every gate whenever its cell is locked instead |
 
+- **Nobody is teleported out of a cell.** A gate waits until its cell and its plane are empty before it shuts. With `cells.moveOut: true`, a `bounds` cell's sweep and a gate shutting move people out to the gallery's entry instead.
 - During the decorating window, owners are in survival inside their own cell and decorate with their own blocks.
-- **Containers are allowed as decoration:** chests, barrels, shulker boxes and decorated pots. During the window only the owner can open them; anyone else sees a view-only copy. Hoppers, droppers, dispensers and crafters can't be placed anywhere in the Hall, and nothing can pull items out of a Hall container.
+- **Decoration elsewhere in the Hall** (the hub, hallways, archways) comes from builders: players in creative mode (`hof.creativeBuilds: true`) and holders of `seasons.hof.bypass`. Seasons never removes or changes decoration; it touches only its own figures, displays, gate planes, stamp markers and stamped entities. Builders may place any block, so a hub can keep its crafting tables, ender chests and signs. Decoration that would move or expose items does nothing for visitors: workstations don't open, ender chests open for builders only, and chests open as view-only copies. Signs and buttons registered as links work.
+- **Containers are allowed as decoration:** chests, barrels, shulker boxes and decorated pots. During the window only the owner can open them; anyone else sees a view-only copy. Owners can't place hoppers, droppers, dispensers, crafters or ender chests, builders can, and nothing can pull items out of a Hall container.
 - **Cells lock when the season ends,** at the end of the countdown and before anyone is archived. Owners still in their cell switch to adventure mode. Whatever was placed becomes protected Hall, and every container opens as a view-only copy from then on, the same as the archive anchor. Items put in a cell container are on display forever, so a stash gains nothing.
 - Owners can't keep decorating after the lock (`decorating.lockAtEnd: true`). The lock comes `decorating.afterArchive` after their archive (TheRanch: 15 minutes), or at launch if that is sooner.
 - Cushions (new in 26.3) are allowed as decoration. Anyone can sit on one; only the owner can place or break them, and only during the window.
@@ -319,12 +335,13 @@ Items keep their own data: the server already upgraded them when the world was u
 
 ## Visiting the Hall of Fame
 
-Players visit from a safe spot next to a bed and return to where they left, or the nearest safe place if it has changed. That makes the Hall useless as an escape button, a shortcut or a stash.
+Players visit from a safe spot next to a bed and return to where they left, or the nearest safe place if it has changed, or click a link to go somewhere else. Nothing can be stashed in the Hall or carried out of it, and links never lead into land that is locked.
 
 **Entry**
 
 - `/hof` (alias `/halloffame`) or sneak and right-click a bed with an empty hand.
-- `/hof <season>` or `/hof <player>` lands at that gallery's or cell's entry anchor. Plain `/hof` lands at the Hall entry.
+- Plain `/hof` always lands at the Hall spawn in the hub; with no Hall spawn set it is refused. `/hof <season>` or `/hof <player>` lands at that gallery's or cell's entry anchor.
+- A link to the Hall (see Links) skips the bed check; the other checks apply.
 
 **Entry conditions** (each configurable)
 
@@ -342,18 +359,34 @@ A failed check tells the player which one failed, such as "Monsters are nearby".
 
 **Return**
 
-- `/hof leave`, or step on an exit anchor (a pressure plate or other block marked `exit` in the gallery).
+- `/hof leave`, or step on an exit anchor (a pressure plate or other block marked `exit` in a gallery or the hub).
 - The player returns to the saved position, dimension, yaw and pitch, and their previous game mode is restored.
+- **No saved position.** A player who arrived without one (after a respawn or a first join at a Hall spawn that is the world spawn) goes to the current season's spawn with `/hof leave` (`hof.leaveWithoutSpot: season-spawn`; `refuse` refuses instead). During the Intermission everyone stays in the Hall.
 - **Return safety.** The saved spot may have changed while they were away. Before returning, Seasons checks it: a solid block to stand on, no lava, fire, magma or powder snow at feet or head, room to stand, and no hostile mobs within 8 blocks. If a check fails, the player goes to their bed (respawn point) if that passes the same checks, then the nearest safe spot within 8 blocks, then the season spawn, and is told why.
 - On arrival the player gets 5 s of damage immunity.
 - The saved position survives logouts and restarts.
 
-**Sealing the Hall**
+**Leaving and sealing**
 
-- Leaving the Hall's bounds by any route (walking, flying, pearls, pushing, falling) returns the player to their saved position. During Intermission there is no saved position, so they return to the Hall entry.
+- `hof.sealed` says what leaving the Hall's bounds by some other route (walking, falling, another plugin's teleport) does:
+  - `intermission` (default): outside the Intermission the player simply leaves. They stay where they land, their game mode comes back and their saved position is dropped. During the Intermission they are brought back to the Hall spawn, since no zone is in force then.
+  - `always`: they are returned to their saved position; during the Intermission, with none, to the Hall spawn.
+  - `never`: they always simply leave.
+- Locked zones still hold outside the Hall: leaving into one is refused by the zone, as any other way in is.
 - Inside the Hall: adventure mode, no item dropping or pickup, no ender pearls or chorus fruit, no riding entities in. Visitors may walk into any cell with access mode open, and sit on cushions there.
-- Exception: during the decorating window, owners are in survival inside their own cell's bounds.
-- Ops are not exempt unless they hold `seasons.hof.bypass`.
+- Exception: during the decorating window, owners are in survival inside their own cell's bounds. Players in creative or spectator mode keep their mode.
+- Ops are not exempt unless they hold `seasons.hof.bypass`, or build in creative mode.
+
+**Links**
+
+- A link is any block an admin marks with `/hof link add <id>`: a button, a sign, a pressure plate. Clicking it, or stepping on it if it is a plate, takes the player to its destination. Seasons takes over the click, so a button sends no redstone and no command blocks are needed.
+- Destinations: `hall` (the Hall spawn), `season <n>` (that season's recorded spawn), or a spot an admin stands at (`/hof link to <id>`), for seasons whose spawn Seasons never recorded.
+- A link to the Hall skips the bed check; the other entry checks apply. With `hof.links.returnToLink: true` (default), `/hof leave` brings the player back to the link they came from.
+- A link into land locked for that player now is refused with the reason ("Season 1's spawn opens at Homecoming"), and works once Homecoming or `/season unlock` opens it. Links out of the Hall are refused during the Intermission.
+- Arriving runs the return-safety checks and gives the usual immunity. Leaving the Hall by a link restores the game mode and drops the saved position.
+- TheRanch: a link per season in the hub, to each season's spawn, and a link back to the Hall at each season's spawn. Link blocks outside the Hall can't be broken or changed except by builders.
+
+**Arriving at season end.** Archiving sends everyone to their own cell (`archive.arrival: cell`, default), where they wake at the live event; `hub` sends them to the Hall spawn instead.
 
 ## Old world, zones and Homecoming
 
@@ -691,6 +724,7 @@ Players get a handful of commands, plus four web commands with the Seasons Web a
 | `/hof leave` | `seasons.hof.visit` | Return to the saved position, with return safety |
 | `/hof swap <player>` | `seasons.hof.swap` | Swap cells during the decorating window; both players run it within 60 s |
 | `/hof claim [cell]` | `seasons.hof.claim` | Claim a free cell, only when the gallery uses `claim` assignment |
+| `/hof gate open\|shut` | `seasons.hof.gate` | Open or shut the gate of your own cell (access mode `gate`) |
 | `/vault` | `seasons.vault` | View, or after Homecoming withdraw from, your ender vault |
 | `/pet add` / `remove <name>` / `list` | `seasons.pet` | Register up to 5 tamed pets to travel to the next season's spawn |
 | `/season info` | `seasons.info` | Phase, stage, the planned end, your cell, your archive status |
@@ -744,7 +778,14 @@ Admin dashboard widgets need `seasons.web.admin`, which is never granted by defa
 | Command | Does |
 | --- | --- |
 | `/hof gallery create <id> <season>` | Create a gallery; then bounds, entry, exit subcommands |
-| `/hof cell new <gallery> <id>` | Create a cell; then anchor \<type>, bounds |
+| `/hof cell new <gallery> [id]` | Create a cell (with no id, the next free `c<n>`); then anchor \<type>, bounds |
+| `/hof cell gate <cell> open\|shut` / `/hof gallery gate <gallery> open\|shut` | Open or shut one cell's gate, or every gate of a gallery |
+| `/hof hall hub [corners]` | Mark the hub; with no corners, the wand selection |
+| `/hof hall spawn [x y z [yaw]]` | Set the Hall spawn, inside the hub; with no position, where the admin stands |
+| `/hof hall exit [x y z\|none]` | Add an exit in the hub, or remove them all |
+| `/hof hall check` | Report what doesn't fit together: gaps between wings and the hub, odd-sized cells, galleries without an entry, cells without a figure, links leading nowhere; and the cells and free cells of each gallery |
+| `/hof link add <id> [hall\|season <n>] [x y z]` | Make a block a link (the one looked at, or at x y z) |
+| `/hof link to <id> [x y z [yaw]]` / `remove <id>` / `list` | Set where a link leads to a spot (where the admin stands), remove one, or list them |
 | `/hof cell assign <cell> <player>` / `unassign` | Manual assignment, overriding the random draw |
 | `/hof wand` | Give the anchor and zone wand |
 | `/hof stamp <template> <gallery> <count> [--step x y z] [--rotate 0\|90\|180\|270]` | Paste cell templates and register their anchors |
@@ -760,7 +801,7 @@ Admin dashboard widgets need `seasons.web.admin`, which is never granted by defa
 | `/hof curate <player> <season>` | Open the curator view for one archive |
 | `/hof curate undo <id>` | Restore a destroyed item from the recycle bin |
 
-**Bypass nodes** (never granted by default, ops included): `seasons.zone.bypass`, `seasons.hof.bypass`.
+**Bypass nodes** (never granted by default, ops included): `seasons.zone.bypass`, `seasons.hof.bypass`. Players in creative mode build in the Hall as bypass holders do (`hof.creativeBuilds`).
 
 ## Configuration and data files
 
@@ -776,6 +817,7 @@ plugins/Seasons/
 <world>/seasons/
   seasons/3.yml           # spawn, zones, unlocks, schedule (command-editable)
   galleries/season-3.yml  # gallery, cells, anchors (command-editable)
+  hall.yml                # the hub, the Hall spawn, the Hall's exits and links (command-editable)
   museum.yml
   templates/*.nbt         # cell templates
   data/players/<uuid>.json
@@ -798,6 +840,9 @@ schedule:
   endCountdown: 10m
 launch:
   requireManual: true
+  setWorldSpawn: false           # the world spawn stays at the Hall spawn; true moves it to each season's spawn
+archive:
+  arrival: cell                  # cell or hub: where archiving sends everyone at season end
 resets:
   xp: reset
   enderChest: vault
@@ -810,6 +855,8 @@ cells:
   minPlaytime: 0
   access: open                   # open, bounds, gate
   containers: [chest, barrel, shulker_box, decorated_pot]
+  gates: open                    # open (shut only on purpose) or auto (shut while the cell is locked)
+  moveOut: false                 # never move anyone out of a cell
 decorating:
   opensBefore: 7d
   lockAtEnd: true
@@ -823,6 +870,10 @@ hof:
   entry: { bedDistance: 3, anyBed: true, noHostiles: true, noDamageFor: 10s }
   returnSafety: { hostileRadius: 8, fallbacks: [bed, nearby, spawn] }
   arrivalImmunity: 5s
+  sealed: intermission           # intermission, always or never: what leaving the Hall does
+  leaveWithoutSpot: season-spawn # season-spawn or refuse
+  links: { returnToLink: true }
+  creativeBuilds: true
 dragon:
   newEggEachSeason: true
   eggTo: slayer                  # slayer or portal
@@ -859,7 +910,9 @@ All coordinates are placeholders. Item groups name Seasons' own groups or item i
 
 **Validation rules**
 
-- Galleries do not overlap; cells sit inside their gallery; anchors sit inside their cell's bounds.
+- Galleries do not overlap each other or the hub; cells sit inside their gallery; anchors sit inside their cell's bounds, but a gate's corners may sit just outside them, and a gate plane stays out of every other cell.
+- The Hall spawn sits inside the hub. A link's id is lower-case letters, digits, - and _.
+- The season spawn and every spawn candidate sit outside the Hall. As with zones, a hand edit that puts one inside is a warning on reload and validate, the dry run reports it, and `/season launch` is refused until it moves; the commands refuse to put one there.
 - Every cell has a figure anchor, and every dimension id exists.
 - Zone shapes are well-formed, and the season spawn and every spawn candidate sit outside every zone.
 - The season spawn is within 24,000 blocks of 0,0, so strongholds are in reach. Beyond that is a warning: Java's last stronghold ring ends at 24,320 blocks.
@@ -883,7 +936,8 @@ All plugin-owned data carries a `format-version` and migrates forward on load. I
 | Player | `data/players/<uuid>.json` | UUID, last name, seasons played (play time, first and last seen), archived-through season, cell per season, saved return position, last valid position, stat baselines, registered pets (entity UUID, type, name, last known position), furthest block (from spawn and from 0,0, with its position), firsts earned, privacy flags, pending notices |
 | Archive | `data/archives/s<n>/<uuid>.dat` | Format version, player, season, created time, content hash, equipment and inventory slots as vanilla item data, advancement snapshot (advancement id to awarded criteria with times), XP, statistics difference, furthest block, final position, skin profile (texture value and signature), awards, firsts |
 | Vault | `data/vaults/<uuid>.dat` | Pages by season, each slot's item, the Returned page, withdrawal history |
-| Gallery | `galleries/<id>.yml` | As in Hall of Fame, plus each cell's owner per season |
+| Gallery | `galleries/<id>.yml` | As in Hall of Fame, plus each cell's owner per season and whether its gate is shut |
+| Hall | `hall.yml` | The hub's bounds, the Hall spawn, the Hall's exits, and each link's block and destination |
 | Zone | `seasons/<n>.yml` | As in the zone model |
 | Museum | `museum.yml` and `data/museum/<anchor>.dat` | Anchor, label, season, credit, stored item |
 | Journal entry | `data/journal.log` | Sequence, time, kind (`ARCHIVE_STARTED`, `VAULT_SEALED`, `ARCHIVE_DONE`, `VAULT_WITHDRAW`, `CURATE_STARTED`, `CURATE_DONE`, `EGG_DELIVERED`, `PET_TRAVELLED`), player, season, payload hash |
@@ -907,7 +961,7 @@ The main defence is that no archived item exists in the world. Everything else i
 | Smuggling items into the new season | Pack animals with chests, mob buckets, cell containers | Chested animals can't travel; buckets are archived; cell containers lock view-only |
 | Taking from the old world before Homecoming | Entering old land; reaching, hoppering or blowing up into it from the edge; withdrawing from the vault early | Block-mode zones refuse entry and every change across the edge; the vault is read-only until Homecoming |
 | Building in old bases after Homecoming | Placing blocks, buckets, TNT | No-build mode |
-| Using the Hall as a teleport or stash | `/hof`, then walk out; drop items inside; fill a cell chest | Return to the saved position on any exit; no drops or pickup; cell containers view-only after the lock; no hoppers in the Hall |
+| Using the Hall as a stash, or to reach locked land | Drop items inside; fill a cell chest; walk out or take a link into a locked zone | No drops or pickup; cell containers view-only after the lock; no hoppers placed but by builders, and none pulls from a Hall container; zones refuse entry from the Hall as from anywhere, and links refuse locked destinations. Travel through the Hall (from a bed or a link to a spawn) is intended; `hof.sealed: always` returns everyone to their saved position instead |
 | Griefing someone's `/hof` return | Lava, fire or mobs at their saved spot while they're away | Return safety checks, then bed, nearby spot or spawn; 5 s immunity |
 | Text injection | Formatting or click events in names, pet names, sign or book text | Player text is always a plain literal text component. No player text is ever parsed as formatting or put into a command. |
 | Leaked secrets | Pasting config into Discord for support | Webhooks in secrets.yml or the environment; redacted in logs; never echoed by `/season config get` |
@@ -1485,9 +1539,9 @@ These are the behaviours the finished product must show. Each is an end-to-end t
 - A1. With a planned end set, reminders arrive at 7 days, 1 day, 1 hour and 10 minutes, in chat and on Discord, and nothing ends at the planned time while `autoEnd` is false.
 - A2. `/season end` starts a 10-minute boss-bar countdown; `/season cancel` during it changes nothing; `--now` skips it; a second `/season end` during a countdown is refused.
 - A3. At the end of the countdown every gallery locks before the first player is archived, and an owner standing in their cell switches to adventure mode first.
-- A4. Every online player ends in their own cell with an empty inventory and ender chest, zero XP, no advancements except recipe unlocks, no respawn point and full health.
+- A4. Every online player ends in their own cell (at the Hall spawn with `archive.arrival: hub`) with an empty inventory and ender chest, zero XP, no advancements except recipe unlocks, no respawn point and full health.
 - A5. A player offline at season end is archived at their next login: into their cell during Intermission, straight to the new spawn after launch.
-- A6. `/season launch` teleports everyone online to the new spawn in survival with 5 s of immunity, sets the world spawn, resets the dragon flag, creates the new deaths objective and locks the old-world zones.
+- A6. `/season launch` teleports everyone online to the new spawn in survival with 5 s of immunity, sets the world spawn (unless `launch.setWorldSpawn` is false, when it stays where it is), resets the dragon flag, creates the new deaths objective and locks the old-world zones.
 
 **Archive integrity**
 
@@ -1516,7 +1570,7 @@ These are the behaviours the finished product must show. Each is an end-to-end t
 - A20. Opening the decorating window gives everyone who played the season a random free cell and tells them which; a player who first plays later gets one at next login.
 - A21. Two players running `/hof swap` at each other within 60 s swap cells; one alone changes nothing.
 - A22. During decorating, an owner can place and open a chest in their cell; another player sees a view-only copy and can take nothing.
-- A23. A hopper can't be placed in the Hall, and no hopper or hopper minecart can pull from a Hall container.
+- A23. A hopper can't be placed in the Hall except by a builder (creative mode or `seasons.hof.bypass`), and no hopper or hopper minecart can pull from a Hall container.
 - A24. After the lock, the owner's chest opens as a view-only copy for everyone, the owner included.
 - A25. With access `open`, a visitor walks into any cell in adventure mode and can break, place or take nothing.
 - A44. A visitor can sit on a cushion in someone else's cell, but can't place or break one there, or in a no-build zone.
@@ -1554,8 +1608,19 @@ These are the behaviours the finished product must show. Each is an end-to-end t
 **Configuration and admin**
 
 - A40. A broken YAML edit followed by `/season reload` leaves the previous config live and reports the file, line and message.
-- A41. `/season end --dry-run` reports a cell shortfall, a spawn inside a zone and a spawn beyond 24,000 blocks of 0,0.
+- A41. `/season end --dry-run` reports a cell shortfall, a spawn inside a zone or inside the Hall, and a spawn beyond 24,000 blocks of 0,0.
 - A42. Every curation action needs a reason, writes an audit entry and tells the owner.
+
+**Hub, links and decoration**
+
+- A52. Two wand corners mark the hub; the Hall spawn is refused outside it; plain `/hof` always lands at the Hall spawn and is refused with none set; walking from the hub down a wing and back changes nothing; a visitor can't change anything in the hub.
+- A53. Outside the Intermission, a visitor who walks or falls out of the Hall stays where they land, with their game mode back and their saved spot dropped; during the Intermission they are brought back to the Hall spawn; with `hof.sealed: always` they return to their saved spot.
+- A54. A link in the hub takes a visitor to the current season's spawn; a link to land in a locked zone is refused before Homecoming and works after it; a link at a season's spawn takes a player to the Hall spawn with no bed near, and `/hof leave` returns them to it; a link block outside the Hall can't be broken; stepping on a pressure plate link works.
+- A55. A gate is open by default; an admin shuts one cell's gate, then a whole gallery's; a gate waits until nobody is in its cell; an owner shuts their own gate and an admin opens it; in `bounds` mode nobody inside a cell is moved out when it closes.
+- A56. With the Hall spawn as the world spawn and `launch.setWorldSpawn: false`, launch keeps the world spawn; a first-time joiner and a player who respawns without a bed arrive in the hub in adventure mode, and `/hof leave` takes them to the season's spawn.
+- A57. A gate plane in a cell's doorway, touching its bounds, is accepted, and the cell's bounds can still be set with it there; a gate corner that doesn't touch the cell is refused.
+- A58. `/hof hall check` reports a wing that doesn't touch the hub, odd-sized cells, a gallery without an entry, cells without bounds or a figure and links leading nowhere, and says all is clear, with each gallery's cells and free cells, once they are fixed.
+- A59. A creative builder and a bypass holder place and break blocks in the hub, a hopper and an ender chest included; what they place stays through reconciliation and does nothing for visitors; an owner decorates only their own cell, during the window; an op in survival without bypass changes nothing.
 
 **Performance**
 
@@ -1599,7 +1664,8 @@ World preparation comes first. Upgrade the game, pick spawn candidates in unexpl
 **About 2 weeks before**
 
 - [ ] `/season spawn set <winning candidate>`. Pre-generate around it to about 3,000 blocks with Chunky. Keep it unrendered on BlueMap until launch, and remove the other candidates' preview maps.
-- [ ] Build hallway 2, Season 2's gallery, and tag or stamp one cell per player. It starts empty: the first automated rollover archives Season 2 into it, so it only needs to be ready before decorating starts. If building runs late, open decorating by hand with /season decorate open. Add the museum's egg wall with one `egg` trophy anchor per season.
+- [ ] Mark the Hall: stand at the hub's centre (0, 256, 0) and run `/hof hall spawn`, select the hub's two corners with the wand and run `/hof hall hub`, set `launch.setWorldSpawn: false` so the world spawn stays there, then `/hof hall check`. Register the hub's signs as links to each season's spawn (`/hof link add`, then `/hof link to` standing at Season 1's and Season 2's spawns).
+- [ ] Build hallway 2, Season 2's gallery, and tag or stamp one cell per player: `/hof cell new season-2`, two wand corners around the cell's 7 × 7 × 6 inside, then its figure, for each cell from the hub outwards. It starts empty: the first automated rollover archives Season 2 into it, so it only needs to be ready before decorating starts. If building runs late, open decorating by hand with /season decorate open. Add the museum's egg wall with one `egg` trophy anchor per season.
 - [ ] Convert Season 1's hallway with `/hof import` (see Importing Season 1's cells): on a copy first (dry run, import, check, walk the hallway), then on the live world after a fresh backup. Remove the old barrier blocks afterwards.
 - [ ] Draw the old-world zones: stand at 0,0 and run `/season zone add old-world cylinder <radius>`, with the radius just past the furthest Season 1 or 2 build; add a box with the wand for any build outside it; then `old-nether` in the Nether at an eighth of the radius with `--max-y 127`, so the roof stays open. All are `block` until Homecoming and `off` after it. Leave at least 2,000 blocks between the circle's edge and the new spawn.
 - [ ] Add the shared waypoints (hub, megaprojects) with `/season marker add`.
@@ -1626,6 +1692,7 @@ World preparation comes first. Upgrade the game, pick spawn candidates in unexpl
 - [ ] Intermission: look around, announce the awards and firsts.
 - [ ] Press the launch button. Everyone, with their pets, arrives at the new spawn.
 - [ ] Show the new area on BlueMap, check `/season status` for pending players and pets, post on Discord.
+- [ ] Put a link back to the Hall at the new spawn (`/hof link add <id> hall`), and a link to the new spawn in the hub (`/hof link add <id> season 3`).
 
 **Homecoming (when the group votes)**
 
@@ -1645,9 +1712,10 @@ Season 3 needs M0 to M3. The rest can follow during the season. Each milestone i
 4. **M3 Old world.** Zones with block, no-build and announce modes, Homecoming, the ender vault, pets and their travel, BlueMap areas and spawn candidates. Scenarios A16 to A19, A30 to A36, A41, A45.
 5. **M4 Season extras.** Dragon egg to the slayer with fanfare, the egg wall, season cards with full stats, awards, season firsts, the museum, curation, Discord webhooks. Scenarios A37 to A39, A42. Can ship mid-season, ideally before anyone kills the dragon.
 6. **M5 Cell tooling.** Wand, templates and stamping. Until this ships, cells are tagged by command.
-7. **M6 Public release.** Full suite, CI across supported versions, performance scenario A43, generated config docs, Hangar and Modrinth listings.
-8. **M7 Seasons Web.** The web server and API, device-code login, the connect page on the public site, the dashboard with the embedded BlueMap, profiles and second-screen mode. Scenarios A48, A49.
-9. **Later: Seasons Adapters.** Fabric, then NeoForge, when a real server asks, each passing the same scenario suite. Bedrock players through Geyser if TheRanch wants them, after checking how mannequins and the archive view look to them.
+7. **Post-M5: hub, links and decoration.** The hub and Hall spawn, leaving freely, links, doorway gates that shut only on purpose, decoration by builders, `/hof hall check`. Scenarios A52 to A59; A4, A6, A23 and A41 widened.
+8. **M6 Public release.** Full suite, CI across supported versions, performance scenario A43, generated config docs, Hangar and Modrinth listings.
+9. **M7 Seasons Web.** The web server and API, device-code login, the connect page on the public site, the dashboard with the embedded BlueMap, profiles and second-screen mode. Scenarios A48, A49.
+10. **Later: Seasons Adapters.** Fabric, then NeoForge, when a real server asks, each passing the same scenario suite. Bedrock players through Geyser if TheRanch wants them, after checking how mannequins and the archive view look to them.
 
 **Open decisions**
 
@@ -1697,6 +1765,12 @@ Player feedback so far. Q numbers refer to the questionnaire.
 | Season 1's hand-built cells convert with /hof import: one archive page per chest, the head's skin on the mannequin, every item checked and undoable | Peter |
 | Hall of Fame archives stay view-only forever, even after Homecoming | Peter |
 | Development on the MacBook with Homebrew and IntelliJ IDEA Ultimate | Peter |
+| The Hall is a hub plus wings: the hub holds the Hall spawn, where plain `/hof` always lands, and at TheRanch the Hall spawn is the world spawn | Peter |
+| The Hall is a free place to visit: leaving it by any route just leaves (except during the Intermission), and nobody is teleported into or out of a cell against their will; every restriction that moves or holds players is a setting | Peter |
+| Links (buttons, signs, plates) in the hub take players to each season's spawn once that land is open, and a link at each season's spawn leads back to the Hall | Peter |
+| Cell bounds are the 7 × 7 × 6 interior above the floor; gates fill the doorway beside it, open unless an admin or the owner shuts them | Peter |
+| Decoration outside cells comes from builders (creative mode or bypass) and stays as placed; owners decorate their own cell during the window | Peter |
+| At season end everyone still wakes in their own cell; owners can shut their own gate | Peter, on Claude's recommendation |
 
 ## Sources
 

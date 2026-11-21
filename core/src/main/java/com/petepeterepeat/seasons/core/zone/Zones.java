@@ -280,6 +280,17 @@ public final class Zones implements ZoneGuard, Milestones {
     return map().blocking(at).isPresent();
   }
 
+  /**
+   * Until when a position is locked to a player, as players read it ("Homecoming"), if a zone
+   * blocks it now and they don't hold the bypass: where a Hall link may not go (questions 249).
+   */
+  public Optional<String> lockedFor(PlayerId player, Position at) {
+    if (bypasses(player)) {
+      return Optional.empty();
+    }
+    return map().blocking(at).map(live -> until(live.zone()));
+  }
+
   // Players
 
   /** The zones' say on a player's intent, if a zone has one. */

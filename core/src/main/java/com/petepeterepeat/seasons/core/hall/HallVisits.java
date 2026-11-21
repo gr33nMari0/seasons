@@ -12,6 +12,7 @@ import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerRecord.HallReturn;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
+import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -34,8 +35,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -68,6 +71,18 @@ public final class HallVisits {
   private final IntFunction<Optional<Position>> seasonSpawn;
   private final Executor serverThread;
   private Supplier<Optional<SeasonState>> state = Optional::empty;
+
+  /** Until when a position is locked to a player, if a zone blocks it now (questions 249). */
+  private BiFunction<PlayerId, Position, Optional<String>> locked = (p, at) -> Optional.empty();
+
+  /** Whether a player is held for archiving, when no link may take them anywhere. */
+  private Predicate<PlayerId> held = player -> false;
+
+  /** The link each player last stood on, so standing on one takes it once. */
+  private final Map<PlayerId, String> standingOnLink = new HashMap<>();
+
+  /** How far from where they last stood a player may appear in the Hall and still have walked. */
+  private static final double STEP = 4;
 
   private final Map<PlayerId, Instant> lastAttempt = new HashMap<>();
   private final Map<PlayerId, Instant> lastVisit = new HashMap<>();
@@ -118,6 +133,19 @@ public final class HallVisits {
     this.state = state;
   }
 
+  /**
+   * Connects the archive hold. Clicks reach a held player's links only through the intent router,
+   * which refuses them, but standing on a link is noticed by the sweep, so it asks here too.
+   */
+  public void bindHold(Predicate<PlayerId> held) {
+    this.held = held;
+  }
+
+  /** Connects the zones, which say where a link may not go. */
+  public void bindZones(BiFunction<PlayerId, Position, Optional<String>> locked) {
+    this.locked = locked;
+  }
+
   /** Starts the sweep that notices players entering and leaving the Hall. */
   public void start() {
     sweeper = platform.scheduler().runGlobalRepeating(SWEEP, this::sweep);
@@ -146,25 +174,42 @@ public final class HallVisits {
       tell(player, "hof.visit.not-yet");
       return;
     }
-    SeasonsConfig.Hof.Entry rules = config.get().config().hof().entry();
-    Instant now = clock.instant();
-    Instant attempted = lastAttempt.get(player);
-    if (attempted != null && now.isBefore(attempted.plus(rules.rateLimit()))) {
-      tell(player, "hof.entry.rate-limit");
-      return;
-    }
-    lastAttempt.put(player, now);
-    if (moving.contains(player)) {
+    if (!attempt(player) || moving.contains(player)) {
       return;
     }
     Optional<Position> destination = destination(player, target);
     if (destination.isEmpty()) {
       return;
     }
+    enter(player, destination.get(), true, true);
+  }
+
+  /** Counts an attempt at /hof or a link; false, telling them, within the rate limit. */
+  private boolean attempt(PlayerId player) {
+    Duration limit = config.get().config().hof().entry().rateLimit();
+    Instant now = clock.instant();
+    Instant attempted = lastAttempt.get(player);
+    if (attempted != null && now.isBefore(attempted.plus(limit))) {
+      tell(player, "hof.entry.rate-limit");
+      return false;
+    }
+    lastAttempt.put(player, now);
+    return true;
+  }
+
+  /**
+   * Takes a player into the Hall, or across it if they are already inside, after the entry checks.
+   *
+   * @param needsBed whether the bed check applies: not for a link (questions 249)
+   * @param save whether where they stand is saved for /hof leave
+   */
+  private void enter(PlayerId player, Position destination, boolean needsBed, boolean save) {
+    SeasonsConfig.Hof.Entry rules = config.get().config().hof().entry();
+    Instant now = clock.instant();
     Position at = platform.players().position(player);
     if (halls.inHall(at)) {
       // Already inside: just a walk across the Hall, so no checks and the saved spot stays.
-      moveTo(player, destination.get(), "hof.visit.arrived");
+      moveTo(player, destination, "hof.visit.arrived");
       return;
     }
     Instant visited = lastVisit.get(player);
@@ -191,7 +236,8 @@ public final class HallVisits {
                         EntryChecks.MONSTER_HEIGHT,
                         EntryChecks.MONSTER_REACH),
                 Optional.ofNullable(lastDamage.get(player)),
-                now));
+                now),
+            needsBed);
     if (failed.isPresent()) {
       tell(
           player,
@@ -203,14 +249,15 @@ public final class HallVisits {
     // way back: a free teleport home. So it is turned down now, by the same rules.
     int radius = config.get().config().hof().returnSafety().hostileRadius();
     Optional<String> unsafe = ReturnSafety.unsafe(at, blocks(), hostiles(at, radius), radius);
-    if (unsafe.isPresent()) {
+    if (save && unsafe.isPresent()) {
       tell(player, "hof.entry.unsafe", "reason", messages().text("hof.unsafe." + unsafe.get()));
       return;
     }
-    HallReturn back = new HallReturn(at, platform.players().gameMode(player));
+    Optional<HallReturn> back =
+        save ? Optional.of(new HallReturn(at, modeOutside(player))) : Optional.empty();
     moving.add(player);
     var _ =
-        saveReturn(player, Optional.of(back))
+        saveReturn(player, back)
             .whenCompleteAsync(
                 (saved, failure) -> {
                   moving.remove(player);
@@ -222,7 +269,7 @@ public final class HallVisits {
                   lastVisit.put(player, clock.instant());
                   moveTo(
                       player,
-                      destination.get(),
+                      destination,
                       "hof.visit.arrived",
                       // They never left: a saved spot outside the Hall would be a free teleport.
                       () -> {
@@ -235,11 +282,11 @@ public final class HallVisits {
   /** Where {@code /hof} with this target lands, telling the player if nowhere. */
   private Optional<Position> destination(PlayerId player, Optional<String> target) {
     if (target.isEmpty()) {
-      Optional<Position> entry = hallEntry();
-      if (entry.isEmpty()) {
-        tell(player, "hof.visit.no-entry");
+      Optional<Position> spawn = hallEntry();
+      if (spawn.isEmpty()) {
+        tell(player, "hof.visit.no-spawn");
       }
-      return entry;
+      return spawn;
     }
     String text = target.get();
     if (text.chars().allMatch(Character::isDigit) && !text.isEmpty() && text.length() < 9) {
@@ -286,13 +333,109 @@ public final class HallVisits {
     return arrival;
   }
 
-  /** The Hall entry: that of the newest season's gallery that has one. */
+  /** A season's recorded spawn, if it has one. */
+  public Optional<Position> seasonSpawn(int season) {
+    return seasonSpawn.apply(season);
+  }
+
+  /** The Hall spawn, where plain {@code /hof} lands (questions 244). */
   public Optional<Position> hallEntry() {
-    return halls.galleries().stream()
-        .filter(g -> g.kind() == Gallery.Kind.SEASON && g.entry().isPresent())
-        .max(Comparator.comparingInt(Gallery::season))
-        .flatMap(Gallery::entry)
-        .map(HallService::standOn);
+    return halls.hallSpawn();
+  }
+
+  // Links
+
+  /**
+   * A player clicked or stepped on a link (questions 248 and 249): to the Hall, as {@code /hof}
+   * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked.
+   */
+  public void takeLink(PlayerId player, HallLayout.Link link) {
+    if (held.test(player) || moving.contains(player) || !attempt(player)) {
+      return;
+    }
+    if (link.to().isEmpty()) {
+      tell(player, "hof.link.nowhere");
+      return;
+    }
+    switch (link.to().get()) {
+      case HallLayout.Target.Hall() -> {
+        if (state.get().isEmpty()) {
+          tell(player, "hof.visit.not-yet");
+          return;
+        }
+        Optional<Position> spawn = hallEntry();
+        if (spawn.isEmpty()) {
+          tell(player, "hof.visit.no-spawn");
+          return;
+        }
+        enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+      }
+      case HallLayout.Target.SeasonSpawn(int season) -> {
+        Optional<Position> spawn = seasonSpawn.apply(season);
+        if (spawn.isEmpty()) {
+          tell(player, "hof.link.no-spawn", "season", Integer.toString(season));
+          return;
+        }
+        away(player, spawn.get());
+      }
+      case HallLayout.Target.At(Position at) -> away(player, HallService.standOn(at));
+    }
+  }
+
+  /** A link that leads out into the world: refused into locked land and between seasons. */
+  private void away(PlayerId player, Position to) {
+    if (state.get().map(s -> !playing(s)).orElse(false)) {
+      tell(player, "hof.link.between-seasons");
+      return;
+    }
+    Optional<String> until = locked.apply(player, to);
+    if (until.isPresent()) {
+      tell(player, "hof.link.locked", "until", until.get());
+      return;
+    }
+    returnTo(player, new HallReturn(to, modeOutside(player)), "hof.link.arrived");
+  }
+
+  /**
+   * The game mode a player leaving the Hall goes back to: survival if Seasons switched them to
+   * adventure in it, else the mode they are in.
+   */
+  private GameMode modeOutside(PlayerId player) {
+    GameMode mode = platform.players().gameMode(player);
+    return mode == GameMode.ADVENTURE && halls.switched(player) ? GameMode.SURVIVAL : mode;
+  }
+
+  /**
+   * Gives a player who just left the Hall their game mode back now, rather than at the next sweep,
+   * so a quick way back in doesn't remember adventure as the mode to go back to.
+   */
+  private void restoreMode(PlayerId player) {
+    GameMode back = modeOutside(player);
+    if (platform.players().gameMode(player) != back) {
+      platform.players().setGameMode(player, back);
+    }
+    halls.forgetSwitched(player);
+  }
+
+  /** Right-clicking a link takes it; Seasons takes over the click either way. */
+  private Optional<Decision> linkClick(Intent.UseBlock use) {
+    Optional<HallLayout.Link> link = halls.layout().linkAt(use.block());
+    if (link.isEmpty()) {
+      return none();
+    }
+    if (use.mainHand()) {
+      takeLink(use.player(), link.get());
+    }
+    return Optional.of(new Decision.Deny(Optional.empty()));
+  }
+
+  /** The link a player stands on, or on the block above, as exits count. */
+  private Optional<HallLayout.Link> linkUnder(Position at) {
+    HallLayout layout = halls.layout();
+    return layout
+        .linkAt(at)
+        .or(() ->
+            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())));
   }
 
   /** Moves a player within or into the Hall, with arrival immunity. */
@@ -319,6 +462,7 @@ public final class HallVisits {
                   }
                   inside.add(player);
                   lastOutside.remove(player);
+                  arrived(player);
                   immunity.grant(player, config.get().config().hof().arrivalImmunity());
                   tell(player, messageKey);
                 },
@@ -346,9 +490,19 @@ public final class HallVisits {
     }
     if (state.get().map(s -> !playing(s)).orElse(false)) {
       tell(player, "hof.leave.to-entry");
-    } else {
-      tell(player, "hof.leave.no-return");
+      return;
     }
+    if (config.get().config().hof().leaveWithoutSpot()
+        == SeasonsConfig.LeaveWithoutSpot.SEASON_SPAWN) {
+      // Arrived with no spot of their own, such as by a respawn at a Hall spawn that is the world
+      // spawn: the season's spawn (questions 246).
+      Position spawn = spawn();
+      if (!halls.inHall(spawn)) {
+        returnTo(player, new HallReturn(spawn, modeOutside(player)), "hof.leave.to-spawn");
+        return;
+      }
+    }
+    tell(player, "hof.leave.no-return");
   }
 
   /**
@@ -442,6 +596,7 @@ public final class HallVisits {
                     return;
                   }
                   inside.remove(player);
+                  arrived(player);
                   immunity.grant(player, config.get().config().hof().arrivalImmunity());
                   if (platform.players().gameMode(player) != back.mode()) {
                     platform.players().setGameMode(player, back.mode());
@@ -463,6 +618,19 @@ public final class HallVisits {
       dropStaleReturn(player);
       return;
     }
+    if (!kept()) {
+      if (halls.inHall(platform.players().position(player))) {
+        // Back in already, such as by a teleport straight after: nothing to let go of.
+        inside.add(player);
+        return;
+      }
+      // They just leave (questions 245): the saved spot is done with, and the sweep gives back
+      // survival if Seasons put them in adventure.
+      dropStaleReturn(player);
+      restoreMode(player);
+      tell(player, "hof.leave.walked-out");
+      return;
+    }
     Optional<HallReturn> back = savedReturn(player);
     if (back.isPresent()) {
       returnTo(player, back.get(), "hof.leave.left-hall");
@@ -477,13 +645,26 @@ public final class HallVisits {
     }
   }
 
+  /**
+   * Whether leaving the Hall now brings a player back, by {@code hof.sealed} (questions 245):
+   * always, never, or only during the Intermission and the archiving before it.
+   */
+  private boolean kept() {
+    boolean between = state.get().map(s -> !playing(s)).orElse(false);
+    return switch (config.get().config().hof().sealed()) {
+      case ALWAYS -> true;
+      case NEVER -> false;
+      case INTERMISSION -> between;
+    };
+  }
+
   // Sealing
 
   /** The visits' say on an intent, if they have one. */
   public Optional<Decision> decide(Intent intent) {
     PlayerId player = intent.player();
     return switch (intent) {
-      case Intent.UseBlock use -> bedClick(use);
+      case Intent.UseBlock use -> linkClick(use).or(() -> bedClick(use));
       case Intent.DropItem drop ->
           sealed(player) ? Optional.of(Decision.deny(message("hof.sealed.no-drop"))) : none();
       case Intent.PickupItem pickup ->
@@ -539,7 +720,7 @@ public final class HallVisits {
     }
     if (teleport.kind() == Intent.TeleportKind.PEARL
         || teleport.kind() == Intent.TeleportKind.CHORUS) {
-      if (fromIn && !toIn) {
+      if (fromIn && !toIn && kept()) {
         later(() -> leftHall(player));
       }
       return Optional.of(Decision.deny(message("hof.sealed.no-pearl")));
@@ -606,8 +787,7 @@ public final class HallVisits {
         || state.get().map(s -> !playing(s)).orElse(true)) {
       return;
     }
-    var _ =
-        saveReturn(player, Optional.of(new HallReturn(from, platform.players().gameMode(player))));
+    var _ = saveReturn(player, Optional.of(new HallReturn(from, modeOutside(player))));
   }
 
   /**
@@ -636,11 +816,13 @@ public final class HallVisits {
       if (in && !was) {
         inside.add(player);
         Position from = lastOutside.remove(player);
+        // Appearing from further than a step away with no move or teleport reported is a respawn
+        // or a join: nothing to go back to (questions 247).
         if (from != null && !bypasses(player)) {
           if (platform.players().movement(player).riding()) {
             // Ridden in, which no move event reports: back out the way they came.
             moveOut(player, from);
-          } else {
+          } else if (near(from, at)) {
             enteredOtherwise(player, from);
           }
         }
@@ -648,10 +830,12 @@ public final class HallVisits {
         leftHall(player);
       } else if (in && onExit(at) && !bypasses(player)) {
         savedReturn(player).ifPresent(back -> returnTo(player, back, "hof.leave.returned"));
-      } else if (in) {
+      } else if (in && config.get().config().cells().moveOut()) {
         moveOutOfClosedCell(player, at);
       }
+      steppedOnLink(player, at);
     }
+    standingOnLink.keySet().retainAll(online);
     inside.retainAll(online);
     known.retainAll(online);
     lastOutside.keySet().retainAll(online);
@@ -688,16 +872,50 @@ public final class HallVisits {
                 serverThread);
   }
 
+  /**
+   * After one of Seasons' own moves: a link the player landed on counts as already stood on, so
+   * {@code /hof leave} back to the pressure plate they came by doesn't send them in again.
+   */
+  private void arrived(PlayerId player) {
+    linkUnder(platform.players().position(player))
+        .ifPresentOrElse(
+            link -> standingOnLink.put(player, link.id()), () -> standingOnLink.remove(player));
+  }
+
+  /** Takes the link a player has just stepped onto, once until they step off it. */
+  private void steppedOnLink(PlayerId player, Position at) {
+    Optional<HallLayout.Link> link = moving.contains(player) ? Optional.empty() : linkUnder(at);
+    if (link.isEmpty()) {
+      standingOnLink.remove(player);
+      return;
+    }
+    if (!link.get().id().equals(standingOnLink.put(player, link.get().id()))) {
+      takeLink(player, link.get());
+    }
+  }
+
+  private static boolean near(Position from, Position at) {
+    if (!from.dimension().equals(at.dimension())) {
+      return false;
+    }
+    double dx = from.x() - at.x();
+    double dy = from.y() - at.y();
+    double dz = from.z() - at.z();
+    return dx * dx + dy * dy + dz * dz <= STEP * STEP;
+  }
+
   /** Whether a player stands on an exit anchor, or on the block above one. */
   private boolean onExit(Position at) {
+    List<Position> exits = new ArrayList<>(halls.layout().exits());
     for (Gallery gallery : halls.galleries()) {
-      for (Position exit : gallery.exits()) {
-        if (exit.dimension().equals(at.dimension())
-            && exit.blockX() == at.blockX()
-            && exit.blockZ() == at.blockZ()
-            && (exit.blockY() == at.blockY() || exit.blockY() == at.blockY() - 1)) {
-          return true;
-        }
+      exits.addAll(gallery.exits());
+    }
+    for (Position exit : exits) {
+      if (exit.dimension().equals(at.dimension())
+          && exit.blockX() == at.blockX()
+          && exit.blockZ() == at.blockZ()
+          && (exit.blockY() == at.blockY() || exit.blockY() == at.blockY() - 1)) {
+        return true;
       }
     }
     return false;
@@ -750,6 +968,7 @@ public final class HallVisits {
   /** Forgets the saved spot, and that Seasons switched them to adventure in the Hall. */
   private void forgetReturn(PlayerId player) {
     returnsWithoutRecord.remove(player);
+    halls.forgetSwitched(player);
     Optional<PlayerRecord> record = players.find(player);
     if (record.isPresent()) {
       var _ =

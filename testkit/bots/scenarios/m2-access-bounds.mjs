@@ -21,6 +21,8 @@ export default {
     const alex = await ctx.join('Alex')
     const sam = await ctx.join('Sam')
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
+    // As before the hub (questions 251): moved out when the window closes.
+    await ctx.command(admin, '/season config set cells.moveOut true', /^Set cells\.moveOut to true in config\.yml/)
     const cells = await buildGallery(ctx, admin, { cells: 3 })
     const c1 = cells[0]
     ctx.writeFile(FILE, ctx.readFile(FILE).replace(/^cells:/m, 'access: bounds\ncells:'))

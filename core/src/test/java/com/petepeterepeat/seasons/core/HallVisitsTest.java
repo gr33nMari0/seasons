@@ -34,7 +34,11 @@ import org.junit.jupiter.api.io.TempDir;
 class HallVisitsTest {
   private static final String OVERWORLD = "minecraft:overworld";
   private static final Position HOME = new Position(OVERWORLD, 100.5, 64, 100.5, 90f, 10f);
-  private static final Position ENTRY = new Position(OVERWORLD, 1.5, 64, 1.5, 0f, 0f);
+
+  /** The Hall spawn, in the hub beside the gallery's west side. */
+  private static final Position ENTRY = new Position(OVERWORLD, -1.5, 64, 1.5, 0f, 0f);
+
+  private static final Position GALLERY_ENTRY = new Position(OVERWORLD, 1.5, 64, 1.5, 0f, 0f);
   private static final Position INSIDE = Position.of(OVERWORLD, 5.5, 64, 5.5);
   private static final Position OUTSIDE = Position.of(OVERWORLD, 30.5, 64, 5.5);
 
@@ -450,7 +454,7 @@ class HallVisitsTest {
     hof(alex, "/hof 3");
     assertThat(lastHeard(alex)).isEqualTo("Season 3 has no gallery to visit.");
     hof(alex, "/hof 2");
-    assertThat(at(alex)).isEqualTo(ENTRY);
+    assertThat(at(alex)).isEqualTo(GALLERY_ENTRY);
     hof(alex, "/hof Nobody");
     assertThat(lastHeard(alex)).isEqualTo("Nobody called Nobody has played here.");
     assertThat(saved(alex)).map(PlayerRecord.HallReturn::at).contains(HOME);
@@ -509,7 +513,7 @@ class HallVisitsTest {
     run("/season decorate close");
     fake.tick();
 
-    assertThat(at(alex)).isEqualTo(ENTRY);
+    assertThat(at(alex)).isEqualTo(GALLERY_ENTRY);
     assertThat(lastHeard(alex))
         .isEqualTo(
             "Only its owner can be in that cell, while decorating it, so you're at the gallery"
@@ -524,12 +528,24 @@ class HallVisitsTest {
 
     hof(sam, "/hof Alex");
 
-    assertThat(at(sam)).isEqualTo(ENTRY);
+    assertThat(at(sam)).isEqualTo(GALLERY_ENTRY);
   }
 
   private void writeGallery() throws IOException {
     Path galleries = dir.resolve("world/seasons/galleries");
     Files.createDirectories(galleries);
+    Files.writeString(
+        dir.resolve("world/seasons/hall.yml"),
+        """
+        schema-version: 1
+        hub: { min: [-8, 60, 0], max: [-1, 80, 20] }
+        spawn: { pos: [-2, 64, 1] }
+        """);
+    // The Hall sealed as it was before the hub (questions 245 and 251); see the free tests below.
+    Files.createDirectories(dir.resolve("plugins/Seasons"));
+    Files.writeString(
+        dir.resolve("plugins/Seasons/config.yml"),
+        "schema-version: 1\nhof:\n  sealed: always\ncells:\n  moveOut: true\n");
     Files.writeString(
         galleries.resolve("season-2.yml"),
         """

@@ -9,7 +9,8 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M2 Hall protection | Done (#11, #12) | A22 to A29, A44 (its no-build half with M3), A9 widened |
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
 | M4 Season extras | Done (#22, #23, #24) | A37 to A39, A42; A6, A9, A13 and A14 widened |
-| M5 Cell tooling | On `m5-cell-tooling` | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
+| M5 Cell tooling | Done (#25) | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
+| Post-M5 Hub, links and decoration | On `post-m5-hof-preparation` | A52 to A59; A4, A6, A20, A23 and A41 widened |
 | M6 and M7 | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
@@ -291,6 +292,30 @@ Built: `hall/Wand` (selections, the wand cell, the anchor menu, egg plinths in m
 Review of #25: the wand cell takes one selection, only for a cell just made and without bounds, and bounds never leave an anchor outside (a gallery file the next start would leave out); templates refuse loot tables, dropped items, pick-up arrows and spawners; every entity a stamp places carries the copy's mark, so recovery replaces rather than doubles them; the stamp plan has a `format-version` and both stamp files are written atomically. Then a stamp holds its gallery from its checks until its cells are written (and, if it stops, until recovery finishes it), so no cell, bounds or gallery point can change under it: `StampTest#whileAStampRunsItsGalleryCantChangeUnderIt`, `#aStampThatStopsKeepsItsGalleryHeldUntilRecoveryFinishesIt`. Decisions: `docs/questions.md` 239 to 242.
 
 On the way, 26.3 turned out to name a structure palette's block under `id` and its state under `properties`: a file claiming 26.3's data version with the old `Name` and `Properties` reads as air and isn't upgraded, which the first scenario run caught.
+
+## Post-M5: hub, links and decoration
+
+**The Hall as a place to visit** (branch `post-m5-hof-preparation`). The owner changed the spec for this part: the Hall is a hub plus wings, left freely, with links between the hub and each season's spawn, doorway gates that shut only on purpose, and decoration by builders (spec, decision log; readings in `docs/questions.md` 243 to 259). Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A52 Two wand corners mark the hub; the Hall spawn is refused before a hub and outside it; plain `/hof` is refused with no Hall spawn, not sent to a gallery's entry, and lands at the Hall spawn in adventure mode; walking from the hub down the wing and back changes nothing; a visitor and an op in survival can't change anything in the hub | `a52-hub.mjs`; unit: `HubTest#plainHofAlwaysLandsAtTheHallSpawn`, `#theHubCantOverlapAGalleryAndHoldsTheSpawn`, `#hallYmlReadsBackAsWritten` |
+| A53 Walking or falling out outside the Intermission just leaves, survival back and nothing saved; `always` returns to the saved spot; during the Intermission, back to the Hall spawn | `a53-free-leaving.mjs`; unit: `HubTest#eachSealingMode` |
+| A54 Links: one at Season 3's spawn takes a player to the Hall with no bed, its click taken over, and `/hof leave` returns them to it; its block can't be broken; one into the locked base is refused before Homecoming and works after; one to Season 3's spawn takes them there in survival; a pressure plate link works | `a54-links.mjs`; unit: `HubTest#linksLeadToTheHallASeasonsSpawnOrASpot` |
+| A55 A doorway gate is open by default; an admin shuts one cell's and a gallery's; it waits while a visitor is in the cell; an owner opens and shuts their own, an admin opens it; in `bounds` mode an owner isn't moved out when the window closes | `a55-gates-no-moves.mjs`; unit: `GatesTest#aGateIsOpenUnlessShutOnPurpose`, `#aShuttingGateWaitsForAnEmptyCell` |
+| A56 With `launch.setWorldSpawn: false` the world spawn stays in the hub; a first-time joiner after launch and a bedless respawn arrive in the hub in adventure mode, and `/hof leave` takes them to Season 3's spawn | `a56-world-spawn-hub.mjs`; unit: `LaunchSequenceTest#launchKeepsTheWorldSpawnWhenToldTo`, `HubTest#arrivingWithNoSpotLeavesForTheSeasonSpawn` |
+| A57 A 7-wide doorway gate beside a cell is accepted and survives new bounds by command and wand; bounds two blocks off, a corner away from the cell, and a hand edit putting one there are refused | `a57-doorway-gate.mjs`; unit: `GatesTest#aGateCornerMaySitInTheDoorwayBesideItsCell`, `WandTest#boundsKeepADoorwayGate` |
+| A58 `/hof hall check` reports no hub or spawn, a wing across a gap, no entry, cells without bounds or a figure, an odd-sized cell, links leading nowhere or on air, with each gallery's counts, then "All clear." once fixed | `a58-hall-check.mjs`; unit: `HubTest#theCheckReportsWhatDoesntFitTogether` |
+| A59 A creative builder and a bypass holder place a crafting table, hopper and ender chest in the hub; an op in survival can't; reconciliation leaves them; a visitor can't use or break them; an owner decorates only their own cell | `a59-decoration.mjs`; unit: `HubTest#creativeBuildersBuildInTheHubAndSurvivalOpsDont` |
+| A4 widened: `archive.arrival: hub` wakes everyone at the Hall spawn | `a04-arrival-hub.mjs`; unit: `HubTest#archivingSendsEveryoneToTheHallSpawnWithArrivalHub` |
+| A20 widened: a cell assigned before the window is kept, and an `ordered` wing deals the rest in order | `a20-chosen-cells.mjs`; unit: `HubTest#aCellAssignedBeforeTheWindowIsKept` |
+| A41 widened: the spawn and a candidate are refused inside the Hall, a hand edit is warned about on reload and reported by the dry run, and launch is refused | `a41-dry-run.mjs`; unit: `HubTest#aSpawnInsideTheHallIsRefusedAndWarnedAbout` |
+| A15: a block placed in the hub isn't the furthest block | unit: `HubTest#theHubIsHallForBuildingAndFurthestBlocks` |
+| Quick tagging: `/hof cell new <gallery>` makes c1, c2, c3, each taking its selection and the wand's figure from the cell's floor | `hof-cell-tagging.mjs`; unit: `HubTest#cellNewWithoutAnIdTakesTheNextFree`, `WandTest#theCellsFloorFindsTheCellForAFigure`, `#inTheHallButInNoCellTheMenuOffersALinkAndADoorwayGate` |
+
+Scenarios written before the hub keep their behaviour by setting it: `hallToVisit` marks a hub beside its gallery and sets `hof.sealed: always` (a26 to a29, a44, m2-hall-*, m2-hof-restart, m3-frontier-border), `gateGallery` sets `cells.gates: auto` and `cells.moveOut: true` (m2-access-gate, m1-gate-crash), m2-access-bounds sets `cells.moveOut: true`, a25 turns `hof.creativeBuilds` off, and m5-wand's click between cells now opens the link menu.
+
+Built: `hall/HallLayout` and `hall/HallFiles` (`<world>/seasons/hall.yml`: hub, Hall spawn, exits, links), loaded and checked with the galleries (`GalleryRules.check(HallLayout, …)`), left out at startup when broken; the Hall as hub plus galleries (`ConfigSnapshot#inHall`), so protection, zones' exemption, furthest blocks and the map's cut-outs take in the hub; `HallVisits` with the Hall spawn, `hof.sealed`, `hof.leaveWithoutSpot`, links (clicked or stood on) and arrivals by respawn; `Zones#lockedFor`; doorway gates, `cells.gates` and `cells.moveOut` in `Gates`, `GalleryRules` and `CellEdits`; builders in `HallRules`; `HallCheck`; the `/hof hall`, `/hof link`, `/hof gate`, `/hof cell gate`, `/hof gallery gate` commands and `/hof cell new` with no id; the wand's Hall menu; `launch.setWorldSpawn`, `archive.arrival`, spawns refused inside the Hall, and first-time joiners kept in a Hall at the world spawn (`SeasonEntry#welcome`). No new Paper API. Decisions: `docs/questions.md` 243 to 259.
 
 ## On hold
 

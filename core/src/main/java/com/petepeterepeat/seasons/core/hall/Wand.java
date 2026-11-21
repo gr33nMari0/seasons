@@ -204,14 +204,15 @@ public final class Wand {
   }
 
   private void menu(PlayerId player, Position block, String face) {
-    Optional<HallService.CellRef> found = cellAt(block);
+    Position front = offset(block, face);
+    // The block clicked, or the one in front of it: a cell's floor isn't in its bounds.
+    Optional<HallService.CellRef> found = cellAt(block).or(() -> cellAt(front));
     if (found.isEmpty()) {
-      platform.players().sendMessage(player, messages().get("hof.wand.no-cell"));
+      hallMenu(player, block, front);
       return;
     }
     HallService.CellRef ref = found.get();
     float yaw = facing(platform.players().position(player).yaw() + 180f);
-    Position front = offset(block, face);
     List<Menus.Choice> choices = new ArrayList<>();
     List<Runnable> actions = new ArrayList<>();
     for (AnchorType type : TYPES) {
@@ -263,6 +264,74 @@ public final class Wand {
                 actions.get(index).run();
               }
             });
+  }
+
+  /**
+   * A click in the Hall but in no cell (questions 253): a link on the block, and a gate corner in
+   * front of it when that is beside exactly one cell. Outside the Hall, refused.
+   */
+  private void hallMenu(PlayerId player, Position block, Position front) {
+    if (!hall.inHall(block) && !hall.inHall(front)) {
+      platform.players().sendMessage(player, messages().get("hof.wand.no-cell"));
+      return;
+    }
+    List<Menus.Choice> choices = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link")));
+    actions.add(
+        () -> links.add(source(player), hall.layout().nextLinkId(), block, Optional.empty()));
+    List<HallService.CellRef> beside = besideCells(front);
+    if (beside.size() == 1) {
+      HallService.CellRef ref = beside.getFirst();
+      choices.add(
+          new Menus.Choice(
+              "minecraft:iron_bars", messages().get("hof.wand.gate-for", "cell", ref.key())));
+      float yaw = facing(platform.players().position(player).yaw() + 180f);
+      actions.add(() ->
+          current(ref)
+              .ifPresent(now ->
+                  edits.anchor(
+                      source(player), now, Anchor.of(AnchorType.GATE, withYaw(front, yaw)))));
+    }
+    platform
+        .menus()
+        .openChoice(
+            player,
+            messages().get("hof.wand.menu-hall"),
+            choices,
+            index -> {
+              platform.menus().close(player);
+              if (index >= 0 && index < actions.size()) {
+                actions.get(index).run();
+              }
+            });
+  }
+
+  /** The cells a block is right beside, in their doorway (questions 250). */
+  private List<HallService.CellRef> besideCells(Position block) {
+    List<HallService.CellRef> found = new ArrayList<>();
+    for (Gallery gallery : hall.galleries()) {
+      for (Cell cell : gallery.cells()) {
+        if (cell.bounds().isPresent()
+            && !cell.contains(block)
+            && cell.bounds().get().grown(1).contains(block)) {
+          found.add(new HallService.CellRef(gallery, cell));
+        }
+      }
+    }
+    return found;
+  }
+
+  /** Makes a block a link, as {@code /hof link add} does. */
+  public interface Links {
+    void add(CommandSource source, String id, Position block, Optional<HallLayout.Target> to);
+  }
+
+  private Links links = (source, id, block, to) -> {};
+
+  /** Connects the link command, once it exists. */
+  public void bindLinks(Links links) {
+    this.links = links;
   }
 
   /** The cell as it is now, which the menu's choice acts on. */

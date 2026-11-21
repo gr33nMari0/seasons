@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // A25. With access open, a visitor walks into any cell in adventure mode and can break, place or
 // take nothing: not from a chest, an item frame, an armour stand or a decorated pot. A fence gate
-// opens for them, since walking in may need it; a lever, a sign and a lectern don't. In creative
-// mode Seasons still refuses every change, and each refusal is audited.
+// opens for them, since walking in may need it; a lever, a sign and a lectern don't. With
+// hof.creativeBuilds off, in creative mode Seasons still refuses every change, and each refusal is
+// audited (creative builders, the default, are A59's).
 import { assert } from '../lib/context.mjs'
 import { FLOOR, blockItems, breakBlock, cellOf, gameMode, inside, place, selectorData } from '../lib/hall.mjs'
 import { attack, audit, clickBlock, entityAt, expectViewOnly, hit, openContainer, rightClick, seen } from '../lib/protection.mjs'
@@ -15,6 +16,7 @@ export default {
     const visitor = await ctx.join('Visitor')
     await ctx.join('Owner')
     const cells = await hallToVisit(ctx, admin)
+    await ctx.command(admin, '/season config set hof.creativeBuilds false', /^Set hof\.creativeBuilds to false in config\.yml/)
     await ctx.command(admin, '/hof cell assign season-2:c2 Owner', /^Assigned /)
     const cell = await cellOf(ctx, admin, 'season-2', cells, 'Owner')
 

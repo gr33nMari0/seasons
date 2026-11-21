@@ -257,6 +257,9 @@ final class SeasonCommands {
     for (ConfigProblem problem : config.get().markersLeftOut()) {
       source.reply(markersLeftOut(messages, problem));
     }
+    for (ConfigProblem problem : config.get().hallLeftOut()) {
+      source.reply(hallLeftOut(messages, problem));
+    }
     for (ConfigProblem problem : startupProblems) {
       source.reply(messages.get("status.config-problem", "problem", problem.describe(messages)));
     }
@@ -409,6 +412,11 @@ final class SeasonCommands {
   static Message galleryLeftOut(Messages messages, String gallery, ConfigProblem problem) {
     return messages.get(
         "status.gallery-left-out", "gallery", gallery, "problem", problem.describe(messages));
+  }
+
+  /** hall.yml left out at startup, for /season status and admins as they join. */
+  static Message hallLeftOut(Messages messages, ConfigProblem problem) {
+    return messages.get("status.hall-left-out", "problem", problem.describe(messages));
   }
 
   /** markers.yml left out at startup, for /season status and admins as they join. */
@@ -935,6 +943,21 @@ final class SeasonCommands {
               Integer.toString(spawn.blockZ()),
               "distance",
               Long.toString(SeasonFile.distanceFromOrigin(spawn))));
+    }
+    Optional<Position> inHall = file.flatMap(SeasonFile::spawn).filter(config.get()::inHall);
+    if (inHall.isPresent()) {
+      Position spawn = inHall.get();
+      source.reply(
+          messages.get(
+              "end.dry-run.spawn-in-hall",
+              "next",
+              Integer.toString(next),
+              "x",
+              Integer.toString(spawn.blockX()),
+              "y",
+              Integer.toString(spawn.blockY()),
+              "z",
+              Integer.toString(spawn.blockZ())));
     }
     Optional<Zone> holding = file.flatMap(SeasonFile::zoneHoldingSpawn);
     if (holding.isEmpty()) {

@@ -68,6 +68,7 @@ public final class HallService {
   private final Platform platform;
   private final ConfigHolder config;
   private final Function<String, Path> galleryFile;
+  private Path hallFile;
   private final Path backups;
   private final SerialWriter writer;
   private final Clock clock;
@@ -129,6 +130,8 @@ public final class HallService {
     this.platform = platform;
     this.config = config;
     this.galleryFile = galleryFile;
+    this.hallFile =
+        backups.resolveSibling(com.petepeterepeat.seasons.core.config.ConfigLoader.HALL);
     this.backups = backups;
     this.writer = writer;
     this.clock = clock;
@@ -217,6 +220,52 @@ public final class HallService {
     return stamping.contains(gallery);
   }
 
+  /** Where hall.yml lives; beside the backups folder unless told otherwise. */
+  public void hallFile(Path file) {
+    this.hallFile = file;
+  }
+
+  /** The Hall's own parts: the hub, the Hall spawn, the Hall's exits and links. */
+  public HallLayout layout() {
+    return config.get().hall();
+  }
+
+  /** Where plain {@code /hof} lands: the Hall spawn, standing in its block (questions 244). */
+  public Optional<Position> hallSpawn() {
+    return layout().spawn().map(HallService::standOn);
+  }
+
+  /** Whether hall.yml was left out at startup, so it mustn't be written over. */
+  public boolean hallLeftOut() {
+    return !config.get().hallLeftOut().isEmpty();
+  }
+
+  /**
+   * Saves hall.yml: the live config has it at once, and the file is written on the writer thread.
+   * Refused while hall.yml is left out, since writing it would replace the admin's hub, spawn and
+   * links with what little the live config holds.
+   */
+  public CompletableFuture<Void> saveHall(HallLayout hall) {
+    if (hallLeftOut()) {
+      return CompletableFuture.failedFuture(
+          new IllegalStateException("hall.yml was left out at startup; fix it and /season reload"));
+    }
+    config.set(config.get().withHall(hall));
+    Path file = hallFile;
+    Path backupDir = backups.resolve("hall");
+    return writer
+        .submit(() -> {
+          HallFiles.write(file, backupDir, hall);
+          return Boolean.TRUE;
+        })
+        .thenApply(done -> (Void) null)
+        .whenComplete((done, failure) -> {
+          if (failure != null) {
+            LOG.error("Can't write {}", file, failure);
+          }
+        });
+  }
+
   /**
    * Saves a gallery: the live config has it at once, and its file is written on the writer thread.
    */
@@ -291,9 +340,17 @@ public final class HallService {
     return Optional.empty();
   }
 
-  /** Whether a position is in the Hall: inside any gallery's bounds. */
+  /**
+   * Whether a block is Seasons' to protect: in the Hall, or a link's block anywhere (questions
+   * 248).
+   */
+  public boolean guarded(Position block) {
+    return inHall(block) || layout().linkAt(block).isPresent();
+  }
+
+  /** Whether a position is in the Hall: inside the hub or any gallery's bounds. */
   public boolean inHall(Position position) {
-    return galleries().stream().anyMatch(g -> g.contains(position));
+    return config.get().inHall(position);
   }
 
   /**
@@ -307,25 +364,29 @@ public final class HallService {
         || platform.permissions().has(player, BYPASS);
   }
 
-  /** Whether a position is in the gate plane of a cell in a {@code gate} gallery. */
+  /**
+   * Whether a position is in the gate plane of a cell in a {@code gate} gallery, inside the cell or
+   * in its doorway (questions 250).
+   */
   public boolean inGate(Position position) {
     SeasonsConfig settings = config.get().config();
-    return cellAt(position).stream()
-        .anyMatch(ref ->
-            ref.gallery().access(settings) == SeasonsConfig.CellAccess.GATE
-                && ref.cell().gate().map(plane -> plane.contains(position)).orElse(false));
+    for (Gallery gallery : galleries()) {
+      if (gallery.access(settings) != SeasonsConfig.CellAccess.GATE
+          || !gallery.contains(position)) {
+        continue;
+      }
+      for (Cell cell : gallery.cells()) {
+        if (cell.gate().map(plane -> plane.contains(position)).orElse(false)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
-  /** Where a player stands in a gallery outside its cells: its entry, else the Hall's. */
+  /** Where a player stands in a gallery outside its cells: its entry, else the Hall spawn. */
   public Optional<Position> galleryEntry(Gallery gallery) {
-    return gallery
-        .entry()
-        .or(() ->
-            galleries().stream()
-                .filter(g -> g.kind() == Gallery.Kind.SEASON && g.entry().isPresent())
-                .max(Comparator.comparingInt(Gallery::season))
-                .flatMap(Gallery::entry))
-        .map(HallService::standOn);
+    return gallery.entry().map(HallService::standOn).or(this::hallSpawn);
   }
 
   /** Where to send a player to their cell: its entry anchor, else in front of its figure. */
@@ -863,7 +924,7 @@ public final class HallService {
       Position at = platform.players().position(player);
       if (!inHall(at)) {
         if (switched(player)) {
-          markSwitched(player, false);
+          forgetSwitched(player);
           if (mode == GameMode.ADVENTURE) {
             platform.players().setGameMode(player, GameMode.SURVIVAL);
           }
@@ -885,12 +946,19 @@ public final class HallService {
     switchedWithoutRecord.removeIf(player -> platform.players().find(player).isEmpty());
   }
 
-  /** Whether Seasons switched a player from survival to adventure in the Hall. */
-  private boolean switched(PlayerId player) {
-    return players
-        .find(player)
-        .map(PlayerRecord::hallAdventure)
-        .orElseGet(() -> switchedWithoutRecord.contains(player));
+  /**
+   * Whether Seasons switched a player from survival to adventure in the Hall: by their record, or,
+   * for a player switched before their record was made (a first join in the hub), in memory.
+   */
+  public boolean switched(PlayerId player) {
+    return players.find(player).map(PlayerRecord::hallAdventure).orElse(false)
+        || switchedWithoutRecord.contains(player);
+  }
+
+  /** Forgets that Seasons switched a player, once they have their game mode back. */
+  public void forgetSwitched(PlayerId player) {
+    markSwitched(player, false);
+    switchedWithoutRecord.remove(player);
   }
 
   /** Remembers, in the player record so it survives a restart, whether Seasons switched them. */
@@ -1161,6 +1229,13 @@ public final class HallService {
           return arrival;
         }
         archived(player, season);
+        if (config.get().config().archive().arrival() == SeasonsConfig.Arrival.HUB) {
+          // Everyone wakes at the Hall spawn instead of their cell (questions 257).
+          Optional<Position> spawn = hallSpawn();
+          if (spawn.isPresent()) {
+            return spawn;
+          }
+        }
         // In a bounds gallery an owner whose cell is locked waits outside it.
         CellRef ref = cell.get();
         return mayBeIn(player, ref) ? arrival : galleryEntry(ref.gallery()).or(() -> arrival);

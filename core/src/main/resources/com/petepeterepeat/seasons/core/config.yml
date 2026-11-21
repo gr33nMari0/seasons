@@ -15,6 +15,13 @@ schedule:
 launch:
   # The next season starts only with /season launch or the launch button in the Hall.
   requireManual: true
+  # true: launch moves the world spawn to the new season's spawn. false: it stays where it is,
+  # such as at the Hall spawn, so first-time joiners and bedless respawns arrive in the hub.
+  setWorldSpawn: true
+
+archive:
+  # Where archiving sends everyone at season end: cell (their own cell) or hub (the Hall spawn).
+  arrival: cell
 
 # What archiving resets for the new season.
 resets:
@@ -32,9 +39,14 @@ cells:
   access: open                   # open, bounds, gate
   # Containers owners may place in their cell during decorating; view-only after the lock.
   containers: [chest, barrel, shulker_box, decorated_pot]
-  # With access: gate, what a cell's gate plane is while the cell is locked; air while its owner
-  # may decorate it.
+  # With access: gate, what a cell's gate plane is while it is shut; air while it is open.
   gateBlock: iron_bars
+  # open: a gate is open unless an admin (/hof cell gate, /hof gallery gate) or its owner
+  # (/hof gate) shut it. auto: shut whenever its cell is locked, open while its owner decorates.
+  gates: open
+  # false: nobody is ever moved out of a cell; a shutting gate waits until the cell is empty, and a
+  # bounds cell only refuses entry at its edge. true: they are moved to the gallery's entry.
+  moveOut: false
 
 decorating:
   # The decorating window opens this long before the planned end (or with /season decorate open).
@@ -62,6 +74,17 @@ hof:
   returnSafety: { hostileRadius: 8, fallbacks: [bed, nearby, spawn] }
   # Damage immunity after every Seasons teleport.
   arrivalImmunity: 5s
+  # What leaving the Hall by walking, falling or another plugin's teleport does. intermission: just
+  # leave, except during the Intermission, when everyone goes back to the Hall spawn. always: back to
+  # where they came from. never: just leave.
+  sealed: intermission
+  # /hof leave with no saved spot (after a respawn or a first join in the hub): season-spawn takes
+  # them to the season's spawn, refuse refuses.
+  leaveWithoutSpot: season-spawn
+  # returnToLink: /hof leave after a link to the Hall goes back to that link.
+  links: { returnToLink: true }
+  # Players in creative mode build anywhere in the Hall, as holders of seasons.hof.bypass do.
+  creativeBuilds: true
 
 zones:
   # Also post announce-mode entries ("Peter entered the market") to the Discord webhook.

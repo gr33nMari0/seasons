@@ -105,4 +105,27 @@ class LaunchSequenceTest {
     assertThat(fake.shownObjectives).isEmpty();
     assertThat(fake.objectives).containsExactly("seasons_deaths_s3", "seasons_deaths_s4");
   }
+
+  @Test
+  void launchKeepsTheWorldSpawnWhenToldTo() throws IOException {
+    start();
+    PlayerRef admin = fake.join("Admin");
+    Position spawn = Position.of("minecraft:overworld", 500, -60, 300);
+    fake.player(admin).position = spawn;
+    Position hall = Position.of("minecraft:overworld", 0.5, 256, 0.5);
+    fake.worldSpawn = hall;
+    run("/season init 2", Optional.empty());
+    Path config = dir.resolve("plugins/Seasons/config.yml");
+    Files.createDirectories(config.getParent());
+    Files.writeString(config, "schema-version: 1\nlaunch:\n  setWorldSpawn: false\n");
+    run("/season reload", Optional.empty());
+
+    launch(admin);
+    assertThat(fake.worldSpawn).as("kept at the Hall spawn (questions 258)").isEqualTo(hall);
+
+    Files.writeString(config, "schema-version: 1\n");
+    run("/season reload", Optional.empty());
+    launch(admin);
+    assertThat(fake.worldSpawn.blockX()).as("moved to Season 4's spawn").isEqualTo(500);
+  }
 }

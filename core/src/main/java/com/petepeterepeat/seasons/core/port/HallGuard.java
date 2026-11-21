@@ -30,6 +30,14 @@ public interface HallGuard {
   boolean protects(Position block);
 
   /**
+   * Whether a block is a link's, which stays even when what holds it up goes (a button's wall, a
+   * plate's floor), since only the link's own block is protected outside the Hall.
+   */
+  default boolean holdsLink(Position block) {
+    return false;
+  }
+
+  /**
    * Whether a change touching all these blocks may go ahead, such as a piston's push or water
    * flowing: none is in the Hall, or all are in one cell its owner may still decorate.
    */

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.destroystokyo.paper.event.block.BlockDestroyEvent;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.port.HallGuard;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -313,6 +314,17 @@ final class PaperHallGuard implements Listener {
       touched.add(position(block.getRelative(direction)));
     }
     if (!guard.allows(touched)) {
+      event.setCancelled(true);
+    }
+  }
+
+  /**
+   * A block destroyed by the world rather than broken by a player, such as a button whose wall was
+   * broken or a plate whose floor went: a link's block stays where it is.
+   */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onDestroy(BlockDestroyEvent event) {
+    if (guard.holdsLink(position(event.getBlock()))) {
       event.setCancelled(true);
     }
   }

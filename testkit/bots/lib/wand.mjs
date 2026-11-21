@@ -15,6 +15,7 @@ export const ICONS = {
   entry: 'oak_door',
   gate: 'iron_bars',
   egg: 'dragon_egg',
+  link: 'lodestone',
   remove: 'barrier'
 }
 

@@ -74,6 +74,9 @@ public final class Gates {
   /** Gates left alone because a block in their plane has contents. */
   private final Set<String> blocked = new HashSet<>();
 
+  /** Gates waiting to shut until nobody is in their cell, admins told once (questions 250). */
+  private final Set<String> waiting = new HashSet<>();
+
   /**
    * Tries at setting a gate {@code open} (or shut). A change of what it should be starts again,
    * since the window may open and close faster than a pass.
@@ -153,8 +156,17 @@ public final class Gates {
           tries.remove(key);
           held.remove(key);
           blocked.remove(key);
+          waiting.remove(key);
           continue;
         }
+        if (!open && !settings.cells().moveOut() && occupied(ref, plane.get())) {
+          // Nobody is shut in or out by a gate: it waits for the cell to be empty.
+          if (waiting.add(key)) {
+            announcer.admins(HallCommands.PERMISSION_ADMIN, "hof.gate.waiting", "cell", key);
+          }
+          continue;
+        }
+        waiting.remove(key);
         Held stuck = held.get(key);
         if (stuck != null && stuck.open() == open && stuck.config() == snapshot) {
           continue;
@@ -185,6 +197,41 @@ public final class Gates {
     tries.keySet().retainAll(seen);
     held.keySet().retainAll(seen);
     blocked.retainAll(seen);
+    waiting.retainAll(seen);
+  }
+
+  /** Half a player's width, and their height: the box a player fills. */
+  private static final double HALF_WIDTH = 0.3;
+
+  private static final double HEIGHT = 1.8;
+
+  /**
+   * Whether anyone but a bypass holder is partly in a cell or its gate's plane: their whole box,
+   * not just the blocks their feet and head are in, so nobody at the edge of a block is caught.
+   */
+  private boolean occupied(HallService.CellRef ref, Bounds plane) {
+    for (PlayerRef online : platform.players().online()) {
+      PlayerId player = online.id();
+      if (platform.permissions().has(player, HallService.BYPASS)) {
+        continue;
+      }
+      Position feet = platform.players().position(player);
+      if (touches(plane, feet) || ref.cell().bounds().map(b -> touches(b, feet)).orElse(false)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Whether a player standing at {@code feet} overlaps any block of a box. */
+  static boolean touches(Bounds box, Position feet) {
+    return box.dimension().equals(feet.dimension())
+        && feet.x() + HALF_WIDTH > box.minX()
+        && feet.x() - HALF_WIDTH < box.maxX() + 1
+        && feet.y() + HEIGHT > box.minY()
+        && feet.y() < box.maxY() + 1
+        && feet.z() + HALF_WIDTH > box.minZ()
+        && feet.z() - HALF_WIDTH < box.maxZ() + 1;
   }
 
   /**
@@ -207,8 +254,14 @@ public final class Gates {
         Integer.toString(at.blockZ()));
   }
 
-  /** Whether a cell's gate should be open: while its owner may decorate it. */
+  /**
+   * Whether a cell's gate should be open: unless it was shut on purpose, or with {@code
+   * cells.gates: auto}, while its owner may decorate it (questions 250).
+   */
   private boolean open(HallService.CellRef ref) {
+    if (config.get().config().cells().gates() == SeasonsConfig.GateMode.OPEN) {
+      return !ref.cell().gateShut();
+    }
     return ref.cell()
         .owner(ref.gallery().season())
         .map(owner -> halls.canDecorate(owner, ref))
@@ -237,6 +290,17 @@ public final class Gates {
                   if (blocks.stream().anyMatch(platform.world()::holdsContents)) {
                     return;
                   }
+                  // And someone may have stepped in while the journal was written: the gate
+                  // waits for them, as the pass would (questions 250).
+                  if (!open
+                      && !config.get().config().cells().moveOut()
+                      && ref.cell().gate().map(plane -> occupied(ref, plane)).orElse(false)) {
+                    if (waiting.add(key)) {
+                      announcer.admins(
+                          HallCommands.PERMISSION_ADMIN, "hof.gate.waiting", "cell", key);
+                    }
+                    return;
+                  }
                   try {
                     platform.world().setBlocks(blocks, type);
                   } catch (RuntimeException e) {
@@ -247,7 +311,7 @@ public final class Gates {
                   if (repair) {
                     audit.record(AuditLog.SEASONS, "reconcile", key, "repaired", "gate " + state);
                   }
-                  if (!open) {
+                  if (!open && config.get().config().cells().moveOut()) {
                     putOut(ref);
                   }
                 },
