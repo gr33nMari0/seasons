@@ -145,8 +145,13 @@ public sealed interface Intent {
    * interaction itself.
    *
    * @param tag the tag the display was spawned with
+   * @param sneaking whether the player is sneaking
    */
-  record UseDisplay(PlayerId player, String tag) implements Intent {}
+  record UseDisplay(PlayerId player, String tag, boolean sneaking) implements Intent {
+    public UseDisplay(PlayerId player, String tag) {
+      this(player, tag, false);
+    }
+  }
 
   /** Taking damage of any kind. */
   record TakeDamage(PlayerId player) implements Intent {}

@@ -28,6 +28,34 @@ public interface Menus {
    */
   void openWithdraw(PlayerId viewer, PagedView view, int startPage, Withdrawal taken);
 
+  /**
+   * Opens a small menu of choices, such as a curator's actions, each an item with a label. A left
+   * click on one tells {@code chosen} which; nothing in it moves, as in the other menus.
+   */
+  void openChoice(PlayerId viewer, Message title, List<Choice> choices, Chosen chosen);
+
+  /** Closes whatever menu a player has open, so they can type in chat. */
+  void close(PlayerId viewer);
+
+  /**
+   * One choice.
+   *
+   * @param icon the item it shows as, such as {@code minecraft:ender_chest}
+   * @param label its name
+   */
+  record Choice(String icon, Message label) {}
+
+  /** A click on one of a menu's choices. */
+  @FunctionalInterface
+  interface Chosen {
+    /**
+     * Hears one choice.
+     *
+     * @param index which choice, in the order given (0-based)
+     */
+    void chosen(int index);
+  }
+
   /** A click asking to withdraw the item in one slot of one page. */
   @FunctionalInterface
   interface Withdrawal {

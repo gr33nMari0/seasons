@@ -123,6 +123,51 @@ public final class FakePlatform {
 
   public record Withdraw(PlayerId viewer, PagedView view, int startPage, Menus.Withdrawal taken) {}
 
+  /** Who had their menu closed by Seasons, in order. */
+  public final List<PlayerId> closed = new ArrayList<>();
+
+  /** Choice menus opened, newest last. */
+  public final List<Choice> choices = new ArrayList<>();
+
+  public record Choice(
+      PlayerId viewer, Message title, List<Menus.Choice> options, Menus.Chosen chosen) {
+    /** The icons offered, in order. */
+    public List<String> icons() {
+      return options.stream().map(Menus.Choice::icon).toList();
+    }
+
+    /** Clicks the choice with this icon. */
+    public void click(String icon) {
+      int index = icons().indexOf(icon);
+      if (index < 0) {
+        throw new IllegalStateException(icon + " isn't offered: " + icons());
+      }
+      chosen.chosen(index);
+    }
+  }
+
+  /** Where chat lines go before anyone sees them. */
+  public com.petepeterepeat.seasons.core.port.ChatInput chat =
+      com.petepeterepeat.seasons.core.port.ChatInput.NONE;
+
+  /** Lines players typed that nobody else saw, because Seasons took them. */
+  public final List<String> taken = new ArrayList<>();
+
+  /** Lines players typed that went to chat. */
+  public final List<String> chatted = new ArrayList<>();
+
+  /** A player types a line in chat. */
+  public void type(PlayerRef player, String text) {
+    if (chat.typed(player.id(), text)) {
+      taken.add(text);
+    } else {
+      chatted.add(text);
+    }
+  }
+
+  /** Permission nodes taken away from a player, beyond the bypass and admin rules below. */
+  public final Map<PlayerId, Set<String>> denied = new HashMap<>();
+
   public final List<String> objectives = new ArrayList<>();
 
   /** The objective shown in each display slot, by slot. */
@@ -830,6 +875,17 @@ public final class FakePlatform {
               PlayerId viewer, PagedView view, int startPage, Menus.Withdrawal taken) {
             withdraws.add(new Withdraw(viewer, view, startPage, taken));
           }
+
+          @Override
+          public void close(PlayerId viewer) {
+            closed.add(viewer);
+          }
+
+          @Override
+          public void openChoice(
+              PlayerId viewer, Message title, List<Menus.Choice> options, Menus.Chosen chosen) {
+            choices.add(new FakePlatform.Choice(viewer, title, options, chosen));
+          }
         };
     Events events =
         new Events() {
@@ -871,6 +927,11 @@ public final class FakePlatform {
           @Override
           public void dragon(com.petepeterepeat.seasons.core.port.DragonEvents d) {
             dragonEvents = d;
+          }
+
+          @Override
+          public void chat(com.petepeterepeat.seasons.core.port.ChatInput input) {
+            chat = input;
           }
         };
     Displays shownDisplays =
@@ -1064,7 +1125,8 @@ public final class FakePlatform {
         // Everyone holds every node except the bypass nodes, which only those a test names get.
         (player, node) ->
             (!node.endsWith(".bypass") || bypassing.contains(player))
-                && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player)),
+                && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player))
+                && !denied.getOrDefault(player, Set.of()).contains(node),
         events,
         scheduler,
         dragon,

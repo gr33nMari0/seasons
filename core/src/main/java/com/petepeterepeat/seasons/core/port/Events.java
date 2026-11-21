@@ -34,4 +34,7 @@ public interface Events {
 
   /** Sets who hears about the End's dragons being hurt and dying, and the End loading. */
   void dragon(DragonEvents dragon);
+
+  /** Lines typed in chat, offered to Seasons before anyone sees them. */
+  void chat(ChatInput input);
 }

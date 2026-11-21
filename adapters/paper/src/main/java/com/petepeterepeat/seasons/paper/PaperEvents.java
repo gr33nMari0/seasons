@@ -5,6 +5,7 @@ import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.event.IntentHandler;
+import com.petepeterepeat.seasons.core.port.ChatInput;
 import com.petepeterepeat.seasons.core.port.DragonEvents;
 import com.petepeterepeat.seasons.core.port.Events;
 import com.petepeterepeat.seasons.core.port.HallGuard;
@@ -15,9 +16,11 @@ import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
 import com.petepeterepeat.seasons.core.port.ZoneGuard;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
@@ -124,6 +127,7 @@ final class PaperEvents implements Events, Listener {
   private IntentHandler handler = intent -> Decision.allow();
   private @Nullable Sessions sessions;
   private @Nullable TripwireReport tripwire;
+  private volatile ChatInput chat = ChatInput.NONE;
 
   PaperEvents(
       Plugin plugin,
@@ -192,6 +196,24 @@ final class PaperEvents implements Events, Listener {
   @Override
   public void dragon(DragonEvents dragon) {
     dragonEvents.listen(dragon);
+  }
+
+  @Override
+  public void chat(ChatInput input) {
+    this.chat = input;
+  }
+
+  /**
+   * A line Seasons is waiting for, such as a curator's reason, is taken before anyone sees it:
+   * cancelled at the lowest priority, so no player, and no chat bridge that skips cancelled chat,
+   * ever gets it. Paper runs this off the server thread; the core hands it on.
+   */
+  @EventHandler(priority = EventPriority.LOWEST)
+  void onChat(AsyncChatEvent event) {
+    String line = PlainTextComponentSerializer.plainText().serialize(event.message());
+    if (chat.typed(id(event.getPlayer()), line)) {
+      event.setCancelled(true);
+    }
   }
 
   /** An ender dragon's death can unlock zones or bring Homecoming. */
@@ -378,7 +400,7 @@ final class PaperEvents implements Events, Listener {
     if (tag.isPresent()) {
       event.setCancelled(true);
       if (event.getHand() == EquipmentSlot.HAND
-          && handler.decide(new Intent.UseDisplay(id(player), tag.get()))
+          && handler.decide(new Intent.UseDisplay(id(player), tag.get(), player.isSneaking()))
               instanceof Decision.Deny deny) {
         deny.message().ifPresent(message -> player.sendMessage(text.render(message)));
       }
