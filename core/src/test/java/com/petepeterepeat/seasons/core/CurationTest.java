@@ -118,6 +118,7 @@ class CurationTest {
     fake = new FakePlatform();
     fake.clock.advance(Duration.between(fake.clock.instant(), before.clock.instant()));
     fake.players.putAll(before.players);
+    fake.imports = before.imports;
     start();
   }
 
@@ -675,6 +676,116 @@ class CurationTest {
             .anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
       }
     }
+  }
+
+  // Imported records and /hof import undo (review of #24)
+
+  private static final NeutralItem DIAMONDS = FakeItems.item("minecraft:diamond", 3);
+  private static final ArchiveSlot CHEST_SLOT = new ArchiveSlot(ArchiveSlot.CONTAINER, 0, 0);
+  private static final String UNDO_BUSY =
+      "Undoing the import of cell veteran stopped: its owner's record is busy: being archived,"
+          + " unarchived or curated, or a curation is waiting for recovery.";
+
+  /** A Season 1 cell of Veteran's, one chest of diamonds, imported into its record. */
+  private ArchivingTest.OneChest imported() throws IOException {
+    ArchivingTest.OneChest chest = new ArchivingTest.OneChest();
+    fake.imports = chest;
+    Path galleries = dir.resolve("world/seasons/galleries");
+    Files.createDirectories(galleries);
+    String veteran =
+        java.util
+            .UUID
+            .nameUUIDFromBytes("Veteran".getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString();
+    Files.writeString(
+        galleries.resolve("season-1.yml"),
+        """
+        schema-version: 1
+        id: season-1
+        kind: season
+        season: 1
+        dimension: minecraft:overworld
+        bounds: { min: [0, -64, 0], max: [10, -50, 10] }
+        cells:
+          veteran:
+            bounds: { min: [1, -64, 1], max: [9, -50, 9] }
+            owners: { "1": %s }
+        """
+            .formatted(veteran));
+    start();
+    run("/season init 2");
+    fake.join("Veteran");
+    assertThat(hof("/hof import season-1"))
+        .containsExactly("Imported 1 cell from season-1; 0 skipped.");
+    assertThat(chest.slots).containsOnly(Optional.empty());
+    return chest;
+  }
+
+  private List<String> hof(String command) {
+    TestSource source = TestSource.console();
+    TestCommands.run(
+        fake.commands.stream().filter(c -> c.name().equals("hof")).findFirst().orElseThrow(),
+        source,
+        command);
+    return source.text();
+  }
+
+  private Optional<ArchiveRecord> veteranRecord() throws IOException {
+    return new ArchiveFiles(dir.resolve("world/seasons/data/archives"))
+        .read(fake.join("Veteran").id(), 1);
+  }
+
+  /** Opens Veteran's imported record, picks the chest's diamonds and chooses Take. */
+  private void pickDiamonds(PlayerRef curator) {
+    assertThat(as(curator, "/hof curate Veteran 1"))
+        .containsExactly(
+            "Curating Veteran's Season 1 archive. Click an item to choose what happens to it.");
+    fake.withdraws.getLast().taken().clicked(0, 0);
+    fake.choices.getLast().click("minecraft:hopper");
+  }
+
+  @Test
+  void anImportUndoIsRefusedWhileACurationOfTheRecordRuns() throws IOException {
+    ArchivingTest.OneChest chest = imported();
+    PlayerRef peter = peter();
+    pickDiamonds(peter);
+    List<String> undo = new ArrayList<>();
+    // The undo comes in while the curation holds the record, between journalling and removing.
+    hooks.onSave(() -> undo.addAll(hof("/hof import undo season-1")));
+    hooks.armSave(CrashPoint.CURATE_JOURNALLED, peter.id());
+
+    fake.type(peter, "For the curator");
+
+    assertThat(undo).containsExactly(UNDO_BUSY);
+    assertThat(fake.player(peter).inventory.storage()).contains(Optional.of(DIAMONDS));
+    assertThat(veteranRecord().orElseThrow().item(CHEST_SLOT)).isEmpty();
+
+    // Once it is done, the undo puts back what is left: the diamonds exist once, with Peter.
+    assertThat(hof("/hof import undo season-1")).containsExactly("Put back 1 cell of season-1.");
+    assertThat(chest.slots).containsOnly(Optional.empty());
+  }
+
+  @Test
+  void anImportUndoIsRefusedWhileACrashLeftACurationOfTheRecordOpen() throws IOException {
+    ArchivingTest.OneChest chest = imported();
+    PlayerRef peter = peter();
+    pickDiamonds(peter);
+    hooks.arm(CrashPoint.CURATE_REMOVED, peter.id());
+    fake.type(peter, "Crash");
+    assertThat(halted).isTrue();
+    restart();
+
+    // The Take waits for Peter; the record no longer holds the diamonds, and the copy kept aside
+    // does. An undo now would leave the record with nothing to put back, then recovery would
+    // have no record to return the diamonds to.
+    assertThat(hof("/hof import undo season-1")).containsExactly(UNDO_BUSY);
+    assertThat(chest.slots).containsOnly(Optional.empty());
+    assertThat(veteranRecord()).isPresent();
+
+    peter();
+    assertThat(veteranRecord().orElseThrow().item(CHEST_SLOT)).contains(DIAMONDS);
+    assertThat(hof("/hof import undo season-1")).containsExactly("Put back 1 cell of season-1.");
+    assertThat(chest.slots).containsExactly(Optional.of(DIAMONDS));
   }
 
   private void hold(PlayerRef player, NeutralItem item) {

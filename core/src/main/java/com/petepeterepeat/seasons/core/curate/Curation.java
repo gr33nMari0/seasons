@@ -36,6 +36,7 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.OpenOperation;
+import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.RecoveryHandler;
 import com.petepeterepeat.seasons.core.store.RecoveryOutcome;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
@@ -509,6 +510,19 @@ public final class Curation implements ChatInput, HallService.CuratorView {
       return;
     }
     queue(curator, () -> run(prompt, reason));
+  }
+
+  /**
+   * Whether a curation a crash left open names a player as the archive's owner, or an undo puts an
+   * item back in their archive. It is journalled under the curator, so the owner's own open
+   * operations don't show it; {@code /hof import undo} asks this before it touches the record.
+   */
+  public boolean curating(PlayerId owner) {
+    String who = owner.toString();
+    return JournalRecovery.openOperations(journal.entries()).stream()
+        .filter(op -> op.operation() == Operation.CURATE)
+        .map(op -> op.steps().getFirst().payloadHash().split("/", -1))
+        .anyMatch(payload -> payload.length == 7 && payload[2].equals(who));
   }
 
   /** Forgets a curator's question when they leave. */

@@ -275,8 +275,19 @@ public final class Seasons implements SeasonsApi {
       replay.register(Operation.UNARCHIVE, unarchiving.recovery());
       HallImporter importing =
           new HallImporter(
-              platform, writer, journal, archives, players, halls, renderer, audit, crash, clock,
-              world);
+              platform,
+              writer,
+              journal,
+              archives,
+              players,
+              halls,
+              renderer,
+              audit,
+              crash,
+              clock,
+              world,
+              hold,
+              owner -> curation != null && curation.curating(owner));
       replay.register(Operation.IMPORT, importing.recovery());
       replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
       Vault vaulting =

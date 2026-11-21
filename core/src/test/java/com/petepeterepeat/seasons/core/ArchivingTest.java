@@ -419,7 +419,7 @@ class ArchivingTest {
   }
 
   /** One Season 1 chest, which a player may empty between the import's scan and its clear. */
-  private static final class OneChest implements Imports {
+  static final class OneChest implements Imports {
     Position at = Position.of("minecraft:overworld", 3, -60, 3);
     List<Optional<NeutralItem>> slots =
         new ArrayList<>(List.of(Optional.of(FakeItems.item("minecraft:diamond", 3))));
