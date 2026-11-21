@@ -12,3 +12,19 @@ dependencies {
     implementation(libs.snakeyaml)
     implementation(libs.gson)
 }
+
+// The default cell templates (questions 238) ship in the jar under templates/.
+tasks.processResources {
+    from(rootProject.file("templates")) {
+        into("templates")
+        include("*.nbt")
+    }
+}
+
+// Writes the default templates into templates/ from their code in the tests (DefaultTemplates).
+tasks.register<JavaExec>("writeDefaultTemplates") {
+    description = "Writes the default cell templates into templates/"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.petepeterepeat.seasons.core.DefaultTemplates"
+    args(rootProject.file("templates").path)
+}
