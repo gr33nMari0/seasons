@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -38,6 +39,12 @@ public final class HallCommands {
 
   /** {@code /hof claim}. */
   public static final String PERMISSION_CLAIM = "seasons.hof.claim";
+
+  /** {@code /hof gate}: an owner opens or shuts their own cell's gate (questions 250). */
+  public static final String PERMISSION_GATE = "seasons.hof.gate";
+
+  private static final String OPEN = "open";
+  private static final String SHUT = "shut";
 
   private static final Pattern WORDS = Pattern.compile("\\s+");
 
@@ -100,6 +107,57 @@ public final class HallCommands {
     return CommandNode.literal("hof")
         .executes(this::visit)
         .then(CommandNode.literal("leave").executes(this::leave))
+        .then(
+            CommandNode.literal("gate")
+                .permission(PERMISSION_GATE)
+                .then(CommandNode.argument("state", ArgumentType.word()).executes(this::ownerGate)))
+        .then(
+            CommandNode.literal("hall")
+                .permission(PERMISSION_ADMIN)
+                .then(
+                    CommandNode.literal("hub")
+                        .executes(this::hallHub)
+                        .then(
+                            CommandNode.argument("corners", ArgumentType.greedy())
+                                .executes(this::hallHub)))
+                .then(
+                    CommandNode.literal("spawn")
+                        .executes(this::hallSpawn)
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes(this::hallSpawn)))
+                .then(
+                    CommandNode.literal("exit")
+                        .executes(this::hallExit)
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes(this::hallExit)))
+                .then(CommandNode.literal("check").executes(this::hallCheck)))
+        .then(
+            CommandNode.literal("link")
+                .permission(PERMISSION_ADMIN)
+                .then(
+                    CommandNode.literal("add")
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::linkAdd)
+                                .then(
+                                    CommandNode.argument("rest", ArgumentType.greedy())
+                                        .executes(this::linkAdd))))
+                .then(
+                    CommandNode.literal("to")
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::linkTo)
+                                .then(
+                                    CommandNode.argument("at", ArgumentType.greedy())
+                                        .executes(this::linkTo))))
+                .then(
+                    CommandNode.literal("remove")
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::linkRemove)))
+                .then(CommandNode.literal("list").executes(this::linkList)))
         .then(CommandNode.argument("target", ArgumentType.word()).executes(this::visit))
         .then(
             CommandNode.literal("gallery")
@@ -145,6 +203,13 @@ public final class HallCommands {
                                     CommandNode.argument("at", ArgumentType.greedy())
                                         .executes(this::galleryLaunch))))
                 .then(
+                    CommandNode.literal("gate")
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .then(
+                                    CommandNode.argument("state", ArgumentType.word())
+                                        .executes(this::galleryGate))))
+                .then(
                     CommandNode.literal("info")
                         .then(
                             CommandNode.argument("gallery", ArgumentType.word())
@@ -156,9 +221,17 @@ public final class HallCommands {
                     CommandNode.literal("new")
                         .then(
                             CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::cellNew)
                                 .then(
                                     CommandNode.argument("id", ArgumentType.word())
                                         .executes(this::cellNew))))
+                .then(
+                    CommandNode.literal("gate")
+                        .then(
+                            CommandNode.argument("cell", ArgumentType.id())
+                                .then(
+                                    CommandNode.argument("state", ArgumentType.word())
+                                        .executes(this::cellGate))))
                 .then(
                     CommandNode.literal("bounds")
                         .then(
@@ -435,14 +508,405 @@ public final class HallCommands {
     }
   }
 
+  /** A gallery's next free cell id: {@code c1}, {@code c2}, … */
+  private static String nextCellId(Gallery gallery) {
+    for (int i = 1; ; i++) {
+      String id = "c" + i;
+      if (gallery.cell(id).isEmpty()) {
+        return id;
+      }
+    }
+  }
+
+  // Gates (questions 250)
+
+  /** {@code open} or {@code shut}, telling the source if it is neither. */
+  private Optional<Boolean> shut(CommandSource source, Arguments arguments) {
+    String state = arguments.string("state");
+    if (state.equals(OPEN) || state.equals(SHUT)) {
+      return Optional.of(state.equals(SHUT));
+    }
+    source.reply(messages().get("hof.gate.open-or-shut"));
+    return Optional.empty();
+  }
+
+  void cellGate(CommandSource source, Arguments arguments) {
+    Optional<HallService.CellRef> found = cell(source, arguments);
+    Optional<Boolean> shut = found.isEmpty() ? Optional.empty() : shut(source, arguments);
+    if (shut.isEmpty()) {
+      return;
+    }
+    HallService.CellRef ref = found.get();
+    saved(
+        source,
+        hall.save(ref.gallery().withCell(ref.cell().withGateShut(shut.get()))),
+        messages().get(shut.get() ? "hof.gate.shut" : "hof.gate.opened", "cell", ref.key()));
+  }
+
+  void galleryGate(CommandSource source, Arguments arguments) {
+    Optional<Gallery> found = gallery(source, arguments);
+    Optional<Boolean> shut = found.isEmpty() ? Optional.empty() : shut(source, arguments);
+    if (shut.isEmpty()) {
+      return;
+    }
+    Gallery next = found.get();
+    for (Cell cell : found.get().cells()) {
+      next = next.withCell(cell.withGateShut(shut.get()));
+    }
+    saved(
+        source,
+        hall.save(next),
+        messages()
+            .get(shut.get() ? "hof.gate.all-shut" : "hof.gate.all-open", "gallery", next.id()));
+  }
+
+  /** {@code /hof gate open|shut}: the gate of the cell the player owns in their newest season. */
+  void ownerGate(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    Optional<Boolean> shut = shut(source, arguments);
+    if (shut.isEmpty()) {
+      return;
+    }
+    PlayerId player = source.player().get();
+    Optional<HallService.CellRef> mine =
+        hall.galleries().stream()
+            .filter(g -> g.kind() == Gallery.Kind.SEASON)
+            .sorted(java.util.Comparator.comparingInt(Gallery::season).reversed())
+            .flatMap(g -> g.cellOf(player).map(c -> new HallService.CellRef(g, c)).stream())
+            .findFirst()
+            .filter(ref ->
+                ref.gallery().access(config.get().config()) == SeasonsConfig.CellAccess.GATE
+                    && ref.cell().gate().isPresent());
+    if (mine.isEmpty()) {
+      source.reply(messages().get("hof.gate.no-cell"));
+      return;
+    }
+    HallService.CellRef ref = mine.get();
+    saved(
+        source,
+        hall.save(ref.gallery().withCell(ref.cell().withGateShut(shut.get()))),
+        messages().get(shut.get() ? "hof.gate.own-shut" : "hof.gate.own-open"));
+  }
+
+  // The hub, the Hall spawn and the Hall's exits (questions 243 and 244)
+
+  /** Whether hall.yml was left out at startup, so it mustn't be written over; if so, says so. */
+  private boolean hallLeftOut(CommandSource source) {
+    if (hall.hallLeftOut()) {
+      source.reply(messages().get("hof.hall.left-out"));
+      return true;
+    }
+    return false;
+  }
+
+  void hallHub(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    String dimension =
+        source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+    Optional<Bounds> box = box(source, arguments, dimension);
+    if (box.isEmpty()) {
+      return;
+    }
+    Bounds hub = box.get();
+    for (Gallery gallery : hall.galleries()) {
+      if (gallery.bounds().map(hub::overlaps).orElse(false)) {
+        source.reply(messages().get("hof.hall.hub-overlaps", "gallery", gallery.id()));
+        return;
+      }
+    }
+    HallLayout layout = hall.layout();
+    if (layout.spawn().isPresent() && !hub.contains(layout.spawn().get())) {
+      source.reply(messages().get("hof.hall.hub-spawn", xyz(layout.spawn().get())));
+      return;
+    }
+    saved(
+        source,
+        hall.saveHall(layout.withHub(hub)),
+        messages()
+            .get(
+                "hof.hall.hub",
+                "from",
+                CellEdits.corner(hub.min()),
+                "to",
+                CellEdits.corner(hub.max())));
+  }
+
+  /** A box from typed corners in a dimension, or else the player's wand selection. */
+  private Optional<Bounds> box(CommandSource source, Arguments arguments, String dimension) {
+    Optional<String> given = arguments.optionalString("corners");
+    if (given.isPresent() && !given.get().isBlank()) {
+      Optional<int[]> corners = numbers(given.get(), 6);
+      if (corners.isEmpty()) {
+        source.reply(messages().get("hof.cell.corners"));
+        return Optional.empty();
+      }
+      int[] c = corners.get();
+      return Optional.of(Bounds.between(dimension, c[0], c[1], c[2], c[3], c[4], c[5]));
+    }
+    Optional<Bounds> selected = source.player().flatMap(wand::selection);
+    if (selected.isEmpty()) {
+      source.reply(messages().get("hof.cell.corners"));
+    }
+    return selected;
+  }
+
+  void hallSpawn(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    if (layout.hub().isEmpty()) {
+      source.reply(messages().get("hof.hall.no-hub"));
+      return;
+    }
+    Optional<Position> at = standing(source, arguments.optionalString("at"), layout.dimension());
+    if (at.isEmpty()) {
+      return;
+    }
+    if (!layout.inHub(at.get())) {
+      source.reply(messages().get("hof.hall.spawn-outside"));
+      return;
+    }
+    saved(
+        source,
+        hall.saveHall(layout.withSpawn(at.get())),
+        messages().get("hof.hall.spawn", xyz(at.get())));
+  }
+
+  /**
+   * A spot typed as {@code x y z [yaw]}, or else the block the player stands in, facing their way.
+   */
+  private Optional<Position> standing(
+      CommandSource source, Optional<String> given, String dimension) {
+    if (given.isPresent() && !given.get().isBlank()) {
+      return position(source, given, dimension);
+    }
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.cell.anchor-where"));
+      return Optional.empty();
+    }
+    Position at = platform.players().position(source.player().get());
+    return Optional.of(
+        new Position(
+            at.dimension(), at.blockX(), at.blockY(), at.blockZ(), Wand.facing(at.yaw()), 0f));
+  }
+
+  void hallExit(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    if (arguments.optionalString("at").map(String::trim).filter("none"::equals).isPresent()) {
+      saved(source, hall.saveHall(layout.withoutExits()), messages().get("hof.hall.no-exits"));
+      return;
+    }
+    Optional<Position> at = position(source, arguments.optionalString("at"), layout.dimension());
+    if (at.isEmpty()) {
+      return;
+    }
+    if (!layout.inHub(at.get())) {
+      source.reply(messages().get("hof.hall.exit-outside"));
+      return;
+    }
+    saved(
+        source,
+        hall.saveHall(layout.withExit(at.get())),
+        messages().get("hof.hall.exit", xyz(at.get())));
+  }
+
+  void hallCheck(CommandSource source, Arguments arguments) {
+    HallCheck.Report report =
+        HallCheck.run(
+            hall.layout(),
+            hall.galleries(),
+            at -> platform.world().block(at).type().equals("minecraft:air"),
+            visits::seasonSpawn,
+            messages());
+    source.reply(messages().get("hof.check.header"));
+    report.findings().forEach(source::reply);
+    report.counts().forEach(source::reply);
+    int count = report.findings().size();
+    source.reply(
+        count == 0
+            ? messages().get("hof.check.clear")
+            : messages()
+                .get(
+                    count == 1 ? "hof.check.one" : "hof.check.many",
+                    "count",
+                    Integer.toString(count)));
+  }
+
+  // Links (questions 248)
+
+  void linkAdd(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    String id = arguments.string("link");
+    if (!HallFiles.ID.matcher(id).matches()) {
+      source.reply(messages().get("hof.bad-id"));
+      return;
+    }
+    // [hall | season <n>] [x y z]
+    List<String> words =
+        new ArrayList<>(List.of(Splitter.split(arguments.optionalString("rest").orElse(""))));
+    Optional<HallLayout.Target> to = Optional.empty();
+    if (!words.isEmpty() && words.getFirst().equals("hall")) {
+      to = Optional.of(new HallLayout.Target.Hall());
+      words.removeFirst();
+    } else if (words.size() >= 2 && words.getFirst().equals("season")) {
+      try {
+        int season = Integer.parseInt(words.get(1));
+        if (season < 1) {
+          throw new NumberFormatException();
+        }
+        to = Optional.of(new HallLayout.Target.SeasonSpawn(season));
+      } catch (NumberFormatException e) {
+        source.reply(messages().get("hof.link.usage"));
+        return;
+      }
+      words.subList(0, 2).clear();
+    }
+    if (!words.isEmpty() && words.size() != 3) {
+      source.reply(messages().get("hof.link.usage"));
+      return;
+    }
+    String dimension =
+        source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+    Optional<Position> block =
+        position(
+            source,
+            words.isEmpty() ? Optional.empty() : Optional.of(String.join(" ", words)),
+            dimension);
+    if (block.isEmpty()) {
+      return;
+    }
+    addLink(
+        source,
+        id,
+        Position.of(dimension, block.get().blockX(), block.get().blockY(), block.get().blockZ()),
+        to);
+  }
+
+  /** Adds a link, or moves the one with its id, telling the source where it leads. */
+  public void addLink(
+      CommandSource source, String id, Position block, Optional<HallLayout.Target> to) {
+    HallLayout layout = hall.layout();
+    Optional<HallLayout.Link> there = layout.linkAt(block);
+    if (there.isPresent() && !there.get().id().equals(id)) {
+      source.reply(messages().get("hof.link.taken", place("link", there.get().id(), block)));
+      return;
+    }
+    for (Gallery gallery : hall.galleries()) {
+      if (gallery.contains(block) && edits.held(source, gallery)) {
+        return;
+      }
+    }
+    HallLayout.Link link = new HallLayout.Link(id, block, to);
+    saved(source, hall.saveHall(layout.withLink(link)), added(link));
+  }
+
+  private Message added(HallLayout.Link link) {
+    String[] where = place("link", link.id(), link.block());
+    if (link.to().isEmpty()) {
+      return messages().get("hof.link.added-nowhere", where);
+    }
+    return messages().get("hof.link.added", with(where, "to", describe(link.to().get())));
+  }
+
+  /** Where a link leads, as admins read it. */
+  private String describe(HallLayout.Target to) {
+    return switch (to) {
+      case HallLayout.Target.Hall() -> messages().text("hof.link.to-hall");
+      case HallLayout.Target.SeasonSpawn(int season) ->
+          messages().text("hof.link.to-season", "season", Integer.toString(season));
+      case HallLayout.Target.At(Position at) -> CellEdits.corner(at);
+    };
+  }
+
+  void linkTo(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    String id = arguments.string("link");
+    Optional<HallLayout.Link> link = hall.layout().link(id);
+    if (link.isEmpty()) {
+      source.reply(messages().get("hof.link.unknown", "link", id));
+      return;
+    }
+    Optional<Position> at =
+        standing(source, arguments.optionalString("at"), link.get().block().dimension());
+    if (at.isEmpty()) {
+      return;
+    }
+    HallLayout.Link next = link.get().withTo(Optional.of(new HallLayout.Target.At(at.get())));
+    saved(
+        source,
+        hall.saveHall(hall.layout().withLink(next)),
+        messages().get("hof.link.to", place("link", id, at.get())));
+  }
+
+  void linkRemove(CommandSource source, Arguments arguments) {
+    if (hallLeftOut(source)) {
+      return;
+    }
+    String id = arguments.string("link");
+    if (hall.layout().link(id).isEmpty()) {
+      source.reply(messages().get("hof.link.unknown", "link", id));
+      return;
+    }
+    saved(
+        source,
+        hall.saveHall(hall.layout().withoutLink(id)),
+        messages().get("hof.link.removed", "link", id));
+  }
+
+  void linkList(CommandSource source, Arguments arguments) {
+    if (hall.layout().links().isEmpty()) {
+      source.reply(messages().get("hof.link.none"));
+      return;
+    }
+    for (HallLayout.Link link : hall.layout().links().values()) {
+      String[] where = place("link", link.id(), link.block());
+      source.reply(
+          link.to().isEmpty()
+              ? messages().get("hof.link.line-nowhere", where)
+              : messages().get("hof.link.line", with(where, "to", describe(link.to().get()))));
+    }
+  }
+
+  private static String[] xyz(Position at) {
+    return new String[] {
+      "x",
+      Integer.toString(at.blockX()),
+      "y",
+      Integer.toString(at.blockY()),
+      "z",
+      Integer.toString(at.blockZ())
+    };
+  }
+
+  private static String[] with(String[] placeholders, String key, String value) {
+    String[] all = java.util.Arrays.copyOf(placeholders, placeholders.length + 2);
+    all[placeholders.length] = key;
+    all[placeholders.length + 1] = value;
+    return all;
+  }
+
   // Cells
 
   void cellNew(CommandSource source, Arguments arguments) {
     Optional<Gallery> found = gallery(source, arguments);
-    String id = arguments.string("id");
     if (found.isEmpty()) {
       return;
     }
+    // With no id, the gallery's next free c1, c2, … (questions 254).
+    String id = arguments.optionalString("id").orElseGet(() -> nextCellId(found.get()));
     if (!GalleryFiles.ID.matcher(id).matches()) {
       source.reply(messages().get("hof.bad-id"));
       return;
