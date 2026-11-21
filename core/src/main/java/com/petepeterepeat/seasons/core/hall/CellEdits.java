@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.Position;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 
@@ -105,7 +106,7 @@ public final class CellEdits {
       }
     }
     for (Anchor anchor : ref.cell().anchors()) {
-      if (!bounds.contains(anchor.at())) {
+      if (!GalleryRules.fits(bounds, anchor)) {
         source.reply(
             messages()
                 .get(
@@ -135,11 +136,32 @@ public final class CellEdits {
       source.reply(messages().get("hof.cell.anchor-no-bounds", "cell", ref.key()));
       return;
     }
-    if (!ref.cell().contains(anchor.at())) {
-      source.reply(messages().get("hof.cell.anchor-outside", "cell", ref.key()));
+    if (!GalleryRules.fits(ref.cell().bounds().get(), anchor)) {
+      source.reply(
+          messages()
+              .get(
+                  anchor.type() == AnchorType.GATE
+                      ? "hof.cell.gate-outside"
+                      : "hof.cell.anchor-outside",
+                  "cell",
+                  ref.key()));
       return;
     }
-    CompletableFuture<Void> save = hall.save(ref.gallery().withCell(ref.cell().withAnchor(anchor)));
+    Cell nextCell = ref.cell().withAnchor(anchor);
+    Gallery next = ref.gallery().withCell(nextCell);
+    List<GalleryRules.Problem> before = GalleryRules.check(ref.gallery());
+    // A gate's second corner makes its plane, which mustn't reach into another cell or out of the
+    // gallery (questions 250); a first corner alone is fine until then.
+    Optional<GalleryRules.Problem> broken =
+        nextCell.gate().isEmpty()
+            ? Optional.empty()
+            : GalleryRules.check(next).stream().filter(p -> !before.contains(p)).findFirst();
+    if (broken.isPresent()) {
+      // Such as a gate plane reaching into another cell: the file would no longer load.
+      source.reply(messages().get("hof.cell.breaks", "problem", broken.get().message()));
+      return;
+    }
+    CompletableFuture<Void> save = hall.save(next);
     OptionalInt egg = anchor.egg();
     if (egg.isPresent()) {
       saved(
