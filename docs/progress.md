@@ -253,7 +253,7 @@ After #23 opened: CI failed the reset after `m3-vault-crash-started`'s halt with
 
 Review of #23: a late archive counts toward the season's awards, worked out again with the list they were first worked out with and announced as a change (`Archiver#onArchived`, `SeasonAwards#counted`); the dragon slayer award comes from the season's own firsts, so a slayer offline at the end, or a launch while the awards are read, no longer loses it; what is left after the awards are saved is kept as `pending` in `season.json` and finished at startup (`Awards#start`); copying into archives rewrites only the `honours` tag (`ArchiveFiles#updateHonours`); a damaged archive is left out and named to admins instead of stopping the awards (`ArchiveFiles.SeasonArchives`). Questions 212 and 213.
 
-**Part 3: curation and Discord** (branch `m4-curation-discord`). M4's last scenario, A42, is this part's; with it every M4 acceptance scenario has an end-to-end test. Passing end to end on Paper 26.3 (run locally; CI pending):
+**Part 3: curation and Discord** (branch `m4-curation-discord`). M4's last scenario, A42, is this part's; with it every M4 acceptance scenario has an end-to-end test. Passing end to end on Paper 26.3:
 
 | Scenario | Test |
 | --- | --- |
