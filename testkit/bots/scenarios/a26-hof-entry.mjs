@@ -4,9 +4,10 @@
 // lava. Sneak-clicking a bed with an empty hand works like /hof, and /hof is rate limited.
 import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
+import { HALL_SPAWN } from '../lib/hub.mjs'
 import { HOME, RATE_LIMIT, bed, hallToVisit, hof, inGallery, middle, sneakUse, standAt, waitInHall, waitNear, whileGliding } from '../lib/visits.mjs'
 
-const ENTRY = { x: 21.5, y: FLOOR, z: 21.5 }
+const ENTRY = { x: HALL_SPAWN.x + 0.5, y: HALL_SPAWN.y, z: HALL_SPAWN.z + 0.5 }
 
 export default {
   name: 'a26-hof-entry',

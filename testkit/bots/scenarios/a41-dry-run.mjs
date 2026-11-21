@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// A41. /season end --dry-run reports a cell shortfall, a spawn beyond 24,000 blocks of 0,0 and a
-// spawn inside a zone. Two players have played Season 2 and its gallery has one cell. A spawn set
+// A41. /season end --dry-run reports a cell shortfall, a spawn beyond 24,000 blocks of 0,0, a
+// spawn inside the Hall and a spawn inside a zone. Two players have played Season 2 and its
+// gallery has one cell. A spawn set
 // 25,000 blocks out is taken with a warning, which reload and the dry run repeat. The commands
 // won't put the spawn or a spawn candidate in a zone (a zone around either, either inside a zone),
 // so the scenario makes that happen by hand, as an admin editing the season file might;
 // /season reload takes the edit and warns. Launch is refused until the zone goes.
 import { assert } from '../lib/context.mjs'
 import { FLOOR, buildGallery } from '../lib/hall.mjs'
+import { markHub } from '../lib/hub.mjs'
 import { standAt } from '../lib/visits.mjs'
 import { SPAWN, forceload } from '../lib/zones.mjs'
 
@@ -34,6 +36,23 @@ export default {
       /^Hall of Fame: only 1 free cells /,
       /^Season 3's spawn at 25000, -60, 0 is 25000 blocks from 0, 0, beyond 24,000: strongholds may be out of reach\.$/
     ])
+
+    // Nor inside the Hall (questions 256): the commands refuse, and a hand edit is warned about.
+    await markHub(ctx, admin)
+    await standAt(ctx, admin, 'SeasonsAdmin', { x: 12, y: FLOOR, z: 25 })
+    await ctx.command(admin, '/season spawn set', /^Season 3's spawn can't be inside the Hall of Fame\.$/)
+    await ctx.command(admin, '/season spawn candidate add hubby', /^Season 3's spawn candidates can't be inside the Hall of Fame\.$/)
+    const far = ctx.readFile(SEASON_FILE)
+    const inHall = far.replace(/25000(,\s*|\n\s+- )-60(,\s*|\n\s+- )0\b/, '12$1-60$225')
+    assert(inHall !== far, `the edit moved the spawn: ${far}`)
+    ctx.writeFile(SEASON_FILE, inHall)
+    await ctx.command(admin, '/season reload', [/^Reloaded /, /Season 3's spawn at 12, -60, 25 is inside the Hall of Fame; \/season launch is refused until it moves/])
+    await ctx.command(admin, '/season end --dry-run', [
+      /^Dry run of \/season end/,
+      /^Season 3's spawn at 12, -60, 25 is inside the Hall of Fame\. \/season launch is refused until it moves\.$/
+    ])
+    ctx.writeFile(SEASON_FILE, far)
+    await ctx.command(admin, '/season reload', /^Reloaded /)
 
     // The commands won't put the spawn or a candidate in a zone.
     await forceload(ctx, admin, SPAWN, 40)
