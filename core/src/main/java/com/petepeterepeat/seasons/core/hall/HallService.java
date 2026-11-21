@@ -918,7 +918,7 @@ public final class HallService {
       Position at = platform.players().position(player);
       if (!inHall(at)) {
         if (switched(player)) {
-          markSwitched(player, false);
+          forgetSwitched(player);
           if (mode == GameMode.ADVENTURE) {
             platform.players().setGameMode(player, GameMode.SURVIVAL);
           }
@@ -940,12 +940,19 @@ public final class HallService {
     switchedWithoutRecord.removeIf(player -> platform.players().find(player).isEmpty());
   }
 
-  /** Whether Seasons switched a player from survival to adventure in the Hall. */
-  private boolean switched(PlayerId player) {
-    return players
-        .find(player)
-        .map(PlayerRecord::hallAdventure)
-        .orElseGet(() -> switchedWithoutRecord.contains(player));
+  /**
+   * Whether Seasons switched a player from survival to adventure in the Hall: by their record, or,
+   * for a player switched before their record was made (a first join in the hub), in memory.
+   */
+  public boolean switched(PlayerId player) {
+    return players.find(player).map(PlayerRecord::hallAdventure).orElse(false)
+        || switchedWithoutRecord.contains(player);
+  }
+
+  /** Forgets that Seasons switched a player, once they have their game mode back. */
+  public void forgetSwitched(PlayerId player) {
+    markSwitched(player, false);
+    switchedWithoutRecord.remove(player);
   }
 
   /** Remembers, in the player record so it survives a restart, whether Seasons switched them. */

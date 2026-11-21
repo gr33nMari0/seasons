@@ -80,7 +80,9 @@ export default {
 
     // The link to Season 3's spawn takes them there, in survival, with no saved spot left.
     await ctx.advance(admin, 6_000)
+    const followed = ctx.waitForMessages(visitor, /^You followed the link\.$/, 20_000)
     await use(ctx, admin, 'Visitor', TO_S3)
+    await followed
     await waitNear(ctx, admin, 'Visitor', middle(SPAWN), 3)
     await ctx.eventually(async () => assert(await gameMode(ctx, admin, 'Visitor') === 0, 'survival at the spawn'))
     await hof(ctx, visitor, '/hof leave', /^You aren't visiting the Hall of Fame\.$/)
@@ -91,7 +93,10 @@ export default {
     await use(ctx, admin, 'Visitor', BACK)
     await waitNear(ctx, admin, 'Visitor', middle(HALL_SPAWN))
     await ctx.advance(admin, 6_000)
+    const arrived = ctx.waitForMessages(visitor, /^You followed the link\.$/, 20_000)
     await use(ctx, admin, 'Visitor', TO_S1)
+    // Once the trip has finished: until then the next link is ignored, as a second /hof would be.
+    await arrived
     await ctx.eventually(async () => assert(inBase(await ctx.position(admin, 'Visitor')), 'the visitor is in Season 1\'s land'))
 
     // Stepping on the pressure plate in the hub.

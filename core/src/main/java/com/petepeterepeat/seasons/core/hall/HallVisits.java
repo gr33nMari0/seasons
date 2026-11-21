@@ -390,8 +390,7 @@ public final class HallVisits {
    */
   private GameMode modeOutside(PlayerId player) {
     GameMode mode = platform.players().gameMode(player);
-    boolean switched = players.find(player).map(PlayerRecord::hallAdventure).orElse(false);
-    return mode == GameMode.ADVENTURE && switched ? GameMode.SURVIVAL : mode;
+    return mode == GameMode.ADVENTURE && halls.switched(player) ? GameMode.SURVIVAL : mode;
   }
 
   /**
@@ -403,10 +402,7 @@ public final class HallVisits {
     if (platform.players().gameMode(player) != back) {
       platform.players().setGameMode(player, back);
     }
-    players
-        .find(player)
-        .filter(PlayerRecord::hallAdventure)
-        .ifPresent(r -> players.put(r.withHallAdventure(false)));
+    halls.forgetSwitched(player);
   }
 
   /** Right-clicking a link takes it; Seasons takes over the click either way. */
@@ -948,6 +944,7 @@ public final class HallVisits {
   /** Forgets the saved spot, and that Seasons switched them to adventure in the Hall. */
   private void forgetReturn(PlayerId player) {
     returnsWithoutRecord.remove(player);
+    halls.forgetSwitched(player);
     Optional<PlayerRecord> record = players.find(player);
     if (record.isPresent()) {
       var _ =
