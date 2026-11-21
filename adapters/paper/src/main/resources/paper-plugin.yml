@@ -39,6 +39,30 @@ permissions:
   seasons.admin.hof:
     description: Hall of Fame admin commands
     default: op
+  seasons.curate.view:
+    description: Open the curator view with /hof curate, or by sneak-clicking an archive
+    default: op
+  seasons.curate.museum:
+    description: Curation, putting an archived item in the museum
+    default: op
+  seasons.curate.return:
+    description: Curation, returning an archived item to its owner's vault
+    default: op
+  seasons.curate.take:
+    description: Curation, taking an archived item into your inventory
+    default: op
+  seasons.curate.destroy:
+    description: Curation, destroying an archived item into the recycle bin, and /hof curate undo
+    default: op
+  seasons.curate.*:
+    description: Every curation node, for a curator group
+    default: op
+    children:
+      seasons.curate.view: true
+      seasons.curate.museum: true
+      seasons.curate.return: true
+      seasons.curate.take: true
+      seasons.curate.destroy: true
   seasons.zone.bypass:
     description: Ignore old-world zones. Never granted by default
     default: false

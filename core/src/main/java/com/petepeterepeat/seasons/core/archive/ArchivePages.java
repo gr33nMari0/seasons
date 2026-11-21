@@ -29,20 +29,39 @@ public final class ArchivePages {
   private ArchivePages() {}
 
   public static List<List<Optional<NeutralItem>>> pages(ArchiveRecord archive) {
+    return slots(archive).stream()
+        .map(page -> page.stream().map(at -> at.flatMap(archive::item)).toList())
+        .toList();
+  }
+
+  /**
+   * Where each item shown on each page sits in the record, in the same layout as {@link #pages}:
+   * what a click on a page's slot points at, for the curator view.
+   */
+  public static List<List<Optional<ArchiveSlot>>> slots(ArchiveRecord archive) {
     if (archive.imported().isPresent()) {
-      return importedPages(archive.imported().get());
+      return importedSlots(archive.imported().get());
     }
-    List<List<Optional<NeutralItem>>> pages = new ArrayList<>();
+    List<List<Optional<ArchiveSlot>>> pages = new ArrayList<>();
     pages.add(firstPage(archive));
-    List<Optional<NeutralItem>> overflow =
-        archive.overflow().stream().filter(Optional::isPresent).toList();
+    List<Optional<ArchiveSlot>> overflow = new ArrayList<>();
+    for (int i = 0; i < archive.overflow().size(); i++) {
+      if (archive.overflow().get(i).isPresent()) {
+        overflow.add(Optional.of(ArchiveSlot.of(ArchiveSlot.OVERFLOW, i)));
+      }
+    }
     for (int from = 0; from < overflow.size(); from += PagedView.PAGE_SIZE) {
       pages.add(overflow.subList(from, Math.min(overflow.size(), from + PagedView.PAGE_SIZE)));
     }
     if (archive.enderChestPolicy() == EnderChestPolicy.ARCHIVE
         && archive.inventory().enderChest().stream().anyMatch(Optional::isPresent)) {
-      List<Optional<NeutralItem>> ender = archive.inventory().enderChest();
-      pages.add(ender.subList(0, Math.min(ender.size(), PagedView.PAGE_SIZE)));
+      List<Optional<ArchiveSlot>> ender = new ArrayList<>();
+      for (int i = 0;
+          i < Math.min(archive.inventory().enderChest().size(), PagedView.PAGE_SIZE);
+          i++) {
+        ender.add(Optional.of(ArchiveSlot.of(ArchiveSlot.ENDER, i)));
+      }
+      pages.add(ender);
     }
     return pages;
   }
@@ -58,32 +77,38 @@ public final class ArchivePages {
     return starts;
   }
 
-  private static List<List<Optional<NeutralItem>>> importedPages(ImportedCell imported) {
-    List<List<Optional<NeutralItem>>> pages = new ArrayList<>();
+  private static List<List<Optional<ArchiveSlot>>> importedSlots(ImportedCell imported) {
+    List<List<Optional<ArchiveSlot>>> pages = new ArrayList<>();
     if (hasGearPage(imported)) {
-      List<Optional<NeutralItem>> gear =
-          new ArrayList<>(Collections.nCopies(PagedView.PAGE_SIZE, Optional.<NeutralItem>empty()));
-      List<Optional<NeutralItem>> worn =
-          imported.stand().map(ImportedCell.Stand::equipment).orElse(List.of());
-      for (int i = 0; i < worn.size(); i++) {
-        gear.set(i, worn.get(i));
+      List<Optional<ArchiveSlot>> gear = emptyPage();
+      int worn = imported.stand().map(s -> s.equipment().size()).orElse(0);
+      for (int i = 0; i < worn; i++) {
+        gear.set(i, Optional.of(ArchiveSlot.of(ArchiveSlot.STAND, i)));
       }
       for (int i = 0; i < Math.min(imported.frames().size(), PagedView.PAGE_SIZE - ROW); i++) {
-        gear.set(ROW + i, imported.frames().get(i).item());
+        gear.set(ROW + i, Optional.of(ArchiveSlot.of(ArchiveSlot.FRAME, i)));
       }
       pages.add(gear);
     }
-    for (ImportedCell.Container container : imported.containers()) {
-      List<Optional<NeutralItem>> slots = container.slots();
-      for (int page = 0; page < pagesFor(slots.size()); page++) {
+    for (int c = 0; c < imported.containers().size(); c++) {
+      int size = imported.containers().get(c).slots().size();
+      for (int page = 0; page < pagesFor(size); page++) {
         int from = page * PagedView.PAGE_SIZE;
-        pages.add(slots.subList(from, Math.min(slots.size(), from + PagedView.PAGE_SIZE)));
+        List<Optional<ArchiveSlot>> slots = new ArrayList<>();
+        for (int i = from; i < Math.min(size, from + PagedView.PAGE_SIZE); i++) {
+          slots.add(Optional.of(new ArchiveSlot(ArchiveSlot.CONTAINER, c, i)));
+        }
+        pages.add(slots);
       }
     }
     if (pages.isEmpty()) {
       pages.add(List.of());
     }
     return pages;
+  }
+
+  private static List<Optional<ArchiveSlot>> emptyPage() {
+    return new ArrayList<>(Collections.nCopies(PagedView.PAGE_SIZE, Optional.<ArchiveSlot>empty()));
   }
 
   private static boolean hasGearPage(ImportedCell imported) {
@@ -116,22 +141,20 @@ public final class ArchivePages {
         labels);
   }
 
-  private static List<Optional<NeutralItem>> firstPage(ArchiveRecord archive) {
-    List<Optional<NeutralItem>> page =
-        new ArrayList<>(Collections.nCopies(PagedView.PAGE_SIZE, Optional.<NeutralItem>empty()));
-    List<Optional<NeutralItem>> armour = new ArrayList<>(archive.inventory().armour());
+  private static List<Optional<ArchiveSlot>> firstPage(ArchiveRecord archive) {
+    List<Optional<ArchiveSlot>> page = emptyPage();
+    int armour = archive.inventory().armour().size();
     // Stored from boots to helmet, as the game keeps them; shown from the helmet down.
-    Collections.reverse(armour);
-    for (int i = 0; i < Math.min(4, armour.size()); i++) {
-      page.set(i, armour.get(i));
+    for (int i = 0; i < Math.min(4, armour); i++) {
+      page.set(i, Optional.of(ArchiveSlot.of(ArchiveSlot.ARMOUR, armour - 1 - i)));
     }
-    page.set(4, archive.inventory().offHand());
-    List<Optional<NeutralItem>> storage = archive.inventory().storage();
-    for (int slot = HOTBAR; slot < Math.min(MAIN_INVENTORY, storage.size()); slot++) {
-      page.set(ROW + slot - HOTBAR, storage.get(slot));
+    page.set(4, Optional.of(ArchiveSlot.of(ArchiveSlot.OFFHAND, 0)));
+    int storage = archive.inventory().storage().size();
+    for (int slot = HOTBAR; slot < Math.min(MAIN_INVENTORY, storage); slot++) {
+      page.set(ROW + slot - HOTBAR, Optional.of(ArchiveSlot.of(ArchiveSlot.STORAGE, slot)));
     }
-    for (int slot = 0; slot < Math.min(HOTBAR, storage.size()); slot++) {
-      page.set(4 * ROW + slot, storage.get(slot));
+    for (int slot = 0; slot < Math.min(HOTBAR, storage); slot++) {
+      page.set(4 * ROW + slot, Optional.of(ArchiveSlot.of(ArchiveSlot.STORAGE, slot)));
     }
     return page;
   }

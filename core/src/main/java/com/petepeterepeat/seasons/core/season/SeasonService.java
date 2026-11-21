@@ -385,6 +385,7 @@ public final class SeasonService {
                   }
                   if (apply(new AllArchived()) instanceof Changed) {
                     announcer.broadcast("end.intermission", "season", Integer.toString(season));
+                    announcer.discord("end.discord", "season", Integer.toString(season));
                     intermissionListeners.forEach(listener -> listener.accept(season));
                   }
                 },

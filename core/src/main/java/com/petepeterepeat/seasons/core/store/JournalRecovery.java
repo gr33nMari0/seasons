@@ -32,13 +32,30 @@ public final class JournalRecovery {
   private final List<OpenOperation> pending = new CopyOnWriteArrayList<>();
   private final Map<OpenOperation, String> failures = new ConcurrentHashMap<>();
   private final Set<OpenOperation> running = ConcurrentHashMap.newKeySet();
+  private final Reporter reporter;
+
+  /** Hears how each attempt at an open operation ended, on the server thread. */
+  @FunctionalInterface
+  public interface Reporter {
+    Reporter NONE = (operation, outcome) -> {};
+
+    void attempted(OpenOperation operation, RecoveryOutcome outcome);
+  }
 
   /**
    * @param serverThread where outcomes are handled, so the pending list changes on one thread
    */
   public JournalRecovery(Journal journal, Executor serverThread) {
+    this(journal, serverThread, Reporter.NONE);
+  }
+
+  /**
+   * @param reporter told how each attempt ended, such as for the admin webhook
+   */
+  public JournalRecovery(Journal journal, Executor serverThread, Reporter reporter) {
     this.journal = journal;
     this.serverThread = serverThread;
+    this.reporter = reporter;
   }
 
   /** Registers the handler for one kind of operation, before {@link #recoverAll}. */
@@ -144,6 +161,11 @@ public final class JournalRecovery {
           if (failure != null) {
             LOG.error("Recovering {} failed", describe(operation), failure);
             settled = RecoveryOutcome.failed(String.valueOf(failure));
+          }
+          try {
+            reporter.attempted(operation, settled);
+          } catch (RuntimeException e) {
+            LOG.warn("Reporting a recovery attempt failed", e);
           }
           switch (settled) {
             case RecoveryOutcome.Finished finished -> {

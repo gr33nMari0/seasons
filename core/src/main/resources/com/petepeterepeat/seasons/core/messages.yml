@@ -85,6 +85,7 @@ end:
   now: "<gold>Ending Season <season> now: archiving <count> online players.</gold>"
   cancelled: "<green>The end of Season <season> was cancelled. Play on!</green>"
   intermission: "<gold>Season <season> has ended. Welcome to the Intermission.</gold>"
+  discord: "Season <season> has ended. Welcome to the Intermission!"
   interrupted: "<yellow>The server restarted during the end countdown of Season <season>, so it was cancelled. Run /season end to start it again.</yellow>"
   archiving-failed: "<red>Archiving for Season <season> stopped: <error>. See the server log.</red>"
   not-saved: "<red>Season <season> wasn't ended: season.json couldn't be saved, so nobody was archived. Fix the problem in the server log, restart, then run /season end again.</red>"
@@ -122,6 +123,7 @@ launch:
   failed: "<red>Launching Season <season> stopped: <error>. See the server log; it is finished at the next restart.</red>"
   loading: "<gray>Loading the spawn at <x>, <y>, <z>...</gray>"
   done: "<gold>Season <season> has begun!</gold>"
+  discord: "Season <season> has begun!"
   title: "<gold>Season <season></gold>"
   subtitle: "<yellow>has begun!</yellow>"
   deaths: "Deaths, Season <season>"
@@ -350,6 +352,15 @@ hof:
     undone-many: "<green>Put back <count> cells of <gallery>.</green>"
     undo-stopped: "<red>Undoing the import of cell <cell> stopped: <reason>.</red>"
 
+# Posted to the admin webhook (secrets.yml), never to the public channel.
+alerts:
+  tripwire: "Tripwire: <details> (<name>)"
+  reconcile: "Reconciliation repaired <cell>: <what>"
+  recovery-finished: "Journal recovery: <operation> for <name>, Season <season>: finished"
+  recovery-failed: "Journal recovery: <operation> for <name>, Season <season>: failed: <reason>"
+  curate: "Curation: <curator> <verb> <item> from <name>'s Season <season> archive (<slot>) to <destination>. Reason: <reason>"
+  curate-undo: "Curation: <curator> put <item> back in <name>'s Season <season> archive (<slot>) from the recycle bin (<id>)."
+
 audit:
   header: "<gold>The last <count> audit entries:</gold>"
   header-player: "<gold>The last <count> audit entries for <name>:</gold>"
@@ -420,6 +431,74 @@ museum:
   egg-plaque: "Season <season> · slain by <name>"
   season-plaque: "Season <season>"
   award-line: "<gray><award>:</gray> <winners>"
+
+# /hof curate: the curator view, its actions and /hof curate undo. <item> is "64 × minecraft:dirt".
+curate:
+  player-only: "<red>Only a player can open the curator view.</red>"
+  no-archive: "<red><name> has no archive for Season <season>.</red>"
+  opened: "<gray>Curating <name>'s Season <season> archive. Click an item to choose what happens to it.</gray>"
+  title: "Curating <name> · Season <season>"
+  actions: "<item>: what happens to it?"
+  action:
+    museum: "Put it in the museum"
+    return: "Return it to <name>"
+    take: "Take it"
+    destroy: "Destroy it (kept 30 days)"
+    cancel: "Cancel"
+  view-only: "<red>You may look at this archive, but not move anything out of it.</red>"
+  plinths: "Which museum plinth?"
+  no-plinth: "<red>No museum plinth is free: each holds something already, or there is no museum.</red>"
+  verb:
+    museum: "put in the museum"
+    return: "return"
+    take: "take"
+    destroy: "destroy"
+  prompt: "<gold>Type the reason to <verb> <item> in chat, or cancel. Nobody else sees it.</gold>"
+  reason-required: "<red>A reason is required. Type it in chat, or cancel.</red>"
+  cancelled: "<gray>Cancelled: <item> stays in the archive.</gray>"
+  timed-out: "<gray>No reason came in time, so <item> stays in the archive.</gray>"
+  no-reason: "no reason given"
+  busy: "<red><name>'s archive is busy right now: someone is being archived, unarchived or curated, or a crash is waiting for recovery. Try again in a moment.</red>"
+  changed: "<red>That slot changed since the view opened, so nothing moved. Open the archive again.</red>"
+  done:
+    museum: "<green>Put <item> in <anchor>.</green>"
+    return: "<green>Returned <item> to <name>'s vault.</green>"
+    take: "<green>Took <item>.</green>"
+    destroy: "<green>Destroyed <item>. /hof curate undo <id> brings it back within 30 days.</green>"
+  full: "<red>Your inventory is full, so <item> stays in the archive.</red>"
+  plinth-taken: "<red><anchor> isn't free any more, so <item> stays in the archive.</red>"
+  failed: "<red>That didn't work, so <item> stays in the archive. See the server log.</red>"
+  # Where the item went, in audit entries and admin alerts.
+  destination:
+    museum: "<anchor>"
+    return: "<name>'s Returned page"
+    take: "<curator>'s inventory"
+    destroy: "the recycle bin as <id>"
+  alert-verb:
+    museum: "moved"
+    return: "returned"
+    take: "took"
+    destroy: "destroyed"
+  # To the owner, at once or at their next login.
+  notice:
+    museum: "<gold>A curator put <item> from your Season <season> archive in the museum: <reason></gold>"
+    return: "<gold>A curator returned <item> from your Season <season> archive to your vault's Returned page: <reason></gold>"
+    take: "<gold>A curator took <item> from your Season <season> archive: <reason></gold>"
+    destroy: "<gold>A curator removed <item> from your Season <season> archive: <reason></gold>"
+    undo: "<gold>A curator put <item> back in your Season <season> archive.</gold>"
+  # The public channel: never the reason.
+  discord:
+    museum: "<item> from <name>'s Season <season> archive is now in the museum."
+    return: "<item> from <name>'s Season <season> archive was returned to them."
+    take: "<item> was taken from <name>'s Season <season> archive by a curator."
+    destroy: "<item> was removed from <name>'s Season <season> archive by a curator."
+    undo: "<item> is back in <name>'s Season <season> archive."
+  undo:
+    unknown: "<red>There is nothing in the recycle bin with id <id>.</red>"
+    done: "<green>Put <item> back in <name>'s Season <season> archive.</green>"
+    no-archive: "<red><name> has no Season <season> archive any more, so <item> stays in the recycle bin.</red>"
+    slot-taken: "<red>That slot of <name>'s Season <season> archive holds something else now, so <item> stays in the recycle bin.</red>"
+    failed: "<red>That didn't work: <error>. See the server log.</red>"
 
 dragon:
   title: "<gold>The dragon is slain!</gold>"

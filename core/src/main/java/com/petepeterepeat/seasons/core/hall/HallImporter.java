@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.archive.ImportedCell;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig.EnderChestPolicy;
+import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Experience;
@@ -48,6 +49,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,6 +61,11 @@ import org.slf4j.LoggerFactory;
  * and the cell is emptied only once it is checked, so a crash at any point leaves every item in the
  * record, in the cell, or both; recovery then empties whatever still matches the record. No item is
  * ever dropped or copied into the world.
+ *
+ * <p>An undo holds the cell's owner from reading the record until the record is set aside, as
+ * {@code /season unarchive} does, so no curation of the record runs alongside it; and it is refused
+ * while a curation a crash left open names the owner. Otherwise an item a curator moves out of the
+ * record after the undo read it would be put back in the cell as well (review of #24).
  */
 public final class HallImporter {
   private static final Logger LOG = LoggerFactory.getLogger(HallImporter.class);
@@ -77,11 +84,15 @@ public final class HallImporter {
   private final CrashPoints crash;
   private final Clock clock;
   private final Path reports;
+  private final ArchiveHold hold;
+  private final Predicate<PlayerId> curating;
   private final Executor serverThread;
   private final AtomicBoolean busy = new AtomicBoolean();
 
   /**
    * @param reports where {@code import-<gallery>.txt} is written
+   * @param hold held for a cell's owner while its import is undone
+   * @param curating whether a curation a crash left open names a player as the archive's owner
    */
   public HallImporter(
       Platform platform,
@@ -94,8 +105,12 @@ public final class HallImporter {
       AuditLog audit,
       CrashPoints crash,
       Clock clock,
-      Path reports) {
+      Path reports,
+      ArchiveHold hold,
+      Predicate<PlayerId> curating) {
     this.platform = platform;
+    this.hold = hold;
+    this.curating = curating;
     this.writer = writer;
     this.journal = journal;
     this.archives = archives;
@@ -722,6 +737,27 @@ public final class HallImporter {
     if (owner.isEmpty()) {
       return CompletableFuture.failedFuture(new Stop("it has no owner"));
     }
+    PlayerId id = owner.get();
+    if (!hold.hold(id)) {
+      return CompletableFuture.failedFuture(new Stop(BUSY));
+    }
+    if (curating.test(id)) {
+      hold.release(id);
+      return CompletableFuture.failedFuture(new Stop(BUSY));
+    }
+    return heldUndo(gallery, cell, actor, id)
+        .whenCompleteAsync((done, failure) -> hold.release(id), serverThread);
+  }
+
+  /** Why an undo is refused while its owner's record is in use. */
+  private static final String BUSY =
+      "its owner's record is busy: being archived, unarchived or curated, or a curation is waiting"
+          + " for recovery";
+
+  /** {@link #undoCell}, with the owner held throughout. Server thread. */
+  private CompletableFuture<Void> heldUndo(Gallery gallery, Cell cell, String actor, PlayerId id) {
+    int season = gallery.season();
+    Optional<PlayerId> owner = Optional.of(id);
     Bounds bounds = cell.bounds().orElseThrow();
     return writer
         .submit(() -> archives.read(owner.get(), season))

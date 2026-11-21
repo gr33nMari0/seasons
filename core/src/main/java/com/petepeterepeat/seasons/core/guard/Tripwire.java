@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.guard;
 
+import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -20,8 +21,7 @@ import org.slf4j.LoggerFactory;
  * The tripwire: every item shown in an archive view carries the {@code seasons:archived} tag, and
  * one found in a real inventory or on the ground is deleted and audited. The adapter checks
  * pickups, items appearing in the world and menu closes; this sweeps every online player every 30
- * seconds. Reporting hits to the admin webhook waits for M4; until then they are logged as
- * warnings.
+ * seconds. Each hit is also logged as a warning and posted to the admin webhook.
  */
 public final class Tripwire implements TripwireReport {
   /** How often online players are swept. */
@@ -33,9 +33,16 @@ public final class Tripwire implements TripwireReport {
   private final Inventories inventories;
   private final Scheduler scheduler;
   private final AuditLog audit;
+  private final AdminAlerts alerts;
   private @Nullable ScheduledTask sweep;
 
-  public Tripwire(Players players, Inventories inventories, Scheduler scheduler, AuditLog audit) {
+  public Tripwire(
+      Players players,
+      Inventories inventories,
+      Scheduler scheduler,
+      AuditLog audit,
+      AdminAlerts alerts) {
+    this.alerts = alerts;
     this.players = players;
     this.inventories = inventories;
     this.scheduler = scheduler;
@@ -74,5 +81,6 @@ public final class Tripwire implements TripwireReport {
     String details = "Deleted " + String.join(", ", items) + " " + where;
     LOG.warn("Tripwire: {} ({}). Archived items must never exist in the world.", details, name);
     audit.record(AuditLog.SEASONS, "tripwire", name, "deleted", details);
+    alerts.alert("alerts.tripwire", "details", details, "name", name);
   }
 }

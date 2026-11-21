@@ -2,6 +2,7 @@
 package com.petepeterepeat.seasons.core;
 
 import com.petepeterepeat.seasons.api.SeasonsApi;
+import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
@@ -18,6 +19,8 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
 import com.petepeterepeat.seasons.core.config.ConfigProblem;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.curate.CurateFiles;
+import com.petepeterepeat.seasons.core.curate.Curation;
 import com.petepeterepeat.seasons.core.dragon.Dragon;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
@@ -114,6 +117,8 @@ public final class Seasons implements SeasonsApi {
   private @Nullable FirstsTracker firsts;
   private @Nullable Pets pets;
   private @Nullable Dragon dragon;
+  private @Nullable AdminAlerts alerts;
+  private @Nullable Curation curation;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -196,6 +201,8 @@ public final class Seasons implements SeasonsApi {
     Immunity immunity = new Immunity(clock);
     Announcer announcer =
         new Announcer(platform.players(), platform.permissions(), webhooks, config);
+    AdminAlerts adminAlerts = new AdminAlerts(platform.scheduler(), webhooks, config);
+    alerts = adminAlerts;
     CrashPoints crash = hooks.<CrashPoints>map(h -> h).orElse(CrashPoints.NONE);
     Pets pets = new Pets(platform, config, players, audit, Optional.ofNullable(journal));
     this.pets = pets;
@@ -242,7 +249,8 @@ public final class Seasons implements SeasonsApi {
             crash,
             clock);
     Reconciler reconciling =
-        new Reconciler(platform, halls, renderer, archives, writer, audit, museum, nanoTime);
+        new Reconciler(
+            platform, halls, renderer, archives, writer, audit, museum, nanoTime, adminAlerts);
     reconciler = reconciling;
     HallRules hallRules = new HallRules(platform, config, halls, hallAudit, reconciling);
     rules = hallRules;
@@ -254,7 +262,8 @@ public final class Seasons implements SeasonsApi {
     Optional<Vault> vault = Optional.empty();
     RolloverArchiver rollover = refusingArchiver();
     if (journal != null) {
-      JournalRecovery replay = new JournalRecovery(journal, serverThread);
+      JournalRecovery replay =
+          new JournalRecovery(journal, serverThread, recoveryAlerts(adminAlerts));
       Archiver archiving =
           new Archiver(
               platform, config, clock, writer, journal, replay, archives, vaults, players, hall,
@@ -266,8 +275,19 @@ public final class Seasons implements SeasonsApi {
       replay.register(Operation.UNARCHIVE, unarchiving.recovery());
       HallImporter importing =
           new HallImporter(
-              platform, writer, journal, archives, players, halls, renderer, audit, crash, clock,
-              world);
+              platform,
+              writer,
+              journal,
+              archives,
+              players,
+              halls,
+              renderer,
+              audit,
+              crash,
+              clock,
+              world,
+              hold,
+              owner -> curation != null && curation.curating(owner));
       replay.register(Operation.IMPORT, importing.recovery());
       replay.register(Operation.IMPORT_UNDO, importing.undoRecovery());
       Vault vaulting =
@@ -275,6 +295,30 @@ public final class Seasons implements SeasonsApi {
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
       replay.register(Operation.MUSEUM, museum.recovery());
+      Curation curating =
+          new Curation(
+              platform,
+              config,
+              archives,
+              vaults,
+              new CurateFiles(world.resolve("data")),
+              museum,
+              renderer,
+              players,
+              writer,
+              journal,
+              replay,
+              hold,
+              audit,
+              announcer,
+              adminAlerts,
+              crash,
+              clock,
+              back ->
+                  vaulting.returnItem(
+                      back.owner(), back.item(), back.why(), Optional.of(back.ref())));
+      replay.register(Operation.CURATE, curating.recovery());
+      curation = curating;
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
       var _ = replay.recoverAll();
@@ -352,6 +396,11 @@ public final class Seasons implements SeasonsApi {
     seasons.start();
     fight.start();
     halls.bind(seasons::state, seasons::updateDecorating);
+    if (curation != null) {
+      halls.bindCuration(curation);
+      curation.start();
+      platform.events().chat(curation);
+    }
     halls.start();
     if (gates != null) {
       gates.start();
@@ -383,7 +432,8 @@ public final class Seasons implements SeasonsApi {
                 clock,
                 pets::loggedIn));
     Tripwire wire =
-        new Tripwire(platform.players(), platform.inventories(), platform.scheduler(), audit);
+        new Tripwire(
+            platform.players(), platform.inventories(), platform.scheduler(), audit, adminAlerts);
     tripwire = wire;
     wire.start();
     FirstsTracker firstsTracker =
@@ -475,13 +525,16 @@ public final class Seasons implements SeasonsApi {
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
     platform.commands().register(built.root(nodes));
-    platform
-        .commands()
-        .register(
-            new HallCommands(
-                    platform, config, halls, visiting, renderer, reconciling, importer, players)
-                .root(),
-            List.of("halloffame"));
+    CommandNode hof =
+        new HallCommands(
+                platform, config, halls, visiting, renderer, reconciling, importer, players)
+            .root();
+    if (curation != null) {
+      List<CommandNode> children = new ArrayList<>(hof.children());
+      children.add(curation.command());
+      hof = new CommandNode(hof.name(), hof.argument(), hof.permission(), children, hof.action());
+    }
+    platform.commands().register(hof, List.of("halloffame"));
     vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
     platform.commands().register(pets.command(), List.of());
     platform.commands().register(museum.command(), List.of());
@@ -559,6 +612,39 @@ public final class Seasons implements SeasonsApi {
       @Override
       public void left(PlayerId player) {
         login.ifPresent(l -> l.left(player));
+        if (curation != null) {
+          curation.left(player);
+        }
+      }
+    };
+  }
+
+  /** Recovery runs for the admin webhook: each operation finished, and each that failed. */
+  private JournalRecovery.Reporter recoveryAlerts(AdminAlerts adminAlerts) {
+    return (operation, outcome) -> {
+      String name =
+          operation
+              .player()
+              .map(p -> platform.players().knownName(p).orElse(p.toString()))
+              .orElse("nobody");
+      String kind = operation.operation().name().toLowerCase(java.util.Locale.ROOT);
+      String season = Integer.toString(operation.season());
+      switch (outcome) {
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.Finished f ->
+            adminAlerts.alert(
+                "alerts.recovery-finished", "operation", kind, "name", name, "season", season);
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.Failed f ->
+            adminAlerts.alert(
+                "alerts.recovery-failed",
+                "operation",
+                kind,
+                "name",
+                name,
+                "season",
+                season,
+                "reason",
+                f.reason());
+        case com.petepeterepeat.seasons.core.store.RecoveryOutcome.WaitForPlayer w -> {}
       }
     };
   }
@@ -640,6 +726,9 @@ public final class Seasons implements SeasonsApi {
     if (dragon != null) {
       dragon.stop();
     }
+    if (curation != null) {
+      curation.stop();
+    }
     if (flusher != null) {
       flusher.cancel();
     }
@@ -647,6 +736,9 @@ public final class Seasons implements SeasonsApi {
       logFailure(store.flush());
     }
     writer.close();
+    if (alerts != null) {
+      alerts.flush();
+    }
     webhooks.close();
     maps.close();
   }

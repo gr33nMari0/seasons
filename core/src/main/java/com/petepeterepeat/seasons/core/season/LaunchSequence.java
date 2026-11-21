@@ -140,6 +140,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
         .thenRunAsync(
             () -> {
               announcer.broadcast("launch.done", "season", number);
+              announcer.discord("launch.discord", "season", number);
               compactJournal();
             },
             serverThread);

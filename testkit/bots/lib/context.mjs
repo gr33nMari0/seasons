@@ -265,39 +265,73 @@ export class ScenarioContext {
   }
 
   /**
-   * Starts an https webhook receiver standing in for Discord. Every JSON body posted to it lands
-   * in `posts`, in order.
+   * Starts an https webhook receiver standing in for Discord, at its own path on the shard's
+   * webhook port; one server answers every path a scenario asks for. Every JSON body it accepts
+   * lands in `posts`, in order, and every request in `attempts`. With `fail`, the first requests
+   * are answered with those statuses instead, such as [500, 429], to check retries; a 429 says to
+   * retry after half a second, as Discord would.
    */
-  async webhook () {
+  async webhook ({ path = 'webhook', fail = [] } = {}) {
     if (!this.tls) throw new Error('no --tls certificate for the webhook receiver')
-    const posts = []
-    const server = https.createServer({ pfx: readFileSync(this.tls), passphrase: 'changeit' }, (req, res) => {
-      let body = ''
-      req.setEncoding('utf8')
-      req.on('data', (chunk) => { body += chunk })
-      req.on('end', () => {
-        try {
-          posts.push(JSON.parse(body))
-        } catch {
-          posts.push({ invalid: body })
-        }
-        this.log(`[webhook] <- ${body}`)
-        res.writeHead(204)
-        res.end()
+    if (!this.webhookRoutes) {
+      this.webhookRoutes = new Map()
+      const routes = this.webhookRoutes
+      const server = https.createServer({ pfx: readFileSync(this.tls), passphrase: 'changeit' }, (req, res) => {
+        let body = ''
+        req.setEncoding('utf8')
+        req.on('data', (chunk) => { body += chunk })
+        req.on('end', () => {
+          const route = routes.get(new URL(req.url, 'https://127.0.0.1').pathname)
+          if (!route) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          let parsed
+          try {
+            parsed = JSON.parse(body)
+          } catch {
+            parsed = { invalid: body }
+          }
+          route.attempts.push(parsed)
+          const status = route.fail.shift()
+          this.log(`[webhook ${route.path}] <- ${status ?? 204} ${body}`)
+          if (status === 429) {
+            res.writeHead(429, { 'Content-Type': 'application/json' })
+            res.end('{"message":"You are being rate limited.","retry_after":0.5,"global":false}')
+            return
+          }
+          if (status !== undefined) {
+            res.writeHead(status)
+            res.end()
+            return
+          }
+          route.posts.push(parsed)
+          res.writeHead(204)
+          res.end()
+        })
       })
-    })
-    await new Promise((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(this.webhookPort, '127.0.0.1', resolve)
-    })
-    this.servers.push(server)
+      await new Promise((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(this.webhookPort, '127.0.0.1', resolve)
+      })
+      this.servers.push(server)
+    }
+    const route = { path: `/${path}`, posts: [], attempts: [], fail: [...fail] }
+    this.webhookRoutes.set(route.path, route)
+    const { posts } = route
     return {
-      url: `https://127.0.0.1:${this.webhookPort}/webhook`,
+      url: `https://127.0.0.1:${this.webhookPort}/${path}`,
       posts,
-      /** Resolves with the first post whose content matches `pattern`. */
+      attempts: route.attempts,
+      /**
+       * Resolves with the first post whose content, or one line of it, matches `pattern`: admin
+       * alerts that come close together share a post, a line each.
+       */
       waitFor: async (pattern, timeoutMs = REPLY_TIMEOUT_MS) => {
-        await waitUntil(() => posts.some((p) => pattern.test(p.content ?? '')), timeoutMs, `a webhook post matching ${pattern}`)
-        return posts.find((p) => pattern.test(p.content ?? ''))
+        const matches = (p) => pattern.test(p.content ?? '') || (p.content ?? '').split('\n').some((line) => pattern.test(line))
+        await waitUntil(() => posts.some(matches), timeoutMs, `a webhook post to /${path} matching ${pattern}`)
+        return posts.find(matches)
       }
     }
   }
@@ -401,6 +435,7 @@ export class ScenarioContext {
       server.close(() => resolve())
     })))
     this.servers = []
+    this.webhookRoutes = undefined
   }
 }
 

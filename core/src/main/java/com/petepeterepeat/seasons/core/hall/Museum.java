@@ -145,6 +145,84 @@ public final class Museum {
         .build();
   }
 
+  /**
+   * The plinths a curator may put an archived item on (questions 214): museum cells with a trophy
+   * anchor whose first trophy anchor isn't an egg plinth, holding nothing, and with no change
+   * running or left open by a crash. By anchor key, sorted. Completes on the server thread.
+   */
+  public CompletableFuture<List<String>> freePlinths() {
+    List<HallService.CellRef> candidates = new ArrayList<>();
+    for (Gallery gallery : hall.galleries()) {
+      if (gallery.kind() != Gallery.Kind.MUSEUM) {
+        continue;
+      }
+      for (Cell cell : gallery.cells()) {
+        List<Anchor> trophies = cell.anchors(AnchorType.TROPHY);
+        if (!trophies.isEmpty() && trophies.getFirst().egg().isEmpty()) {
+          candidates.add(new HallService.CellRef(gallery, cell));
+        }
+      }
+    }
+    return writer
+        .submit(() -> {
+          List<String> free = new ArrayList<>();
+          for (HallService.CellRef ref : candidates) {
+            if (files.item(ref.key()).isEmpty()) {
+              free.add(ref.key());
+            }
+          }
+          return free;
+        })
+        .thenApplyAsync(
+            free ->
+                free.stream()
+                    .filter(key -> !moving.contains(key) && !unsettled(key))
+                    .sorted()
+                    .toList(),
+            serverThread);
+  }
+
+  /**
+   * Puts a curator's item straight onto a free plinth, never through anyone's inventory, with a
+   * plaque crediting its owner. The curation's own journal entries cover it: this only claims the
+   * plinth, stores the item under the curation's id and draws it. Completes on the server thread
+   * with whether it went on, false if the plinth is gone, busy or no longer free.
+   *
+   * @param id the curation's id, which {@link #holds} looks for after a crash
+   */
+  public CompletableFuture<Boolean> placeCurated(
+      String anchor, NeutralItem item, int season, String credit, String id) {
+    Optional<HallService.CellRef> found = plinth(anchor);
+    if (found.isEmpty() || unsettled(anchor) || !moving.add(anchor)) {
+      return CompletableFuture.completedFuture(false);
+    }
+    HallService.CellRef ref = found.get();
+    MuseumFiles.Trophy trophy =
+        new MuseumFiles.Trophy(ref.key(), Optional.empty(), season, credit, clock.instant(), id);
+    return writer
+        .submit(() -> {
+          if (files.item(ref.key()).isPresent()) {
+            return Boolean.FALSE;
+          }
+          files.put(trophy, item);
+          return Boolean.TRUE;
+        })
+        .whenCompleteAsync(
+            (placed, failure) -> {
+              moving.remove(anchor);
+              if (Boolean.TRUE.equals(placed)) {
+                redraw(ref);
+              }
+            },
+            serverThread);
+  }
+
+  /** Whether a plinth holds what the curation with this id put there. Writer thread only. */
+  public boolean holds(String anchor, String id) throws IOException {
+    return files.trophy(anchor).map(t -> t.id().equals(id)).orElse(false)
+        && files.item(anchor).isPresent();
+  }
+
   /** Whether a museum has an egg plinth for a season, as the end's dry run asks. */
   public static boolean hasEggPlinth(java.util.Collection<Gallery> galleries, int season) {
     return galleries.stream()

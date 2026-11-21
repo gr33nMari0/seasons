@@ -189,9 +189,19 @@ public final class Vault {
    * as a dragon egg they had no room for or a curator's return.
    */
   public CompletableFuture<Void> returnItem(PlayerId player, NeutralItem item, String why) {
+    return returnItem(player, item, why, Optional.empty());
+  }
+
+  /**
+   * As {@link #returnItem(PlayerId, NeutralItem, String)}, under a reference that {@link
+   * VaultFiles#delivered} finds afterwards, so a crash can tell whether it arrived.
+   */
+  public CompletableFuture<Void> returnItem(
+      PlayerId player, NeutralItem item, String why, Optional<String> ref) {
     return writer
         .submit(() -> {
-          vaults.addReturned(player, item, clock.instant());
+          // With a reference, a second call adds nothing.
+          vaults.addReturned(player, item, clock.instant(), ref);
           return Boolean.TRUE;
         })
         .thenRun(() ->

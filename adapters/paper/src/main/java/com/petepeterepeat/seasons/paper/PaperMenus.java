@@ -27,10 +27,11 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
 /**
- * View-only and withdraw-only menus: every click and drag is refused, then the client is resynced;
- * in a withdraw-only menu a left or shift click on an item then asks the core to withdraw it. Every
- * item shown is a throwaway copy tagged {@code seasons:archived}, which the tripwire deletes
- * wherever else it turns up.
+ * View-only, withdraw-only and choice menus: every click and drag is refused, then the client is
+ * resynced; in a withdraw-only menu a left or shift click on an item then asks the core to withdraw
+ * it, and in a choice menu a left click on a choice tells the core which. Every item shown is a
+ * throwaway copy tagged {@code seasons:archived}, which the tripwire deletes wherever else it turns
+ * up.
  */
 final class PaperMenus implements Menus, Listener {
   private static final int ROW = 9;
@@ -95,6 +96,28 @@ final class PaperMenus implements Menus, Listener {
     player.openInventory(inventory);
   }
 
+  @Override
+  public void close(PlayerId viewer) {
+    players.player(viewer).ifPresent(Player::closeInventory);
+  }
+
+  @Override
+  public void openChoice(PlayerId viewer, Message title, List<Choice> choices, Chosen chosen) {
+    Player player =
+        players.player(viewer).orElseThrow(() -> new IllegalStateException(viewer + " is offline"));
+    int slots = Math.min(MAX_SLOTS, Math.max(ROW, (choices.size() + ROW - 1) / ROW * ROW));
+    ChoiceHolder holder = new ChoiceHolder(choices.size(), chosen);
+    Inventory inventory = server.createInventory(holder, slots, text.render(title));
+    holder.inventory = inventory;
+    for (int i = 0; i < Math.min(slots, choices.size()); i++) {
+      Choice choice = choices.get(i);
+      Material icon = Material.matchMaterial(choice.icon());
+      inventory.setItem(
+          i, button(icon == null || !icon.isItem() ? Material.PAPER : icon, choice.label()));
+    }
+    player.openInventory(inventory);
+  }
+
   @EventHandler(priority = EventPriority.LOWEST)
   void onClick(InventoryClickEvent event) {
     if (!isViewOnly(event.getView().getTopInventory())) {
@@ -102,6 +125,15 @@ final class PaperMenus implements Menus, Listener {
     }
     // Refused first, whatever the click: the buttons only turn the page.
     event.setCancelled(true);
+    if (event.getView().getTopInventory().getHolder(false) instanceof ChoiceHolder choice) {
+      int raw = event.getRawSlot();
+      resync(event.getWhoClicked());
+      if (event.getClick() == ClickType.LEFT && raw >= 0 && raw < choice.count) {
+        // Asked only after the refusal, as a withdrawal is.
+        choice.chosen.chosen(raw);
+      }
+      return;
+    }
     if (event.getView().getTopInventory().getHolder(false) instanceof PagedHolder paged
         && event.getClick() != ClickType.CREATIVE) {
       int raw = event.getRawSlot();
@@ -153,7 +185,9 @@ final class PaperMenus implements Menus, Listener {
 
   static boolean isViewOnly(Inventory inventory) {
     InventoryHolder holder = inventory.getHolder(false);
-    return holder instanceof ViewOnlyHolder || holder instanceof PagedHolder;
+    return holder instanceof ViewOnlyHolder
+        || holder instanceof PagedHolder
+        || holder instanceof ChoiceHolder;
   }
 
   private void show(PagedHolder holder, int page) {
@@ -209,6 +243,26 @@ final class PaperMenus implements Menus, Listener {
 
     PagedHolder(PagedView view) {
       this.view = view;
+    }
+
+    @Override
+    public Inventory getInventory() {
+      if (inventory == null) {
+        throw new IllegalStateException("Menu not built yet");
+      }
+      return inventory;
+    }
+  }
+
+  /** Marks a menu of choices, and who hears which is clicked. */
+  static final class ChoiceHolder implements InventoryHolder {
+    private final int count;
+    private final Chosen chosen;
+    private @org.jspecify.annotations.Nullable Inventory inventory;
+
+    ChoiceHolder(int count, Chosen chosen) {
+      this.count = count;
+      this.chosen = chosen;
     }
 
     @Override

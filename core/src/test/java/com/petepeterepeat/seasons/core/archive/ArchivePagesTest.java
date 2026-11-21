@@ -62,4 +62,50 @@ class ArchivePagesTest {
         .element(1)
         .isEqualTo(List.of(stone));
   }
+
+  @Test
+  void eachShownItemKnowsItsSlotInTheRecord() {
+    ArchiveRecord record = archive(EnderChestPolicy.ARCHIVE, List.of());
+    List<List<Optional<ArchiveSlot>>> slots = ArchivePages.slots(record);
+    List<List<Optional<NeutralItem>>> pages = ArchivePages.pages(record);
+
+    assertThat(slots).hasSameSizeAs(pages);
+    for (int page = 0; page < pages.size(); page++) {
+      for (int i = 0; i < pages.get(page).size(); i++) {
+        assertThat(slots.get(page).get(i).flatMap(record::item)).isEqualTo(pages.get(page).get(i));
+      }
+    }
+    assertThat(slots.getFirst().get(0)).contains(ArchiveSlot.of(ArchiveSlot.ARMOUR, 3));
+    assertThat(slots.getFirst().get(4)).contains(ArchiveSlot.of(ArchiveSlot.OFFHAND, 0));
+    assertThat(slots.getFirst().get(36)).contains(ArchiveSlot.of(ArchiveSlot.STORAGE, 0));
+    assertThat(slots.get(1).getFirst()).contains(ArchiveSlot.of(ArchiveSlot.ENDER, 0));
+  }
+
+  @Test
+  void changingASlotChangesTheHashAsArchivingWould() {
+    ArchiveRecord record = archive(EnderChestPolicy.VAULT, List.of());
+    ArchiveSlot helmet = ArchiveSlot.of(ArchiveSlot.ARMOUR, 3);
+
+    ArchiveRecord changed = record.with(helmet, Optional.empty());
+
+    assertThat(changed.item(helmet)).isEmpty();
+    assertThat(changed.contentHash()).isEqualTo(ArchiveHash.of(changed.inventory(), true));
+    assertThat(changed.with(helmet, record.item(helmet)).contentHash())
+        .isEqualTo(ArchiveHash.of(record.inventory(), true));
+    assertThat(changed.figureEquipment().getFirst()).isEmpty();
+  }
+
+  @Test
+  void slotKeysReadBack() {
+    for (ArchiveSlot slot :
+        List.of(
+            ArchiveSlot.of(ArchiveSlot.STORAGE, 13),
+            ArchiveSlot.of(ArchiveSlot.OFFHAND, 0),
+            new ArchiveSlot(ArchiveSlot.CONTAINER, 1, 4))) {
+      assertThat(ArchiveSlot.parse(slot.key())).contains(slot);
+    }
+    assertThat(ArchiveSlot.parse("pocket.1")).isEmpty();
+    assertThat(ArchiveSlot.parse("storage")).isEmpty();
+    assertThat(ArchiveSlot.parse("container.1")).isEmpty();
+  }
 }
