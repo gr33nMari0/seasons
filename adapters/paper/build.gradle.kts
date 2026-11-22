@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+import java.util.UUID
+
 description = "Seasons Adapter for Paper, packaged with the core as the Seasons plugin jar"
 
 plugins {
@@ -13,6 +15,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":integrations"))
     implementation(libs.configurate.yaml)
+    implementation(libs.bstats.bukkit)
 
     testImplementation(libs.paper.api.mockbukkit)
     testImplementation(libs.mockbukkit)
@@ -37,6 +40,8 @@ tasks.shadowJar {
     relocate("net.kyori.option", "$shaded.option")
     relocate("com.google.gson", "$shaded.gson")
     relocate("org.yaml.snakeyaml", "$shaded.snakeyaml")
+    // bStats insists on being relocated, so its classes never clash with another plugin's copy.
+    relocate("org.bstats", "$shaded.bstats")
     // Gson's compile-time annotations are not needed at run time.
     dependencies { exclude(dependency("com.google.errorprone:error_prone_annotations")) }
     exclude("META-INF/maven/**", "META-INF/versions/*/module-info.class", "module-info.class")
@@ -57,5 +62,20 @@ tasks.runServer {
             properties.parentFile.mkdirs()
             properties.writeText("white-list=false\n")
         }
+        // A dev server never reports to bStats, for any plugin: turned off before every boot, so
+        // a run/ folder from before Seasons had metrics is turned off too. Its server id stays.
+        val bStats = runDirectory.get().asFile.resolve("plugins/bStats/config.yml")
+        val id = if (bStats.exists()) {
+            Regex("^serverUuid: *(\\S+)$", RegexOption.MULTILINE).find(bStats.readText())?.groupValues?.get(1)
+        } else {
+            null
+        }
+        bStats.parentFile.mkdirs()
+        bStats.writeText(
+            "# Written by runServer before every boot: a dev server never reports to bStats.\n" +
+                "enabled: false\n" +
+                "serverUuid: ${id ?: UUID.randomUUID()}\n" +
+                "logFailedRequests: false\n",
+        )
     }
 }

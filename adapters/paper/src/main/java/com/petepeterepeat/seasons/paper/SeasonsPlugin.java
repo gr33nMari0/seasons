@@ -44,6 +44,7 @@ public final class SeasonsPlugin extends JavaPlugin {
 
   private @Nullable ExecutorService async;
   private @Nullable Seasons seasons;
+  private @Nullable PaperMetrics metrics;
 
   @Override
   public void onEnable() {
@@ -116,6 +117,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     server.getPluginManager().registerEvents(entities, this);
 
     start(platform, clock, hooks);
+    metrics = new PaperMetrics(this, () -> Optional.ofNullable(seasons));
     Clock seasonsClock = clock;
     Optional<ScenarioHooks> scenarioHooks = hooks;
     hooks.ifPresent(scenario -> {
@@ -188,9 +190,14 @@ public final class SeasonsPlugin extends JavaPlugin {
   @Override
   public void onDisable() {
     getServer().getServicesManager().unregisterAll(this);
-    Seasons running = seasons;
+    PaperMetrics running = metrics;
     if (running != null) {
       running.stop();
+      metrics = null;
+    }
+    Seasons started = seasons;
+    if (started != null) {
+      started.stop();
       seasons = null;
     }
     ExecutorService executor = async;

@@ -926,6 +926,15 @@ public final class Seasons implements SeasonsApi {
     return state.map(s -> OptionalInt.of(s.season())).orElse(OptionalInt.empty());
   }
 
+  /**
+   * Seasons' anonymous usage charts for bStats, each chart's id with its value now (see {@link
+   * com.petepeterepeat.seasons.core.usage.UsageCharts}).
+   */
+  public java.util.Map<String, String> usage(boolean webInstalled) {
+    return com.petepeterepeat.seasons.core.usage.UsageCharts.values(
+        config.get().config(), currentSeason(), webInstalled);
+  }
+
   /** The command handlers, once started. */
   Optional<SeasonCommands> commands() {
     return Optional.ofNullable(commands);
