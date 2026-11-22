@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// A64. /hof help, help cell and help cell bounds show each usage with its arguments' types and
+// A64. /hof help, help cell, help cell row and help cell bounds show each usage with its arguments' types and
 // choices; /hof cell alone lists its subcommands; a mistyped command shows its usage; after
 // /hof gallery create, /hof cell new and /season end the admin is privately offered the next
 // steps, and with admin.hints: false isn't; console help is plain text (questions 267 and 268).
@@ -21,6 +21,7 @@ export default {
       /^\/hof cell anchor <cell: [^>]+> <type: \(figure\|archive\|plaque\|trophy\|entry\|gate\)> \[<at: [^>]+>\] - \S/,
       /^\/hof cell assign <cell: [^>]+> <player: [^>]+> \[<season: [^>]+>\] - \S/
     ])
+    await ctx.command(admin, '/hof help cell row', [/^Seasons help: \/hof cell row$/, /^\/hof cell row <gallery: gallery id> <count: 1 to 64> \[<options: --along \+x\|-x\|\+z\|-z, --wall 0 to 4, --across \+x\|-x\|\+z\|-z width, --like cell, --from corners>\] - \S/])
     await ctx.command(admin, '/hof help cell bounds', [/^Seasons help: \/hof cell bounds$/, /^\/hof cell bounds <cell: /])
     await ctx.command(admin, '/hof help', [/^Seasons help: \/hof$/, /^\/hof gallery create <gallery: [^>]+> <season: [^>]+>/, /^\/hof leave - /])
     await ctx.command(admin, '/season help', [/^Seasons help: \/season$/, /^\/season end \[<options: [^>]+>\] - /, /^\/season spawn set /])

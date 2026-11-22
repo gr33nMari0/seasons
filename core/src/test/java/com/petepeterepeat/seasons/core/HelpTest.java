@@ -90,6 +90,19 @@ class HelpTest {
   }
 
   @Test
+  void aRowsHelpNamesItsCountsRangeAndOptions() {
+    List<String> lines = hof(TestSource.console(), "/hof help cell row");
+    assertThat(lines.getFirst()).isEqualTo("Seasons help: /hof cell row");
+    // Every option shows, none lost as if it were a tag.
+    assertThat(lines)
+        .contains(
+            "/hof cell row <gallery: gallery id> <count: 1 to 64> [<options: --along +x|-x|+z|-z,"
+                + " --wall 0 to 4, --across +x|-x|+z|-z width, --like cell, --from corners>] -"
+                + " Repeat the selected cell along a hallway, on one side or both, previewed"
+                + " first.");
+  }
+
+  @Test
   void partOfACommandListsWhatFollowsAndAWrongWordSaysSo() {
     assertThat(hof(TestSource.console(), "/hof cell")).first().isEqualTo("Seasons help: /hof cell");
     assertThat(hof(TestSource.console(), "/hof cell bogus"))

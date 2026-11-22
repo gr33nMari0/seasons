@@ -38,6 +38,15 @@ public interface Menus {
   void close(PlayerId viewer);
 
   /**
+   * Closes a Seasons menu a player has open (a view-only, paged, withdraw-only or choice menu),
+   * leaving any other inventory alone; before Seasons stops itself, so no menu outlives the
+   * listener that keeps it view-only (questions 283).
+   */
+  default void closeOwn(PlayerId viewer) {
+    close(viewer);
+  }
+
+  /**
    * One choice.
    *
    * @param icon the item it shows as, such as {@code minecraft:ender_chest}

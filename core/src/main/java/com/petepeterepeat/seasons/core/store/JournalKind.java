@@ -25,5 +25,11 @@ public enum JournalKind {
   MUSEUM_DONE,
   /** {@code /hof stamp} started: its id, with its plan saved under {@code data/stamps/}. */
   STAMP_STARTED,
-  STAMP_DONE
+  STAMP_DONE,
+  /**
+   * {@code /season reset} confirmed, before its first change to the world (questions 283). Needs no
+   * recovery from the journal, which the reset deletes: {@code plugins/Seasons/reset-pending}
+   * finishes an interrupted reset at the next start.
+   */
+  RESET_STARTED
 }

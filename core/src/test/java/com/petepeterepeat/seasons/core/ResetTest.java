@@ -122,4 +122,44 @@ class ResetTest {
     String gallery = Files.readString(dir.resolve("world/seasons/galleries/season-2.yml"));
     assertThat(gallery).contains("c1:").doesNotContain("owners");
   }
+
+  @Test
+  void seasonsMenusCloseAndSeasonsStopsBeforeTheDisplaysGo() {
+    console("/season reset");
+    console("/season reset confirm DELETE");
+    // Every online player's Seasons menu is closed, so no view-only copy outlives its listener.
+    assertThat(fake.closed).contains(alex.id());
+    // Seasons stopped first: a tick after the reset draws nothing again.
+    fake.tick();
+    assertThat(fake.displays).isEmpty();
+    assertThat(dir.resolve("plugins/Seasons/" + ResetCommand.PENDING)).doesNotExist();
+  }
+
+  @Test
+  void anInterruptedResetIsFinishedAtTheNextStart() throws IOException {
+    seasons.stop();
+    // As a crash after the journal entry leaves it: the marker, and the folder still all there.
+    Path world = dir.resolve("world/seasons");
+    assertThat(world.resolve("data/season.json")).exists();
+    Files.writeString(
+        dir.resolve("plugins/Seasons/" + ResetCommand.PENDING),
+        "keepHall true\nbox minecraft:overworld 0 60 0 20 80 20\n");
+    FakePlatform again = new FakePlatform();
+    seasons =
+        new Seasons(
+            again.platform(new Capabilities(EnumSet.allOf(Capability.class)), dir),
+            "1.2.3",
+            again.clock,
+            Webhooks.NONE,
+            MapPublisher.NONE,
+            Map.of(),
+            new SerialWriter(Runnable::run),
+            Optional.empty());
+    seasons.start();
+    assertThat(dir.resolve("plugins/Seasons/" + ResetCommand.PENDING)).doesNotExist();
+    assertThat(world.resolve("data/season.json")).doesNotExist();
+    assertThat(world.resolve("data/players")).doesNotExist();
+    String gallery = Files.readString(world.resolve("galleries/season-2.yml"));
+    assertThat(gallery).contains("c1:").doesNotContain("owners");
+  }
 }

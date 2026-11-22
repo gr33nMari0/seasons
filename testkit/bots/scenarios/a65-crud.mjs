@@ -75,6 +75,8 @@ export default {
     await ctx.command(admin, '/season schedule show', /^Planned end: /)
     await ctx.command(admin, '/season schedule clear', /^Season 2 has no planned end now\.$/)
     await ctx.command(admin, '/season schedule show', /^No planned end set\./)
+    // These changes are audited too: the spawn, candidates, waypoints and the schedule.
+    await ctx.command(admin, '/season audit', [/ schedule-clear season-2 /, / schedule-set season-2 /, / config seasons\/3\.yml spawn /, / config seasons\/3\.yml spawnCandidates\.north /])
 
     // Players and seasons.
     await ctx.command(admin, '/season players', [/^Visitor: played Season 2; not archived yet; cell season-2:c1$/, new RegExp(`^${me}: played Season 2; not archived yet; no cell$`)])

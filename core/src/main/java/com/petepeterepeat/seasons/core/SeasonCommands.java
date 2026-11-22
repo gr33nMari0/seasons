@@ -509,6 +509,10 @@ final class SeasonCommands {
       refuse(source, refused);
       return;
     }
+    // Every change is audited (A65).
+    services
+        .audit()
+        .record(actor(source), "schedule-set", "season-" + season(), "ok", at.toString());
     String key =
         config.get().config().schedule().autoEnd() ? "schedule.done-auto" : "schedule.done";
     source.reply(
@@ -540,6 +544,7 @@ final class SeasonCommands {
       refuse(source, refused);
       return;
     }
+    services.audit().record(actor(source), "schedule-clear", "season-" + season(), "ok", "");
     source.reply(messages().get("schedule.cleared", "season", season()));
   }
 

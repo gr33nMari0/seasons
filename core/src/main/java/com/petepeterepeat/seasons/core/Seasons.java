@@ -183,6 +183,19 @@ public final class Seasons implements SeasonsApi {
   public void start() {
     Path world = platform.storage().worldDataDirectory();
     Executor serverThread = platform.scheduler()::runGlobal;
+    // A reset a crash cut short is finished first, so a half-deleted folder never loads as real
+    // data (questions 283); its leftover displays go once the server is running.
+    try {
+      List<com.petepeterepeat.seasons.core.hall.Bounds> leftover =
+          ResetCommand.finishInterrupted(world, platform.storage().configDirectory());
+      if (!leftover.isEmpty()) {
+        serverThread.execute(() -> {
+          var _ = ResetCommand.removeDisplays(platform, leftover);
+        });
+      }
+    } catch (IOException | RuntimeException e) {
+      LOG.error("Can't finish the interrupted /season reset; remove what is left by hand", e);
+    }
     ConfigLoader loader =
         new ConfigLoader(
             platform.storage().configDirectory(),

@@ -101,6 +101,8 @@ reset:
   cancelled: "<green>Reset cancelled; nothing was deleted.</green>"
   backup-failed: "<red>The backup couldn't be written (<error>), so nothing was reset.</red>"
   backed-up: "<gray>Backed up to plugins/Seasons/reset-backups/<file>.</gray>"
+  not-journalled: "<red>The reset couldn't be written to the journal (<error>), so nothing was reset.</red>"
+  stopped-by: "<red><name> reset Seasons, which has stopped. The next start is a fresh install.</red>"
   delete-failed: "<red>Some files couldn't be deleted (<error>); the backup has them all.</red>"
   done: "<green>Seasons was reset and has stopped. Restart the server to start again as a fresh install.</green>"
 
@@ -982,6 +984,7 @@ pet:
 # command's line ends with help.<its words>; each argument shows help.argument.<name>, or a more
 # particular help.argument.<command words>.<name> or help.argument.<root>.<name> if there is one.
 help:
+  # Argument texts are shown as plain text, so they name values in words, never as <tags>.
   header: "<gold>Seasons help: <command></gold>"
   none: "<gray>You can't run anything under <command>.</gray>"
   unknown: "<red>There's no <command>.</red>"
@@ -1000,7 +1003,7 @@ help:
     id: "id"
     season.zone.add.id: "new zone id"
     hof.cell.new.id: "new cell id, or the next free c1, c2, ..."
-    shape: "cylinder <radius> | box <corners> | outside circle <radius> | outside box <x1 z1 x2 z2> | y-above <y> | y-below <y>"
+    shape: "cylinder radius | box corners | outside circle radius | outside box x1 z1 x2 z2 | y-above y | y-below y"
     mode: "zone mode"
     target: "what to open"
     season.target: "homecoming, or a zone id"
@@ -1019,7 +1022,7 @@ help:
     player: "player name"
     state: "open or shut"
     link: "link id"
-    rest: "[hall | season <n>] [x y z]"
+    rest: "[hall | season n] [x y z]"
     gallery: "gallery id"
     cell: "gallery:cell"
     type: "anchor type"
@@ -1033,7 +1036,7 @@ help:
     other: "the other gallery:cell"
     offset: "dx dy dz [--force]"
     hof.cell.rename.id: "new cell id"
-    hof.cell.row.options: "--along +x|-x|+z|-z, --wall <0-4>, --across <dir> <width>, --like <cell>, --from <corners>"
+    hof.cell.row.options: "--along +x|-x|+z|-z, --wall 0 to 4, --across +x|-x|+z|-z width, --like cell, --from corners"
     hof.cell.swap.options: "--force"
     hof.cell.redefine.options: "--force"
     season.players.which: "online, archived or pending"

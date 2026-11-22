@@ -8,6 +8,7 @@ import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Words;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.hall.Bounds;
 import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.GalleryFiles;
@@ -21,8 +22,11 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.Phase;
+import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
+import com.petepeterepeat.seasons.core.store.AtomicFiles;
 import com.petepeterepeat.seasons.core.store.Journal;
+import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -62,6 +66,10 @@ final class ResetCommand implements ChatInput {
   static final Duration WAIT = Duration.ofSeconds(60);
 
   static final String KEEP_HALL = "--keep-hall";
+
+  /** In {@code plugins/Seasons/}: a confirmed reset not yet finished (questions 283). */
+  static final String PENDING = "reset-pending";
+
   private static final String WORD = "DELETE";
   private static final String CONSOLE = "console";
   private static final DateTimeFormatter STAMP =
@@ -243,7 +251,12 @@ final class ResetCommand implements ChatInput {
     return Optional.empty();
   }
 
-  /** The reset itself: backup, displays, objectives, game modes, files, then Seasons stops. */
+  /**
+   * The reset itself (questions 283): the backup, then {@code reset-pending} and the journal before
+   * the first change to the world; then Seasons' menus closed and Seasons stopped, so nothing of it
+   * can draw a display again or leave a view-only copy takeable; then the displays, objectives,
+   * game modes and files; then Seasons disables itself.
+   */
   private void run(CommandSource source, boolean keepHall) {
     Messages messages = messages();
     Optional<String> busy = busy();
@@ -255,93 +268,223 @@ final class ResetCommand implements ChatInput {
         configDirectory
             .resolve("reset-backups")
             .resolve(worldName() + "-" + STAMP.format(clock.instant()) + ".zip");
+    List<Bounds> boxes = boxes(halls.galleries());
     try {
       zip(world, backup);
+      writePending(configDirectory.resolve(PENDING), keepHall, boxes);
     } catch (IOException e) {
       LOG.error("The reset's backup failed, so nothing was reset", e);
       source.reply(messages.get("reset.backup-failed", "error", String.valueOf(e.getMessage())));
       return;
     }
     source.reply(messages.get("reset.backed-up", "file", String.valueOf(backup.getFileName())));
-    List<Gallery> galleries = List.copyOf(halls.galleries());
+    int season = state.get().map(SeasonState::season).orElse(0);
+    CompletableFuture<?> journalled =
+        journal
+            .<CompletableFuture<?>>map(j ->
+                j.append(
+                    JournalKind.RESET_STARTED,
+                    source.player().orElse(null),
+                    season,
+                    keepHall ? "reset-keep-hall" : "reset"))
+            .orElseGet(() -> CompletableFuture.completedFuture(null));
     var _ =
-        removeDisplays(galleries)
+        journalled.whenCompleteAsync(
+            (entry, failure) -> {
+              if (failure != null) {
+                LOG.error("The reset couldn't be journalled, so nothing was reset", failure);
+                try {
+                  Files.deleteIfExists(configDirectory.resolve(PENDING));
+                } catch (IOException e) {
+                  LOG.error("Can't remove {}", configDirectory.resolve(PENDING), e);
+                }
+                source.reply(
+                    messages()
+                        .get(
+                            "reset.not-journalled", "error", String.valueOf(failure.getMessage())));
+                return;
+              }
+              stopThenClear(source, keepHall, boxes);
+            },
+            serverThread);
+  }
+
+  private void stopThenClear(CommandSource source, boolean keepHall, List<Bounds> boxes) {
+    Messages messages = messages();
+    List<PlayerId> switched = new ArrayList<>();
+    List<PlayerId> admins = new ArrayList<>();
+    for (PlayerRef online : platform.players().online()) {
+      PlayerId player = online.id();
+      // A view-only copy outlives the listener that keeps it so once Seasons stops (questions 283).
+      platform.menus().closeOwn(player);
+      if (halls.switched(player) && platform.players().gameMode(player) == GameMode.ADVENTURE) {
+        switched.add(player);
+      }
+      if (platform.permissions().has(player, SeasonService.ADMIN_PERMISSION)
+          && !source.player().map(player::equals).orElse(false)) {
+        admins.add(player);
+      }
+    }
+    // Stopped before the displays go, so reconciliation can't draw one again meanwhile, nor the
+    // reset's own chunk loads queue one (questions 283); and so nothing writes the files again.
+    stopSeasons.run();
+    var _ =
+        removeDisplays(platform, boxes)
             .whenCompleteAsync(
                 (done, failure) -> {
                   if (failure != null) {
                     LOG.warn("Some displays weren't removed by the reset", failure);
                   }
-                  finish(source, keepHall, galleries);
+                  finish(source, keepHall, switched, admins, messages);
                 },
                 serverThread);
   }
 
-  private void finish(CommandSource source, boolean keepHall, List<Gallery> galleries) {
+  private void finish(
+      CommandSource source,
+      boolean keepHall,
+      List<PlayerId> switched,
+      List<PlayerId> admins,
+      Messages messages) {
     platform.players().removeObjectives("seasons_deaths_s");
-    for (PlayerRef online : platform.players().online()) {
-      PlayerId player = online.id();
-      if (halls.switched(player) && platform.players().gameMode(player) == GameMode.ADVENTURE) {
+    for (PlayerId player : switched) {
+      // Their records go with the folder, so there is nothing to mark.
+      if (platform.players().find(player).isPresent()) {
         platform.players().setGameMode(player, GameMode.SURVIVAL);
       }
-      halls.forgetSwitched(player);
     }
-    // Stopped first, so nothing it does on the way out writes its files again.
-    stopSeasons.run();
     try {
-      delete(keepHall, galleries);
+      delete(world, keepHall);
+      Files.deleteIfExists(configDirectory.resolve(PENDING));
     } catch (IOException e) {
-      LOG.error("The reset couldn't delete every file; the backup has them all", e);
-      source.reply(messages().get("reset.delete-failed", "error", String.valueOf(e.getMessage())));
+      LOG.error("The reset couldn't delete every file; the next start finishes it", e);
+      source.reply(messages.get("reset.delete-failed", "error", String.valueOf(e.getMessage())));
     }
+    String name = source.player().flatMap(p -> platform.players().knownName(p)).orElse(CONSOLE);
     LOG.warn(
         "Seasons was reset by {}{}; the backup is in {}",
-        source.player().flatMap(p -> platform.players().knownName(p)).orElse(CONSOLE),
+        name,
         keepHall ? ", keeping the Hall's layout" : "",
         configDirectory.resolve("reset-backups"));
-    source.reply(messages().get("reset.done"));
+    for (PlayerId admin : admins) {
+      platform.players().sendMessage(admin, messages.get("reset.stopped-by", "name", name));
+    }
+    source.reply(messages.get("reset.done"));
     platform.storage().stopSeasons();
   }
 
-  /** Every Seasons display of every gallery, its chunks loaded first. */
-  private CompletableFuture<Void> removeDisplays(List<Gallery> galleries) {
-    List<CompletableFuture<Void>> loads = new ArrayList<>();
+  /** Where Seasons' displays may be: each gallery's bounds, else each of its cells'. */
+  static List<Bounds> boxes(java.util.Collection<Gallery> galleries) {
+    List<Bounds> boxes = new ArrayList<>();
     for (Gallery gallery : galleries) {
-      gallery
-          .bounds()
-          .ifPresent(b -> {
-            for (int x = b.minX() >> 4; x <= b.maxX() >> 4; x++) {
-              for (int z = b.minZ() >> 4; z <= b.maxZ() >> 4; z++) {
-                loads.add(
-                    platform
-                        .world()
-                        .loadChunk(Position.of(b.dimension(), x * 16, b.minY(), z * 16)));
-              }
-            }
-          });
+      if (gallery.bounds().isPresent()) {
+        boxes.add(gallery.bounds().get());
+      } else {
+        gallery.cells().forEach(cell -> cell.bounds().ifPresent(boxes::add));
+      }
     }
+    return boxes;
+  }
+
+  /** Every Seasons display in the boxes, their chunks loaded first; on the server thread. */
+  static CompletableFuture<Void> removeDisplays(Platform platform, List<Bounds> boxes) {
+    List<CompletableFuture<Void>> loads = new ArrayList<>();
+    for (Bounds b : boxes) {
+      for (int x = b.minX() >> 4; x <= b.maxX() >> 4; x++) {
+        for (int z = b.minZ() >> 4; z <= b.maxZ() >> 4; z++) {
+          loads.add(
+              platform.world().loadChunk(Position.of(b.dimension(), x * 16, b.minY(), z * 16)));
+        }
+      }
+    }
+    Executor serverThread = platform.scheduler()::runGlobal;
     return CompletableFuture.allOf(loads.toArray(CompletableFuture[]::new))
         .thenRunAsync(
-            () -> {
-              for (Gallery gallery : galleries) {
-                gallery
-                    .bounds()
-                    .ifPresent(b -> platform.displays().removeTagged(b.min(), b.max(), ""));
-              }
-            },
+            () -> boxes.forEach(b -> platform.displays().removeTagged(b.min(), b.max(), "")),
             serverThread);
   }
 
-  /** Deletes {@code <world>/seasons}, keeping with {@code --keep-hall} the Hall's layout. */
-  private void delete(boolean keepHall, List<Gallery> galleries) throws IOException {
+  /**
+   * At startup, before anything reads {@code <world>/seasons/}: finishes a reset that a crash or a
+   * failed delete left half done, as {@code plugins/Seasons/reset-pending} records it (questions
+   * 283), so the next start never loads a half-deleted folder as real data.
+   *
+   * @return the boxes whose displays still have to go, empty when no reset was pending
+   */
+  static List<Bounds> finishInterrupted(Path world, Path configDirectory) throws IOException {
+    Path pending = configDirectory.resolve(PENDING);
+    if (!Files.exists(pending)) {
+      return List.of();
+    }
+    boolean keepHall = false;
+    List<Bounds> boxes = new ArrayList<>();
+    for (String line : Files.readAllLines(pending)) {
+      List<String> words = Words.of(line);
+      if (words.size() == 2 && words.get(0).equals("keepHall")) {
+        keepHall = Boolean.parseBoolean(words.get(1));
+      } else if (words.size() == 8 && words.get(0).equals("box")) {
+        boxes.add(
+            new Bounds(
+                words.get(1),
+                Integer.parseInt(words.get(2)),
+                Integer.parseInt(words.get(3)),
+                Integer.parseInt(words.get(4)),
+                Integer.parseInt(words.get(5)),
+                Integer.parseInt(words.get(6)),
+                Integer.parseInt(words.get(7))));
+      }
+    }
+    LOG.warn("Finishing a /season reset that didn't finish; its backup is in reset-backups");
+    delete(world, keepHall);
+    Files.delete(pending);
+    return boxes;
+  }
+
+  /** {@code reset-pending}: whether the Hall is kept and where the displays are, fsynced. */
+  private static void writePending(Path file, boolean keepHall, List<Bounds> boxes)
+      throws IOException {
+    StringBuilder text = new StringBuilder("keepHall " + keepHall + "\n");
+    for (Bounds b : boxes) {
+      text.append(
+          String.join(
+                  " ",
+                  "box",
+                  b.dimension(),
+                  Integer.toString(b.minX()),
+                  Integer.toString(b.minY()),
+                  Integer.toString(b.minZ()),
+                  Integer.toString(b.maxX()),
+                  Integer.toString(b.maxY()),
+                  Integer.toString(b.maxZ()))
+              + "\n");
+    }
+    Files.createDirectories(file.getParent());
+    AtomicFiles.write(file, text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  }
+
+  /**
+   * Deletes {@code <world>/seasons}, keeping with {@code --keep-hall} the Hall's layout: {@code
+   * hall.yml}, {@code templates/} and the gallery files, each read back from disk and written again
+   * without owners, imports or gate states. Safe to run again on what an earlier run left.
+   */
+  private static void delete(Path world, boolean keepHall) throws IOException {
     if (!Files.exists(world)) {
       return;
+    }
+    Path galleries = world.resolve("galleries");
+    if (keepHall && Files.isDirectory(galleries)) {
+      try (Stream<Path> files = Files.list(galleries)) {
+        for (Path file : files.filter(f -> f.toString().endsWith(".yml")).toList()) {
+          strip(file);
+        }
+      }
     }
     Files.walkFileTree(
         world,
         new SimpleFileVisitor<>() {
           @Override
           public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-            if (keepHall && dir.equals(world.resolve("templates"))) {
+            if (keepHall && (dir.equals(world.resolve("templates")) || dir.equals(galleries))) {
               return FileVisitResult.SKIP_SUBTREE;
             }
             return FileVisitResult.CONTINUE;
@@ -350,11 +493,7 @@ final class ResetCommand implements ChatInput {
           @Override
           public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
               throws IOException {
-            boolean kept =
-                keepHall
-                    && (file.equals(world.resolve("hall.yml"))
-                        || world.resolve("galleries").equals(file.getParent()));
-            if (!kept) {
+            if (!(keepHall && file.equals(world.resolve("hall.yml")))) {
               Files.delete(file);
             }
             return FileVisitResult.CONTINUE;
@@ -373,28 +512,42 @@ final class ResetCommand implements ChatInput {
             return FileVisitResult.CONTINUE;
           }
         });
-    if (keepHall) {
-      // The layout stays; who owned what, and which gates were shut, go with the seasons.
-      Path backups = Files.createTempDirectory("seasons-reset");
-      for (Gallery gallery : galleries) {
-        Path file = world.resolve("galleries").resolve(gallery.id() + ".yml");
-        if (!Files.exists(file)) {
-          continue;
+  }
+
+  /** A gallery file written again with its layout only: who owned what goes with the seasons. */
+  private static void strip(Path file) throws IOException {
+    String name = file.getFileName().toString();
+    String id = name.substring(0, name.length() - ".yml".length());
+    Gallery gallery;
+    try {
+      gallery =
+          GalleryFiles.read(
+              id,
+              org.spongepowered.configurate.yaml.YamlConfigurationLoader.builder()
+                  .path(file)
+                  .build()
+                  .load());
+    } catch (GalleryFiles.Invalid | IOException e) {
+      // A file that doesn't load stays as it was, for the admin to fix; the backup has it too.
+      LOG.warn("Kept {} as it was: it doesn't load ({})", file, e.getMessage());
+      return;
+    }
+    Gallery bare = gallery;
+    for (Cell cell : gallery.cells()) {
+      bare =
+          bare.withCell(
+              new Cell(
+                  cell.id(), cell.bounds(), cell.anchors(), Map.of(), false, cell.pose(), false));
+    }
+    // No backup of its own: the reset's zip has the file as it was.
+    Path scratch = Files.createTempDirectory("seasons-reset");
+    try {
+      GalleryFiles.write(file, scratch, bare);
+    } finally {
+      try (Stream<Path> left = Files.walk(scratch)) {
+        for (Path path : left.sorted(java.util.Comparator.reverseOrder()).toList()) {
+          Files.deleteIfExists(path);
         }
-        Gallery bare = gallery;
-        for (Cell cell : gallery.cells()) {
-          bare =
-              bare.withCell(
-                  new Cell(
-                      cell.id(),
-                      cell.bounds(),
-                      cell.anchors(),
-                      Map.of(),
-                      false,
-                      cell.pose(),
-                      false));
-        }
-        GalleryFiles.write(file, backups, bare);
       }
     }
   }
