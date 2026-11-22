@@ -104,6 +104,12 @@ public sealed interface Intent {
   record WandSwap(PlayerId player) implements Intent {}
 
   /**
+   * The hotbar slot changed, a scroll, with the Seasons wand in the main hand: a plaque looked at
+   * while sneaking grows or shrinks (questions 278).
+   */
+  record WandScroll(PlayerId player, int from, int to, boolean sneaking) implements Intent {}
+
+  /**
    * Opening the inventory of a block, such as a chest.
    *
    * @param blocks every block whose inventory opens: one, or both halves of a double chest

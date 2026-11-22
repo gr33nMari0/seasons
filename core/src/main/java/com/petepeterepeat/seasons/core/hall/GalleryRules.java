@@ -106,6 +106,9 @@ public final class GalleryRules {
    * or right beside them, in the doorway (questions 250).
    */
   public static boolean fits(Bounds bounds, Anchor anchor) {
+    if (anchor.area().isPresent() && !bounds.contains(anchor.area().get())) {
+      return false;
+    }
     return anchor.type() == AnchorType.GATE
         ? bounds.grown(1).contains(anchor.at())
         : bounds.contains(anchor.at());
@@ -128,6 +131,10 @@ public final class GalleryRules {
     if (hall.spawn().isPresent() && !hall.inHub(hall.spawn().get())) {
       problems.add(new Problem(HALL, "spawn", "the Hall spawn must sit inside the hub"));
     }
+    if (hall.areas().entry().isPresent()
+        && !hall.hub().map(h -> h.contains(hall.areas().entry().get())).orElse(false)) {
+      problems.add(new Problem(HALL, "spawn.to", "the Hall spawn's box must sit inside the hub"));
+    }
     List<HallLayout.Link> seen = new ArrayList<>();
     for (HallLayout.Link link : hall.links().values()) {
       for (HallLayout.Link other : seen) {
@@ -147,6 +154,11 @@ public final class GalleryRules {
   /** The rules one gallery keeps by itself. */
   public static List<Problem> check(Gallery gallery) {
     List<Problem> problems = new ArrayList<>();
+    if (gallery.areas().entry().isPresent()
+        && !gallery.bounds().map(b -> b.contains(gallery.areas().entry().get())).orElse(false)) {
+      problems.add(
+          new Problem(gallery.id(), "entry.to", "the entry's box must sit inside the gallery"));
+    }
     if (gallery.launch().isPresent() && !gallery.contains(gallery.launch().get())) {
       problems.add(
           new Problem(gallery.id(), "launch", "the launch button must sit inside the gallery"));

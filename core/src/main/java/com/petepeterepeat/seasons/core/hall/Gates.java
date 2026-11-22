@@ -145,11 +145,14 @@ public final class Gates {
         }
         boolean open = open(ref);
         String wanted = open ? AIR : shut;
+        // Only the plane's air and gate blocks are the gate's: an archway's decoration in it, and
+        // anything with contents, stays as built (questions 280).
+        List<Position> own = own(blocks, shut);
         boolean matches =
-            blocks.stream()
+            own.stream()
                 .map(platform.world()::block)
                 .map(BlockInfo::type)
-                .allMatch(wanted::equals);
+                .allMatch(type -> open ? isAir(type) : type.equals(shut));
         Boolean was = applied.get(key);
         if (matches) {
           applied.put(key, open);
@@ -172,14 +175,6 @@ public final class Gates {
           continue;
         }
         held.remove(key);
-        Optional<Position> contents =
-            blocks.stream().filter(platform.world()::holdsContents).findFirst();
-        if (contents.isPresent()) {
-          if (blocked.add(key)) {
-            leftAlone(ref, "contents", contents.get());
-          }
-          continue;
-        }
         blocked.remove(key);
         Tries before = tries.get(key);
         int tried = before != null && before.open() == open ? before.count() + 1 : 1;
@@ -286,10 +281,9 @@ public final class Gates {
                     return;
                   }
                   owner.ifPresent(o -> crash.reached(CrashPoint.GATE_SET, o));
-                  // Checked again: something with contents may have been put there meanwhile.
-                  if (blocks.stream().anyMatch(platform.world()::holdsContents)) {
-                    return;
-                  }
+                  // Worked out again: what is air or gate block may have changed meanwhile.
+                  List<Position> own =
+                      own(blocks, blockId(config.get().config().cells().gateBlock()));
                   // And someone may have stepped in while the journal was written: the gate
                   // waits for them, as the pass would (questions 250).
                   if (!open
@@ -302,7 +296,7 @@ public final class Gates {
                     return;
                   }
                   try {
-                    platform.world().setBlocks(blocks, type);
+                    platform.world().setBlocks(own, type);
                   } catch (RuntimeException e) {
                     LOG.error("Can't set the gate of {}", key, e);
                     return;
@@ -343,6 +337,20 @@ public final class Gates {
                     serverThread);
       }
     }
+  }
+
+  /** The blocks of a plane that are the gate's own: air, or the gate block (questions 280). */
+  private List<Position> own(List<Position> blocks, String shut) {
+    return blocks.stream()
+        .filter(b -> {
+          String type = platform.world().block(b).type();
+          return isAir(type) || type.equals(shut);
+        })
+        .toList();
+  }
+
+  private static boolean isAir(String type) {
+    return type.equals(AIR) || type.equals("minecraft:cave_air");
   }
 
   /** {@code iron_bars} as {@code minecraft:iron_bars}. */

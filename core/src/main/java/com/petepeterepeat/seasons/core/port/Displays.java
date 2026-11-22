@@ -16,6 +16,16 @@ public interface Displays {
    */
   UUID spawnText(Position position, Message text, String tag);
 
+  /** Spawns a text display at a size, such as a plaque's (questions 278). */
+  default UUID spawnText(Position position, Message text, String tag, double scale) {
+    return spawnText(position, text, tag);
+  }
+
+  /** Sets a text display's size; false if there is no such display. */
+  default boolean scaleText(UUID display, double scale) {
+    return false;
+  }
+
   /** Spawns a figure. */
   UUID spawnFigure(Figure figure);
 

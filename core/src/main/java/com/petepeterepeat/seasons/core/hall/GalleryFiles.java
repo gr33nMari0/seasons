@@ -62,6 +62,11 @@ public final class GalleryFiles {
   /** Gallery and cell ids: lower-case letters, digits, dashes and underscores. */
   public static final Pattern ID = Pattern.compile("[a-z0-9_-]{1,32}");
 
+  /** The smallest and largest a plaque's text may be (questions 278). */
+  public static final double MIN_SCALE = 0.25;
+
+  public static final double MAX_SCALE = 4;
+
   static final Pattern DIMENSION = Pattern.compile("[a-z0-9_.-]+:[a-z0-9_./-]+");
 
   private GalleryFiles() {}
@@ -111,11 +116,10 @@ public final class GalleryFiles {
         node.node("entry").virtual()
             ? Optional.empty()
             : Optional.of(point(node.node("entry"), dimension, "entry"));
+    Optional<Bounds> entryArea = area(node.node("entry"), entry, dimension, "entry");
     List<Position> exits = new ArrayList<>();
-    List<? extends ConfigurationNode> exitNodes = node.node("exits").childrenList();
-    for (int i = 0; i < exitNodes.size(); i++) {
-      exits.add(xyz(exitNodes.get(i), dimension, 0f, "exits." + i));
-    }
+    List<Bounds> exitAreas = new ArrayList<>();
+    readExits(node.node("exits"), dimension, exits, exitAreas);
     List<Cell> cells = new ArrayList<>();
     for (Map.Entry<Object, ? extends ConfigurationNode> entry2 :
         node.node("cells").childrenMap().entrySet()) {
@@ -127,7 +131,91 @@ public final class GalleryFiles {
             ? Optional.empty()
             : Optional.of(point(node.node("launch"), dimension, "launch"));
     return new Gallery(
-        id, kind, season, dimension, bounds, entry, exits, cells, settings(node), launch);
+        id,
+        kind,
+        season,
+        dimension,
+        bounds,
+        entry,
+        exits,
+        cells,
+        settings(node),
+        launch,
+        new Gallery.Areas(entryArea, exitAreas));
+  }
+
+  /**
+   * Exits as a list of single blocks {@code [x, y, z]} and areas {@code { min, max }} (questions
+   * 279), each at most 32 blocks a side.
+   */
+  static void readExits(
+      ConfigurationNode node, String dimension, List<Position> exits, List<Bounds> areas)
+      throws Invalid {
+    List<? extends ConfigurationNode> exitNodes = node.childrenList();
+    for (int i = 0; i < exitNodes.size(); i++) {
+      ConfigurationNode exit = exitNodes.get(i);
+      if (exit.isMap()) {
+        Bounds area = bounds(exit, dimension, "exits." + i).orElseThrow();
+        checkArea(area, "exits." + i);
+        areas.add(area);
+      } else {
+        exits.add(xyz(exit, dimension, 0f, "exits." + i));
+      }
+    }
+  }
+
+  /** Writes exits as {@link #readExits} reads them. */
+  static void writeExits(ConfigurationNode node, List<Position> exits, List<Bounds> areas)
+      throws SerializationException {
+    for (Position exit : exits) {
+      setXyz(node.appendListNode(), exit);
+    }
+    for (Bounds area : areas) {
+      setBounds(node.appendListNode(), area);
+    }
+  }
+
+  /** The largest an entry, exit or link area may be along each side (questions 279). */
+  public static final int MAX_AREA = 32;
+
+  static void checkArea(Bounds area, String path) throws Invalid {
+    if (area.maxX() - area.minX() >= MAX_AREA
+        || area.maxY() - area.minY() >= MAX_AREA
+        || area.maxZ() - area.minZ() >= MAX_AREA) {
+      throw new Invalid(path, "an area is at most " + MAX_AREA + " blocks a side");
+    }
+  }
+
+  /** A point's box, when it has a {@code to} corner: from {@code pos} to {@code to}. */
+  static Optional<Bounds> area(
+      ConfigurationNode node, Optional<Position> from, String dimension, String path)
+      throws Invalid {
+    if (from.isEmpty() || node.node("to").virtual()) {
+      return Optional.empty();
+    }
+    Position to = xyz(node.node("to"), dimension, 0f, path + ".to");
+    Position a = from.get();
+    Bounds area =
+        Bounds.between(
+            dimension, a.blockX(), a.blockY(), a.blockZ(), to.blockX(), to.blockY(), to.blockZ());
+    checkArea(area, path + ".to");
+    return Optional.of(area);
+  }
+
+  /** Writes a point and, for a box, its far corner {@code to}. */
+  static void setPoint(ConfigurationNode node, Position at, Optional<Bounds> area)
+      throws SerializationException {
+    setPoint(node, at);
+    if (area.isPresent()) {
+      Bounds b = area.get();
+      Position far =
+          b.min().blockX() == at.blockX()
+                  && b.min().blockY() == at.blockY()
+                  && b.min().blockZ() == at.blockZ()
+              ? b.max()
+              : b.min();
+      setXyz(node.node("to"), far);
+    }
   }
 
   private static Gallery.Settings settings(ConfigurationNode node) throws Invalid {
@@ -161,7 +249,15 @@ public final class GalleryFiles {
         throw new Invalid("decorating.afterArchive", String.valueOf(e.getMessage()));
       }
     }
-    return new Gallery.Settings(assignment, access, renderer, lockAtEnd, afterArchive);
+    Optional<Double> plaqueScale = Optional.empty();
+    if (!node.node("plaqueScale").virtual()) {
+      double scale = node.node("plaqueScale").getDouble(Double.NaN);
+      if (!(scale >= MIN_SCALE && scale <= MAX_SCALE)) {
+        throw new Invalid("plaqueScale", "is between 0.25 and 4");
+      }
+      plaqueScale = Optional.of(scale);
+    }
+    return new Gallery.Settings(assignment, access, renderer, lockAtEnd, afterArchive, plaqueScale);
   }
 
   /** An enum written in lower case with dashes, such as {@code archive-and-reset}. */
@@ -220,7 +316,19 @@ public final class GalleryFiles {
         }
         egg = OptionalInt.of(season);
       }
-      anchors.add(new Anchor(type, position, page, egg));
+      Optional<Bounds> area = area(anchor, Optional.of(position), dimension, at);
+      if (area.isPresent() && type != AnchorType.ENTRY) {
+        throw new Invalid(at + ".to", "only an entry anchor can be an area");
+      }
+      java.util.OptionalDouble scale = java.util.OptionalDouble.empty();
+      if (!anchor.node("scale").virtual()) {
+        double value = anchor.node("scale").getDouble(Double.NaN);
+        if (type != AnchorType.PLAQUE || !(value >= MIN_SCALE && value <= MAX_SCALE)) {
+          throw new Invalid(at + ".scale", "only a plaque has a scale, between 0.25 and 4");
+        }
+        scale = java.util.OptionalDouble.of(value);
+      }
+      anchors.add(new Anchor(type, position, page, egg, area, scale));
     }
     Map<Integer, PlayerId> owners = new HashMap<>();
     for (Map.Entry<Object, ? extends ConfigurationNode> owner :
@@ -306,11 +414,9 @@ public final class GalleryFiles {
       setBounds(node.node("bounds"), gallery.bounds().get());
     }
     if (gallery.entry().isPresent()) {
-      setPoint(node.node("entry"), gallery.entry().get());
+      setPoint(node.node("entry"), gallery.entry().get(), gallery.areas().entry());
     }
-    for (Position exit : gallery.exits()) {
-      setXyz(node.node("exits").appendListNode(), exit);
-    }
+    writeExits(node.node("exits"), gallery.exits(), gallery.areas().exits());
     if (gallery.launch().isPresent()) {
       setPoint(node.node("launch"), gallery.launch().get());
     }
@@ -330,6 +436,9 @@ public final class GalleryFiles {
     if (settings.afterArchive().isPresent()) {
       node.node("decorating", "afterArchive").set(Durations.format(settings.afterArchive().get()));
     }
+    if (settings.plaqueScale().isPresent()) {
+      node.node("plaqueScale").set(settings.plaqueScale().get());
+    }
     node.node("cells").raw(new java.util.LinkedHashMap<>());
     for (Cell cell : gallery.cells()) {
       ConfigurationNode at = node.node("cells", cell.id());
@@ -348,7 +457,10 @@ public final class GalleryFiles {
       for (Anchor anchor : cell.anchors()) {
         ConfigurationNode a = at.node("anchors").appendListNode();
         a.node("type").set(anchor.type().id());
-        setPoint(a, anchor.at());
+        setPoint(a, anchor.at(), anchor.area());
+        if (anchor.scale().isPresent()) {
+          a.node("scale").set(anchor.scale().getAsDouble());
+        }
         if (anchor.page().isPresent()) {
           a.node("page").set(anchor.page().getAsInt());
         }

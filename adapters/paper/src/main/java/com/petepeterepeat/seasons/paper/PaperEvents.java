@@ -364,6 +364,21 @@ final class PaperEvents implements Events, Listener {
         new Intent.Consume(id(event.getPlayer()), event.getItem().getType().getKey().asString()));
   }
 
+  /** Scrolling the hotbar with the wand held: a plaque looked at while sneaking resizes. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onHeld(org.bukkit.event.player.PlayerItemHeldEvent event) {
+    Player player = event.getPlayer();
+    if (!inventories.isWand(player.getInventory().getItem(event.getPreviousSlot()))) {
+      return;
+    }
+    if (handler.decide(
+            new Intent.WandScroll(
+                id(player), event.getPreviousSlot(), event.getNewSlot(), player.isSneaking()))
+        instanceof Decision.Deny) {
+      event.setCancelled(true);
+    }
+  }
+
   /** Swap-hands with the wand in the main hand toggles its mode (questions 272). */
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onSwapHands(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {

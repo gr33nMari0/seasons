@@ -53,11 +53,10 @@ public final class HallFiles {
         node.node("spawn").virtual()
             ? Optional.empty()
             : Optional.of(GalleryFiles.point(node.node("spawn"), dimension, "spawn"));
+    Optional<Bounds> spawnArea = GalleryFiles.area(node.node("spawn"), spawn, dimension, "spawn");
     List<Position> exits = new ArrayList<>();
-    List<? extends ConfigurationNode> exitNodes = node.node("exits").childrenList();
-    for (int i = 0; i < exitNodes.size(); i++) {
-      exits.add(GalleryFiles.xyz(exitNodes.get(i), dimension, 0f, "exits." + i));
-    }
+    List<Bounds> exitAreas = new ArrayList<>();
+    GalleryFiles.readExits(node.node("exits"), dimension, exits, exitAreas);
     Map<String, HallLayout.Link> links = new LinkedHashMap<>();
     for (Map.Entry<Object, ? extends ConfigurationNode> entry :
         node.node("links").childrenMap().entrySet()) {
@@ -68,10 +67,19 @@ public final class HallFiles {
       }
       ConfigurationNode link = entry.getValue();
       String at = dimension(link.node("dimension"), dimension, path + ".dimension");
-      Position block = GalleryFiles.xyz(link.node("pos"), at, 0f, path + ".pos");
-      links.put(id, new HallLayout.Link(id, block, target(link.node("to"), at, path + ".to")));
+      Optional<Bounds> area = GalleryFiles.bounds(link.node("area"), at, path + ".area");
+      if (area.isPresent()) {
+        GalleryFiles.checkArea(area.get(), path + ".area");
+      }
+      Position block =
+          link.node("pos").virtual() && area.isPresent()
+              ? area.get().min()
+              : GalleryFiles.xyz(link.node("pos"), at, 0f, path + ".pos");
+      links.put(
+          id, new HallLayout.Link(id, block, target(link.node("to"), at, path + ".to"), area));
     }
-    return new HallLayout(dimension, hub, spawn, exits, links);
+    return new HallLayout(
+        dimension, hub, spawn, exits, links, new Gallery.Areas(spawnArea, exitAreas));
   }
 
   private static Optional<HallLayout.Target> target(
@@ -115,17 +123,19 @@ public final class HallFiles {
       GalleryFiles.setBounds(node.node("hub"), hall.hub().get());
     }
     if (hall.spawn().isPresent()) {
-      GalleryFiles.setPoint(node.node("spawn"), hall.spawn().get());
+      GalleryFiles.setPoint(node.node("spawn"), hall.spawn().get(), hall.areas().entry());
     }
-    for (Position exit : hall.exits()) {
-      GalleryFiles.setXyz(node.node("exits").appendListNode(), exit);
-    }
+    GalleryFiles.writeExits(node.node("exits"), hall.exits(), hall.areas().exits());
     for (HallLayout.Link link : hall.links().values()) {
       ConfigurationNode at = node.node("links", link.id());
       if (!link.block().dimension().equals(hall.dimension())) {
         at.node("dimension").set(link.block().dimension());
       }
-      GalleryFiles.setXyz(at.node("pos"), link.block());
+      if (link.area().isPresent()) {
+        GalleryFiles.setBounds(at.node("area"), link.area().get());
+      } else {
+        GalleryFiles.setXyz(at.node("pos"), link.block());
+      }
       if (link.to().isPresent()) {
         setTarget(at.node("to"), link.to().get(), link.block().dimension());
       }

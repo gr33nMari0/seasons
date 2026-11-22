@@ -288,6 +288,57 @@ public final class HallVisits {
                 serverThread);
   }
 
+  /**
+   * Into the Hall through a link area: the entry checks but the bed and movement, no saved spot.
+   */
+  private void enterFlying(PlayerId player, Position destination) {
+    SeasonsConfig.Hof.Entry rules = config.get().config().hof().entry();
+    SeasonsConfig.Hof.Entry flying =
+        new SeasonsConfig.Hof.Entry(
+            false,
+            rules.bedDistance(),
+            rules.anyBed(),
+            rules.noHostiles(),
+            rules.noDamageFor(),
+            false,
+            rules.noHazards(),
+            rules.cooldown(),
+            rules.rateLimit());
+    Position at = platform.players().position(player);
+    if (halls.inHall(at)) {
+      moveTo(player, destination, "hof.visit.arrived");
+      return;
+    }
+    boolean anywhere = platform.permissions().has(player, PERMISSION_ANYWHERE);
+    Optional<EntryChecks.Failure> failed =
+        EntryChecks.check(
+            flying,
+            new EntryChecks.Situation(
+                at,
+                platform.players().movement(player),
+                blocks(),
+                platform.players().bed(player),
+                platform
+                    .entities()
+                    .hostiles(
+                        at,
+                        EntryChecks.MONSTER_REACH,
+                        EntryChecks.MONSTER_HEIGHT,
+                        EntryChecks.MONSTER_REACH),
+                Optional.ofNullable(lastDamage.get(player)),
+                clock.instant()),
+            false);
+    if (!anywhere && failed.isPresent()) {
+      tell(
+          player,
+          "hof.entry." + failed.get().key(),
+          failed.get().placeholders().toArray(String[]::new));
+      return;
+    }
+    lastVisit.put(player, clock.instant());
+    moveTo(player, destination, "hof.visit.arrived");
+  }
+
   /** Where {@code /hof} with this target lands, telling the player if nowhere. */
   private Optional<Position> destination(PlayerId player, Optional<String> target) {
     if (target.isEmpty()) {
@@ -302,9 +353,9 @@ public final class HallVisits {
       int season = Integer.parseInt(text);
       Optional<Position> entry =
           halls.seasonGalleries(season).stream()
-              .flatMap(g -> g.entry().stream())
+              .filter(g -> g.entry().isPresent())
               .findFirst()
-              .map(HallService::standOn);
+              .flatMap(halls::galleryEntry);
       if (entry.isEmpty()) {
         tell(player, "hof.visit.no-season", "season", text);
       }
@@ -364,6 +415,15 @@ public final class HallVisits {
    * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked.
    */
   public void takeLink(PlayerId player, HallLayout.Link link) {
+    takeLink(player, link, false);
+  }
+
+  /**
+   * @param throughArea passed through the link's area rather than clicking or standing on its
+   *     block: no movement checks, so an elytra flight can take it, and no spot saved, since it may
+   *     be in the air (questions 279)
+   */
+  private void takeLink(PlayerId player, HallLayout.Link link, boolean throughArea) {
     if (held.test(player) || moving.contains(player) || !attempt(player)) {
       return;
     }
@@ -382,7 +442,11 @@ public final class HallVisits {
           tell(player, "hof.visit.no-spawn");
           return;
         }
-        enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+        if (throughArea) {
+          enterFlying(player, spawn.get());
+        } else {
+          enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+        }
       }
       case HallLayout.Target.SeasonSpawn(int season) -> {
         Optional<Position> spawn = seasonSpawn.apply(season);
@@ -449,7 +513,89 @@ public final class HallVisits {
     return layout
         .linkAt(at)
         .or(() ->
-            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())));
+            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())))
+        .or(() ->
+            layout.links().values().stream()
+                .filter(l -> l.area().map(a -> a.contains(at)).orElse(false))
+                .findFirst());
+  }
+
+  /** Every exit that is an area: the hub's and the galleries' (questions 279). */
+  private List<Bounds> exitAreas() {
+    List<Bounds> areas = new ArrayList<>(halls.layout().areas().exits());
+    for (Gallery gallery : halls.galleries()) {
+      areas.addAll(gallery.areas().exits());
+    }
+    return areas;
+  }
+
+  /**
+   * A move through an exit or link area (questions 279): worked out on the line from where it
+   * starts to where it ends, at the feet and at the head, so a fast flight can't skip a plane one
+   * block thick. Fires once until the player is out of the area again.
+   */
+  private void crossings(PlayerId player, Position from, Position to) {
+    if (moving.contains(player) || held.test(player)) {
+      return;
+    }
+    if (!bypasses(player) && (halls.inHall(from) || halls.inHall(to))) {
+      for (Bounds area : exitAreas()) {
+        if (!area.contains(from) && crosses(area, from, to)) {
+          later(() ->
+              savedReturn(player).ifPresent(back -> returnTo(player, back, "hof.leave.returned")));
+          return;
+        }
+      }
+    }
+    for (HallLayout.Link link : halls.layout().links().values()) {
+      if (link.area().isPresent()
+          && !link.area().get().contains(from)
+          && crosses(link.area().get(), from, to)
+          && !link.id().equals(standingOnLink.get(player))) {
+        standingOnLink.put(player, link.id());
+        later(() -> takeLink(player, link, true));
+        return;
+      }
+    }
+  }
+
+  /** Whether the line from {@code from} to {@code to}, at the feet or the head, passes a box. */
+  static boolean crosses(Bounds box, Position from, Position to) {
+    if (!box.dimension().equals(from.dimension()) || !box.dimension().equals(to.dimension())) {
+      return false;
+    }
+    for (double lift : new double[] {0.1, 1.5}) {
+      if (segment(box, from.x(), from.y() + lift, from.z(), to.x(), to.y() + lift, to.z())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean segment(
+      Bounds box, double x0, double y0, double z0, double x1, double y1, double z1) {
+    double[] start = {x0, y0, z0};
+    double[] delta = {x1 - x0, y1 - y0, z1 - z0};
+    double[] min = {box.minX(), box.minY(), box.minZ()};
+    double[] max = {box.maxX() + 1, box.maxY() + 1, box.maxZ() + 1};
+    double enter = 0;
+    double leave = 1;
+    for (int i = 0; i < 3; i++) {
+      if (Math.abs(delta[i]) < 1e-9) {
+        if (start[i] < min[i] || start[i] > max[i]) {
+          return false;
+        }
+        continue;
+      }
+      double t1 = (min[i] - start[i]) / delta[i];
+      double t2 = (max[i] - start[i]) / delta[i];
+      enter = Math.max(enter, Math.min(t1, t2));
+      leave = Math.min(leave, Math.max(t1, t2));
+      if (enter > leave) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -822,6 +968,7 @@ public final class HallVisits {
 
   private Optional<Decision> moved(Intent.Move move) {
     PlayerId player = move.player();
+    crossings(player, move.from(), move.to());
     Optional<Decision> closed = closedCell(player, move.from(), move.to());
     if (closed.isPresent()) {
       return closed;
@@ -995,6 +1142,9 @@ public final class HallVisits {
     List<Position> exits = new ArrayList<>(halls.layout().exits());
     for (Gallery gallery : halls.galleries()) {
       exits.addAll(gallery.exits());
+    }
+    if (exitAreas().stream().anyMatch(area -> area.contains(at))) {
+      return true;
     }
     for (Position exit : exits) {
       if (exit.dimension().equals(at.dimension())

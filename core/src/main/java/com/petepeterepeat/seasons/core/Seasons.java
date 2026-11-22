@@ -43,6 +43,7 @@ import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
+import com.petepeterepeat.seasons.core.hall.PlaqueScale;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.hall.Stamper;
@@ -131,6 +132,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Curation curation;
   private @Nullable Wand wand;
   private @Nullable HallOutlines outlines;
+  private @Nullable PlaqueScale plaqueScale;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -540,6 +542,8 @@ public final class Seasons implements SeasonsApi {
                 intent ->
                     wanding
                         .decide(intent)
+                        .or(() ->
+                            plaqueScale == null ? Optional.empty() : plaqueScale.decide(intent))
                         .or(() -> visiting.decide(intent))
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
@@ -596,6 +600,8 @@ public final class Seasons implements SeasonsApi {
             help);
     wanding.bindLinks(hallCommands::addLink);
     CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
+    PlaqueScale plaques = new PlaqueScale(platform, config, halls, cellEdits);
+    plaqueScale = plaques;
     HallOutlines outlining = new HallOutlines(platform, config, halls, wanding);
     outlining.bindPreviews(rows::previews);
     outlines = outlining;
@@ -608,7 +614,8 @@ public final class Seasons implements SeasonsApi {
             .merge(
                 new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
                     .root())
-            .merge(rows.root());
+            .merge(rows.root())
+            .merge(plaques.root());
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
       children.add(curation.command());

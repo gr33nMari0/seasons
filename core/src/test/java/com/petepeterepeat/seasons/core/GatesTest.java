@@ -173,7 +173,8 @@ class GatesTest {
   @Test
   void aChangedGateIsPutBackAndAudited() throws IOException {
     fake.tick();
-    fake.setBlock(5, 64, 5, FakePlatform.STONE);
+    // A gate block taken out; decoration put in its place would be left (questions 280).
+    fake.setBlock(5, 64, 5, BlockInfo.AIR);
 
     fake.tick();
 
@@ -182,7 +183,7 @@ class GatesTest {
   }
 
   @Test
-  void aGateIsNeverSetOverABlockWithContents() throws IOException {
+  void aGateOnlyFillsAirAndOnlyClearsItsOwnBlock() throws IOException {
     fake.tick();
     run("/season decorate open");
     fake.tick();
@@ -196,21 +197,28 @@ class GatesTest {
         .as("the chest stays")
         .isEqualTo("minecraft:chest");
     assertThat(PLANE.stream().skip(1).map(at -> fake.blockAt(at).type()))
-        .as("nothing of the gate is set while it is there")
-        .containsOnly("minecraft:air");
-    assertThat(journal()).containsOnlyOnce("season-2:c1/shut");
-    assertThat(audit()).containsOnlyOnce("\"action\":\"gate\"").contains("contents at 5, 64, 5");
+        .as("the rest of the plane is shut around it")
+        .containsOnly("minecraft:iron_bars");
+    assertThat(
+            java.nio.file.Files.exists(dir.resolve("world/seasons/audit/2026-11.jsonl"))
+                ? audit()
+                : "")
+        .doesNotContain("contents at");
 
-    fake.setBlock(5, 64, 5, BlockInfo.AIR);
+    run("/season decorate open");
     fake.tick();
-    assertThat(gateIs("minecraft:iron_bars")).as("set once the chest is gone").isTrue();
+    fake.tick();
+    assertThat(fake.blockAt(PLANE.getFirst()).type()).isEqualTo("minecraft:chest");
+    assertThat(PLANE.stream().skip(1).map(at -> fake.blockAt(at).type()))
+        .as("opening clears only the gate's own blocks")
+        .containsOnly("minecraft:air");
   }
 
   @Test
   void aGateThatDoesntStaySetIsLeftAloneUntilAReload() throws IOException {
     fake.tick();
     for (int i = 0; i < 10; i++) {
-      fake.setBlock(5, 64, 5, FakePlatform.STONE);
+      fake.setBlock(5, 64, 5, BlockInfo.AIR);
       fake.tick();
     }
 

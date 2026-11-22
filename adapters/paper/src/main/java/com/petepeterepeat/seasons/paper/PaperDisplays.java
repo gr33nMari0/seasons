@@ -86,6 +86,11 @@ final class PaperDisplays implements Displays {
 
   @Override
   public UUID spawnText(Position position, Message message, String tag) {
+    return spawnText(position, message, tag, 1.0);
+  }
+
+  @Override
+  public UUID spawnText(Position position, Message message, String tag, double scale) {
     Location location = PaperPositions.toLocation(position);
     TextDisplay display =
         location
@@ -97,9 +102,30 @@ final class PaperDisplays implements Displays {
                   // Compact, so /data and clients see one text component, not a split one.
                   spawned.text(text.render(message).compact());
                   spawned.setBillboard(Display.Billboard.CENTER);
+                  scale(spawned, scale);
                   tag(spawned, tag);
                 });
     return display.getUniqueId();
+  }
+
+  @Override
+  public boolean scaleText(UUID id, double scale) {
+    if (server.getEntity(id) instanceof TextDisplay display) {
+      scale(display, scale);
+      return true;
+    }
+    return false;
+  }
+
+  private static void scale(Display display, double scale) {
+    org.bukkit.util.Transformation now = display.getTransformation();
+    float s = (float) scale;
+    display.setTransformation(
+        new org.bukkit.util.Transformation(
+            now.getTranslation(),
+            now.getLeftRotation(),
+            new org.joml.Vector3f(s, s, s),
+            now.getRightRotation()));
   }
 
   @Override

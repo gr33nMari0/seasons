@@ -476,15 +476,31 @@ public final class HallCommands {
     if (edits.held(source, found.get())) {
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), found.get().dimension());
-    if (at.isEmpty()) {
+    Optional<String> typed = arguments.optionalString("at");
+    Optional<Spot> spot;
+    if (typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().startsWith(Positions.SELECTION))) {
+      spot = spot(source, typed, found.get().dimension());
+    } else {
+      spot =
+          position(source, typed, found.get().dimension())
+              .map(at -> new Spot(at, Optional.empty()));
+    }
+    if (spot.isEmpty()) {
       return;
     }
+    Position at = spot.get().point();
+    Optional<Bounds> area = spot.get().area();
     saved(
         source,
-        hall.save(found.get().withEntry(at.get())),
-        messages().get("hof.gallery.entry", place("gallery", found.get().id(), at.get())));
+        hall.save(found.get().withEntry(at, area)),
+        area.isPresent()
+            ? messages()
+                .get(
+                    "hof.gallery.entry-area",
+                    with(areaText(area.get()), "gallery", found.get().id()))
+            : messages().get("hof.gallery.entry", place("gallery", found.get().id(), at)));
   }
 
   void galleryExit(CommandSource source, Arguments arguments) {
@@ -495,8 +511,23 @@ public final class HallCommands {
     if (edits.held(source, found.get())) {
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), found.get().dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if (typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().equals(Positions.SELECTION))) {
+      Optional<Spot> spot = spot(source, typed, found.get().dimension());
+      if (spot.isEmpty()) {
+        return;
+      }
+      Bounds area = spot.get().area().orElseThrow();
+      saved(
+          source,
+          hall.save(found.get().withExitArea(area)),
+          messages()
+              .get("hof.gallery.exit-area", with(areaText(area), "gallery", found.get().id())));
+      return;
+    }
+    Optional<Position> at = position(source, typed, found.get().dimension());
     if (at.isEmpty()) {
       return;
     }
@@ -738,6 +769,62 @@ public final class HallCommands {
     return Optional.empty();
   }
 
+  /** A point, or a box from its first corner (questions 279), as typed. */
+  private record Spot(Position point, Optional<Bounds> area) {}
+
+  /**
+   * A typed point {@code <position> [yaw]}, or a box {@code <position> <position> [yaw]} or {@code
+   * sel [yaw]}, at most 32 blocks a side; with nothing typed, where the sender stands.
+   */
+  private Optional<Spot> spot(CommandSource source, Optional<String> given, String dimension) {
+    if (given.isEmpty() || given.get().isBlank()) {
+      return standing(source, Optional.empty(), dimension)
+          .map(at -> new Spot(at, Optional.empty()));
+    }
+    List<String> words = new ArrayList<>(List.of(Splitter.split(given.get())));
+    Optional<Float> yaw = Optional.empty();
+    if (words.size() == 2 || words.size() == 4 || words.size() == 7) {
+      yaw = Positions.yaw(words.getLast());
+      if (yaw.isPresent()) {
+        words.removeLast();
+      }
+    }
+    Optional<Bounds> box;
+    if (words.size() == 1 && words.getFirst().equals(Positions.SELECTION)) {
+      box = source.player().flatMap(wand::selection);
+      if (box.isEmpty()) {
+        source.reply(messages().get("hof.cell.corners"));
+        return Optional.empty();
+      }
+    } else if (words.size() == 6
+        || (words.size() >= 2 && words.contains(Positions.HERE) && words.size() <= 4)) {
+      box = typedBox(source, String.join(" ", words), dimension);
+      if (box.isEmpty()) {
+        return Optional.empty();
+      }
+    } else {
+      return standing(source, given, dimension).map(at -> new Spot(at, Optional.empty()));
+    }
+    Bounds b = box.get();
+    if (b.maxX() - b.minX() >= GalleryFiles.MAX_AREA
+        || b.maxY() - b.minY() >= GalleryFiles.MAX_AREA
+        || b.maxZ() - b.minZ() >= GalleryFiles.MAX_AREA) {
+      source.reply(
+          messages().get("hof.area.too-big", "max", Integer.toString(GalleryFiles.MAX_AREA)));
+      return Optional.empty();
+    }
+    float facing = yaw.orElse(origin(source).map(at -> Wand.facing(at.yaw())).orElse(0f));
+    Position min = b.min();
+    return Optional.of(
+        new Spot(
+            new Position(b.dimension(), min.blockX(), min.blockY(), min.blockZ(), facing, 0f),
+            Optional.of(b)));
+  }
+
+  private static String[] areaText(Bounds b) {
+    return new String[] {"from", CellEdits.corner(b.min()), "to", CellEdits.corner(b.max())};
+  }
+
   /** Where the sender stands and faces, or empty for the console. */
   private Optional<Position> origin(CommandSource source) {
     return source.player().map(p -> platform.players().position(p));
@@ -752,18 +839,22 @@ public final class HallCommands {
       source.reply(messages().get("hof.hall.no-hub"));
       return;
     }
-    Optional<Position> at = standing(source, arguments.optionalString("at"), layout.dimension());
-    if (at.isEmpty()) {
+    Optional<Spot> spot = spot(source, arguments.optionalString("at"), layout.dimension());
+    if (spot.isEmpty()) {
       return;
     }
-    if (!layout.inHub(at.get())) {
+    Position at = spot.get().point();
+    if (!layout.inHub(at)
+        || spot.get().area().map(a -> !layout.hub().orElseThrow().contains(a)).orElse(false)) {
       source.reply(messages().get("hof.hall.spawn-outside"));
       return;
     }
     saved(
         source,
-        hall.saveHall(layout.withSpawn(at.get())),
-        messages().get("hof.hall.spawn", xyz(at.get())),
+        hall.saveHall(layout.withSpawn(at, spot.get().area())),
+        spot.get().area().isPresent()
+            ? messages().get("hof.hall.spawn-area", areaText(spot.get().area().get()))
+            : messages().get("hof.hall.spawn", xyz(at)),
         "hof.hall.spawn");
   }
 
@@ -799,7 +890,25 @@ public final class HallCommands {
       saved(source, hall.saveHall(layout.withoutExits()), messages().get("hof.hall.no-exits"));
       return;
     }
-    Optional<Position> at = position(source, arguments.optionalString("at"), layout.dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if ((typed.isPresent() && Splitter.split(typed.get()).length >= 6)
+        || typed.map(t -> t.trim().equals(Positions.SELECTION)).orElse(false)) {
+      Optional<Spot> spot = spot(source, typed, layout.dimension());
+      if (spot.isEmpty()) {
+        return;
+      }
+      Bounds area = spot.get().area().orElseThrow();
+      if (!layout.hub().map(h -> h.contains(area)).orElse(false)) {
+        source.reply(messages().get("hof.hall.exit-outside"));
+        return;
+      }
+      saved(
+          source,
+          hall.saveHall(layout.withExitArea(area)),
+          messages().get("hof.hall.exit-area", areaText(area)));
+      return;
+    }
+    Optional<Position> at = position(source, typed, layout.dimension());
     if (at.isEmpty()) {
       return;
     }
@@ -819,6 +928,15 @@ public final class HallCommands {
             hall.layout(),
             hall.galleries(),
             at -> platform.world().block(at).type().equals("minecraft:air"),
+            at -> platform.world().block(at).type(),
+            Gates.blockId(config.get().config().cells().gateBlock()),
+            at ->
+                platform
+                        .world()
+                        .block(
+                            Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ()))
+                        .solid()
+                    && platform.world().block(at).passable(),
             visits::seasonSpawn,
             messages());
     source.reply(messages().get("hof.check.header"));
@@ -865,6 +983,33 @@ public final class HallCommands {
         return;
       }
       words.subList(0, 2).clear();
+    }
+    if (!words.isEmpty() && words.getFirst().equals("area")) {
+      // A link that is an area, taken by passing through it (questions 279).
+      String dimension =
+          source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+      Optional<Spot> spot =
+          spot(source, Optional.of(String.join(" ", words.subList(1, words.size()))), dimension);
+      if (spot.isEmpty()) {
+        return;
+      }
+      if (spot.get().area().isEmpty()) {
+        source.reply(messages().get("hof.link.usage"));
+        return;
+      }
+      Bounds area = spot.get().area().get();
+      HallLayout.Link link = new HallLayout.Link(id, area.min(), to, Optional.of(area));
+      String[] where = with(areaText(area), "link", id);
+      saved(
+          source,
+          hall.saveHall(hall.layout().withLink(link)),
+          to.isPresent()
+              ? messages()
+                  .get(
+                      "hof.link.added-area",
+                      with(with(areaText(area), "link", id), "dest", describe(to.get())))
+              : messages().get("hof.link.added-area-nowhere", where));
+      return;
     }
     if (!words.isEmpty() && words.size() != 3) {
       source.reply(messages().get("hof.link.usage"));
@@ -1054,8 +1199,22 @@ public final class HallCommands {
       source.reply(messages().get("hof.cell.anchor-no-bounds", "cell", ref.key()));
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), ref.gallery().dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if (type.get() == AnchorType.ENTRY
+        && typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().startsWith(Positions.SELECTION))) {
+      // An entry may be a box arrivals spread over (questions 279).
+      Optional<Spot> spot = spot(source, typed, ref.gallery().dimension());
+      if (spot.isPresent()) {
+        edits.anchor(
+            source,
+            ref,
+            Anchor.of(AnchorType.ENTRY, spot.get().point()).withArea(spot.get().area()));
+      }
+      return;
+    }
+    Optional<Position> at = position(source, typed, ref.gallery().dimension());
     if (at.isEmpty()) {
       return;
     }

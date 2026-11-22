@@ -132,6 +132,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code scroll <player> <slot> [sneak]} scrolls the hotbar to a slot as the player, firing
+ *       {@code PlayerItemHeldEvent}, and holds that slot unless it is cancelled
  *   <li>{@code swap-hands <player>} presses swap-hands as the player, firing {@code
  *       PlayerSwapHandItemsEvent}, and swaps unless it is cancelled
  *   <li>{@code console <command...>} runs a command as a sender that isn't a player, as the console
@@ -274,6 +276,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "permit" -> permit(sender, args);
         case "console" -> console(sender, args);
         case "swap-hands" -> swapHands(sender, args);
+        case "scroll" -> scroll(sender, args);
         case "vault-return" -> vaultReturn(sender, hooks, args);
         case "tame" -> tame(sender, args);
         case "stat" -> stat(sender, args);
@@ -311,7 +314,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
             sender.sendMessage(
                 "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
-                    + "|portal-pair|bucket|ignite|permit|console|swap-hands|vault-return|tame|chest|leash|forget-pet"
+                    + "|portal-pair|bucket|ignite|permit|console|swap-hands|scroll|vault-return|tame|chest|leash|forget-pet"
                     + "|dragon|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
@@ -911,6 +914,40 @@ final class ScenarioCommands implements BasicCommand, Listener {
                             .plainText()
                             .serialize(feedback)));
     plugin.getServer().dispatchCommand(console, command);
+  }
+
+  /**
+   * Scrolls the hotbar to a slot as the player, firing PlayerItemHeldEvent; held unless cancelled.
+   */
+  private void scroll(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't scroll for " + args[1]);
+      return;
+    }
+    int slot = Integer.parseInt(args[2]);
+    boolean sneak = args.length > 3 && args[3].equals("sneak");
+    boolean was = player.isSneaking();
+    if (sneak) {
+      player.setSneaking(true);
+    }
+    org.bukkit.event.player.PlayerItemHeldEvent event =
+        new org.bukkit.event.player.PlayerItemHeldEvent(
+            player, player.getInventory().getHeldItemSlot(), slot);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (sneak) {
+      player.setSneaking(was);
+    }
+    if (!event.isCancelled()) {
+      player.getInventory().setHeldItemSlot(slot);
+    }
+    sender.sendMessage(
+        "Scrolled "
+            + args[1]
+            + " to slot "
+            + slot
+            + ": "
+            + (event.isCancelled() ? "refused" : "done"));
   }
 
   /** Presses swap-hands as the player, firing PlayerSwapHandItemsEvent; swaps unless cancelled. */
