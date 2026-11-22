@@ -208,15 +208,20 @@ public final class Reconciler {
         .thenApply(done -> cells.stream().mapToInt(CompletableFuture::join).sum());
   }
 
-  /** Loads one cell's chunks, then reconciles it. Completes with its repairs. */
+  /**
+   * Loads one cell's chunks, waits for a draw of it under way, then reconciles it. Completes with
+   * its repairs.
+   */
   public CompletableFuture<Integer> reconcile(HallService.CellRef ref) {
     Optional<Bounds> bounds = ref.cell().bounds();
     if (bounds.isEmpty()) {
       return CompletableFuture.completedFuture(0);
     }
+    // A draw of the cell under way is let finish first, so the command judges a whole cell.
     return renderer
         .loaded(bounds.get())
-        .thenCompose(loaded -> planned(ref))
+        .thenComposeAsync(loaded -> renderer.settled(ref), serverThread)
+        .thenCompose(settled -> planned(ref))
         .thenApplyAsync(expected -> reconcile(ref, expected), serverThread);
   }
 

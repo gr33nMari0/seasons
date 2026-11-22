@@ -45,8 +45,8 @@ public final class HallRenderer implements DisplayRenderer {
   private final Executor serverThread;
   private final DrawQueue drawing;
 
-  /** Cells with a draw under way, by key, with how many; server thread only. */
-  private final java.util.Map<String, Integer> pending = new java.util.HashMap<>();
+  /** Each cell with a draw under way, by key, with that draw; server thread only. */
+  private final java.util.Map<String, CompletableFuture<Void>> underWay = new java.util.HashMap<>();
 
   public HallRenderer(
       Platform platform,
@@ -85,25 +85,47 @@ public final class HallRenderer implements DisplayRenderer {
 
   /**
    * Queues a cell's drawing, noted as under way from its first step, the clearing, until its last
-   * display is drawn. On the server thread.
+   * display is drawn. A cell's draws run one after another, so at most one is under way. On the
+   * server thread.
    */
   private CompletableFuture<Void> queue(HallService.CellRef ref, ArchiveRecord archive) {
     String key = ref.key();
-    return drawing
-        .submitSteps(() -> {
-          pending.merge(key, 1, Integer::sum);
-          return draw(ref, archive);
-        })
-        .whenComplete(
-            (done, failure) -> pending.computeIfPresent(key, (k, n) -> n > 1 ? n - 1 : null));
+    CompletableFuture<Void> done = new CompletableFuture<>();
+    var _ =
+        drawing
+            .submitSteps(() -> {
+              underWay.put(key, done);
+              return draw(ref, archive);
+            })
+            .whenComplete((drawn, failure) -> {
+              underWay.remove(key, done);
+              if (failure != null) {
+                done.completeExceptionally(failure);
+              } else {
+                done.complete(null);
+              }
+            });
+    return done;
   }
 
   /**
    * Whether a cell's drawing is under way, its displays half drawn, so reconciliation leaves it to
    * the draw. A draw still waiting its turn will clear the cell first, whatever is there by then.
+   * On the server thread.
    */
   boolean drawing(HallService.CellRef ref) {
-    return pending.containsKey(ref.key());
+    return underWay.containsKey(ref.key());
+  }
+
+  /**
+   * Completes once a draw of the cell under way now, if any, is done, failed or not. On the server
+   * thread.
+   */
+  CompletableFuture<Void> settled(HallService.CellRef ref) {
+    CompletableFuture<Void> current = underWay.get(ref.key());
+    return current == null
+        ? CompletableFuture.completedFuture(null)
+        : current.handle((drawn, failure) -> null);
   }
 
   @Override
