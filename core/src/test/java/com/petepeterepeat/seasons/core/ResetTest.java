@@ -77,6 +77,14 @@ class ResetTest {
   }
 
   @Test
+  void aRecordArchivedBeyondTheSeasonIsReported() {
+    var store = seasons.players().orElseThrow();
+    store.put(store.find(alex.id()).orElseThrow().withArchived(4));
+    assertThat(console("/season status"))
+        .anyMatch(l -> l.startsWith("Alex's record says they were archived through Season 4"));
+  }
+
+  @Test
   void onlyOperatorsAndTheConsole() {
     TestSource player = new TestSource(Optional.of(alex.id()));
     TestCommands.run(fake.commands.getFirst(), player, "/season reset");
