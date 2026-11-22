@@ -97,9 +97,21 @@ final class PaperInventories implements Inventories {
   /** Checks the room first, so the stack goes in whole or not at all; nothing is dropped. */
   @Override
   public boolean give(PlayerId id, NeutralItem item) {
-    Player player = online(id);
-    PlayerInventory inventory = player.getInventory();
+    PlayerInventory inventory = online(id).getInventory();
     ItemStack stack = codec.decode(item);
+    if (!hasRoom(inventory, stack)) {
+      return false;
+    }
+    return inventory.addItem(stack).isEmpty();
+  }
+
+  @Override
+  public boolean fits(PlayerId id, NeutralItem item) {
+    return hasRoom(online(id).getInventory(), codec.decode(item));
+  }
+
+  /** Whether the whole stack fits: empty slots, and room on similar stacks. */
+  private static boolean hasRoom(PlayerInventory inventory, ItemStack stack) {
     int room = 0;
     for (ItemStack slot : inventory.getStorageContents()) {
       if (slot == null || slot.isEmpty()) {
@@ -108,13 +120,10 @@ final class PaperInventories implements Inventories {
         room += Math.max(0, slot.getMaxStackSize() - slot.getAmount());
       }
       if (room >= stack.getAmount()) {
-        break;
+        return true;
       }
     }
-    if (room < stack.getAmount()) {
-      return false;
-    }
-    return inventory.addItem(stack).isEmpty();
+    return room >= stack.getAmount();
   }
 
   /**

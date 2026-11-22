@@ -85,6 +85,17 @@ public final class Vault {
   private final Executor serverThread;
   private final Map<PlayerId, CompletableFuture<Void>> queues = new ConcurrentHashMap<>();
   private final AtomicLong counter = new AtomicLong();
+
+  /** Withdrawals a player has running or waiting: at most {@link #MAX_WAITING}. */
+  private final Map<PlayerId, java.util.concurrent.atomic.AtomicInteger> clicks =
+      new ConcurrentHashMap<>();
+
+  private final Map<PlayerId, java.time.Instant> noticed = new ConcurrentHashMap<>();
+  private final Map<PlayerId, java.time.Instant> audited = new ConcurrentHashMap<>();
+
+  /** One withdrawal running and one waiting per player (security review M2). */
+  static final int MAX_WAITING = 2;
+
   private java.util.function.BiPredicate<PlayerId, Integer> archiveOpen = (player, page) -> false;
 
   public Vault(
@@ -368,7 +379,57 @@ public final class Vault {
       platform.players().sendMessage(player, messages().get("vault.pending"));
       return;
     }
-    queue(player, () -> withdraw(player, page, vaultSlot, Notice.menu(shownPage)));
+    // A full inventory is refused here, before anything is journalled or written, so a burst of
+    // clicks costs nothing (security review M2); the give still checks again.
+    List<Optional<NeutralItem>> shown = layout.view().pages().get(shownPage);
+    Optional<NeutralItem> item = slot < shown.size() ? shown.get(slot) : Optional.empty();
+    if (item.isPresent() && !platform.inventories().fits(player, item.get())) {
+      notice(player, "vault.full");
+      if (refusalAudited(player)) {
+        audit.record(
+            name(player),
+            "vault-withdraw",
+            name(player),
+            "refused",
+            page(page) + ": no room for " + describe(item.get()));
+      }
+      return;
+    }
+    // One withdrawal runs and one more waits; clicks beyond that are dropped.
+    java.util.concurrent.atomic.AtomicInteger waiting =
+        clicks.computeIfAbsent(player, who -> new java.util.concurrent.atomic.AtomicInteger());
+    if (waiting.incrementAndGet() > MAX_WAITING) {
+      waiting.decrementAndGet();
+      notice(player, "vault.busy");
+      return;
+    }
+    queue(
+        player,
+        () ->
+            withdraw(player, page, vaultSlot, Notice.menu(shownPage))
+                .whenComplete((given, failure) -> waiting.decrementAndGet()));
+  }
+
+  /** Tells a player something about their clicks at most once a second. */
+  private void notice(PlayerId player, String key) {
+    java.time.Instant now = clock.instant();
+    java.time.Instant last = noticed.get(player);
+    if (last != null && now.isBefore(last.plusSeconds(1))) {
+      return;
+    }
+    noticed.put(player, now);
+    platform.players().sendMessage(player, messages().get(key));
+  }
+
+  /** Whether a refused click should be audited: the first in each ten seconds per player. */
+  private boolean refusalAudited(PlayerId player) {
+    java.time.Instant now = clock.instant();
+    java.time.Instant last = audited.get(player);
+    if (last != null && now.isBefore(last.plusSeconds(10))) {
+      return false;
+    }
+    audited.put(player, now);
+    return true;
   }
 
   /** One transaction at a time per player, in the order asked for. */

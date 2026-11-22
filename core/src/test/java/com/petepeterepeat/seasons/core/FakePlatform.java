@@ -696,6 +696,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean fits(PlayerId player, NeutralItem item) {
+            return state(player).inventory.storage().contains(Optional.<NeutralItem>empty());
+          }
+
+          @Override
           public void restore(PlayerId player, InventorySnapshot snapshot) {
             state(player).inventory = snapshot;
           }

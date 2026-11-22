@@ -126,12 +126,31 @@ public final class JournalRecovery {
     return List.copyOf(pending);
   }
 
-  /** The operations open in the journal right now for one player. */
+  /**
+   * The operations open in the journal right now for one player. Worked out once each time the
+   * journal changes, not on every call, since the server thread asks often (security review M2).
+   */
   public List<OpenOperation> open(PlayerId player) {
-    Optional<PlayerId> who = Optional.of(player);
-    return openOperations(journal.entries()).stream()
-        .filter(op -> op.player().equals(who))
-        .toList();
+    return index().getOrDefault(player, List.of());
+  }
+
+  private long indexedSequence = -1;
+  private int indexedSize = -1;
+  private Map<PlayerId, List<OpenOperation>> index = Map.of();
+
+  private synchronized Map<PlayerId, List<OpenOperation>> index() {
+    JournalHealth health = journal.health();
+    if (health.lastSequence() != indexedSequence || health.entries() != indexedSize) {
+      Map<PlayerId, List<OpenOperation>> next = new java.util.HashMap<>();
+      for (OpenOperation op : openOperations(journal.entries())) {
+        op.player().ifPresent(who -> next.computeIfAbsent(who, k -> new ArrayList<>()).add(op));
+      }
+      next.replaceAll((who, ops) -> List.copyOf(ops));
+      index = Map.copyOf(next);
+      indexedSequence = health.lastSequence();
+      indexedSize = health.entries();
+    }
+    return index;
   }
 
   /** Why each failed operation failed, for admins. */

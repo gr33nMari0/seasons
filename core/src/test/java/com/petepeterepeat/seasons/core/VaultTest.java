@@ -18,6 +18,7 @@ import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.EnumSet;
@@ -209,6 +210,32 @@ class VaultTest {
         .containsExactly("Your inventory is full, so it stays in your vault.");
     assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
     assertThat(menu().view().pages().getFirst().getFirst()).contains(EMERALDS);
+  }
+
+  @Test
+  void aBurstOfClicksWithAFullInventoryJournalsNothing() throws IOException {
+    PlayerRef pat = sealedAndLaunched();
+    run("/season unlock homecoming");
+    fake.player(pat).inventory =
+        new InventorySnapshot(
+            FakeItems.empty(36).stream()
+                .map(slot -> Optional.of(FakeItems.item("minecraft:stone", 64)))
+                .toList(),
+            FakeItems.empty(4),
+            Optional.empty(),
+            FakeItems.empty(27));
+    vault(pat);
+    String journal = Files.readString(dir.resolve("world/seasons/data/journal.log"));
+    int before = fake.sent.size();
+
+    for (int i = 0; i < 100; i++) {
+      menu().taken().clicked(0, 0);
+    }
+
+    assertThat(said(pat, before))
+        .containsExactly("Your inventory is full, so it stays in your vault.");
+    assertThat(Files.readString(dir.resolve("world/seasons/data/journal.log"))).isEqualTo(journal);
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
   }
 
   @Test
