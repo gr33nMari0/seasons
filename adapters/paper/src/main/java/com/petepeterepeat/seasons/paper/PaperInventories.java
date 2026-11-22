@@ -31,9 +31,9 @@ import org.jspecify.annotations.Nullable;
 final class PaperInventories implements Inventories {
   private final PaperPlayers players;
   private final PaperItemCodec codec;
-  private final NamespacedKey archivedKey;
   private final NamespacedKey wandKey;
   private final PaperText text;
+  private final ArchivedTag tag;
   private int dataVersion;
 
   /**
@@ -47,7 +47,7 @@ final class PaperInventories implements Inventories {
       PaperText text) {
     this.players = players;
     this.codec = codec;
-    this.archivedKey = archivedKey;
+    this.tag = new ArchivedTag(archivedKey);
     this.wandKey = wandKey;
     this.text = text;
   }
@@ -233,9 +233,13 @@ final class PaperInventories implements Inventories {
     List<String> removed = new ArrayList<>();
     purge(player.getInventory(), removed);
     purge(player.getEnderChest(), removed);
-    if (isArchived(player.getItemOnCursor())) {
-      removed.add(describe(player.getItemOnCursor()));
+    ItemStack cursor = player.getItemOnCursor();
+    if (tag.isTagged(cursor)) {
+      removed.add(describe(cursor));
       player.setItemOnCursor(null);
+    } else if (tag.isArchived(cursor)) {
+      removed.addAll(tag.stripNested(cursor));
+      player.setItemOnCursor(cursor);
     }
     Inventory top = player.getOpenInventory().getTopInventory();
     // Seasons' own menus show tagged copies on purpose: the view, the vault and choice menus.
@@ -289,9 +293,12 @@ final class PaperInventories implements Inventories {
     return isArchived(codec.decode(item));
   }
 
-  /** Whether a stack carries the tag every archive-view copy has. */
+  /**
+   * Whether a stack carries the tag every archive-view copy has, or holds such a copy inside it, as
+   * a bundle or shulker box can (security review M3).
+   */
   boolean isArchived(@Nullable ItemStack stack) {
-    return stack != null && !stack.isEmpty() && stack.getPersistentDataContainer().has(archivedKey);
+    return tag.isArchived(stack);
   }
 
   /** Such as {@code 3 × minecraft:stone}, for the audit log. */
@@ -299,13 +306,20 @@ final class PaperInventories implements Inventories {
     return stack.getAmount() + " × " + stack.getType().getKey().asString();
   }
 
+  /**
+   * Deletes archived copies from an inventory: a tagged stack whole, and a tagged copy inside an
+   * untagged bundle or shulker box taken out of it, the rest kept.
+   */
   private void purge(Inventory inventory, List<String> removed) {
     @Nullable ItemStack[] contents = inventory.getContents();
     for (int slot = 0; slot < contents.length; slot++) {
       ItemStack stack = contents[slot];
-      if (isArchived(stack)) {
+      if (tag.isTagged(stack)) {
         removed.add(describe(stack));
         inventory.setItem(slot, null);
+      } else if (stack != null && tag.isArchived(stack)) {
+        removed.addAll(tag.stripNested(stack));
+        inventory.setItem(slot, stack);
       }
     }
   }

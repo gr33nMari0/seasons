@@ -303,6 +303,15 @@ final class PaperEvents implements Events, Listener {
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onPlace(BlockPlaceEvent event) {
     Player player = event.getPlayer();
+    // An archived copy is never placed: a shulker box copy would unpack untagged items (security
+    // review M3). It is deleted where it was held, as the tripwire does.
+    if (inventories.isArchived(event.getItemInHand())) {
+      event.setCancelled(true);
+      String found = PaperInventories.describe(event.getItemInHand());
+      player.getInventory().setItem(event.getHand(), null);
+      report(Optional.of(id(player)), "placed as a block", List.of(found));
+      return;
+    }
     apply(
         event,
         player,
@@ -734,6 +743,22 @@ final class PaperEvents implements Events, Listener {
     String found = PaperInventories.describe(item.getItemStack());
     item.getScheduler().run(plugin, task -> item.remove(), null);
     report(Optional.empty(), ON_THE_GROUND, List.of(found));
+  }
+
+  /**
+   * Any container opened, outside Seasons' own menus: archived copies stashed in it are deleted
+   * (security review M3), so a chest anywhere is no hiding place.
+   */
+  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+  void onOpenPurge(InventoryOpenEvent event) {
+    Inventory top = event.getInventory();
+    if (PaperMenus.isViewOnly(top) || !(event.getPlayer() instanceof Player player)) {
+      return;
+    }
+    List<String> removed = inventories.purge(top);
+    if (!removed.isEmpty()) {
+      report(Optional.of(id(player)), IN_A_CONTAINER, removed);
+    }
   }
 
   @EventHandler(priority = EventPriority.MONITOR)
