@@ -274,6 +274,8 @@ final class SeasonCommands {
                       HumanTime.time(at.atZone(ZoneId.systemDefault())))));
     }
     state.ifPresent(current -> playerStatus(source, messages, current));
+    state.ifPresent(
+        current -> recordsAhead(messages, current, services.players()).forEach(source::reply));
     journalStatus(source, messages);
     for (Map.Entry<String, List<ConfigProblem>> gallery :
         config.get().galleriesLeftOut().entrySet()) {
@@ -1190,6 +1192,27 @@ final class SeasonCommands {
             "dimension",
             spawn.dimension()));
     help.after(source, "season.launch.dry-run");
+  }
+
+  /**
+   * Records archived beyond the season on record, which archiving would skip, as after season.json
+   * alone was reset by hand (questions 284).
+   */
+  static List<com.petepeterepeat.seasons.core.message.Message> recordsAhead(
+      Messages messages, SeasonState state, PlayerStore players) {
+    int done = LoginPlan.isBetweenSeasons(state.phase()) ? state.season() : state.season() - 1;
+    return players.all().stream()
+        .filter(r -> r.archivedThrough() > done)
+        .map(r ->
+            messages.get(
+                "records.ahead",
+                "name",
+                r.lastName(),
+                "through",
+                Integer.toString(r.archivedThrough()),
+                "season",
+                Integer.toString(state.season())))
+        .toList();
   }
 
   /** The players line for the last finished season, and the season's furthest block. */

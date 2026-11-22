@@ -398,6 +398,16 @@ final class PaperPlayers implements Players {
   }
 
   @Override
+  public void removeObjectives(String prefix) {
+    Scoreboard scoreboard = server.getScoreboardManager().getMainScoreboard();
+    for (Objective objective : java.util.List.copyOf(scoreboard.getObjectives())) {
+      if (objective.getName().startsWith(prefix)) {
+        objective.unregister();
+      }
+    }
+  }
+
+  @Override
   public void deathsObjective(String name, Message displayName, String slot) {
     Scoreboard scoreboard = server.getScoreboardManager().getMainScoreboard();
     Objective objective = scoreboard.getObjective(name);

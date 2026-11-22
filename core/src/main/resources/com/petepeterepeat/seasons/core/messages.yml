@@ -84,6 +84,29 @@ schedule:
   refused: "<red>The planned end can only be set while Season <season> is Active.</red>"
   cleared: "<green>Season <season> has no planned end now.</green>"
 
+reset:
+  operators-only: "<red>Only a server operator can reset Seasons.</red>"
+  usage: "<red>Use /season reset, or /season reset --keep-hall to keep the hub, galleries and cells.</red>"
+  ending: "<red>Seasons can't be reset while a season is ending; /season cancel first, or wait for the Intermission.</red>"
+  busy: "<red>Seasons can't be reset while someone is being archived, or an import, stamp or curation is unfinished.</red>"
+  warning: "<red><bold>This deletes Seasons from this world:</bold> every archive and the items in it, every player record, every season, gallery and hub file, the vaults, the museum and the recycle bin. Archived items can't be given back afterwards.</red>"
+  counts: "<yellow>That is <players> player records, <archives> archives, <vaults> vaults, <museum> museum items and <recycled> recycled items.</yellow>"
+  keeps-hall: "<yellow>--keep-hall keeps the hub, the galleries and their cells, without owners.</yellow>"
+  keeps-nothing: "<yellow>Nothing is kept; add --keep-hall to keep the hub, galleries and cells.</yellow>"
+  next-confirm: "<gold>A backup is written first. Run /season reset confirm within a minute to go on.</gold>"
+  not-started: "<red>No reset is waiting; run /season reset first.</red>"
+  last-warning: "<red><bold>Last warning:</bold> this can't be undone in game; only the backup brings it back.</red>"
+  type-delete: "<gold>Please type DELETE in chat to reset Seasons, or anything else to stop.</gold>"
+  console-word: "<gold>From the console, run /season reset confirm DELETE to reset Seasons.</gold>"
+  cancelled: "<green>Reset cancelled; nothing was deleted.</green>"
+  backup-failed: "<red>The backup couldn't be written (<error>), so nothing was reset.</red>"
+  backed-up: "<gray>Backed up to plugins/Seasons/reset-backups/<file>.</gray>"
+  delete-failed: "<red>Some files couldn't be deleted (<error>); the backup has them all.</red>"
+  done: "<green>Seasons was reset and has stopped. Restart the server to start again as a fresh install.</green>"
+
+records:
+  ahead: "<yellow><name>'s record says they were archived through Season <through>, beyond Season <season> on record, so archiving would skip them. Was season.json reset by hand? /season reset starts over.</yellow>"
+
 players:
   line: "<gray><name>: <played>; <status>; <cell></gray>"
   played-one: "played Season <seasons>"
@@ -1014,6 +1037,8 @@ help:
     hof.cell.swap.options: "--force"
     hof.cell.redefine.options: "--force"
     season.players.which: "online, archived or pending"
+    season.reset.options: "--keep-hall"
+    word: "DELETE, from the console"
     hof.locate.target: "gallery, gallery:cell, link or player"
   season:
     spawn:
@@ -1051,6 +1076,8 @@ help:
       show: "Show the planned end."
       clear: "Clear the planned end."
     players: "Players' records: seasons played, archive status, cell."
+    reset: "Server operators only: wipe Seasons from this world for testing, behind two confirmations."
+    reset.confirm: "Go on with a reset: then type DELETE in chat."
     list: "Every season with a file or a gallery."
     end: "Start the end countdown, or skip it with --now; --dry-run says what would happen."
     launch: "Launch the next season; --dry-run says what would happen."

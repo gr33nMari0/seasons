@@ -10,4 +10,7 @@ public interface Storage {
 
   /** World-specific files, inside the main world folder so a world backup carries them. */
   Path worldDataDirectory();
+
+  /** Stops Seasons on this server, as {@code /season reset} does once its files are gone. */
+  default void stopSeasons() {}
 }

@@ -133,6 +133,8 @@ public final class Seasons implements SeasonsApi {
   private @Nullable Wand wand;
   private @Nullable HallOutlines outlines;
   private @Nullable PlaqueScale plaqueScale;
+  private @Nullable ResetCommand reset;
+  private boolean stopped;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -433,7 +435,7 @@ public final class Seasons implements SeasonsApi {
     if (curation != null) {
       halls.bindCuration(curation);
       curation.start();
-      platform.events().chat(curation);
+      // Set below with the reset's, which comes first.
     }
     halls.start();
     if (gates != null) {
@@ -574,6 +576,26 @@ public final class Seasons implements SeasonsApi {
             platform, config, loader, edits, seasons, seasonBackups, help, visiting::adminGo);
     nodes.add(spawnCommands.node());
     nodes.add(spawnCommands.tpNode());
+    ResetCommand resetting =
+        new ResetCommand(
+            platform,
+            config,
+            seasons::state,
+            Optional.ofNullable(journal),
+            hold,
+            halls,
+            players,
+            world,
+            platform.storage().configDirectory(),
+            clock,
+            this::stop);
+    reset = resetting;
+    nodes.add(resetting.node());
+    Curation chatting = curation;
+    platform
+        .events()
+        .chat((player, text) ->
+            resetting.typed(player, text) || (chatting != null && chatting.typed(player, text)));
     nodes.addAll(
         new ZoneCommands(
                 platform, config, loader, edits, seasons, zoning, seasonBackups, wanding::selection)
@@ -674,6 +696,14 @@ public final class Seasons implements SeasonsApi {
       private void tellAboutLeftOutFiles(PlayerRef player) {
         ConfigSnapshot snapshot = config.get();
         if (platform.players().find(player.id()).isPresent()
+            && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)
+            && service != null
+            && service.state().isPresent()
+            && store != null) {
+          SeasonCommands.recordsAhead(snapshot.messages(), service.state().get(), store)
+              .forEach(line -> platform.players().sendMessage(player.id(), line));
+        }
+        if (platform.players().find(player.id()).isPresent()
             && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
           snapshot
@@ -712,6 +742,9 @@ public final class Seasons implements SeasonsApi {
         }
         if (outlines != null) {
           outlines.left(player);
+        }
+        if (reset != null) {
+          reset.left(player);
         }
         if (curation != null) {
           curation.left(player);
@@ -791,6 +824,11 @@ public final class Seasons implements SeasonsApi {
 
   /** Stops the lifecycle and finishes queued writes and posts. */
   public void stop() {
+    // Once: a reset stops Seasons itself before the platform does (questions 283).
+    if (stopped) {
+      return;
+    }
+    stopped = true;
     if (service != null) {
       service.stop();
     }

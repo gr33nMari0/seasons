@@ -121,4 +121,7 @@ public interface Players {
    * @param slot where it shows: {@code list}, {@code sidebar}, {@code below_name} or {@code none}
    */
   void deathsObjective(String name, Message displayName, String slot);
+
+  /** Removes every scoreboard objective whose name starts with a prefix. */
+  default void removeObjectives(String prefix) {}
 }
