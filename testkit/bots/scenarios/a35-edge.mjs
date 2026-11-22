@@ -98,13 +98,15 @@ export default {
     assert(await is(600, FLOOR, 610, 'minecraft:air'), 'lava doesn\'t flow into the zone')
 
     // TNT just outside the edge breaks blocks outside, and nothing inside.
-    await setblock(601, FLOOR, 615, 'minecraft:stone')
-    await setblock(601, FLOOR, 616, 'minecraft:stone')
+    // The controls are dirt a block or two from the TNT, which its blast always breaks; stone further
+    // off survived a blast now and then, as explosions break blocks by random rays.
+    await setblock(601, FLOOR, 613, 'minecraft:dirt')
+    await setblock(601, FLOOR, 614, 'minecraft:dirt')
     await setblock(601, FLOOR, 610, 'minecraft:stone')
     await setblock(602, FLOOR, 610, 'minecraft:stone')
     await ctx.command(admin, `/summon minecraft:tnt 601.5 ${FLOOR} 612.5 {fuse:1}`, /^Summoned /)
     await ctx.sync(admin, [], 20) // the fuse and the explosion are game ticks
-    assert(!await is(601, FLOOR, 615, 'minecraft:stone') || !await is(601, FLOOR, 616, 'minecraft:stone'), 'the explosion broke blocks outside the zone')
+    assert(!await is(601, FLOOR, 613, 'minecraft:dirt') || !await is(601, FLOOR, 614, 'minecraft:dirt'), 'the explosion broke blocks outside the zone')
     assert(await is(601, FLOOR, 610, 'minecraft:stone') && await is(602, FLOOR, 610, 'minecraft:stone'), 'the blocks inside the zone stand')
 
     // Holders of seasons.zone.bypass may.
