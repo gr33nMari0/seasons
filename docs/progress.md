@@ -404,7 +404,7 @@ Built:
 - **Publishing.** `release.yml` uploads its jars, then publishes the Seasons jar to Hangar (`io.papermc.hangar-publish-plugin`) and Modrinth (Minotaur) from jobs of their own, with `HANGAR_API_TOKEN` and `MODRINTH_TOKEN`; a version with a hyphen is a beta.
 - **Docs.** A README for server owners; building, layout and releasing in CONTRIBUTING.
 
-Before the first public release: create the Hangar project (with a `Beta` channel) and the Modrinth project, set `hangarProject` and `modrinthProject` in `gradle.properties` if they differ from the placeholders, and add the two secrets (questions 292).
+Release targets: Hangar `gr33nMari0/SeasonsMC` (Release and Beta channels) and Modrinth `seasonsmc`, with both secrets set on the repository (questions 292). Nothing has been published yet: the first tag will be the first upload.
 
 ## On hold
 

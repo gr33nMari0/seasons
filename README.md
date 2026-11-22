@@ -19,7 +19,7 @@ Every step that moves items is journalled, so a crash at any moment leaves every
 
 ## Install
 
-1. Download `Seasons-<version>.jar` from [Hangar](https://hangar.papermc.io/), [Modrinth](https://modrinth.com/) or [GitHub Releases](https://github.com/gr33nMari0/seasons/releases). Each release lists SHA-256 checksums in `SHA256SUMS`.
+1. Download `Seasons-<version>.jar` from [Hangar](https://hangar.papermc.io/gr33nMari0/SeasonsMC), [Modrinth](https://modrinth.com/project/seasonsmc) or [GitHub Releases](https://github.com/gr33nMari0/seasons/releases). Each release lists SHA-256 checksums in `SHA256SUMS`.
 2. Put it in `plugins/` and restart the server.
 3. Seasons writes `plugins/Seasons/config.yml`, `messages.yml` and `secrets.yml`. Every setting is described in the file itself and in the [configuration reference](https://github.com/gr33nMari0/seasons/blob/main/docs/config.md). Edit a file, then run `/season reload`. A broken file is reported with its line number, and the old settings stay in force.
 4. For Discord posts, put your webhook URLs in `secrets.yml`, or in the environment variables `SEASONS_DISCORD_WEBHOOK` and `SEASONS_ADMIN_WEBHOOK`. Keep that file private.
