@@ -12,6 +12,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M5 Cell tooling | Done (#25) | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
 | Post-M5 Hub, links and decoration | On `post-m5-hof-preparation` | A52 to A59; A4, A6, A20, A23 and A41 widened |
 | Post-M5 Setting up the Hall | On `post-m5-hall-setup` | A60 to A76; A26, A41, A53, A54, A55 and A58 widened; `m2-access-gate` changed |
+| Security fixes | On `security-fixes` | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
 | M6 and M7 | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
@@ -361,6 +362,25 @@ Passing end to end on Paper 26.3:
 | Records ahead of the season are reported in `/season status` and to admins joining (questions 284) | unit: `ResetTest#aRecordArchivedBeyondTheSeasonIsReported` |
 
 Built: `command/Positions`, `Words`, `Suggester` and `CommandHelp` (help, unknown words and next steps over every registered tree, decorating it before registration; `CommandNode#merge` joins trees from several classes), `CommandSuggestions`; `SpawnCommands` gains `set at`, `show`, `clear`, `candidate move` and `/season tp`; `MarkerCommands` gains `--at`, `move` and `list`; `ZoneCommands` gains `info` and `--replace`; `SeasonCommands` gains `schedule show|clear`, `players` and `list`; `HallVisits` gains `seasons.hof.anywhere`, `seasons.hof.roam`, `adminGo`, exit and link areas with crossing on a move's line; `HallLists`, `CellFixes`, `CellRows`, `PlaqueScale` and `HallOutlines` in `hall/`; `HallService` gains landing in areas, undo and gallery removal; `Gallery.Areas`, `Gallery.Kind.LEGACY`, anchor areas and scales, link areas, read and written by `GalleryFiles` and `HallFiles`; `Gates` sets only a plane's own blocks; `HallRules` keeps legacy galleries' items; `ResetCommand`; config `hof.entry.requireBed`, `wand.outlines`, `admin.hints`; and on Paper suggestions, `PaperOutlines`, the wand's swap-hands and scroll, scaled text displays, the armour stand spawn fix, operators, objectives and Seasons stopping itself. The test plugin gains `/scenario console`, `swap-hands` and `scroll`, and `place-entity` spawns a creature with the game's own reason (ADR 0003). No new dependency: the reset's zip is `java.util.zip`. New Paper API is in `docs/paper-api.md`.
+
+## Security fixes
+
+**The security review's High and Medium findings** (branch `security-fixes`; `docs/security-review.md`, readings in `docs/questions.md` 285 to 288). Each scenario was written first and failed before its fix.
+
+Passing end to end on Paper 26.3:
+
+| Finding | Scenario | Test |
+| --- | --- | --- |
+| H1 an anvil's, stonecutter's and villager's inputs are archived with a full inventory and an item on the cursor; nothing is handed back after the clear | `sec-workstation-inputs.mjs` | unit: `ArchivingTest#whatAMenuHandsBackAfterTheClearGoesIntoTheRecordNotThePlayer`, `PaperInventoriesTest` |
+| M1 XP orbs mending a worn chestplate during the archive no longer fail it; commands wait while held, an admin's excepted | `sec-hold-mending.mjs` | unit: `IntentRouterTest` |
+| H3 an emptied inventory after a crash before `ARCHIVE_CLEARING` isn't taken as cleared; a crash after it still finishes; a vault page whose archive is open can't be withdrawn from | `sec-empty-after-crash.mjs` (two sessions); `a07-crash-*` pass as before | unit: `ArchivingTest#anEmptyInventoryBeforeTheClearWasJournalledIsNotTakenAsCleared`, `#aCrashAfterTheClearWasJournalledFinishesWithAnEmptyInventory`, `VaultTest#aPageWhoseArchiveIsStillOpenCantBeWithdrawnFrom` |
+| H2 an archive that fails after the vault is sealed is put back (no page, no open operation), the player held with their commands waiting, and archived on the retry; a player busy at the end is held, admins told, and archived once free | `sec-failed-archive-contained.mjs`, `sec-busy-at-end.mjs` | unit: `ArchivingTest#aFailedArchiveIsPutBackAndThePlayerHeldUntilItGoesThrough`, `#aPlayerBusyAtTheEndIsHeldAndArchivedOnceFree`, `#aStuckRecoveryIsRestartedFromWhatThePlayerCarriesNow`, `#aStuckRecoveryIsntRestartedWhileThePlayerCarriesNothing`; `JournalRecoveryTest#anAbortedArchiveIsClosed` |
+| M2 200 vault clicks with a full inventory journal nothing and give nothing | `sec-vault-flood.mjs` | unit: `VaultTest#aBurstOfClicksWithAFullInventoryJournalsNothing`, `JournalRecoveryTest#eachPlayersOpenOperationsFollowTheJournalAsItChanges` |
+| M3 a tagged copy in a bundle is taken out at the sweep, the bundle and its stick kept; a tagged shulker box can't be placed and is deleted | `sec-tripwire-nested.mjs` | unit: `ArchivedTagTest` |
+
+Built: workstation inputs in `PaperInventories` (`inputSlots`, settle, loose, clear) and the late-items check in `Archiver`; the `PickupExperience`, `WearItem` and `RunCommand` intents and their Paper events, denied by `IntentRouter` while a player is held; `ARCHIVE_CLEARING` and `ARCHIVE_ABORTED` in the journal (`Operation#closes`), recovery that accepts an empty inventory only after the clear and seals the vault page again when the player matches, `Archiver#abort`, pending players in `ArchiveHold` retried by `LoginService` every 10 s, `archive.stuck` after 6 tries, `/season reprocess <player> --restart`; `Inventories#fits`, the bounded click queue and throttled notices in `Vault`, the open-operation index in `JournalRecovery`; `ArchivedTag` (tagging and stripping inside bundles and shulker boxes), the placement refusal and the purge of any container opened. Test hooks: `/scenario act-at`, `hold`, `release`, `workstation`, `cursor`, `tagged`, and `place … held` (`ScenarioHooks#armAction`, `#haltNow`, `#hold`, `#release`; `CrashPoints#halted`, so a test's halt never runs the put-back).
+
+Departures from the review's fix plan: the failed-archive scenario changes the inventory with `/scenario act-at` rather than switching the M1 fix off; launch keeps refusing only while an online player is unarchived (a pending player who leaves is held again at their next login); the journal is still compacted only at launch (questions 288). The review's Low items (L1 to L7) wait for a later branch.
 
 ## On hold
 

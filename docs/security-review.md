@@ -191,6 +191,8 @@ These held up under the same attack:
 
 ## Fix plan (High and Medium)
 
+Status: built on `security-fixes` as below; see `docs/progress.md`, Security fixes, for the scenarios and the departures from this plan.
+
 On branch `security-fixes`, one commit per fix, with a pull request into main. Each fix gets unit tests in core, Paper-side tests where the adapter changes, and an end-to-end scenario named `sec-*` (run with `./gradlew scenarioTest -Pscenarios=sec-*`). Each also gets `messages.yml` keys for any new player-facing text, entries in `docs/paper-api.md` for new Paper calls, and a `CHANGELOG.md` line. Where a fix needs a reading of the spec, it goes in `docs/questions.md` (from 285) and no decision changes.
 
 ### 1. H1: archive what's in a workstation (`fix(archive): take workstation inputs with the cursor`)
