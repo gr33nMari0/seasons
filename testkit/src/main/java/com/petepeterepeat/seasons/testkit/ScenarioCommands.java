@@ -143,6 +143,10 @@ import org.bukkit.util.Vector;
  *       stack in each of its input slots, which the game hands back to the player when it closes
  *   <li>{@code cursor <player> <item> <count>} puts a stack on the player's cursor, as picking it
  *       up in an open menu would
+ *   <li>{@code tagged <player> <shulker|bundle>} gives the player what an archived copy that got
+ *       out would look like: a shulker box tagged {@code seasons:archived} holding untagged
+ *       diamonds, in their main hand; or an untagged bundle holding a tagged diamond and a stick
+ *   <li>{@code place ... held} places the item in the player's main hand, as the game does
  *   <li>{@code scroll <player> <slot> [sneak]} scrolls the hotbar to a slot as the player, firing
  *       {@code PlayerItemHeldEvent}, and holds that slot unless it is cancelled
  *   <li>{@code swap-hands <player>} presses swap-hands as the player, firing {@code
@@ -295,6 +299,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "permit" -> permit(sender, args);
         case "workstation" -> workstation(sender, args);
         case "cursor" -> cursor(sender, args);
+        case "tagged" -> tagged(sender, args);
         case "console" -> console(sender, args);
         case "swap-hands" -> swapHands(sender, args);
         case "scroll" -> scroll(sender, args);
@@ -359,6 +364,8 @@ final class ScenarioCommands implements BasicCommand, Listener {
       return;
     }
     boolean consume = args.length > 6 && args[6].equals("consume");
+    // "held": the item in the player's hand is the one placed, as the game's own placing has it.
+    boolean held = args.length > 6 && args[6].equals("held");
     if (consume && !player.getInventory().contains(material)) {
       sender.sendMessage("Placing " + material.getKey() + " was refused: " + args[1] + " has none");
       return;
@@ -378,7 +385,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
             block,
             replaced,
             block.getRelative(BlockFace.DOWN),
-            ItemStack.of(material),
+            held ? player.getInventory().getItemInMainHand().clone() : ItemStack.of(material),
             player,
             true,
             EquipmentSlot.HAND);
@@ -1081,6 +1088,43 @@ final class ScenarioCommands implements BasicCommand, Listener {
       view.getTopInventory().setItem(slot, ItemStack.of(material, count));
     }
     sender.sendMessage("Opened a " + args[2] + " for " + args[1] + " with " + inputs + " input(s)");
+  }
+
+  private void tagged(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't give " + args[1] + " a tagged copy");
+      return;
+    }
+    NamespacedKey archived =
+        java.util.Objects.requireNonNull(NamespacedKey.fromString("seasons:archived"));
+    if (args[2].equals("shulker")) {
+      ItemStack box = ItemStack.of(Material.SHULKER_BOX);
+      box.editMeta(
+          org.bukkit.inventory.meta.BlockStateMeta.class,
+          meta -> {
+            org.bukkit.block.ShulkerBox state = (org.bukkit.block.ShulkerBox) meta.getBlockState();
+            state.getInventory().addItem(ItemStack.of(Material.DIAMOND, 64));
+            meta.setBlockState(state);
+          });
+      box.editPersistentDataContainer(
+          data -> data.set(archived, org.bukkit.persistence.PersistentDataType.BOOLEAN, true));
+      player.getInventory().setItemInMainHand(box);
+      sender.sendMessage("Gave " + args[1] + " a tagged shulker box");
+      return;
+    }
+    ItemStack diamond = ItemStack.of(Material.DIAMOND);
+    diamond.editPersistentDataContainer(
+        data -> data.set(archived, org.bukkit.persistence.PersistentDataType.BOOLEAN, true));
+    ItemStack bundle = ItemStack.of(Material.BUNDLE);
+    bundle.editMeta(
+        org.bukkit.inventory.meta.BundleMeta.class,
+        meta -> {
+          meta.addItem(diamond);
+          meta.addItem(ItemStack.of(Material.STICK));
+        });
+    player.getInventory().addItem(bundle);
+    sender.sendMessage("Gave " + args[1] + " a bundle holding a tagged copy");
   }
 
   private void cursor(CommandSender sender, String[] args) {
