@@ -563,7 +563,9 @@ public final class Seasons implements SeasonsApi {
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
                         .or(() -> zoning.decide(intent)),
-                visiting::damaged));
+                visiting::damaged,
+                player -> platform.permissions().has(player, SeasonService.ADMIN_PERMISSION),
+                () -> config.get().messages()));
     platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
     platform.events().hall(hallRules);

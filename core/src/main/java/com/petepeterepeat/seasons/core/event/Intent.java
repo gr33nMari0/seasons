@@ -212,4 +212,20 @@ public sealed interface Intent {
    * @param cushion whether the entity is a cushion
    */
   record Mount(PlayerId player, boolean cushion) implements Intent {}
+
+  /** Picking up an experience orb, which can mend what the player wears (security review M1). */
+  record PickupExperience(PlayerId player) implements Intent {}
+
+  /**
+   * An item the player carries wearing down or being mended, such as an elytra while gliding or a
+   * mending item an orb repairs (security review M1).
+   */
+  record WearItem(PlayerId player) implements Intent {}
+
+  /**
+   * Running a command, which can change what the player carries (security review M1).
+   *
+   * @param command as typed, slash included
+   */
+  record RunCommand(PlayerId player, String command) implements Intent {}
 }

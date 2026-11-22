@@ -31,8 +31,7 @@ class PaperInventoriesTest {
   void workstationInputsAreThePlayersButNeverResultsOrContainers() {
     assertThat(PaperInventories.inputSlots(server.createInventory(null, InventoryType.ANVIL)))
         .containsExactly(0, 1);
-    assertThat(
-            PaperInventories.inputSlots(server.createInventory(null, InventoryType.STONECUTTER)))
+    assertThat(PaperInventories.inputSlots(server.createInventory(null, InventoryType.STONECUTTER)))
         .containsExactly(0);
     assertThat(PaperInventories.inputSlots(server.createInventory(null, InventoryType.CHEST)))
         .isEmpty();

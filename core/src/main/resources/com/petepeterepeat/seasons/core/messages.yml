@@ -223,6 +223,7 @@ archive:
   failed: "<red>Archiving <name> into Season <season> stopped: <reason>. Their items stay on them; /season reprocess <name> tries again.</red>"
   unavailable: "<red>The journal is unavailable, so nobody can be archived. See /season status.</red>"
   no-cells: "<yellow>Season <season> has no free Hall cells left, so some archived players stay where they are.</yellow>"
+  hold-command: "<red>Seasons is moving your items right now, so commands wait a moment.</red>"
   recovery-mismatch: "<red><name>'s inventory neither matches their Season <season> archive nor is empty, so recovery stopped. Nothing was cleared. Check it, then run /season reprocess <name>.</red>"
 
 unarchive:

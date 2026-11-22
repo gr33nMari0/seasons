@@ -29,6 +29,7 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 ### Security
 
 - Archiving takes what sits in an open anvil's, stonecutter's, smithing table's, grindstone's, enchanting table's, loom's, cartography table's, beacon's or villager's input slots, with the cursor and crafting grid; before, a full inventory and an item on the cursor kept such a menu open, and closing it after the clear handed its inputs back for the new season. Anything that still turns up in the inventory after the clear goes into the record, never back to the player, and is audited as `late-items` (security review H1).
+- While a player is held for archiving, unarchiving, a vault withdrawal or a curation, XP orbs stay on the ground, nothing they carry is mended or worn down, and their commands (another plugin's included) are refused, unless they hold `seasons.admin.season`; any of these could change the inventory between the copy and the clear and fail the archive (security review M1).
 
 ## [1.0.0-beta.1] - 2026-11-20
 

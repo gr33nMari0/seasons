@@ -133,9 +133,9 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
- *   <li>{@code workstation <player> <anvil|stonecutter|merchant> <item> <count>} opens that menu for
- *       the player, as if they had clicked an anvil, a stonecutter or a villager, and puts a stack
- *       in each of its input slots, which the game hands back to the player when it closes
+ *   <li>{@code workstation <player> <anvil|stonecutter|merchant> <item> <count>} opens that menu
+ *       for the player, as if they had clicked an anvil, a stonecutter or a villager, and puts a
+ *       stack in each of its input slots, which the game hands back to the player when it closes
  *   <li>{@code cursor <player> <item> <count>} puts a stack on the player's cursor, as picking it
  *       up in an open menu would
  *   <li>{@code scroll <player> <slot> [sneak]} scrolls the hotbar to a slot as the player, firing

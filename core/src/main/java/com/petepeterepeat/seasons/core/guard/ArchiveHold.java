@@ -37,6 +37,14 @@ public final class ArchiveHold {
     arriving.remove(player);
   }
 
+  /**
+   * Whether an archive, unarchive or other transaction holds the player right now, as opposed to
+   * their login still running: what a command may not change (security review M1).
+   */
+  public boolean inTransaction(PlayerId player) {
+    return held.contains(player);
+  }
+
   public boolean isHeld(PlayerId player) {
     return held.contains(player) || arriving.contains(player);
   }

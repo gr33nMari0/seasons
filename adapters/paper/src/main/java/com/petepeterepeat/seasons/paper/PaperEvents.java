@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
@@ -75,12 +76,15 @@ import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.event.player.PlayerItemMendEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -362,6 +366,30 @@ final class PaperEvents implements Events, Listener {
         event,
         event.getPlayer(),
         new Intent.Consume(id(event.getPlayer()), event.getItem().getType().getKey().asString()));
+  }
+
+  /** An orb picked up can mend what the player wears (security review M1). */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onExperience(PlayerPickupExperienceEvent event) {
+    apply(event, event.getPlayer(), new Intent.PickupExperience(id(event.getPlayer())));
+  }
+
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onMend(PlayerItemMendEvent event) {
+    apply(event, event.getPlayer(), new Intent.WearItem(id(event.getPlayer())));
+  }
+
+  /** Wear that isn't from a hit, such as an elytra while gliding. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onWear(PlayerItemDamageEvent event) {
+    apply(event, event.getPlayer(), new Intent.WearItem(id(event.getPlayer())));
+  }
+
+  /** Any command, another plugin's included, can change what a player carries. */
+  @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+  void onCommand(PlayerCommandPreprocessEvent event) {
+    apply(
+        event, event.getPlayer(), new Intent.RunCommand(id(event.getPlayer()), event.getMessage()));
   }
 
   /** Scrolling the hotbar with the wand held: a plaque looked at while sneaking resizes. */
