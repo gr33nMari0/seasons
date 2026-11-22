@@ -241,13 +241,15 @@ public final class Reconciler {
 
   /**
    * Compares a cell's displays with what it should show and repairs the difference. Its chunks are
-   * loaded. A cell the renderer is drawing is left to it.
+   * loaded. A cell the renderer is drawing is queued to be looked at again once it is done.
    *
    * @return how many repairs it made
    */
   int reconcile(HallService.CellRef ref, List<HallRenderer.Planned> expected) {
     if (renderer.drawing(ref)) {
-      // Being drawn a display at a time: what is missing now is on its way.
+      // Half drawn, a display at a time, from a plan that may be out of date by now: looked at
+      // again once the draw is done.
+      enqueue(ref.key());
       return 0;
     }
     Bounds bounds = ref.cell().bounds().orElseThrow();

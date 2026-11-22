@@ -45,7 +45,7 @@ public final class HallRenderer implements DisplayRenderer {
   private final Executor serverThread;
   private final DrawQueue drawing;
 
-  /** Cells with a draw queued or under way, by key, with how many; server thread only. */
+  /** Cells with a draw under way, by key, with how many; server thread only. */
   private final java.util.Map<String, Integer> pending = new java.util.HashMap<>();
 
   public HallRenderer(
@@ -83,19 +83,24 @@ public final class HallRenderer implements DisplayRenderer {
             serverThread);
   }
 
-  /** Queues a cell's drawing, noting it as under way until it is done. On the server thread. */
+  /**
+   * Queues a cell's drawing, noted as under way from its first step, the clearing, until its last
+   * display is drawn. On the server thread.
+   */
   private CompletableFuture<Void> queue(HallService.CellRef ref, ArchiveRecord archive) {
     String key = ref.key();
-    pending.merge(key, 1, Integer::sum);
     return drawing
-        .submitSteps(() -> draw(ref, archive))
+        .submitSteps(() -> {
+          pending.merge(key, 1, Integer::sum);
+          return draw(ref, archive);
+        })
         .whenComplete(
             (done, failure) -> pending.computeIfPresent(key, (k, n) -> n > 1 ? n - 1 : null));
   }
 
   /**
-   * Whether a cell's drawing is queued or under way, its displays possibly half drawn, so
-   * reconciliation leaves it to the draw.
+   * Whether a cell's drawing is under way, its displays half drawn, so reconciliation leaves it to
+   * the draw. A draw still waiting its turn will clear the cell first, whatever is there by then.
    */
   boolean drawing(HallService.CellRef ref) {
     return pending.containsKey(ref.key());
@@ -143,7 +148,16 @@ public final class HallRenderer implements DisplayRenderer {
             bounds.min(),
             bounds.max(),
             DisplayTag.prefix(ref.gallery().id(), ref.cell().id(), archive.season()));
-    return plan(ref, archive).stream().<Runnable>map(planned -> () -> spawn(planned)).toList();
+    List<Planned> planned = plan(ref, archive);
+    if (planned.isEmpty()) {
+      return List.of();
+    }
+    // The first display, the figure, goes up in the same step as the clearing, so a cell being
+    // drawn again never stands empty.
+    spawn(planned.getFirst());
+    return planned.subList(1, planned.size()).stream()
+        .<Runnable>map(next -> () -> spawn(next))
+        .toList();
   }
 
   /** One display a cell shows for an archive. */
