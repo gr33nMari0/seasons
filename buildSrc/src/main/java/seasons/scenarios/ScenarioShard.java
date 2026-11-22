@@ -294,6 +294,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
         generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
         generate-structures=false
         spawn-protection=0
+        max-players=40
         view-distance=4
         simulation-distance=4
         """
