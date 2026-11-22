@@ -223,6 +223,7 @@ archive:
   failed: "<red>Archiving <name> into Season <season> stopped: <reason>. Their items stay on them; /season reprocess <name> tries again.</red>"
   unavailable: "<red>The journal is unavailable, so nobody can be archived. See /season status.</red>"
   no-cells: "<yellow>Season <season> has no free Hall cells left, so some archived players stay where they are.</yellow>"
+  recovery-uncleared: "<red><name>'s inventory is empty, but Seasons never cleared it for their Season <season> archive, so recovery stopped: what was copied may be somewhere else. Check it, then run /season reprocess <name>.</red>"
   hold-command: "<red>Seasons is moving your items right now, so commands wait a moment.</red>"
   recovery-mismatch: "<red><name>'s inventory neither matches their Season <season> archive nor is empty, so recovery stopped. Nothing was cleared. Check it, then run /season reprocess <name>.</red>"
 
@@ -954,6 +955,7 @@ vault:
   locked: "<red>That page is sealed until Homecoming.</red>"
   locked-between: "<red>Your vault is read-only until the next season starts.</red>"
   busy: "<red>Wait a moment, then try again.</red>"
+  pending: "<red>That page waits until your archive for its season is finished. An admin has been told.</red>"
   failed: "<red>That didn't work, so it stays in your vault.</red>"
 
 pet:

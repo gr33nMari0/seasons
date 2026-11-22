@@ -362,6 +362,56 @@ class ArchivingTest {
   }
 
   @Test
+  void anEmptyInventoryBeforeTheClearWasJournalledIsNotTakenAsCleared() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    PlayerRef admin = fake.join("Admin");
+    run("/season init 2");
+    hooks.arm(CrashPoint.VAULT_SEALED, casey.id());
+    run("/season end --now");
+    restart();
+    // Emptied into a chest somewhere before the restart, as a player could after a failure.
+    fake.player(casey).inventory = FakeItems.EMPTY;
+    fake.online.add(admin);
+    int before = fake.sent.size();
+
+    join("Casey");
+
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+    assertThat(fake.sent.subList(before, fake.sent.size()))
+        .map(sent -> TestSource.plain(sent.message()))
+        .anyMatch(line ->
+            line.startsWith(
+                "Casey's inventory is empty, but Seasons never cleared it for their Season 2"
+                    + " archive"));
+    assertThat(run("/season status"))
+        .anyMatch(line -> line.endsWith(", 1 waiting for recovery"))
+        .anyMatch(line -> line.contains("never cleared it"));
+  }
+
+  @Test
+  void aCrashAfterTheClearWasJournalledFinishesWithAnEmptyInventory() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    run("/season init 2");
+    hooks.arm(CrashPoint.RESET, casey.id());
+    run("/season end --now");
+    assertThat(isEmpty(casey)).isTrue();
+    assertThat(Files.readString(dir.resolve("world/seasons/data/journal.log")))
+        .contains("ARCHIVE_CLEARING")
+        .doesNotContain("ARCHIVE_DONE");
+    restart();
+
+    join("Casey");
+
+    assertThat(record(casey).archivedThrough()).isEqualTo(2);
+    assertThat(archive(casey, 2).orElseThrow().inventory()).isEqualTo(FakeItems.gear());
+    assertThat(vault(casey, 2).orElseThrow())
+        .contains(Optional.of(FakeItems.item("minecraft:emerald", 5)));
+    assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
+  }
+
+  @Test
   void unarchiveRestoresAndKeepsWhateverWasInTheWay() throws IOException {
     start();
     PlayerRef undo = withGear("Undo");

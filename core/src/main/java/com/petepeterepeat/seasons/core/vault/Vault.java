@@ -85,6 +85,7 @@ public final class Vault {
   private final Executor serverThread;
   private final Map<PlayerId, CompletableFuture<Void>> queues = new ConcurrentHashMap<>();
   private final AtomicLong counter = new AtomicLong();
+  private java.util.function.BiPredicate<PlayerId, Integer> archiveOpen = (player, page) -> false;
 
   public Vault(
       Platform platform,
@@ -108,6 +109,14 @@ public final class Vault {
     this.crash = crash;
     this.clock = clock;
     this.serverThread = platform.scheduler()::runGlobal;
+  }
+
+  /**
+   * Connects the journal: a season page whose archive is still open for its player is read-only,
+   * since the ender chest it copied may still be in the game (security review H3).
+   */
+  public void bindArchiveOpen(java.util.function.BiPredicate<PlayerId, Integer> open) {
+    this.archiveOpen = open;
   }
 
   /** What season pages allow in a season state. Pure. */
@@ -355,6 +364,10 @@ public final class Vault {
               messages().get(access == Access.SEALED ? "vault.locked" : "vault.locked-between"));
       return;
     }
+    if (page != VaultFiles.RETURNED && archiveOpen.test(player, page)) {
+      platform.players().sendMessage(player, messages().get("vault.pending"));
+      return;
+    }
     queue(player, () -> withdraw(player, page, vaultSlot, Notice.menu(shownPage)));
   }
 
@@ -385,6 +398,11 @@ public final class Vault {
       }
       if (page != VaultFiles.RETURNED && access(state.get()) != Access.OPEN) {
         platform.players().sendMessage(player, messages().get("vault.locked"));
+        done.complete(false);
+        return;
+      }
+      if (page != VaultFiles.RETURNED && archiveOpen.test(player, page)) {
+        platform.players().sendMessage(player, messages().get("vault.pending"));
         done.complete(false);
         return;
       }

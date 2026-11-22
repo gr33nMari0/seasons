@@ -26,7 +26,7 @@ export default {
       const admin = await ctx.admin()
       const before = await ctx.archive(admin, 'Casey', 2)
       assert(before.pending === 1, `Casey's archive waits for recovery: ${JSON.stringify(before)}`)
-      const refused = ctx.waitForMessages(admin, /^Casey's inventory neither matches their Season 2 archive nor is empty, so recovery stopped\./, 20_000)
+      const refused = ctx.waitForMessages(admin, /^Casey's inventory is empty, but Seasons never cleared it for their Season 2 archive, so recovery stopped/, 20_000)
       await ctx.join('Casey')
       await refused
       const after = await ctx.archive(admin, 'Casey', 2)

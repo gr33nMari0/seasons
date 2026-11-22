@@ -69,7 +69,7 @@ public enum Operation {
    */
   public static Optional<Operation> of(JournalKind kind) {
     return switch (kind) {
-      case ARCHIVE_STARTED, VAULT_SEALED, ARCHIVE_DONE -> Optional.of(ARCHIVE);
+      case ARCHIVE_STARTED, VAULT_SEALED, ARCHIVE_CLEARING, ARCHIVE_DONE -> Optional.of(ARCHIVE);
       case UNARCHIVE_STARTED, UNARCHIVE_DONE -> Optional.of(UNARCHIVE);
       case CURATE_STARTED, CURATE_DONE -> Optional.of(CURATE);
       case IMPORT_STARTED, IMPORT_DONE -> Optional.of(IMPORT);

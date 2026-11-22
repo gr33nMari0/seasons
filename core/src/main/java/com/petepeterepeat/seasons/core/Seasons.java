@@ -328,6 +328,9 @@ public final class Seasons implements SeasonsApi {
           new Vault(
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      vaulting.bindArchiveOpen((player, season) ->
+          replay.open(player).stream()
+              .anyMatch(op -> op.operation() == Operation.ARCHIVE && op.season() == season));
       replay.register(Operation.MUSEUM, museum.recovery());
       Curation curating =
           new Curation(

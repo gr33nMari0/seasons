@@ -5,6 +5,11 @@ package com.petepeterepeat.seasons.core.store;
 public enum JournalKind {
   ARCHIVE_STARTED,
   VAULT_SEALED,
+  /**
+   * The player matched their copy and is about to be cleared: only after this may recovery take an
+   * empty inventory as cleared (security review H3).
+   */
+  ARCHIVE_CLEARING,
   ARCHIVE_DONE,
   UNARCHIVE_STARTED,
   UNARCHIVE_DONE,

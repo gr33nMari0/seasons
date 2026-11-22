@@ -222,7 +222,7 @@ public final class Archiver implements RolloverArchiver {
           crash.reached(CrashPoint.ARCHIVE_STARTED, player);
           return sealVault(archive, capture.dataVersion());
         })
-        .thenComposeAsync(sealed -> finish(archive, false), serverThread)
+        .thenComposeAsync(sealed -> finish(archive, false, false), serverThread)
         .handleAsync(
             (outcome, failure) -> {
               hold.release(player);
@@ -345,28 +345,37 @@ public final class Archiver implements RolloverArchiver {
               boolean matches =
                   ArchiveHash.of(live, archive.clearsEnderChest()).equals(archive.contentHash());
               boolean empty = ArchiveHash.isEmpty(live, archive.clearsEnderChest());
-              if (!matches && !empty) {
+              // An empty inventory is "already cleared" only if Seasons got as far as clearing it;
+              // before that, the items it copied went somewhere else (security review H3).
+              boolean clearing =
+                  operation.steps().stream()
+                      .anyMatch(step -> step.kind() == JournalKind.ARCHIVE_CLEARING);
+              if (!matches && !(empty && clearing)) {
                 announcer.admins(
                     SeasonService.ADMIN_PERMISSION,
-                    "archive.recovery-mismatch",
+                    empty ? "archive.recovery-uncleared" : "archive.recovery-mismatch",
                     "name",
                     archive.name(),
                     "season",
                     Integer.toString(season));
                 return CompletableFuture.completedFuture(
                     RecoveryOutcome.failed(
-                        "the live inventory neither matches the archive nor is empty"));
+                        empty
+                            ? "the live inventory is empty, but Seasons never cleared it"
+                            : "the live inventory neither matches the archive nor is empty"));
               }
               if (!hold.hold(player)) {
                 return CompletableFuture.completedFuture(RecoveryOutcome.waitForPlayer());
               }
               int dataVersion = platform.inventories().dataVersion();
+              // Sealing again is harmless while the player still holds what was copied: no
+              // withdrawal touches a page while its archive is open.
               CompletableFuture<Void> sealed =
-                  last == JournalKind.ARCHIVE_STARTED
+                  matches
                       ? sealVault(archive, dataVersion)
                       : CompletableFuture.completedFuture(null);
               return sealed
-                  .thenComposeAsync(done -> finish(archive, true), serverThread)
+                  .thenComposeAsync(done -> finish(archive, true, clearing), serverThread)
                   .handleAsync(
                       (outcome, failure) -> {
                         hold.release(player);
@@ -409,12 +418,31 @@ public final class Archiver implements RolloverArchiver {
   }
 
   /**
-   * Steps 4 and 5, on the server thread: check, clear, reset, save the player's file, then mark
-   * them archived and journal {@code ARCHIVE_DONE}.
+   * Steps 4 and 5, on the server thread: check, journal {@code ARCHIVE_CLEARING}, check again,
+   * clear, reset, save the player's file, then mark them archived and journal {@code ARCHIVE_DONE}.
    *
-   * @param allowEmpty whether an already-cleared player counts as matching, as after a crash
+   * @param recovering whether this finishes an archive a crash left open, when the cursor and grid
+   *     hold whatever the game kept rather than the overflow
+   * @param allowEmpty whether an already-cleared player counts as matching, as after a crash that
+   *     came after {@code ARCHIVE_CLEARING}
    */
-  private CompletableFuture<Outcome> finish(ArchiveRecord archive, boolean allowEmpty) {
+  private CompletableFuture<Outcome> finish(
+      ArchiveRecord archive, boolean recovering, boolean allowEmpty) {
+    PlayerId player = archive.player();
+    check(archive, recovering, allowEmpty);
+    return journal
+        .append(JournalKind.ARCHIVE_CLEARING, player, archive.season(), archive.contentHash())
+        .thenComposeAsync(
+            entry -> {
+              // Nothing may have moved while the line was written.
+              check(archive, recovering, allowEmpty);
+              return clear(archive);
+            },
+            serverThread);
+  }
+
+  /** Throws unless the player still holds exactly what was copied (or nothing, if allowed). */
+  private void check(ArchiveRecord archive, boolean recovering, boolean allowEmpty) {
     PlayerId player = archive.player();
     if (platform.players().find(player).isEmpty()) {
       throw new IllegalStateException(archive.name() + " left before their inventory was cleared");
@@ -429,12 +457,17 @@ public final class Archiver implements RolloverArchiver {
     // The cursor and grid aren't in the hash, since the game doesn't save them; while the player
     // is online they must still hold exactly the overflow. After a crash they hold whatever the
     // game kept, and clearing takes that.
-    if (!allowEmpty && !looseMatches(player, archive)) {
+    if (!recovering && !looseMatches(player, archive)) {
       throw new IllegalStateException(
           archive.name()
               + "'s cursor or crafting grid changed after it was copied, so it wasn't"
               + " cleared");
     }
+  }
+
+  /** Steps 4 and 5 after the checks, on the server thread. */
+  private CompletableFuture<Outcome> clear(ArchiveRecord archive) {
+    PlayerId player = archive.player();
     clearAndReset(player, archive.clearsEnderChest());
     // Whatever turned up after the clear, as a menu the game empties into the inventory as it
     // closes: never handed back, but taken into the record too (security review H1).

@@ -243,6 +243,44 @@ class VaultTest {
   }
 
   @Test
+  void aPageWhoseArchiveIsStillOpenCantBeWithdrawnFrom() throws IOException {
+    start();
+    PlayerRef pat = fake.join("Pat");
+    fake.player(pat).inventory = FakeItems.gear();
+    run("/season init 2");
+    hooks.arm(CrashPoint.VAULT_SEALED, pat.id());
+    run("/season end --now");
+    restart();
+    // Pat kept the ender chest the vault page copies, and changed what they carry.
+    fake.player(pat).inventory =
+        new InventorySnapshot(
+            List.of(Optional.of(FakeItems.item("minecraft:stone", 1))),
+            FakeItems.empty(4),
+            Optional.empty(),
+            FakeItems.gear().enderChest());
+    PlayerRef admin = fake.join("Admin");
+    fake.player(admin).position = Position.of("minecraft:overworld", 500, -60, 300);
+    TestCommands.run(
+        fake.commands.getFirst(), new TestSource(Optional.of(admin.id())), "/season spawn set");
+    fake.leave(admin);
+    run("/season launch");
+    run("/season unlock homecoming");
+    join("Pat");
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+
+    vault(pat);
+    int before = fake.sent.size();
+    menu().taken().clicked(0, 0);
+
+    assertThat(said(pat, before))
+        .containsExactly(
+            "That page waits until your archive for its season is finished. An admin has been"
+                + " told.");
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+    assertThat(carried(pat, "minecraft:emerald")).isZero();
+  }
+
+  @Test
   void anEmptyVaultSaysSo() {
     start();
     PlayerRef pat = fake.join("Pat");
