@@ -110,6 +110,10 @@ hangarPublish {
         channel = if (beta) "Beta" else "Release"
         changelog = provider { changelogFor(releaseVersion) }
         apiKey = providers.environmentVariable("HANGAR_API_TOKEN")
+        // The project's main page; syncAllPagesToHangar uploads it (.github/workflows/listing.yml).
+        pages {
+            resourcePage(provider { rootProject.file("docs/listing/hangar.md").readText() })
+        }
         platforms {
             paper {
                 jar = releaseJar

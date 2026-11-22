@@ -1,0 +1,48 @@
+{
+  "project": {
+    "title": "Seasons",
+    "description": "Run your server in seasons on one world that never resets. Gear goes into a Hall of Fame, everyone restarts at a fresh spawn, and the old world unlocks at Homecoming.",
+    "categories": ["management", "game-mechanics", "social"],
+    "additional_categories": ["utility"],
+    "client_side": "unsupported",
+    "server_side": "required",
+    "issues_url": "https://github.com/gr33nMari0/seasons/issues",
+    "source_url": "https://github.com/gr33nMari0/seasons",
+    "wiki_url": "https://github.com/gr33nMari0/seasons/blob/main/docs/config.md",
+    "license_id": "PolyForm-Noncommercial-1.0.0",
+    "license_url": "https://github.com/gr33nMari0/seasons/blob/main/LICENSE"
+  },
+  "icon": "docs/images/icon.png",
+  "gallery": [
+    {
+      "file": "docs/images/banner.png",
+      "title": "Seasons",
+      "description": "Every season ends. Its legends stay in the Hall of Fame.",
+      "featured": true
+    },
+    {
+      "file": "docs/images/gallery-1-season-loop.png",
+      "title": "How a season works",
+      "description": "Play, the season ends, your gear goes into the Hall of Fame, everyone starts fresh far away, and Homecoming reopens the old world.",
+      "featured": false
+    },
+    {
+      "file": "docs/images/gallery-2-hall-of-fame.png",
+      "title": "The Hall of Fame",
+      "description": "One cell per player per season: a figure in your armour, a plaque, and your whole inventory on display, view-only.",
+      "featured": false
+    },
+    {
+      "file": "docs/images/gallery-3-old-world.png",
+      "title": "The old world waits",
+      "description": "Zones lock old seasons' land until the group votes for Homecoming, while the new spawn is far out in unexplored land.",
+      "featured": false
+    },
+    {
+      "file": "docs/images/gallery-4-crash-safe.png",
+      "title": "Nothing is ever lost",
+      "description": "Every item move is journalled first, so a crash leaves every item exactly once.",
+      "featured": false
+    }
+  ]
+}
