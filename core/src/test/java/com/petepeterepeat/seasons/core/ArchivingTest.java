@@ -411,6 +411,133 @@ class ArchivingTest {
     assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
   }
 
+  /** What Casey carries once something changed it between the copy and the clear. */
+  private static com.petepeterepeat.seasons.core.port.InventorySnapshot gearAndStone() {
+    com.petepeterepeat.seasons.core.port.InventorySnapshot gear = FakeItems.gear();
+    List<Optional<NeutralItem>> storage = new ArrayList<>(gear.storage());
+    storage.set(storage.indexOf(Optional.<NeutralItem>empty()), Optional.of(STONE));
+    return new com.petepeterepeat.seasons.core.port.InventorySnapshot(
+        storage, gear.armour(), gear.offHand(), gear.enderChest());
+  }
+
+  private static final NeutralItem STONE = FakeItems.item("minecraft:stone", 1);
+
+  @Test
+  void aFailedArchiveIsPutBackAndThePlayerHeldUntilItGoesThrough() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    PlayerRef admin = fake.join("Admin");
+    run("/season init 2");
+    hooks.armAction(
+        CrashPoint.VAULT_SEALED, casey.id(), () -> fake.player(casey).inventory = gearAndStone());
+    int before = fake.sent.size();
+
+    run("/season end --now");
+
+    // Put back: no open operation, no vault page, no archive file, nothing cleared.
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+    assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
+    assertThat(vault(casey, 2)).isEmpty();
+    assertThat(archive(casey, 2)).isEmpty();
+    assertThat(fake.player(casey).inventory).isEqualTo(gearAndStone());
+    assertThat(Files.readString(dir.resolve("world/seasons/data/journal.log")))
+        .contains("ARCHIVE_ABORTED");
+    assertThat(fake.sent.subList(before, fake.sent.size()))
+        .map(sent -> TestSource.plain(sent.message()))
+        .anyMatch(line -> line.startsWith("Archiving Casey into Season 2 stopped"))
+        .anyMatch(line -> line.startsWith("Seasons couldn't archive you just now"));
+    // Held: nothing they carry can move, and launch waits for them.
+    assertThat(fake.handler.decide(new Intent.DropItem(casey.id()))).isNotEqualTo(Decision.allow());
+    assertThat(fake.handler.decide(new Intent.OpenContainer(casey.id(), List.of())))
+        .isNotEqualTo(Decision.allow());
+    fake.leave(admin);
+    setSpawn(500, 300);
+    assertThat(run("/season launch").getFirst())
+        .startsWith("Someone online isn't archived into Season 2 yet");
+
+    fake.tick();
+
+    assertThat(record(casey).archivedThrough()).isEqualTo(2);
+    assertThat(archive(casey, 2).orElseThrow().inventory()).isEqualTo(gearAndStone());
+    assertThat(vault(casey, 2).orElseThrow())
+        .contains(Optional.of(FakeItems.item("minecraft:emerald", 5)));
+    assertThat(isEmpty(casey)).isTrue();
+    assertThat(fake.handler.decide(new Intent.DropItem(casey.id()))).isEqualTo(Decision.allow());
+  }
+
+  @Test
+  void aPlayerBusyAtTheEndIsHeldAndArchivedOnceFree() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    PlayerRef admin = fake.join("Admin");
+    run("/season init 2");
+    hooks.hold(casey.id());
+    int before = fake.sent.size();
+
+    run("/season end --now");
+
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+    assertThat(fake.sent.subList(before, fake.sent.size()))
+        .map(sent -> TestSource.plain(sent.message()))
+        .contains(
+            "Casey was busy when Season 2's archive reached them, so they are held and archived"
+                + " as soon as they are free.");
+    fake.tick();
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+
+    hooks.release(casey.id());
+    fake.tick();
+
+    assertThat(record(casey).archivedThrough()).isEqualTo(2);
+    assertThat(isEmpty(casey)).isTrue();
+    fake.leave(admin);
+  }
+
+  @Test
+  void aStuckRecoveryIsRestartedFromWhatThePlayerCarriesNow() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    run("/season init 2");
+    hooks.arm(CrashPoint.VAULT_SEALED, casey.id());
+    run("/season end --now");
+    restart();
+    fake.player(casey).inventory = gearAndStone();
+    join("Casey");
+    assertThat(record(casey).archivedThrough()).isLessThan(2);
+    assertThat(run("/season reprocess Casey --sideways"))
+        .containsExactly("Unknown option --sideways. /season reprocess takes --restart.");
+
+    assertThat(run("/season reprocess Casey --restart"))
+        .containsExactly(
+            "Put back Casey's stuck archive for Season 2; archiving them again from what they"
+                + " carry now.",
+            "Archived Casey into Season 2.");
+
+    assertThat(record(casey).archivedThrough()).isEqualTo(2);
+    assertThat(archive(casey, 2).orElseThrow().inventory()).isEqualTo(gearAndStone());
+    assertThat(vault(casey, 2).orElseThrow())
+        .contains(Optional.of(FakeItems.item("minecraft:emerald", 5)));
+    assertThat(isEmpty(casey)).isTrue();
+    assertThat(run("/season status")).anyMatch(line -> line.endsWith(", 0 waiting for recovery"));
+  }
+
+  @Test
+  void aStuckRecoveryIsntRestartedWhileThePlayerCarriesNothing() throws IOException {
+    start();
+    PlayerRef casey = withGear("Casey");
+    run("/season init 2");
+    hooks.arm(CrashPoint.VAULT_SEALED, casey.id());
+    run("/season end --now");
+    restart();
+    fake.player(casey).inventory = FakeItems.EMPTY;
+    join("Casey");
+
+    assertThat(run("/season reprocess Casey --restart").getFirst())
+        .startsWith("Casey carries nothing, so their stuck archive can't be restarted");
+    assertThat(archive(casey, 2)).isPresent();
+    assertThat(vault(casey, 2)).isPresent();
+  }
+
   @Test
   void unarchiveRestoresAndKeepsWhateverWasInTheWay() throws IOException {
     start();

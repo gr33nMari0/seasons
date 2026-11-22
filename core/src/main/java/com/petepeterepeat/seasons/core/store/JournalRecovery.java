@@ -77,7 +77,7 @@ public final class JournalRecovery {
       if (entry.kind() == key.operation().started()) {
         open.remove(key);
         open.put(key, new ArrayList<>(List.of(entry)));
-      } else if (entry.kind() == key.operation().finished()) {
+      } else if (key.operation().closes(entry.kind())) {
         open.remove(key);
       } else if (open.containsKey(key)) {
         open.get(key).add(entry);

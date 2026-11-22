@@ -73,6 +73,7 @@ final class SeasonCommands {
   private static final String DRY_RUN = "--dry-run";
   private static final String NOW = "--now";
   private static final String FORCE = "--force";
+  private static final String RESTART = "--restart";
   private static final Logger LOG = LoggerFactory.getLogger(SeasonCommands.class);
 
   private final Platform platform;
@@ -224,7 +225,11 @@ final class SeasonCommands {
             CommandNode.literal("reprocess")
                 .permission(PERMISSION_ADMIN_SEASON)
                 .then(
-                    CommandNode.argument("player", ArgumentType.word()).executes(this::reprocess)))
+                    CommandNode.argument("player", ArgumentType.word())
+                        .executes(this::reprocess)
+                        .then(
+                            CommandNode.argument("options", ArgumentType.greedy())
+                                .executes(this::reprocess))))
         .then(
             CommandNode.literal("decorate")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -722,8 +727,11 @@ final class SeasonCommands {
   }
 
   void archive(CommandSource source, Arguments arguments) {
+    archiveNow(source, arguments.string("player"));
+  }
+
+  private void archiveNow(CommandSource source, String name) {
     Messages messages = messages();
-    String name = arguments.string("player");
     if (services.login().isEmpty() || seasons.state().isEmpty()) {
       source.reply(messages.get("archive.unavailable"));
       return;
@@ -879,6 +887,11 @@ final class SeasonCommands {
   void reprocess(CommandSource source, Arguments arguments) {
     Messages messages = messages();
     String name = arguments.string("player");
+    Flags.Parsed parsed = Flags.parse(arguments.optionalString("options"), Set.of(RESTART));
+    if (parsed instanceof Flags.Parsed.Unknown unknown) {
+      source.reply(messages.get("reprocess.unknown-flag", "flag", unknown.word()));
+      return;
+    }
     if (services.recovery().isEmpty()) {
       source.reply(messages.get("archive.unavailable"));
       return;
@@ -906,6 +919,10 @@ final class SeasonCommands {
               name,
               "count",
               Integer.toString(recovery.open(id.get()).size())));
+      return;
+    }
+    if (((Flags.Parsed.Ok) parsed).has(RESTART) && services.archiver().isPresent()) {
+      restart(source, name, id.get());
       return;
     }
     var _ =
@@ -945,6 +962,58 @@ final class SeasonCommands {
                                     "count",
                                     Integer.toString(finished)));
                       }
+                    }));
+  }
+
+  /**
+   * {@code /season reprocess <player> --restart}: puts back a stuck archive, then archives the
+   * player afresh (security review H2).
+   */
+  private void restart(CommandSource source, String name, PlayerId player) {
+    var _ =
+        services
+            .archiver()
+            .orElseThrow()
+            .restart(player)
+            .whenComplete((seasons, failure) ->
+                platform
+                    .scheduler()
+                    .runGlobal(() -> {
+                      Messages now = messages();
+                      if (failure != null) {
+                        source.reply(
+                            now.get(
+                                "reprocess.failed",
+                                "name",
+                                name,
+                                "count",
+                                "1",
+                                "reason",
+                                String.valueOf(failure.getMessage())));
+                        return;
+                      }
+                      if (seasons.isEmpty()) {
+                        source.reply(now.get("reprocess.restart-empty", "name", name));
+                        return;
+                      }
+                      services
+                          .audit()
+                          .record(
+                              actor(source),
+                              "reprocess",
+                              name,
+                              "restarted",
+                              "Season(s) " + seasons.get() + " put back; archiving afresh");
+                      source.reply(
+                          now.get(
+                              "reprocess.restarted",
+                              "name",
+                              name,
+                              "seasons",
+                              seasons.get().stream()
+                                  .map(String::valueOf)
+                                  .collect(java.util.stream.Collectors.joining(", "))));
+                      archiveNow(source, name);
                     }));
   }
 

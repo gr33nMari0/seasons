@@ -34,6 +34,7 @@ import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalKind;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.OpenOperation;
+import com.petepeterepeat.seasons.core.store.Operation;
 import com.petepeterepeat.seasons.core.store.RecoveryHandler;
 import com.petepeterepeat.seasons.core.store.RecoveryOutcome;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
@@ -48,7 +49,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,6 +117,15 @@ public final class Archiver implements RolloverArchiver {
   private final CrashPoints crash;
   private final Executor serverThread;
   private final Set<Integer> noCellNoticeSent = new HashSet<>();
+
+  /** Players whose current attempt has started clearing them. */
+  private final Set<PlayerId> cleared = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  private java.util.function.Consumer<PlayerId> pendingListener = player -> {};
+
+  /** Tries in a row after which admins hear that a player's archive is stuck. */
+  public static final int STUCK_AFTER = 6;
+
   private final JournalRecovery recovery;
   private Supplier<Optional<SeasonState>> seasonState = Optional::empty;
   private java.util.function.BiConsumer<PlayerId, Integer> archived = (player, season) -> {};
@@ -179,7 +191,9 @@ public final class Archiver implements RolloverArchiver {
 
   /**
    * Archives an online player into a season. Never fails: problems come back as {@link
-   * Outcome.Failed}, after admins have been told.
+   * Outcome.Failed} or {@link Outcome.Busy}, after admins have been told. A player whose archive
+   * doesn't go through is held as pending and tried again (security review H2): an attempt that
+   * stopped before the clear is put back first, so nothing it copied exists twice.
    *
    * @param actor who asked, for the audit log
    */
@@ -190,26 +204,52 @@ public final class Archiver implements RolloverArchiver {
     }
     PlayerRecord record = store.getOrCreate(player, online.get().name());
     if (record.archivedThrough() >= season) {
+      settled(player);
       return done(new Outcome.AlreadyArchived());
     }
     if (!recovery.open(player).isEmpty()) {
       // A crash left this player part-archived: finish that instead of starting again.
       return recovery
           .retry(player)
-          .thenApply(finished -> (Outcome) archivedOutcome(player, season));
+          .thenApplyAsync(
+              finished -> {
+                Outcome outcome = archivedOutcome(player, season);
+                if (outcome instanceof Outcome.Failed) {
+                  pend(player, season, online.get().name());
+                } else {
+                  settled(player);
+                }
+                return outcome;
+              },
+              serverThread);
     }
+    String name = online.get().name();
     if (!hold.hold(player)) {
+      if (!hold.isPending(player)) {
+        announcer.admins(
+            SeasonService.ADMIN_PERMISSION,
+            "archive.busy-pending",
+            "name",
+            name,
+            "season",
+            Integer.toString(season));
+        audit.record(AuditLog.SEASONS, "archive", name, "busy", "held until they are free");
+      }
+      pend(player, season, name);
       return done(new Outcome.Busy());
     }
+    boolean first = !hold.isPending(player);
     Capture capture;
     try {
       capture = capture(online.get(), record, season);
     } catch (RuntimeException e) {
       hold.release(player);
-      return done(failed(online.get().name(), season, "couldn't copy their inventory: " + e, e));
+      Outcome failed = failed(name, season, "couldn't copy their inventory: " + e, e, first);
+      pend(player, season, name);
+      return done(failed);
     }
     ArchiveRecord archive = capture.record();
-    String name = online.get().name();
+    AtomicBoolean started = new AtomicBoolean();
     return writer
         .submit(() -> {
           archives.write(archive, capture.dataVersion());
@@ -218,17 +258,30 @@ public final class Archiver implements RolloverArchiver {
         })
         .thenCompose(written ->
             journal.append(JournalKind.ARCHIVE_STARTED, player, season, archive.contentHash()))
-        .thenCompose(started -> {
+        .thenCompose(entry -> {
+          started.set(true);
           crash.reached(CrashPoint.ARCHIVE_STARTED, player);
           return sealVault(archive, capture.dataVersion());
         })
         .thenComposeAsync(sealed -> finish(archive, false, false), serverThread)
-        .handleAsync(
-            (outcome, failure) -> {
+        .handle((outcome, failure) -> new Attempt(outcome, failure))
+        .thenCompose(attempt ->
+            attempt.failure() == null || crash.halted() || !started.get() || cleared.remove(player)
+                ? CompletableFuture.completedFuture(attempt)
+                : abort(archive).thenApply(back -> attempt))
+        .thenApplyAsync(
+            attempt -> {
+              cleared.remove(player);
               hold.release(player);
-              if (failure != null) {
-                return failed(name, season, reason(failure), failure);
+              if (attempt.failure() != null) {
+                Throwable failure = attempt.failure();
+                Outcome failed = failed(name, season, reason(failure), failure, first);
+                if (!crash.halted()) {
+                  pend(player, season, name);
+                }
+                return failed;
               }
+              settled(player);
               audit.record(actor, "archive", name, "ok", summary(archive));
               platform
                   .players()
@@ -238,9 +291,125 @@ public final class Archiver implements RolloverArchiver {
                           .get()
                           .messages()
                           .get("archive.done", "season", Integer.toString(season)));
-              return outcome;
+              return attempt.outcome();
             },
             serverThread);
+  }
+
+  /** How one attempt ended: an outcome, or the failure that stopped it. */
+  private record Attempt(@Nullable Outcome outcome, @Nullable Throwable failure) {}
+
+  /** Who hears that a player is pending, to try their archive again later. */
+  public void onPending(java.util.function.Consumer<PlayerId> listener) {
+    this.pendingListener = listener;
+  }
+
+  /**
+   * Holds a player whose archive didn't go through, if they are still online, and has them tried
+   * again; after {@link #STUCK_AFTER} tries in a row admins hear about it once.
+   */
+  private void pend(PlayerId player, int season, String name) {
+    if (platform.players().find(player).isEmpty()) {
+      hold.clearPending(player);
+      return;
+    }
+    boolean first = !hold.isPending(player);
+    int tries = hold.markPending(player);
+    if (first) {
+      platform.players().sendMessage(player, config.get().messages().get("archive.held"));
+    }
+    if (tries == STUCK_AFTER) {
+      announcer.admins(
+          SeasonService.ADMIN_PERMISSION,
+          "archive.stuck",
+          "name",
+          name,
+          "season",
+          Integer.toString(season),
+          "count",
+          Integer.toString(tries));
+    }
+    pendingListener.accept(player);
+  }
+
+  /** A player archived, or with nothing to archive: no longer pending. */
+  private void settled(PlayerId player) {
+    hold.clearPending(player);
+  }
+
+  /**
+   * Puts back an attempt that stopped before the clear, while the server runs on: the vault page it
+   * sealed is removed, the operation closed with {@code ARCHIVE_ABORTED}, and its file moved aside.
+   * The page goes first: if this stops halfway, recovery still finds the operation open and seals
+   * the page again from the file.
+   */
+  private CompletableFuture<Void> abort(ArchiveRecord archive) {
+    PlayerId player = archive.player();
+    int season = archive.season();
+    return writer
+        .submit(() -> vaults.remove(player, season))
+        .thenCompose(removed ->
+            journal.append(JournalKind.ARCHIVE_ABORTED, player, season, archive.contentHash()))
+        .thenCompose(entry ->
+            writer.submit(() -> {
+              if (archives.exists(player, season)) {
+                archives.moveAside(player, season, "aborted-" + clock.millis());
+              }
+              return Boolean.TRUE;
+            }))
+        .<Void>thenApply(moved -> {
+          audit.record(
+              AuditLog.SEASONS,
+              "archive",
+              archive.name(),
+              "put back",
+              "Season " + season + ": vault page removed, archive moved aside, nothing cleared");
+          return null;
+        })
+        .exceptionally(failure -> {
+          LOG.error(
+              "Can't put back {}'s Season {} archive; recovery will look at it",
+              archive.name(),
+              season,
+              failure);
+          return null;
+        });
+  }
+
+  /**
+   * {@code /season reprocess <player> --restart}: puts back every open archive of a player whose
+   * recovery is stuck, so they can be archived afresh from what they carry now. Refused while they
+   * carry nothing, since what the archive copied would then be lost. Completes with the seasons put
+   * back, or empty if refused.
+   */
+  public CompletableFuture<Optional<List<Integer>>> restart(PlayerId player) {
+    List<OpenOperation> open =
+        recovery.open(player).stream().filter(op -> op.operation() == Operation.ARCHIVE).toList();
+    if (open.isEmpty() || platform.players().find(player).isEmpty()) {
+      return CompletableFuture.completedFuture(Optional.of(List.of()));
+    }
+    if (ArchiveHash.isEmpty(platform.inventories().snapshot(player), true)) {
+      return CompletableFuture.completedFuture(Optional.empty());
+    }
+    CompletableFuture<Void> chain = CompletableFuture.completedFuture(null);
+    List<Integer> seasons = new ArrayList<>();
+    for (OpenOperation operation : open) {
+      int season = operation.season();
+      seasons.add(season);
+      chain =
+          chain
+              .thenCompose(done -> writer.submit(() -> archives.read(player, season)))
+              .thenCompose(read ->
+                  read.isPresent()
+                      ? abort(read.get())
+                      : writer
+                          .submit(() -> vaults.remove(player, season))
+                          .thenCompose(removed ->
+                              journal.append(
+                                  JournalKind.ARCHIVE_ABORTED, player, season, "missing"))
+                          .<Void>thenApply(entry -> null));
+    }
+    return chain.thenApply(done -> Optional.of(List.copyOf(seasons)));
   }
 
   /**
@@ -468,6 +637,8 @@ public final class Archiver implements RolloverArchiver {
   /** Steps 4 and 5 after the checks, on the server thread. */
   private CompletableFuture<Outcome> clear(ArchiveRecord archive) {
     PlayerId player = archive.player();
+    // From here a failure leaves the player cleared: never put back, but left to recovery.
+    cleared.add(player);
     clearAndReset(player, archive.clearsEnderChest());
     // Whatever turned up after the clear, as a menu the game empties into the inventory as it
     // closes: never handed back, but taken into the record too (security review H1).
@@ -606,17 +777,22 @@ public final class Archiver implements RolloverArchiver {
         : new Outcome.Failed("an earlier archive is still waiting for recovery");
   }
 
-  private Outcome failed(String name, int season, String reason, Throwable failure) {
+  /**
+   * @param alert whether to tell admins: the first failure in a row, not each retry after it
+   */
+  private Outcome failed(String name, int season, String reason, Throwable failure, boolean alert) {
     LOG.error("Archiving {} into Season {} stopped: {}", name, season, reason, failure);
-    announcer.admins(
-        SeasonService.ADMIN_PERMISSION,
-        "archive.failed",
-        "name",
-        name,
-        "season",
-        Integer.toString(season),
-        "reason",
-        reason);
+    if (alert) {
+      announcer.admins(
+          SeasonService.ADMIN_PERMISSION,
+          "archive.failed",
+          "name",
+          name,
+          "season",
+          Integer.toString(season),
+          "reason",
+          reason);
+    }
     audit.record(AuditLog.SEASONS, "archive", name, "failed", reason);
     return new Outcome.Failed(reason);
   }

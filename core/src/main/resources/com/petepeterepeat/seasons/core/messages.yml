@@ -220,7 +220,10 @@ archive:
   nothing: "<gray><name> has no finished season waiting to be archived.</gray>"
   offline: "<red><name> isn't online. Players are archived when they next log in.</red>"
   busy: "<red><name> is being archived or unarchived right now.</red>"
-  failed: "<red>Archiving <name> into Season <season> stopped: <reason>. Their items stay on them; /season reprocess <name> tries again.</red>"
+  failed: "<red>Archiving <name> into Season <season> stopped: <reason>. Nothing was cleared and the attempt was put back; they are held while Seasons tries again every few seconds, or run /season archive <name>.</red>"
+  busy-pending: "<yellow><name> was busy when Season <season>'s archive reached them, so they are held and archived as soon as they are free.</yellow>"
+  held: "<yellow>Seasons couldn't archive you just now and tries again in a moment. Until then nothing you carry can move.</yellow>"
+  stuck: "<red><name> still isn't archived into Season <season> after <count> tries, and stays held. See the server log, then /season archive <name>, or /season reprocess <name> --restart if recovery is stuck.</red>"
   unavailable: "<red>The journal is unavailable, so nobody can be archived. See /season status.</red>"
   no-cells: "<yellow>Season <season> has no free Hall cells left, so some archived players stay where they are.</yellow>"
   recovery-uncleared: "<red><name>'s inventory is empty, but Seasons never cleared it for their Season <season> archive, so recovery stopped: what was copied may be somewhere else. Check it, then run /season reprocess <name>.</red>"
@@ -242,6 +245,9 @@ reprocess:
   offline: "<yellow><name> has <count> operation(s) pending, which finish when they log in.</yellow>"
   done: "<green>Finished <count> pending operation(s) for <name>.</green>"
   failed: "<red><name> still has <count> operation(s) pending: <reason></red>"
+  restarted: "<green>Put back <name>'s stuck archive for Season <seasons>; archiving them again from what they carry now.</green>"
+  restart-empty: "<red><name> carries nothing, so their stuck archive can't be restarted: what it copied would be lost. Check the server log and the archive files first.</red>"
+  unknown-flag: "<red>Unknown option <flag>. /season reprocess takes --restart.</red>"
 
 view:
   title: "<name> · Season <season>"

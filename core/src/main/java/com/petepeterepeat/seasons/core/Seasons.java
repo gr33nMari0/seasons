@@ -125,6 +125,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable CommandHelp commandHelp;
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
+  private @Nullable LoginService loginService;
   private @Nullable FirstsTracker firsts;
   private @Nullable Pets pets;
   private @Nullable Dragon dragon;
@@ -485,6 +486,8 @@ public final class Seasons implements SeasonsApi {
                 platform.scheduler(),
                 clock,
                 pets::loggedIn));
+    login.ifPresent(LoginService::start);
+    loginService = login.orElse(null);
     Tripwire wire =
         new Tripwire(
             platform.players(), platform.inventories(), platform.scheduler(), audit, adminAlerts);
@@ -871,6 +874,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (tripwire != null) {
       tripwire.stop();
+    }
+    if (loginService != null) {
+      loginService.stop();
     }
     if (zones != null) {
       zones.stop();

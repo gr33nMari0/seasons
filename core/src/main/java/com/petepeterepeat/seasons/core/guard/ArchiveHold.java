@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ArchiveHold {
   private final Set<PlayerId> held = ConcurrentHashMap.newKeySet();
   private final Set<PlayerId> arriving = ConcurrentHashMap.newKeySet();
+  private final java.util.Map<PlayerId, Integer> pending = new ConcurrentHashMap<>();
 
   /** Holds a player; false if they were already held. */
   public boolean hold(PlayerId player) {
@@ -38,15 +39,36 @@ public final class ArchiveHold {
   }
 
   /**
-   * Whether an archive, unarchive or other transaction holds the player right now, as opposed to
-   * their login still running: what a command may not change (security review M1).
+   * Holds a player whose archive failed or found them busy until it goes through, so they are never
+   * left free with what it should have taken (security review H2). Separate from {@link #hold},
+   * which each attempt takes.
+   *
+   * @return how many times in a row this player's archive hasn't gone through
+   */
+  public int markPending(PlayerId player) {
+    return pending.merge(player, 1, Integer::sum);
+  }
+
+  /** Lets go of a pending player: archived, or gone. */
+  public void clearPending(PlayerId player) {
+    pending.remove(player);
+  }
+
+  public boolean isPending(PlayerId player) {
+    return pending.containsKey(player);
+  }
+
+  /**
+   * Whether an archive, unarchive or other transaction holds the player right now, or their archive
+   * is pending, as opposed to their login still running: what a command may not change (security
+   * review M1 and H2).
    */
   public boolean inTransaction(PlayerId player) {
-    return held.contains(player);
+    return held.contains(player) || pending.containsKey(player);
   }
 
   public boolean isHeld(PlayerId player) {
-    return held.contains(player) || arriving.contains(player);
+    return held.contains(player) || arriving.contains(player) || pending.containsKey(player);
   }
 
   /** Everyone held, such as for refusing a launch while archiving or a login still runs. */

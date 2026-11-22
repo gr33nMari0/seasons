@@ -11,6 +11,11 @@ public enum JournalKind {
    */
   ARCHIVE_CLEARING,
   ARCHIVE_DONE,
+  /**
+   * An archive that stopped while the server ran on, put back before the player was cleared: its
+   * vault page removed and its file moved aside. Closes the operation (security review H2).
+   */
+  ARCHIVE_ABORTED,
   UNARCHIVE_STARTED,
   UNARCHIVE_DONE,
   VAULT_WITHDRAW,
