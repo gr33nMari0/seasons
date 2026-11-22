@@ -5,8 +5,9 @@
 // A step is <scenario> or <scenario>:<session>. With no steps, session 1 of every file in
 // scenarios/ runs. Exit code 0 means every step passed.
 // A scenario either exports run(ctx), or sessions: [fn, fn, ...] with "// @sessions <n>" at the
-// top of its file; the server restarts between sessions, so a session that isn't its scenario's
-// last ends this run, and the next boot carries on with the following session.
+// top of its file; it may export timeoutMs for a session that needs longer than two minutes. The
+// server restarts between sessions, so a session that isn't its scenario's last ends this run, and
+// the next boot carries on with the following session.
 // With --shared, the server runs many scenarios: after each scenario's last session the runner
 // asks the test plugin to reset the server to a fresh boot (docs/adr/0003), writing
 // "@@scenario <request>" to its standard output and reading one line back from its standard input.
@@ -112,7 +113,8 @@ for (const { name, session } of steps) {
     await Promise.race([
       body ? body(ctx) : Promise.reject(new Error(`${name} has no session ${session}`)),
       new Promise((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(`timed out after ${SCENARIO_TIMEOUT_MS} ms`)), SCENARIO_TIMEOUT_MS)
+        const timeoutMs = scenario.timeoutMs ?? SCENARIO_TIMEOUT_MS
+        timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs} ms`)), timeoutMs)
       })
     ]).finally(() => clearTimeout(timer))
     log(`PASS  ${name}`)

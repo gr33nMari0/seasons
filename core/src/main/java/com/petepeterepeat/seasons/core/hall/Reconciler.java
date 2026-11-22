@@ -208,15 +208,20 @@ public final class Reconciler {
         .thenApply(done -> cells.stream().mapToInt(CompletableFuture::join).sum());
   }
 
-  /** Loads one cell's chunks, then reconciles it. Completes with its repairs. */
+  /**
+   * Loads one cell's chunks, waits for a draw of it under way, then reconciles it. Completes with
+   * its repairs.
+   */
   public CompletableFuture<Integer> reconcile(HallService.CellRef ref) {
     Optional<Bounds> bounds = ref.cell().bounds();
     if (bounds.isEmpty()) {
       return CompletableFuture.completedFuture(0);
     }
+    // A draw of the cell under way is let finish first, so the command judges a whole cell.
     return renderer
         .loaded(bounds.get())
-        .thenCompose(loaded -> planned(ref))
+        .thenComposeAsync(loaded -> renderer.settled(ref), serverThread)
+        .thenCompose(settled -> planned(ref))
         .thenApplyAsync(expected -> reconcile(ref, expected), serverThread);
   }
 
@@ -241,11 +246,17 @@ public final class Reconciler {
 
   /**
    * Compares a cell's displays with what it should show and repairs the difference. Its chunks are
-   * loaded.
+   * loaded. A cell the renderer is drawing is queued to be looked at again once it is done.
    *
    * @return how many repairs it made
    */
   int reconcile(HallService.CellRef ref, List<HallRenderer.Planned> expected) {
+    if (renderer.drawing(ref)) {
+      // Half drawn, a display at a time, from a plan that may be out of date by now: looked at
+      // again once the draw is done.
+      enqueue(ref.key());
+      return 0;
+    }
     Bounds bounds = ref.cell().bounds().orElseThrow();
     Displays displays = platform.displays();
     // Every display in the cell, and every one of the cell's own anywhere in its chunks, so one

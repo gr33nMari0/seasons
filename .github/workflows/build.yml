@@ -74,6 +74,22 @@ jobs:
             web/build/libs/SeasonsWeb-*.jar
             testkit/build/libs/seasons-testkit-*.jar
 
+  # The main code compiled against the newest Paper API as well as the oldest supported one, with
+  # deprecations as errors as in every build, so API removals show up before they land.
+  newest-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+      - name: Compile against the newest Paper API
+        run: ./gradlew compileJava -PpaperApi="$(grep '^paperApiNewest=' gradle.properties | cut -d= -f2)"
+
   shard:
     needs: [changes, jars]
     if: needs.changes.outputs.docs_only != 'true'
@@ -129,11 +145,12 @@ jobs:
           path: testkit/build/scenario-results
 
   # The check branch protection requires. It runs whatever happened before it, and passes only if
-  # the jars built and every shard passed, or every shard was skipped for a docs-only change: a job
-  # skipped because something it needs failed would otherwise count as passing. After passing
-  # shards, every session of every scenario file must have a passing result in their results.
+  # the jars built, the code compiled against the newest Paper API, and every shard passed or every
+  # shard was skipped for a docs-only change: a job skipped because something it needs failed would
+  # otherwise count as passing. After passing shards, every session of every scenario file must
+  # have a passing result in their results.
   build:
-    needs: [changes, jars, shard]
+    needs: [changes, jars, newest-api, shard]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -142,11 +159,13 @@ jobs:
           CHANGES: ${{ needs.changes.result }}
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           JARS: ${{ needs.jars.result }}
+          NEWEST_API: ${{ needs.newest-api.result }}
           SHARDS: ${{ needs.shard.result }}
         run: |
-          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, shards: $SHARDS"
+          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, newest API: $NEWEST_API, shards: $SHARDS"
           [ "$CHANGES" = success ] || { echo "The docs-only check didn't run"; exit 1; }
           [ "$JARS" = success ] || { echo "The jars didn't build"; exit 1; }
+          [ "$NEWEST_API" = success ] || { echo "The code doesn't compile against the newest Paper API"; exit 1; }
           if [ "$DOCS_ONLY" = true ] && [ "$SHARDS" = skipped ]; then
             echo "Docs-only change: the scenario shards were skipped" >> "$GITHUB_STEP_SUMMARY"
             exit 0

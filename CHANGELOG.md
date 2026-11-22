@@ -6,6 +6,10 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ### Added
 
+- bStats metrics (M6): Seasons reports as SeasonsMC (35499) and Seasons Web as SeasonsMC Web (35500), with Seasons' anonymous charts: whether Seasons Web is installed, the cell assignment mode, the cell access mode and how many seasons the server has run. No player names, coordinates or addresses. `enabled: false` in `plugins/bStats/config.yml` turns bStats off for every plugin.
+- A configuration reference, `docs/config.md`, generated from the code with the bundled `config.yml`'s comments (M6).
+- Releases are published to Hangar and Modrinth as well as GitHub Releases; a version with a hyphen is a beta (M6).
+
 - The hub (post-M5): `/hof hall hub` marks the Hall's centre with two wand corners, and `/hof hall spawn` sets the Hall spawn in it, where plain `/hof` always lands. Both live in the world's `seasons/hall.yml` with the Hall's exits (`/hof hall exit`) and links. The Hall is the hub plus every gallery, so walking between the hub and its wings is staying in the Hall, and the hub is protected, exempt from zones and cut out of them on the map. Nothing writes `hall.yml` while it is left out after a failed load, the wand's link included.
 - Links: `/hof link add <id> [hall|season <n>] [x y z]` makes any block (a button, a sign, a pressure plate) a link to the Hall spawn, a season's spawn or a spot set with `/hof link to`; clicking it, or stepping on it, takes the player there. A link to the Hall needs no bed; a link into locked land is refused until it opens; links out of the Hall wait during the Intermission. Link blocks outside the Hall are protected like Hall blocks. A link block outside the Hall stays when the block holding it up is broken; `/hof leave` back onto a pressure plate link doesn't take it again until the player steps off; standing on a link does nothing while the player is being archived.
 - `hof.sealed` (default `intermission`): leaving the Hall by walking, falling or another plugin's teleport just leaves, except during the Intermission; `always` keeps the old behaviour. `hof.leaveWithoutSpot: season-spawn` sends `/hof leave` with no saved spot to the season's spawn, as after a respawn at a Hall spawn that is the world spawn. `launch.setWorldSpawn: false` keeps the world spawn at launch. `archive.arrival: hub` wakes everyone at the Hall spawn at season end instead of their cell.
@@ -25,6 +29,11 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - `/museum add` and `remove` are refused on a plinth whose last change a crash interrupted, until recovery settles it.
 - A museum cell can have several trophy anchors, such as an egg wall: each egg plinth shows its own season's egg.
 - The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Taran" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
+
+### Changed
+
+- Displays are drawn a few at a time, within 2 ms a tick, so a rollover no longer draws every cell in one tick (A43). A cell being drawn again keeps its figure throughout.
+- The bundled `config.yml` describes every setting on its own line, with its choices; nested settings such as `hof.entry` and `wand.outlines` are written as sections rather than one-line maps. Defaults are unchanged, and existing files keep working.
 
 ### Security
 

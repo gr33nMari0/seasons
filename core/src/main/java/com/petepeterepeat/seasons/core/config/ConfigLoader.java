@@ -1013,6 +1013,16 @@ public final class ConfigLoader {
     return out.toString();
   }
 
+  /** {@code config.yml}'s settings from its text, as the loader maps them. */
+  static SeasonsConfig parse(String text) throws ConfigurateException {
+    return map(
+        YamlConfigurationLoader.builder()
+            .source(() -> new BufferedReader(new java.io.StringReader(text)))
+            .defaultOptions(options())
+            .build()
+            .load());
+  }
+
   static SeasonsConfig map(ConfigurationNode node) throws SerializationException {
     SeasonsConfig config = node.get(SeasonsConfig.class);
     if (config == null) {

@@ -28,3 +28,17 @@ tasks.register<JavaExec>("writeDefaultTemplates") {
     mainClass = "com.petepeterepeat.seasons.core.DefaultTemplates"
     args(rootProject.file("templates").path)
 }
+
+// Writes the bundled config.yml and secrets.template.yml, comments and all, and docs/config.md
+// from each setting's @Comment in the code (ConfigReference, in the tests). ConfigReferenceTest
+// fails until they match.
+tasks.register<JavaExec>("configReference") {
+    group = "documentation"
+    description = "Writes the bundled config.yml, secrets.template.yml and docs/config.md from the code"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.petepeterepeat.seasons.core.config.ConfigReference"
+    args(
+        file("src/main/resources/com/petepeterepeat/seasons/core").path,
+        rootProject.file("docs/config.md").path,
+    )
+}

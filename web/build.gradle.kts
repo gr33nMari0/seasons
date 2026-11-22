@@ -10,6 +10,7 @@ base.archivesName = "seasons-web"
 dependencies {
     compileOnly(libs.paper.api)
     compileOnly(project(":api"))
+    implementation(libs.bstats.bukkit)
 }
 
 tasks.processResources {
@@ -23,6 +24,9 @@ tasks.jar { enabled = false }
 tasks.shadowJar {
     archiveBaseName = "SeasonsWeb"
     archiveClassifier = ""
+    // bStats insists on being relocated, so its classes never clash with another plugin's copy.
+    relocate("org.bstats", "com.petepeterepeat.seasons.web.lib.bstats")
+    exclude("META-INF/maven/**")
 }
 
 tasks.assemble { dependsOn(tasks.shadowJar) }

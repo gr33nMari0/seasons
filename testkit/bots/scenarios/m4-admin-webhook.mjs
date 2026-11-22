@@ -29,6 +29,10 @@ export default {
       // A reconciliation repair.
       const figure = at('minecraft:mannequin', cells.Owner.figure)
       await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'the figure stands'))
+      // Award winners' cells are drawn again at the Intermission, a few displays a tick; a redraw
+      // still going would put the gear back itself, with no repair to report. Two seconds of ticks
+      // see it done.
+      await ctx.sync(admin, [], 40)
       await ctx.command(admin, `/item replace entity ${figure} weapon.mainhand with minecraft:dirt`, /^Replaced /)
       await ctx.command(admin, '/hof reconcile season-2', REPAIRED, 20_000)
       await alerts.waitFor(new RegExp(`^Reconciliation repaired ${cells.Owner.key}: fixed the figure's gear$`), 20_000)

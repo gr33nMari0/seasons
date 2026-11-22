@@ -26,11 +26,16 @@ import java.util.concurrent.Executor;
 /**
  * Draws a player's displays in their cell from their archive: the figure in their skin and gear at
  * the figure anchor, the plaque, and an imported cell's trophies. Every redraw first removes what
- * the last one drew, so drawing twice leaves one set. Only copies of items are ever shown.
+ * the last one drew, so drawing twice leaves one set. Only copies of items are ever shown. Cells
+ * are drawn a few displays a tick, within {@link #DRAW_BUDGET_NANOS}, so a rollover causes no lag
+ * spike.
  */
 public final class HallRenderer implements DisplayRenderer {
   /** How high above the plaque anchor's block its text floats. */
   private static final double PLAQUE_HEIGHT = 1.2;
+
+  /** The drawing a tick may take, so a rollover draws a few cells a tick (A43). */
+  static final long DRAW_BUDGET_NANOS = 2_000_000;
 
   private final Platform platform;
   private final ConfigHolder config;
@@ -38,6 +43,10 @@ public final class HallRenderer implements DisplayRenderer {
   private final ArchiveFiles archives;
   private final HallService hall;
   private final Executor serverThread;
+  private final DrawQueue drawing;
+
+  /** Each cell with a draw under way, by key, with that draw; server thread only. */
+  private final java.util.Map<String, CompletableFuture<Void>> underWay = new java.util.HashMap<>();
 
   public HallRenderer(
       Platform platform,
@@ -51,6 +60,8 @@ public final class HallRenderer implements DisplayRenderer {
     this.archives = archives;
     this.hall = hall;
     this.serverThread = platform.scheduler()::runGlobal;
+    this.drawing =
+        new DrawQueue(platform.scheduler()::runGlobal, System::nanoTime, DRAW_BUDGET_NANOS);
   }
 
   @Override
@@ -67,9 +78,60 @@ public final class HallRenderer implements DisplayRenderer {
                 return CompletableFuture.completedFuture(null);
               }
               return loaded(ref.get().cell().bounds().get())
-                  .thenRunAsync(() -> draw(ref.get(), found.get()), serverThread);
+                  .thenComposeAsync(_ -> queue(ref.get(), found.get()), serverThread);
             },
             serverThread);
+  }
+
+  /**
+   * Queues a cell's drawing, noted as under way from its first step, the clearing, until its last
+   * display is drawn. A cell's draws run one after another, so at most one is under way. On the
+   * server thread.
+   */
+  private CompletableFuture<Void> queue(HallService.CellRef ref, ArchiveRecord archive) {
+    String key = ref.key();
+    CompletableFuture<Void> done = new CompletableFuture<>();
+    var _ =
+        drawing
+            .submitSteps(() -> {
+              underWay.put(key, done);
+              return draw(ref, archive);
+            })
+            .whenComplete((drawn, failure) -> {
+              underWay.remove(key, done);
+              if (failure != null) {
+                done.completeExceptionally(failure);
+              } else {
+                done.complete(null);
+              }
+            });
+    return done;
+  }
+
+  /**
+   * Whether a cell's drawing is under way, its displays half drawn, so reconciliation leaves it to
+   * the draw. A draw still waiting its turn will clear the cell first, whatever is there by then.
+   * On the server thread.
+   */
+  boolean drawing(HallService.CellRef ref) {
+    return underWay.containsKey(ref.key());
+  }
+
+  /**
+   * Completes once a draw of the cell under way now, if any, is done, failed or not. On the server
+   * thread.
+   */
+  CompletableFuture<Void> settled(HallService.CellRef ref) {
+    CompletableFuture<Void> current = underWay.get(ref.key());
+    return current == null
+        ? CompletableFuture.completedFuture(null)
+        : current.handle((drawn, failure) -> null);
+  }
+
+  /** Stops drawing, as Seasons stops: nothing queued is drawn after it. On the server thread. */
+  public void stop() {
+    drawing.stop();
+    underWay.clear();
   }
 
   @Override
@@ -94,16 +156,36 @@ public final class HallRenderer implements DisplayRenderer {
                 serverThread);
   }
 
-  /** Draws a cell's displays; its chunks are loaded. */
-  void draw(HallService.CellRef ref, ArchiveRecord archive) {
-    Bounds bounds = ref.cell().bounds().orElseThrow();
+  /**
+   * Clears a cell and plans its displays; its chunks are loaded. Returns the steps that spawn them,
+   * one display each, which the draw queue spreads over ticks.
+   */
+  List<Runnable> draw(HallService.CellRef queued, ArchiveRecord archive) {
+    // The cell as it is now: its gallery may have changed while the draw waited its turn.
+    HallService.CellRef ref =
+        hall.gallery(queued.gallery().id())
+            .flatMap(g -> g.cell(queued.cell().id()).map(c -> new HallService.CellRef(g, c)))
+            .orElse(queued);
+    if (ref.cell().bounds().isEmpty()) {
+      return List.of();
+    }
+    Bounds bounds = ref.cell().bounds().get();
     platform
         .displays()
         .removeTagged(
             bounds.min(),
             bounds.max(),
             DisplayTag.prefix(ref.gallery().id(), ref.cell().id(), archive.season()));
-    plan(ref, archive).forEach(this::spawn);
+    List<Planned> planned = plan(ref, archive);
+    if (planned.isEmpty()) {
+      return List.of();
+    }
+    // The first display, the figure, goes up in the same step as the clearing, so a cell being
+    // drawn again never stands empty.
+    spawn(planned.getFirst());
+    return planned.subList(1, planned.size()).stream()
+        .<Runnable>map(next -> () -> spawn(next))
+        .toList();
   }
 
   /** One display a cell shows for an archive. */

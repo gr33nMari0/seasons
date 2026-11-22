@@ -46,6 +46,19 @@ subprojects {
         "testRuntimeOnly"(catalog.junit.launcher)
     }
 
+    // -PpaperApi=<version> compiles the main code against another Paper API than the oldest
+    // supported one, such as the newest (paperApiNewest in gradle.properties), as CI does.
+    providers.gradleProperty("paperApi").orNull?.let { paperApi ->
+        configurations.matching { it.name == "compileClasspath" }.configureEach {
+            resolutionStrategy.eachDependency {
+                if (requested.group == "io.papermc.paper" && requested.name == "paper-api") {
+                    useVersion(paperApi)
+                    because("compiling against the Paper API given with -PpaperApi")
+                }
+            }
+        }
+    }
+
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
         options.release = 25

@@ -211,6 +211,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
     mkdirs(bootOut);
     mkdirs(state);
     writeServerProperties(run, p.getServerPort().get());
+    turnOffBStats(run);
     List<String> command = new ArrayList<>();
     command.add(p.getJava().get());
     command.addAll(p.getJvmArgs().get());
@@ -294,6 +295,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
         generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
         generate-structures=false
         spawn-protection=0
+        max-players=40
         view-distance=4
         simulation-distance=4
         """
@@ -302,6 +304,37 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
       Files.createDirectories(run);
       Files.writeString(run.resolve("server.properties"), properties);
       Files.writeString(run.resolve("eula.txt"), "eula=true\n");
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  /**
+   * Turns bStats off for every plugin on a scenario server, Seasons and Seasons Web included, before
+   * it boots, so no test server reports to bstats.org. The server id bStats wrote before is kept.
+   */
+  static void turnOffBStats(Path run) {
+    Path config = run.resolve("plugins/bStats/config.yml");
+    try {
+      String id = java.util.UUID.randomUUID().toString();
+      if (Files.exists(config)) {
+        java.util.regex.Matcher kept =
+            java.util.regex.Pattern.compile("(?m)^serverUuid: *(\\S+)$")
+                .matcher(Files.readString(config));
+        if (kept.find()) {
+          id = kept.group(1);
+        }
+      }
+      Files.createDirectories(config.getParent());
+      Files.writeString(
+          config,
+          """
+          # Written by the scenario shard; never ships. No scenario server reports to bStats.
+          enabled: false
+          serverUuid: %s
+          logFailedRequests: false
+          """
+              .formatted(id));
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
