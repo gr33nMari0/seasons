@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -145,7 +146,7 @@ public final class ZoneCommands {
         shape = cylinder(platform.players().position(source.player().get()), words);
       }
       case "box" -> {
-        if (words.size() == 1) {
+        if (words.size() == 1 || (words.size() == 2 && words.get(1).equals(Positions.SELECTION))) {
           if (selected.isEmpty()) {
             source.reply(messages.get("zone.box-corners", "id", id));
             return;
@@ -157,7 +158,7 @@ public final class ZoneCommands {
                   ZoneShape.Box.between(
                       b.minX(), b.minY(), b.minZ(), b.maxX(), b.maxY(), b.maxZ()));
         } else {
-          shape = box(words);
+          shape = box(words, source.player().map(p -> platform.players().position(p)), dimension);
         }
       }
       case "outside" -> {
@@ -167,7 +168,10 @@ public final class ZoneCommands {
             return;
           }
           shape = outsideCircle(platform.players().position(source.player().get()), words);
-        } else if (words.size() == 2 && words.get(1).equals("box")) {
+        } else if ((words.size() == 2 && words.get(1).equals("box"))
+            || (words.size() == 3
+                && words.get(1).equals("box")
+                && words.get(2).equals(Positions.SELECTION))) {
           if (selected.isEmpty()) {
             source.reply(messages.get("zone.outside-corners", "id", id));
             return;
@@ -176,7 +180,7 @@ public final class ZoneCommands {
           dimension = b.dimension();
           shape = Optional.of(ZoneShape.OutsideBox.between(b.minX(), b.minZ(), b.maxX(), b.maxZ()));
         } else {
-          shape = outsideBox(words);
+          shape = outsideBox(words, source.player().map(p -> platform.players().position(p)));
         }
       }
       case "y-above", "y-below" -> shape = height(words);
@@ -270,20 +274,32 @@ public final class ZoneCommands {
     }
   }
 
-  /** {@code box <x1> <y1> <z1> <x2> <y2> <z2>}. */
-  private static Optional<ZoneShape> box(List<String> words) {
-    if (words.size() != 7) {
+  /** {@code box <position> <position>}, each typed as questions 264 allows. */
+  private static Optional<ZoneShape> box(
+      List<String> words, Optional<Position> origin, String dimension) {
+    Positions.Read first = Positions.block(words, 1, origin, dimension);
+    if (!(first instanceof Positions.Read.Block a)) {
       return Optional.empty();
     }
-    try {
-      int[] c = new int[6];
-      for (int i = 0; i < 6; i++) {
-        c[i] = Integer.parseInt(words.get(i + 1));
-      }
-      return Optional.of(ZoneShape.Box.between(c[0], c[1], c[2], c[3], c[4], c[5]));
-    } catch (IllegalArgumentException e) {
+    Positions.Read second = Positions.block(words, 1 + a.used(), origin, dimension);
+    if (!(second instanceof Positions.Read.Block b) || 1 + a.used() + b.used() != words.size()) {
       return Optional.empty();
     }
+    Position p = a.block();
+    Position q = b.block();
+    return Optional.of(
+        ZoneShape.Box.between(
+            p.blockX(), p.blockY(), p.blockZ(), q.blockX(), q.blockY(), q.blockZ()));
+  }
+
+  /** One x or z typed as a number or {@code ~n} relative to the sender. */
+  private static int flat(String word, Optional<Position> origin, boolean x) {
+    if (word.startsWith("~")) {
+      double base = origin.map(o -> x ? o.x() : o.z()).orElseThrow(IllegalArgumentException::new);
+      String rest = word.substring(1);
+      return (int) Math.floor(base + (rest.isEmpty() ? 0 : Double.parseDouble(rest)));
+    }
+    return Integer.parseInt(word);
   }
 
   /** {@code outside circle <radius>}, centred on the block at {@code at}, as a cylinder is. */
@@ -300,14 +316,14 @@ public final class ZoneCommands {
   }
 
   /** {@code outside box <x1> <z1> <x2> <z2>}. */
-  private static Optional<ZoneShape> outsideBox(List<String> words) {
+  private static Optional<ZoneShape> outsideBox(List<String> words, Optional<Position> origin) {
     if (words.size() != 6 || !words.get(1).equals("box")) {
       return Optional.empty();
     }
     try {
       int[] c = new int[4];
       for (int i = 0; i < 4; i++) {
-        c[i] = Integer.parseInt(words.get(i + 2));
+        c[i] = flat(words.get(i + 2), origin, i % 2 == 0);
       }
       return Optional.of(ZoneShape.OutsideBox.between(c[0], c[1], c[2], c[3]));
     } catch (IllegalArgumentException e) {

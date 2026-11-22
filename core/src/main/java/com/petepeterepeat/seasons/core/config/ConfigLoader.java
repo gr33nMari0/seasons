@@ -691,7 +691,9 @@ public final class ConfigLoader {
       if (!SeasonFile.CANDIDATE_NAME.matcher(name).matches()) {
         problems.add(
             ConfigProblem.atPath(
-                file, path, "candidate names are lower-case letters, digits and dashes"));
+                file,
+                path,
+                "candidate names start with a letter, then lower-case letters, digits and dashes"));
         continue;
       }
       Optional<Position> at;

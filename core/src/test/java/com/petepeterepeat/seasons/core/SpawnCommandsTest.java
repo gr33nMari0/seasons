@@ -155,7 +155,7 @@ class SpawnCommandsTest {
     assertThat(runAt(EAST, "/season spawn candidate add north-mesa"))
         .containsExactly("Season 3 already has a spawn candidate called north-mesa.");
     assertThat(runAt(EAST, "/season spawn candidate add North_Mesa").getFirst())
-        .startsWith("Candidate names are lower-case letters");
+        .startsWith("Candidate names start with a letter");
     assertThat(run("/season spawn candidate remove nowhere"))
         .containsExactly("Season 3 has no spawn candidate called nowhere.");
     assertThat(run("/season spawn set nowhere"))

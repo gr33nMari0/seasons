@@ -11,6 +11,7 @@ import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigCommands;
@@ -116,6 +117,7 @@ public final class Seasons implements SeasonsApi {
 
   private @Nullable SeasonService service;
   private @Nullable SeasonCommands commands;
+  private @Nullable CommandHelp commandHelp;
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
   private @Nullable FirstsTracker firsts;
@@ -543,9 +545,23 @@ public final class Seasons implements SeasonsApi {
     platform.events().hall(hallRules);
     platform.events().zones(zoning);
     ConfigEdits edits = new ConfigEdits(platform, config, loader, writer, audit, seasons::reloaded);
+    CommandHelp help =
+        new CommandHelp(
+            () -> config.get().messages(),
+            (source, node) ->
+                source.player().map(p -> platform.permissions().has(p, node)).orElse(true),
+            () -> config.get().config().admin().hints());
+    TemplateLibrary library = new TemplateLibrary(world.resolve("templates"), platform.templates());
+    CommandSuggestions suggestions =
+        new CommandSuggestions(
+            platform, config, () -> Optional.of(players), seasons::state, library::names);
+    help.choices(suggestions);
+    commandHelp = help;
+    cellEdits.bindHelp(help);
     Path seasonBackups = world.resolve("backups").resolve("seasons");
     List<CommandNode> nodes = new ArrayList<>();
-    nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
+    nodes.add(
+        new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups, help).node());
     nodes.addAll(
         new ZoneCommands(
                 platform, config, loader, edits, seasons, zoning, seasonBackups, wanding::selection)
@@ -554,7 +570,8 @@ public final class Seasons implements SeasonsApi {
         new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
-    platform.commands().register(built.root(nodes));
+    built.bindHelp(help);
+    platform.commands().register(help.decorate(built.root(nodes), suggestions));
     HallCommands hallCommands =
         new HallCommands(
             platform,
@@ -567,7 +584,8 @@ public final class Seasons implements SeasonsApi {
             players,
             cellEdits,
             wanding,
-            stamper);
+            stamper,
+            help);
     wanding.bindLinks(hallCommands::addLink);
     CommandNode hof = hallCommands.root();
     if (curation != null) {
@@ -575,10 +593,11 @@ public final class Seasons implements SeasonsApi {
       children.add(curation.command());
       hof = new CommandNode(hof.name(), hof.argument(), hof.permission(), children, hof.action());
     }
-    platform.commands().register(hof, List.of("halloffame"));
-    vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
-    platform.commands().register(pets.command(), List.of());
-    platform.commands().register(museum.command(), List.of());
+    platform.commands().register(help.decorate(hof, suggestions), List.of("halloffame"));
+    vault.ifPresent(
+        v -> platform.commands().register(help.decorate(v.command(), suggestions), List.of()));
+    platform.commands().register(help.decorate(pets.command(), suggestions), List.of());
+    platform.commands().register(help.decorate(museum.command(), suggestions), List.of());
     platform.events().pets(pets);
     platform.events().dragon(fight);
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
@@ -813,6 +832,11 @@ public final class Seasons implements SeasonsApi {
   /** The command handlers, once started. */
   Optional<SeasonCommands> commands() {
     return Optional.ofNullable(commands);
+  }
+
+  /** Help and hints over every registered command, for tests. */
+  Optional<CommandHelp> commandHelp() {
+    return Optional.ofNullable(commandHelp);
   }
 
   /** Player records, once started. */

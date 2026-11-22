@@ -13,13 +13,24 @@ import org.jspecify.annotations.Nullable;
  *
  * @param name the literal itself, or the argument's name
  * @param argument empty for a literal
+ * @param suggester what tab completion offers for an argument, if anything (questions 266)
  */
 public record CommandNode(
     String name,
     Optional<ArgumentType> argument,
     Optional<String> permission,
     List<CommandNode> children,
-    Optional<CommandAction> action) {
+    Optional<CommandAction> action,
+    Optional<Suggester> suggester) {
+  public CommandNode(
+      String name,
+      Optional<ArgumentType> argument,
+      Optional<String> permission,
+      List<CommandNode> children,
+      Optional<CommandAction> action) {
+    this(name, argument, permission, children, action, Optional.empty());
+  }
+
   public CommandNode {
     if (name.isBlank() || name.chars().anyMatch(Character::isWhitespace)) {
       throw new IllegalArgumentException("A command word is one word: '" + name + "'");
@@ -38,6 +49,21 @@ public record CommandNode(
     return argument.isEmpty();
   }
 
+  /** This node with other children. */
+  public CommandNode withChildren(List<CommandNode> next) {
+    return new CommandNode(name, argument, permission, next, action, suggester);
+  }
+
+  /** This node running {@code next} when it is the last word typed. */
+  public CommandNode withAction(CommandAction next) {
+    return new CommandNode(name, argument, permission, children, Optional.of(next), suggester);
+  }
+
+  /** This argument with what tab completion offers for it. */
+  public CommandNode withSuggester(Suggester next) {
+    return new CommandNode(name, argument, permission, children, action, Optional.of(next));
+  }
+
   public static Builder literal(String literal) {
     return new Builder(literal, null);
   }
@@ -53,6 +79,7 @@ public record CommandNode(
     private @Nullable String permission;
     private final List<CommandNode> children = new ArrayList<>();
     private @Nullable CommandAction action;
+    private @Nullable Suggester suggester;
 
     private Builder(String name, @Nullable ArgumentType argument) {
       this.name = name;
@@ -78,13 +105,19 @@ public record CommandNode(
       return this;
     }
 
+    public Builder suggests(Suggester suggester) {
+      this.suggester = suggester;
+      return this;
+    }
+
     public CommandNode build() {
       return new CommandNode(
           name,
           Optional.ofNullable(argument),
           Optional.ofNullable(permission),
           children,
-          Optional.ofNullable(action));
+          Optional.ofNullable(action),
+          Optional.ofNullable(suggester));
     }
   }
 }

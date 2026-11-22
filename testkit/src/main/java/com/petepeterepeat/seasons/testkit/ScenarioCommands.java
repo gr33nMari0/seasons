@@ -132,6 +132,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code console <command...>} runs a command as a sender that isn't a player, as the
+ *       console would, and passes what it is told back prefixed "Console: "
  *   <li>{@code vault-return <player> <item> <count>} hands a stack back to the player on their
  *       vault's Returned page, as a curator's return or an undelivered dragon egg will
  *   <li>{@code tame <tag> <player>} tames the entity with a scoreboard tag to a player
@@ -268,6 +270,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "console" -> console(sender, args);
         case "vault-return" -> vaultReturn(sender, hooks, args);
         case "tame" -> tame(sender, args);
         case "stat" -> stat(sender, args);
@@ -305,7 +308,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
             sender.sendMessage(
                 "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
-                    + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
+                    + "|portal-pair|bucket|ignite|permit|console|vault-return|tame|chest|leash|forget-pet"
                     + "|dragon|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
@@ -887,6 +890,24 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     block.setType(Material.FIRE);
     sender.sendMessage("Lit " + describe(block.getLocation()));
+  }
+
+  /**
+   * Runs a command as a sender that isn't a player, as the console does, and passes each line it
+   * is told back to the sender, prefixed "Console: ".
+   */
+  private void console(CommandSender sender, String[] args) {
+    String command = String.join(" ", java.util.Arrays.asList(args).subList(1, args.length));
+    CommandSender console =
+        plugin
+            .getServer()
+            .createCommandSender(feedback ->
+                sender.sendMessage(
+                    "Console: "
+                        + net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+                            .plainText()
+                            .serialize(feedback)));
+    plugin.getServer().dispatchCommand(console, command);
   }
 
   private void permit(CommandSender sender, String[] args) {

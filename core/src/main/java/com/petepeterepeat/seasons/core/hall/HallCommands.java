@@ -3,8 +3,10 @@ package com.petepeterepeat.seasons.core.hall;
 
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -74,6 +76,7 @@ public final class HallCommands {
   private final CellEdits edits;
   private final Wand wand;
   private final Optional<Stamper> stamper;
+  private final CommandHelp help;
 
   /**
    * @param importer empty when the journal couldn't be opened, so imports are refused
@@ -89,7 +92,8 @@ public final class HallCommands {
       PlayerStore players,
       CellEdits edits,
       Wand wand,
-      Optional<Stamper> stamper) {
+      Optional<Stamper> stamper,
+      CommandHelp help) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
@@ -101,6 +105,7 @@ public final class HallCommands {
     this.edits = edits;
     this.wand = wand;
     this.stamper = stamper;
+    this.help = help;
   }
 
   public CommandNode root() {
@@ -363,7 +368,10 @@ public final class HallCommands {
     saved(
         source,
         hall.save(Gallery.create(id, season, dimension)),
-        messages().get("hof.gallery.created", "gallery", id, "season", Integer.toString(season)));
+        messages().get("hof.gallery.created", "gallery", id, "season", Integer.toString(season)),
+        "hof.gallery.create",
+        "gallery",
+        id);
   }
 
   void galleryBounds(CommandSource source, Arguments arguments) {
@@ -382,14 +390,8 @@ public final class HallCommands {
    */
   private Optional<Bounds> corners(CommandSource source, Arguments arguments, Gallery gallery) {
     Optional<String> given = arguments.optionalString("corners");
-    if (given.isPresent() && !given.get().isBlank()) {
-      Optional<int[]> corners = numbers(given.get(), 6);
-      if (corners.isEmpty()) {
-        source.reply(messages().get("hof.cell.corners"));
-        return Optional.empty();
-      }
-      int[] c = corners.get();
-      return Optional.of(Bounds.between(gallery.dimension(), c[0], c[1], c[2], c[3], c[4], c[5]));
+    if (given.isPresent() && !given.get().isBlank() && !isSelection(given.get())) {
+      return typedBox(source, given.get(), gallery.dimension());
     }
     Optional<Bounds> selected = source.player().flatMap(wand::selection);
     if (selected.isEmpty()) {
@@ -633,26 +635,58 @@ public final class HallCommands {
                 "from",
                 CellEdits.corner(hub.min()),
                 "to",
-                CellEdits.corner(hub.max())));
+                CellEdits.corner(hub.max())),
+        "hof.hall.hub");
   }
 
   /** A box from typed corners in a dimension, or else the player's wand selection. */
   private Optional<Bounds> box(CommandSource source, Arguments arguments, String dimension) {
     Optional<String> given = arguments.optionalString("corners");
-    if (given.isPresent() && !given.get().isBlank()) {
-      Optional<int[]> corners = numbers(given.get(), 6);
-      if (corners.isEmpty()) {
-        source.reply(messages().get("hof.cell.corners"));
-        return Optional.empty();
-      }
-      int[] c = corners.get();
-      return Optional.of(Bounds.between(dimension, c[0], c[1], c[2], c[3], c[4], c[5]));
+    if (given.isPresent() && !given.get().isBlank() && !isSelection(given.get())) {
+      return typedBox(source, given.get(), dimension);
     }
     Optional<Bounds> selected = source.player().flatMap(wand::selection);
     if (selected.isEmpty()) {
       source.reply(messages().get("hof.cell.corners"));
     }
     return selected;
+  }
+
+  private static boolean isSelection(String text) {
+    return text.trim().equals(Positions.SELECTION);
+  }
+
+  /** A box typed as two positions, each absolute, relative or {@code here} (questions 264). */
+  Optional<Bounds> typedBox(CommandSource source, String text, String dimension) {
+    List<String> words = List.of(Splitter.split(text));
+    Optional<Position> origin = origin(source);
+    Positions.Read first = Positions.block(words, 0, origin, dimension);
+    if (first instanceof Positions.Read.Block a) {
+      Positions.Read second = Positions.block(words, a.used(), origin, dimension);
+      if (second instanceof Positions.Read.Block b && a.used() + b.used() == words.size()) {
+        Position p = a.block();
+        Position q = b.block();
+        return Optional.of(
+            Bounds.between(
+                dimension, p.blockX(), p.blockY(), p.blockZ(), q.blockX(), q.blockY(), q.blockZ()));
+      }
+      if (second instanceof Positions.Read.Failed failed
+          && failed.messageKey().equals(Positions.CONSOLE)) {
+        source.reply(messages().get(Positions.CONSOLE));
+        return Optional.empty();
+      }
+    } else if (first instanceof Positions.Read.Failed failed
+        && failed.messageKey().equals(Positions.CONSOLE)) {
+      source.reply(messages().get(Positions.CONSOLE));
+      return Optional.empty();
+    }
+    source.reply(messages().get("position.box"));
+    return Optional.empty();
+  }
+
+  /** Where the sender stands and faces, or empty for the console. */
+  private Optional<Position> origin(CommandSource source) {
+    return source.player().map(p -> platform.players().position(p));
   }
 
   void hallSpawn(CommandSource source, Arguments arguments) {
@@ -675,7 +709,8 @@ public final class HallCommands {
     saved(
         source,
         hall.saveHall(layout.withSpawn(at.get())),
-        messages().get("hof.hall.spawn", xyz(at.get())));
+        messages().get("hof.hall.spawn", xyz(at.get())),
+        "hof.hall.spawn");
   }
 
   /**
@@ -684,7 +719,12 @@ public final class HallCommands {
   private Optional<Position> standing(
       CommandSource source, Optional<String> given, String dimension) {
     if (given.isPresent() && !given.get().isBlank()) {
-      return position(source, given, dimension);
+      // Typed: no facing unless typed, but here faces the sender's way, as standing there does.
+      Optional<Float> facing =
+          given.get().trim().startsWith(Positions.HERE)
+              ? origin(source).map(at -> Wand.facing(at.yaw()))
+              : Optional.empty();
+      return typedPosition(source, given.get(), dimension, facing);
     }
     if (source.player().isEmpty()) {
       source.reply(messages().get("hof.cell.anchor-where"));
@@ -929,7 +969,10 @@ public final class HallCommands {
     saved(
         source,
         hall.save(next),
-        messages().get("hof.cell.created", "cell", id, "gallery", gallery.id()));
+        messages().get("hof.cell.created", "cell", id, "gallery", gallery.id()),
+        "hof.cell.new",
+        "cell",
+        gallery.id() + ":" + id);
   }
 
   void cellBounds(CommandSource source, Arguments arguments) {
@@ -1374,6 +1417,16 @@ public final class HallCommands {
     edits.saved(source, save, message);
   }
 
+  /** As {@link #saved}, offering the next steps once it is written (questions 268). */
+  private void saved(
+      CommandSource source,
+      CompletableFuture<Void> save,
+      Message message,
+      String hint,
+      String... placeholders) {
+    edits.saved(source, save, message, () -> help.after(source, hint, placeholders));
+  }
+
   private Optional<Gallery> gallery(CommandSource source, Arguments arguments) {
     String id = arguments.string("gallery");
     Optional<Gallery> gallery = hall.gallery(id);
@@ -1402,24 +1455,7 @@ public final class HallCommands {
   private Optional<Position> position(
       CommandSource source, Optional<String> given, String dimension) {
     if (given.isPresent() && !given.get().isBlank()) {
-      String[] words = Splitter.split(given.get().trim());
-      if (words.length == 3 || words.length == 4) {
-        try {
-          float yaw = words.length == 4 ? Float.parseFloat(words[3]) : 0f;
-          return Optional.of(
-              new Position(
-                  dimension,
-                  Integer.parseInt(words[0]),
-                  Integer.parseInt(words[1]),
-                  Integer.parseInt(words[2]),
-                  yaw,
-                  0f));
-        } catch (NumberFormatException e) {
-          // Falls through to the reply below.
-        }
-      }
-      source.reply(messages().get("hof.cell.anchor-where"));
-      return Optional.empty();
+      return typedPosition(source, given.get(), dimension, Optional.empty());
     }
     Optional<Position> looked =
         source.player().flatMap(p -> platform.players().targetBlock(p, REACH));
@@ -1433,20 +1469,35 @@ public final class HallCommands {
         new Position(block.dimension(), block.blockX(), block.blockY(), block.blockZ(), yaw, 0f));
   }
 
-  private static Optional<int[]> numbers(String text, int count) {
-    String[] words = Splitter.split(text.trim());
-    if (words.length != count) {
-      return Optional.empty();
-    }
-    int[] values = new int[count];
-    try {
-      for (int i = 0; i < count; i++) {
-        values[i] = Integer.parseInt(words[i]);
+  /**
+   * A position typed as {@code <position> [yaw]} (questions 264); with no yaw, {@code yaw} or else
+   * 0.
+   */
+  Optional<Position> typedPosition(
+      CommandSource source, String text, String dimension, Optional<Float> yaw) {
+    List<String> words = List.of(Splitter.split(text));
+    Positions.Read read = Positions.block(words, 0, origin(source), dimension);
+    if (read instanceof Positions.Read.Block block) {
+      Optional<Float> typedYaw = Optional.empty();
+      if (words.size() == block.used() + 1) {
+        typedYaw = Positions.yaw(words.get(block.used()));
       }
-    } catch (NumberFormatException e) {
+      if (words.size() == block.used() || typedYaw.isPresent()) {
+        Position at = block.block();
+        return Optional.of(
+            new Position(
+                dimension,
+                at.blockX(),
+                at.blockY(),
+                at.blockZ(),
+                typedYaw.or(() -> yaw).orElse(0f),
+                0f));
+      }
+      source.reply(messages().get(Positions.BAD));
       return Optional.empty();
     }
-    return Optional.of(values);
+    source.reply(messages().get(((Positions.Read.Failed) read).messageKey()));
+    return Optional.empty();
   }
 
   private static String[] place(String key, String value, Position at) {

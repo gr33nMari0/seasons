@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.hall;
 
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -21,11 +22,22 @@ public final class CellEdits {
   private final Platform platform;
   private final ConfigHolder config;
   private final HallService hall;
+  private Optional<CommandHelp> help = Optional.empty();
 
   public CellEdits(Platform platform, ConfigHolder config, HallService hall) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
+  }
+
+  /** Where next steps come from (questions 268), once the commands are built. */
+  public void bindHelp(CommandHelp next) {
+    this.help = Optional.of(next);
+  }
+
+  /** Offers the next steps after a setup step. */
+  void hint(CommandSource source, String key, String... placeholders) {
+    help.ifPresent(h -> h.after(source, key, placeholders));
   }
 
   /**
@@ -72,7 +84,8 @@ public final class CellEdits {
                 "from",
                 corner(bounds.min()),
                 "to",
-                corner(bounds.max())));
+                corner(bounds.max())),
+        () -> hint(source, "hof.gallery.bounds", "gallery", gallery.id()));
   }
 
   /**
@@ -212,19 +225,25 @@ public final class CellEdits {
 
   /** Replies once the gallery file is written, so the file on disk matches what was said. */
   void saved(CommandSource source, CompletableFuture<Void> save, Message message) {
+    saved(source, save, message, () -> {});
+  }
+
+  /** Replies once the file is written, then, if it was, runs {@code then}, such as a hint. */
+  void saved(CommandSource source, CompletableFuture<Void> save, Message message, Runnable then) {
     var _ =
         save.whenComplete((done, failure) ->
             platform
                 .scheduler()
-                .runGlobal(() ->
+                .runGlobal(() -> {
+                  if (failure == null) {
+                    source.reply(message);
+                    then.run();
+                  } else {
                     source.reply(
-                        failure == null
-                            ? message
-                            : messages()
-                                .get(
-                                    "hof.save-failed",
-                                    "error",
-                                    String.valueOf(failure.getMessage())))));
+                        messages()
+                            .get("hof.save-failed", "error", String.valueOf(failure.getMessage())));
+                  }
+                }));
   }
 
   static String corner(Position at) {

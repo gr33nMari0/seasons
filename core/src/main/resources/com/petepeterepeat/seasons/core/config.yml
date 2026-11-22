@@ -113,6 +113,10 @@ curate:
 wand:
   item: blaze_rod
 
+# Admin conveniences. hints: after a setup step, suggest the commands that usually come next.
+admin:
+  hints: true
+
 # Awards, worked out when the season ends and announced at the Intermission. Each winner gets a
 # trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose
 # best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon,

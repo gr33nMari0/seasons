@@ -29,6 +29,7 @@ public record SeasonsConfig(
     Deaths deaths,
     Curate curate,
     Wand wand,
+    Admin admin,
     Map<String, Award> awards) {
   public SeasonsConfig {
     awards = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(awards));
@@ -188,6 +189,14 @@ public record SeasonsConfig(
    */
   @ConfigSerializable
   public record Wand(String item) {}
+
+  /**
+   * Admin conveniences.
+   *
+   * @param hints whether a setup step suggests the commands that usually come next (questions 268)
+   */
+  @ConfigSerializable
+  public record Admin(boolean hints) {}
 
   /**
    * The deaths display.

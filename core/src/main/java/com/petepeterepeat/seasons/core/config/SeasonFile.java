@@ -38,7 +38,7 @@ public record SeasonFile(
   /**
    * A spawn candidate's name: lower-case letters, digits and dashes, such as {@code north-mesa}.
    */
-  public static final Pattern CANDIDATE_NAME = Pattern.compile("[a-z0-9][a-z0-9-]{0,31}");
+  public static final Pattern CANDIDATE_NAME = Pattern.compile("[a-z][a-z0-9-]{0,31}");
 
   public SeasonFile {
     zones = Collections.unmodifiableMap(new TreeMap<>(zones));

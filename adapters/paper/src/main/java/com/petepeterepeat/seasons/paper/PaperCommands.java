@@ -6,12 +6,15 @@ import com.mojang.brigadier.StringReader;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Suggester;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.Commands;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -90,16 +93,29 @@ final class PaperCommands implements Commands {
         switch (node.argument().orElse(null)) {
           case null -> io.papermc.paper.command.brigadier.Commands.literal(node.name());
           case ArgumentType.IntegerArgument integer ->
-              io.papermc.paper.command.brigadier.Commands.argument(
-                  node.name(), IntegerArgumentType.integer(integer.min(), integer.max()));
+              suggesting(
+                  io.papermc.paper.command.brigadier.Commands.argument(
+                      node.name(), IntegerArgumentType.integer(integer.min(), integer.max())),
+                  node,
+                  path);
           case ArgumentType.WordArgument word ->
-              io.papermc.paper.command.brigadier.Commands.argument(
-                  node.name(), StringArgumentType.word());
+              suggesting(
+                  io.papermc.paper.command.brigadier.Commands.argument(
+                      node.name(), StringArgumentType.word()),
+                  node,
+                  path);
           case ArgumentType.IdArgument id ->
-              io.papermc.paper.command.brigadier.Commands.argument(node.name(), new IdArgument());
+              suggesting(
+                  io.papermc.paper.command.brigadier.Commands.argument(
+                      node.name(), new IdArgument()),
+                  node,
+                  path);
           case ArgumentType.GreedyArgument greedy ->
-              io.papermc.paper.command.brigadier.Commands.argument(
-                  node.name(), StringArgumentType.greedyString());
+              suggesting(
+                  io.papermc.paper.command.brigadier.Commands.argument(
+                      node.name(), StringArgumentType.greedyString()),
+                  node,
+                  path);
         };
     List<CommandNode> inScope = new ArrayList<>(scope);
     if (!node.isLiteral()) {
@@ -121,6 +137,36 @@ final class PaperCommands implements Commands {
       builder.then(toBrigadier(child, inScope, path));
     }
     return builder;
+  }
+
+  /**
+   * An argument with its tab completion (questions 266): the core's words for the last word typed,
+   * those that start with it.
+   */
+  private <T> RequiredArgumentBuilder<CommandSourceStack, T> suggesting(
+      RequiredArgumentBuilder<CommandSourceStack, T> argument,
+      CommandNode node,
+      List<String> path) {
+    if (node.suggester().isEmpty()) {
+      return argument;
+    }
+    return argument.suggests((context, suggestions) -> {
+      Optional<Suggester> suggester = current(path).flatMap(CommandNode::suggester);
+      if (suggester.isEmpty()) {
+        return suggestions.buildFuture();
+      }
+      String typed = suggestions.getRemaining();
+      int last = typed.lastIndexOf(' ') + 1;
+      String word = typed.substring(last).toLowerCase(java.util.Locale.ROOT);
+      SuggestionsBuilder offset = suggestions.createOffset(suggestions.getStart() + last);
+      for (String candidate :
+          suggester.get().suggest(source(context.getSource().getSender()), typed)) {
+        if (candidate.toLowerCase(java.util.Locale.ROOT).startsWith(word)) {
+          offset.suggest(candidate);
+        }
+      }
+      return offset.buildFuture();
+    });
   }
 
   private static Arguments arguments(

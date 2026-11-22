@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Flags;
@@ -86,6 +87,8 @@ final class SeasonCommands {
   private final Optional<String> journalError;
   private final List<ConfigProblem> startupProblems;
   private final Services services;
+  private CommandHelp help =
+      new CommandHelp(Messages::defaults, (source, node) -> true, () -> false);
 
   /**
    * What the archive commands work with. The archiving services are empty when the journal couldn't
@@ -130,6 +133,11 @@ final class SeasonCommands {
     this.journalError = journalError;
     this.startupProblems = List.copyOf(startupProblems);
     this.services = services;
+  }
+
+  /** Where next steps come from (questions 268). */
+  void bindHelp(CommandHelp next) {
+    this.help = next;
   }
 
   /**
@@ -456,6 +464,7 @@ final class SeasonCommands {
     Transition transition = seasons.init(season);
     reply(source, transition, "init.done");
     if (transition instanceof Transition.Changed) {
+      help.after(source, "season.init");
       // Everyone online now is playing the season init recorded.
       services.login().ifPresent(login -> login.markPlaying(platform.players().online()));
     }
@@ -511,9 +520,11 @@ final class SeasonCommands {
     Transition transition = seasons.end(flags.has(NOW));
     if (transition instanceof Transition.Refused refused) {
       refuse(source, refused);
+      return;
     } else if (flags.has(NOW)) {
       source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
     }
+    help.after(source, "season.end");
   }
 
   void launch(CommandSource source, Arguments arguments) {
@@ -1007,6 +1018,7 @@ final class SeasonCommands {
             Integer.toString(spawn.blockZ()),
             "dimension",
             spawn.dimension()));
+    help.after(source, "season.launch.dry-run");
   }
 
   /** The players line for the last finished season, and the season's furthest block. */

@@ -52,6 +52,11 @@ public final class SeasonFiles {
     edit(file, backupDir, season, node -> writePosition(node.node("spawn"), spawn));
   }
 
+  /** Removes {@code spawn} (questions 265). */
+  public static void clearSpawn(Path file, Path backupDir, int season) throws IOException {
+    edit(file, backupDir, season, node -> node.removeChild("spawn"));
+  }
+
   /** Adds a spawn candidate, written as the spawn is, or replaces the one with its name. */
   public static void writeCandidate(Path file, Path backupDir, int season, String name, Position at)
       throws IOException {
