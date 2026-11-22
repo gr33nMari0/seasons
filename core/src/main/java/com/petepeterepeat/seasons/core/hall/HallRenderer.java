@@ -26,11 +26,15 @@ import java.util.concurrent.Executor;
 /**
  * Draws a player's displays in their cell from their archive: the figure in their skin and gear at
  * the figure anchor, the plaque, and an imported cell's trophies. Every redraw first removes what
- * the last one drew, so drawing twice leaves one set. Only copies of items are ever shown.
+ * the last one drew, so drawing twice leaves one set. Only copies of items are ever shown. Cells
+ * are drawn a few a tick, within {@link #DRAW_BUDGET_NANOS}, so a rollover causes no lag spike.
  */
 public final class HallRenderer implements DisplayRenderer {
   /** How high above the plaque anchor's block its text floats. */
   private static final double PLAQUE_HEIGHT = 1.2;
+
+  /** The drawing a tick may take, so a rollover draws a few cells a tick (A43). */
+  static final long DRAW_BUDGET_NANOS = 2_000_000;
 
   private final Platform platform;
   private final ConfigHolder config;
@@ -38,6 +42,7 @@ public final class HallRenderer implements DisplayRenderer {
   private final ArchiveFiles archives;
   private final HallService hall;
   private final Executor serverThread;
+  private final DrawQueue drawing;
 
   public HallRenderer(
       Platform platform,
@@ -51,6 +56,8 @@ public final class HallRenderer implements DisplayRenderer {
     this.archives = archives;
     this.hall = hall;
     this.serverThread = platform.scheduler()::runGlobal;
+    this.drawing =
+        new DrawQueue(platform.scheduler()::runGlobal, System::nanoTime, DRAW_BUDGET_NANOS);
   }
 
   @Override
@@ -67,7 +74,8 @@ public final class HallRenderer implements DisplayRenderer {
                 return CompletableFuture.completedFuture(null);
               }
               return loaded(ref.get().cell().bounds().get())
-                  .thenRunAsync(() -> draw(ref.get(), found.get()), serverThread);
+                  .thenComposeAsync(
+                      _ -> drawing.submit(() -> draw(ref.get(), found.get())), serverThread);
             },
             serverThread);
   }
