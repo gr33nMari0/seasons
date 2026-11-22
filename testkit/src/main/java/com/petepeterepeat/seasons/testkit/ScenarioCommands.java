@@ -82,6 +82,9 @@ import org.bukkit.util.Vector;
  *   <li>{@code crash-at <POINT> <player>} halts the server at that step of archiving them
  *   <li>{@code save-at <POINT> <player>} saves every world to disk when they reach that step,
  *       without stopping, so a later crash point finds the world as it was there
+ *   <li>{@code act-at <POINT> <player> <give|empty> [crash]} when archiving them reaches that step,
+ *       gives them a stone, or empties their inventory and ender chest, and saves their file, on
+ *       the server thread before archiving goes on; with {@code crash}, halts the server then
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
@@ -205,6 +208,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
           hooks.armSave(point, id(args[2]));
           sender.sendMessage("Armed save point " + point + " for " + args[2]);
         }
+        case "act-at" -> actAt(sender, hooks, args);
         case "archive" -> {
           var _ =
               hooks
@@ -994,6 +998,38 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     player.addAttachment(plugin, args[2], true);
     sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  private void actAt(CommandSender sender, ScenarioHooks hooks, String[] args) {
+    CrashPoint point = CrashPoint.valueOf(args[1].toUpperCase(Locale.ROOT).replace('-', '_'));
+    String name = args[2];
+    String what = args[3];
+    boolean crash = args.length > 4 && args[4].equals("crash");
+    hooks.armAction(
+        point,
+        id(name),
+        () ->
+            plugin
+                .getServer()
+                .getGlobalRegionScheduler()
+                .execute(
+                    plugin,
+                    () -> {
+                      Player player = plugin.getServer().getPlayerExact(name);
+                      if (player != null) {
+                        if (what.equals("empty")) {
+                          player.getInventory().clear();
+                          player.getEnderChest().clear();
+                        } else {
+                          player.getInventory().addItem(ItemStack.of(Material.STONE));
+                        }
+                        player.saveData();
+                      }
+                      if (crash) {
+                        hooks.haltNow();
+                      }
+                    }));
+    sender.sendMessage("Armed " + what + " at " + point + " for " + name);
   }
 
   private void workstation(CommandSender sender, String[] args) {
