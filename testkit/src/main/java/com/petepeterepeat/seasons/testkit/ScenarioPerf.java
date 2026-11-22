@@ -91,6 +91,8 @@ final class ScenarioPerf implements Listener {
             new org.bukkit.inventory.ItemStack(org.bukkit.Material.DIAMOND_HELMET)
                 .serializeAsBytes());
     org.bukkit.NamespacedKey key = new org.bukkit.NamespacedKey("seasons_testkit", "warm");
+    helmet.editPersistentDataContainer(
+        data -> data.set(key, org.bukkit.persistence.PersistentDataType.BOOLEAN, true));
     List<org.bukkit.entity.Entity> spawned = new ArrayList<>();
     spawned.add(
         at.getWorld()
@@ -103,7 +105,26 @@ final class ScenarioPerf implements Listener {
                   m.setImmovable(true);
                   m.setAI(false);
                   m.setGravity(false);
-                  m.getEquipment().setItem(org.bukkit.inventory.EquipmentSlot.HEAD, helmet);
+                  m.setInvulnerable(true);
+                  m.setSilent(true);
+                  m.setCollidable(false);
+                  m.setPose(org.bukkit.entity.Pose.STANDING, true);
+                  // Every slot a figure fills, empty ones included, as Seasons fills them.
+                  for (org.bukkit.inventory.EquipmentSlot slot :
+                      List.of(
+                          org.bukkit.inventory.EquipmentSlot.HEAD,
+                          org.bukkit.inventory.EquipmentSlot.CHEST,
+                          org.bukkit.inventory.EquipmentSlot.LEGS,
+                          org.bukkit.inventory.EquipmentSlot.FEET,
+                          org.bukkit.inventory.EquipmentSlot.HAND,
+                          org.bukkit.inventory.EquipmentSlot.OFF_HAND)) {
+                    m.getEquipment()
+                        .setItem(
+                            slot,
+                            slot == org.bukkit.inventory.EquipmentSlot.HEAD
+                                ? helmet
+                                : org.bukkit.inventory.ItemStack.empty());
+                  }
                   m.getPersistentDataContainer()
                       .set(key, org.bukkit.persistence.PersistentDataType.STRING, "warm");
                 }));
