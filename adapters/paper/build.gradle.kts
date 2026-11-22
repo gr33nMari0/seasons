@@ -6,6 +6,8 @@ description = "Seasons Adapter for Paper, packaged with the core as the Seasons 
 plugins {
     alias(libs.plugins.shadow)
     alias(libs.plugins.run.paper)
+    alias(libs.plugins.hangar.publish)
+    alias(libs.plugins.minotaur)
 }
 
 base.archivesName = "seasons-adapter-paper"
@@ -77,5 +79,64 @@ tasks.runServer {
                 "serverUuid: ${id ?: UUID.randomUUID()}\n" +
                 "logFailedRequests: false\n",
         )
+    }
+}
+
+// Publishing a tagged release to Hangar and Modrinth, from release.yml (docs/adr/0006). A version
+// with a hyphen, such as 1.1.0-beta.1, goes out as a beta. release.yml passes the jar it already
+// attached to the GitHub Release with -PreleaseJar, so all three carry the same bytes.
+val releaseVersion = project.version.toString()
+val beta = releaseVersion.contains('-')
+val releaseJar: Provider<RegularFile> =
+    providers.gradleProperty("releaseJar").map { rootProject.layout.projectDirectory.file(it) }
+        .orElse(tasks.shadowJar.flatMap { it.archiveFile })
+val supportedVersions = providers.gradleProperty("minecraftVersions").get().split(",").map { it.trim() }
+
+/** This version's section of CHANGELOG.md, without its heading. */
+fun changelogFor(version: String): String {
+    val lines = rootProject.file("CHANGELOG.md").readLines()
+    val start = lines.indexOfFirst { it.startsWith("## [$version]") }
+    if (start < 0) {
+        return "See CHANGELOG.md for $version."
+    }
+    val end = (start + 1 until lines.size).firstOrNull { lines[it].startsWith("## [") } ?: lines.size
+    return lines.subList(start + 1, end).joinToString("\n").trim()
+}
+
+hangarPublish {
+    publications.register("plugin") {
+        id = providers.gradleProperty("hangarProject")
+        version = releaseVersion
+        channel = if (beta) "Beta" else "Release"
+        changelog = provider { changelogFor(releaseVersion) }
+        apiKey = providers.environmentVariable("HANGAR_API_TOKEN")
+        platforms {
+            paper {
+                jar = releaseJar
+                platformVersions = supportedVersions
+                dependencies {
+                    hangar("BlueMap") { required = false }
+                }
+            }
+        }
+    }
+}
+
+modrinth {
+    token = providers.environmentVariable("MODRINTH_TOKEN")
+    projectId = providers.gradleProperty("modrinthProject")
+    versionNumber = releaseVersion
+    versionName = "Seasons $releaseVersion"
+    versionType = if (beta) "beta" else "release"
+    uploadFile.set(releaseJar)
+    gameVersions = supportedVersions
+    // Paper and the forks that run Paper plugins; Seasons uses Paper-only API, so not Spigot.
+    loaders = listOf("paper", "purpur")
+    detectLoaders = false
+    // -PpublishDebug prints what would be uploaded, and uploads nothing.
+    debugMode = providers.gradleProperty("publishDebug").map { true }.orElse(false)
+    changelog = provider { changelogFor(releaseVersion) }
+    dependencies {
+        optional.project("bluemap")
     }
 }
