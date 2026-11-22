@@ -311,7 +311,38 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
                                 .executes(this::tpLink))))
-        .then(CommandNode.literal("wand").permission(PERMISSION_ADMIN).executes(wand::give))
+        .then(
+            CommandNode.literal("wand")
+                .permission(PERMISSION_ADMIN)
+                .executes(wand::give)
+                .then(
+                    CommandNode.literal("mode")
+                        .then(
+                            CommandNode.argument("mode", ArgumentType.word())
+                                .executes(wand::mode))))
+        .then(
+            CommandNode.literal("sel")
+                .permission(PERMISSION_ADMIN)
+                .then(
+                    CommandNode.literal("pos1")
+                        .executes((source, args) -> wand.selCorner(source, args, 1))
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes((source, args) -> wand.selCorner(source, args, 1))))
+                .then(
+                    CommandNode.literal("pos2")
+                        .executes((source, args) -> wand.selCorner(source, args, 2))
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes((source, args) -> wand.selCorner(source, args, 2))))
+                .then(CommandNode.literal("info").executes(wand::selInfo))
+                .then(CommandNode.literal("clear").executes(wand::selClear)))
+        .then(
+            CommandNode.literal("show")
+                .permission(PERMISSION_ADMIN)
+                .then(CommandNode.literal("on").executes((source, args) -> show(source, true)))
+                .then(CommandNode.literal("off").executes((source, args) -> show(source, false))))
+        .then(CommandNode.literal("undo").permission(PERMISSION_ADMIN).executes(this::undo))
         .then(
             CommandNode.literal("stamp")
                 .permission(PERMISSION_ADMIN)
@@ -1431,6 +1462,46 @@ public final class HallCommands {
       return;
     }
     stamper.get().stamp(source, arguments);
+  }
+
+  // Outlines and undo (questions 275 and 276)
+
+  private Optional<HallOutlines> outlines = Optional.empty();
+
+  /** Where {@code /hof show} goes. */
+  public void bindOutlines(HallOutlines next) {
+    this.outlines = Optional.of(next);
+  }
+
+  private void show(CommandSource source, boolean on) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    outlines.ifPresent(o -> o.show(source.player().get(), on));
+    source.reply(messages().get(on ? "hof.show.on" : "hof.show.off"));
+  }
+
+  void undo(CommandSource source, Arguments arguments) {
+    switch (hall.undo(source)) {
+      case HallService.UndoResult.Nothing nothing ->
+          source.reply(messages().get("hof.undo.nothing"));
+      case HallService.UndoResult.Changed changed ->
+          source.reply(messages().get("hof.undo.changed", "file", changed.file()));
+      case HallService.UndoResult.Undone undone ->
+          edits.saved(
+              source,
+              undone.saved(),
+              messages().get("hof.undo.done", "file", undone.file()),
+              () -> {
+                hall.audited(actor(source), "undo", undone.file(), "");
+                undone
+                    .gallery()
+                    .ifPresent(g -> {
+                      var _ = reconciler.reconcile(g);
+                    });
+              });
+    }
   }
 
   // Admin teleports (questions 271)

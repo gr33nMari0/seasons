@@ -188,9 +188,19 @@ public record SeasonsConfig(
    * The Hall admins' wand (questions 226).
    *
    * @param item the item {@code /hof wand} gives, marked as Seasons' own
+   * @param outlines how far and how many of the Hall's outlines an admin sees (questions 276)
    */
   @ConfigSerializable
-  public record Wand(String item) {}
+  public record Wand(String item, Outlines outlines) {
+    /**
+     * The outlines.
+     *
+     * @param range how far away a box is still drawn, in blocks
+     * @param max how many boxes at most, nearest first
+     */
+    @ConfigSerializable
+    public record Outlines(int range, int max) {}
+  }
 
   /**
    * Admin conveniences.

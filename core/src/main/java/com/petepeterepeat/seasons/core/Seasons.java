@@ -34,6 +34,7 @@ import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
 import com.petepeterepeat.seasons.core.hall.HallLists;
+import com.petepeterepeat.seasons.core.hall.HallOutlines;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
@@ -127,6 +128,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable AdminAlerts alerts;
   private @Nullable Curation curation;
   private @Nullable Wand wand;
+  private @Nullable HallOutlines outlines;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -591,6 +593,10 @@ public final class Seasons implements SeasonsApi {
             stamper,
             help);
     wanding.bindLinks(hallCommands::addLink);
+    HallOutlines outlining = new HallOutlines(platform, config, halls, wanding);
+    outlines = outlining;
+    hallCommands.bindOutlines(outlining);
+    outlining.start();
     CommandNode hof =
         hallCommands
             .root()
@@ -689,6 +695,9 @@ public final class Seasons implements SeasonsApi {
         if (wand != null) {
           wand.left(player);
         }
+        if (outlines != null) {
+          outlines.left(player);
+        }
         if (curation != null) {
           curation.left(player);
         }
@@ -778,6 +787,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (reconciler != null) {
       reconciler.stop();
+    }
+    if (outlines != null) {
+      outlines.stop();
     }
     if (gates != null) {
       gates.stop();

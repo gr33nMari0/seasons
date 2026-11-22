@@ -364,6 +364,18 @@ final class PaperEvents implements Events, Listener {
         new Intent.Consume(id(event.getPlayer()), event.getItem().getType().getKey().asString()));
   }
 
+  /** Swap-hands with the wand in the main hand toggles its mode (questions 272). */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onSwapHands(org.bukkit.event.player.PlayerSwapHandItemsEvent event) {
+    Player player = event.getPlayer();
+    if (!inventories.isWand(player.getInventory().getItemInMainHand())) {
+      return;
+    }
+    if (handler.decide(new Intent.WandSwap(id(player))) instanceof Decision.Deny) {
+      event.setCancelled(true);
+    }
+  }
+
   @EventHandler(priority = EventPriority.LOW)
   void onInteract(PlayerInteractEvent event) {
     Player player = event.getPlayer();

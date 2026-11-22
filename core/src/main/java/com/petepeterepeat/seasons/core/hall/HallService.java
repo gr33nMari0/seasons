@@ -304,6 +304,80 @@ public final class HallService {
         });
   }
 
+  // Undo (questions 275)
+
+  /** What {@code /hof undo} puts back: a file as it was before an edit, and as the edit left it. */
+  private sealed interface Undo {
+    record OfGallery(String id, Optional<Gallery> before, Optional<Gallery> after)
+        implements Undo {}
+
+    record OfHall(HallLayout before, HallLayout after) implements Undo {}
+  }
+
+  private final Map<String, Undo> undos = new HashMap<>();
+
+  private static String undoKey(com.petepeterepeat.seasons.core.command.CommandSource source) {
+    return source.player().map(p -> p.uuid().toString()).orElse("console");
+  }
+
+  /** Remembers a gallery as it is now, about to become {@code after}, for the source's undo. */
+  public void rememberUndo(
+      com.petepeterepeat.seasons.core.command.CommandSource source, Gallery after) {
+    undos.put(
+        undoKey(source), new Undo.OfGallery(after.id(), gallery(after.id()), Optional.of(after)));
+  }
+
+  /** Remembers a gallery about to be removed. */
+  public void rememberRemoval(
+      com.petepeterepeat.seasons.core.command.CommandSource source, Gallery removed) {
+    undos.put(
+        undoKey(source), new Undo.OfGallery(removed.id(), Optional.of(removed), Optional.empty()));
+  }
+
+  /** Remembers hall.yml as it is now, about to become {@code after}. */
+  public void rememberUndo(
+      com.petepeterepeat.seasons.core.command.CommandSource source, HallLayout after) {
+    undos.put(undoKey(source), new Undo.OfHall(layout(), after));
+  }
+
+  /** What an undo came to. */
+  public sealed interface UndoResult {
+    record Nothing() implements UndoResult {}
+
+    record Changed(String file) implements UndoResult {}
+
+    record Undone(String file, CompletableFuture<Void> saved, Optional<Gallery> gallery)
+        implements UndoResult {}
+  }
+
+  /**
+   * {@code /hof undo}: the source's last Hall edit put back, if its file is as the edit left it.
+   */
+  public UndoResult undo(com.petepeterepeat.seasons.core.command.CommandSource source) {
+    Undo undo = undos.get(undoKey(source));
+    if (undo == null) {
+      return new UndoResult.Nothing();
+    }
+    return switch (undo) {
+      case Undo.OfGallery(String id, Optional<Gallery> before, Optional<Gallery> after) -> {
+        if (!gallery(id).equals(after)) {
+          yield new UndoResult.Changed("galleries/" + id + ".yml");
+        }
+        undos.remove(undoKey(source));
+        CompletableFuture<Void> saved =
+            before.isPresent() ? save(before.get()) : remove(after.orElseThrow());
+        yield new UndoResult.Undone("galleries/" + id + ".yml", saved, before);
+      }
+      case Undo.OfHall(HallLayout before, HallLayout after) -> {
+        if (!layout().equals(after)) {
+          yield new UndoResult.Changed("hall.yml");
+        }
+        undos.remove(undoKey(source));
+        yield new UndoResult.Undone("hall.yml", saveHall(before), Optional.empty());
+      }
+    };
+  }
+
   /** Records a Hall edit in the audit log. */
   public void audited(String actor, String action, String target, String details) {
     audit.record(actor, action, target, "ok", details);

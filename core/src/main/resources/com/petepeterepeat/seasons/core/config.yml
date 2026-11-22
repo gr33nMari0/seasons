@@ -113,6 +113,9 @@ curate:
 # The Hall admins' wand (/hof wand): this item, marked as Seasons' own, so a plain one does nothing.
 wand:
   item: blaze_rod
+  # While an admin holds the wand (or after /hof show on), the Hall's parts within range blocks are
+  # outlined for them alone, nearest first, at most max boxes.
+  outlines: { range: 48, max: 64 }
 
 # Admin conveniences. hints: after a setup step, suggest the commands that usually come next.
 admin:

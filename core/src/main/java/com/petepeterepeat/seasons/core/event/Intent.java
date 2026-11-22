@@ -99,6 +99,11 @@ public sealed interface Intent {
       implements Intent {}
 
   /**
+   * Swap-hands pressed with the Seasons wand in the main hand: toggles its mode (questions 272).
+   */
+  record WandSwap(PlayerId player) implements Intent {}
+
+  /**
    * Opening the inventory of a block, such as a chest.
    *
    * @param blocks every block whose inventory opens: one, or both halves of a double chest

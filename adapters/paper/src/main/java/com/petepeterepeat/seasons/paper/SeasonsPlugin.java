@@ -56,6 +56,7 @@ public final class SeasonsPlugin extends JavaPlugin {
         new PaperInventories(players, codec, archived, new NamespacedKey(this, "wand"), text);
     PaperDisplays displays =
         new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
+    displays.bindOutlines(new PaperOutlines(this));
     PaperAdvancements advancements = new PaperAdvancements(server, players);
     PaperEntities entities = new PaperEntities(this, server, new NamespacedKey(this, "pet"));
     PaperEvents events =

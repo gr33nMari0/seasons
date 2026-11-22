@@ -46,6 +46,11 @@ public interface Inventories {
    */
   boolean giveWand(PlayerId player, String item, Message name, Message lore);
 
+  /** Whether an online player holds the Seasons wand in their main hand. */
+  default boolean holdsWand(PlayerId player) {
+    return false;
+  }
+
   /** Whether an item carries the {@code seasons:archived} tag, as copies shown in the Hall do. */
   boolean isArchived(NeutralItem item);
 

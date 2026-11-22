@@ -69,6 +69,21 @@ final class PaperDisplays implements Displays {
     this.archivedKey = archivedKey;
   }
 
+  private @org.jspecify.annotations.Nullable PaperOutlines outlines;
+
+  /** Where outlines are drawn (questions 276). */
+  void bindOutlines(PaperOutlines next) {
+    this.outlines = next;
+  }
+
+  @Override
+  public void outline(
+      com.petepeterepeat.seasons.core.port.PlayerId viewer, List<Displays.Outline> boxes) {
+    if (outlines != null) {
+      outlines.outline(viewer, boxes);
+    }
+  }
+
   @Override
   public UUID spawnText(Position position, Message message, String tag) {
     Location location = PaperPositions.toLocation(position);

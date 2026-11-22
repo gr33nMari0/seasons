@@ -228,6 +228,12 @@ public final class FakePlatform {
   /** Who holds seasons.hof.anywhere and seasons.hof.roam. */
   public final Set<PlayerId> conveniences = new java.util.HashSet<>();
 
+  /** Players given the wand who have put it away. */
+  public final Set<PlayerId> wandAway = new java.util.HashSet<>();
+
+  /** The outlines each player is shown (questions 276). */
+  public final Map<PlayerId, List<Displays.Outline>> outlined = new HashMap<>();
+
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
@@ -684,6 +690,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean holdsWand(PlayerId player) {
+            return wands.contains(player) && !wandAway.contains(player);
+          }
+
+          @Override
           public boolean isArchived(NeutralItem item) {
             return archivedItems.contains(item);
           }
@@ -1026,6 +1037,15 @@ public final class FakePlatform {
                     .toList();
             gone.forEach(displays::remove);
             return gone.size();
+          }
+
+          @Override
+          public void outline(PlayerId viewer, List<Displays.Outline> boxes) {
+            if (boxes.isEmpty()) {
+              outlined.remove(viewer);
+            } else {
+              outlined.put(viewer, List.copyOf(boxes));
+            }
           }
         };
     DragonFight dragon =
