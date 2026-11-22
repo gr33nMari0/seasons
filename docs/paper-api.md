@@ -115,6 +115,7 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `PlayerInventory#getStorageContents`, `ItemStack#isSimilar`, `#getMaxStackSize`, `#getAmount` | `PaperInventories` | Whether a vault item fits before a withdrawal is journalled (security review M2) |
 | `PlayerPickupExperienceEvent`, `PlayerItemMendEvent`, `PlayerItemDamageEvent`, `PlayerCommandPreprocessEvent#getMessage`, `PlayerEvent#getPlayer`, `Cancellable#setCancelled` | `PaperEvents` | The archive hold: no orb picked up, nothing mended or worn, and no command (but an admin's) while a player's items are moving (security review M1) |
 | `Inventory#getType`, `InventoryType` (`ANVIL`, `GRINDSTONE`, `ENCHANTING`, `CARTOGRAPHY`, `MERCHANT`, `SMITHING`, `LOOM`, `STONECUTTER`, `BEACON`), `Inventory#getItem(int)`, `#setItem(int, ItemStack)` | `PaperInventories` | Archiving a workstation's or villager's input slots with the cursor, and emptying them before the menu closes (questions 285) |
+| `PluginManager#isPluginEnabled(String)`; bStats `Metrics(JavaPlugin, int)`, `#addCustomChart`, `SimplePie`, `#shutdown` (bStats, not Paper API: it reads `plugins/bStats/config.yml` and asks for charts through `BukkitScheduler#runTask`) | `PaperMetrics` | bStats metrics, and whether Seasons Web is installed for its chart |
 
 ## BlueMap (`integrations`, only when BlueMap is installed)
 
@@ -131,6 +132,7 @@ Not Paper API, but checked the same way against each BlueMap release: `bluemap-a
 | --- | --- | --- |
 | `ServicesManager#getRegistration`, `RegisteredServiceProvider#getProvider` | `SeasonsWebPlugin` | Finding `SeasonsApi` |
 | `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons |
+| bStats `Metrics(JavaPlugin, int)`, `#shutdown` (bStats, not Paper API) | `SeasonsWebPlugin` | bStats metrics |
 
 ## Test plugin (`testkit`, never shipped)
 
@@ -162,3 +164,4 @@ Not Paper API, but checked the same way against each BlueMap release: `bluemap-a
 | `new PlayerSwapHandItemsEvent(...)`, `#getMainHandItem`, `#getOffHandItem`, `PlayerInventory#setItemInMainHand`, `#setItemInOffHand`, `new PlayerItemHeldEvent(...)`, `PlayerInventory#getHeldItemSlot`, `#setHeldItemSlot` | `/scenario swap-hands` and `scroll` (A67, A71) |
 | `World#spawn(Location, Class, CreatureSpawnEvent.SpawnReason)`, `LivingEntity` | `/scenario place-entity` for a creature, spawned with the reason the game's own placing gives it (A75) |
 | `PluginManager#getPlugin`, `Server#getWorlds`, `World#getKey`; BlueMap's `BlueMapAPI.getInstance`, `#getWorld(Object)`, `BlueMapWorld#getMaps`, `BlueMapMap#getId`, `#getMarkerSets`, `MarkerSet#getLabel`, `#getMarkers`, `Marker#getType`, `#getLabel`, `#getPosition`, `ExtrudeMarker#getShapeMinY`, `#getShapeMaxY`, `#getShape`, `#getHoles`, `ShapeMarker#getShapeY`, `Shape#getPointCount` | `/scenario bluemap`: Seasons' marker sets as BlueMap holds them, on the scenario server that has BlueMap (ADR 0004) |
+| `ServerTickStartEvent`, `ServerTickEndEvent`; `HandlerList.getHandlerLists`, `HandlerList#getRegisteredListeners`, `#unregister(RegisteredListener)`, `#registerAll`; `new RegisteredListener(Listener, EventExecutor, EventPriority, Plugin, boolean)`, `RegisteredListener#getPlugin`, `#getListener`, `#getPriority`, `#callEvent`, `Event#getEventName`; `World#spawn` of `Mannequin`, `TextDisplay` and `ItemDisplay`, `Display#setBillboard`, `#getTransformation`, `#setTransformation`, `ItemStack#serializeAsBytes`, `ItemStack.deserializeBytes`, `Entity#remove` | `/scenario perf` (A43, `ScenarioPerf`): marking ticks, timing Seasons' listeners, and warming Paper's display classes before measuring |
