@@ -69,6 +69,7 @@ import org.bukkit.inventory.BlockInventoryHolder;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.MenuType;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.util.Vector;
@@ -132,6 +133,11 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code workstation <player> <anvil|stonecutter|merchant> <item> <count>} opens that menu for
+ *       the player, as if they had clicked an anvil, a stonecutter or a villager, and puts a stack
+ *       in each of its input slots, which the game hands back to the player when it closes
+ *   <li>{@code cursor <player> <item> <count>} puts a stack on the player's cursor, as picking it
+ *       up in an open menu would
  *   <li>{@code scroll <player> <slot> [sneak]} scrolls the hotbar to a slot as the player, firing
  *       {@code PlayerItemHeldEvent}, and holds that slot unless it is cancelled
  *   <li>{@code swap-hands <player>} presses swap-hands as the player, firing {@code
@@ -274,6 +280,8 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "workstation" -> workstation(sender, args);
+        case "cursor" -> cursor(sender, args);
         case "console" -> console(sender, args);
         case "swap-hands" -> swapHands(sender, args);
         case "scroll" -> scroll(sender, args);
@@ -986,6 +994,59 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     player.addAttachment(plugin, args[2], true);
     sender.sendMessage("Permitted " + args[1] + " " + args[2]);
+  }
+
+  private void workstation(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    Material material = Material.matchMaterial(args[3]);
+    if (player == null || material == null || !material.isItem()) {
+      sender.sendMessage("Can't open a workstation for " + args[1]);
+      return;
+    }
+    int count = Integer.parseInt(args[4]);
+    InventoryView view =
+        switch (args[2]) {
+          case "anvil" ->
+              MenuType.ANVIL
+                  .builder()
+                  .location(java.util.Objects.requireNonNull(player.getLocation()))
+                  .checkReachable(false)
+                  .build(player);
+          case "stonecutter" ->
+              MenuType.STONECUTTER
+                  .builder()
+                  .location(java.util.Objects.requireNonNull(player.getLocation()))
+                  .checkReachable(false)
+                  .build(player);
+          case "merchant" ->
+              MenuType.MERCHANT
+                  .builder()
+                  .merchant(plugin.getServer().createMerchant())
+                  .checkReachable(false)
+                  .build(player);
+          default -> null;
+        };
+    if (view == null) {
+      sender.sendMessage("Can't open a " + args[2] + " for " + args[1]);
+      return;
+    }
+    player.openInventory(view);
+    int inputs = args[2].equals("stonecutter") ? 1 : 2;
+    for (int slot = 0; slot < inputs; slot++) {
+      view.getTopInventory().setItem(slot, ItemStack.of(material, count));
+    }
+    sender.sendMessage("Opened a " + args[2] + " for " + args[1] + " with " + inputs + " input(s)");
+  }
+
+  private void cursor(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    Material material = Material.matchMaterial(args[2]);
+    if (player == null || material == null || !material.isItem()) {
+      sender.sendMessage("Can't put " + args[2] + " on the cursor of " + args[1]);
+      return;
+    }
+    player.setItemOnCursor(ItemStack.of(material, Integer.parseInt(args[3])));
+    sender.sendMessage("Put " + args[3] + " × " + args[2] + " on the cursor of " + args[1]);
   }
 
   private void vaultReturn(CommandSender sender, ScenarioHooks hooks, String[] args) {
