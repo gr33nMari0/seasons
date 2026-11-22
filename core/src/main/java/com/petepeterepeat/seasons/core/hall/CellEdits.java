@@ -277,7 +277,6 @@ public final class CellEdits {
             cell.pose(),
             cell.gateShut());
     Gallery after = gallery.withCell(next);
-    hall.rememberUndo(source, after);
     saved(
         source,
         hall.save(after),
@@ -303,6 +302,7 @@ public final class CellEdits {
 
   /** Replies once the file is written, then, if it was, runs {@code then}, such as a hint. */
   void saved(CommandSource source, CompletableFuture<Void> save, Message message, Runnable then) {
+    hall.claimUndo(source, save);
     var _ =
         save.whenComplete((done, failure) ->
             platform

@@ -250,58 +250,68 @@ public final class HallService {
       return CompletableFuture.failedFuture(
           new IllegalStateException("hall.yml was left out at startup; fix it and /season reload"));
     }
+    HallLayout before = layout();
     config.set(config.get().withHall(hall));
     Path file = hallFile;
     Path backupDir = backups.resolve("hall");
-    return writer
-        .submit(() -> {
-          HallFiles.write(file, backupDir, hall);
-          return Boolean.TRUE;
-        })
-        .thenApply(done -> (Void) null)
-        .whenComplete((done, failure) -> {
-          if (failure != null) {
-            LOG.error("Can't write {}", file, failure);
-          }
-        });
+    return pending(
+        new Undo.OfHall(before, hall),
+        writer
+            .submit(() -> {
+              HallFiles.write(file, backupDir, hall);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't write {}", file, failure);
+              }
+            }));
   }
 
   /**
    * Saves a gallery: the live config has it at once, and its file is written on the writer thread.
    */
   public CompletableFuture<Void> save(Gallery gallery) {
+    Optional<Gallery> before = gallery(gallery.id());
     config.set(config.get().withGallery(gallery));
     Path file = galleryFile.apply(gallery.id());
     Path backupDir = backups.resolve("galleries");
-    return writer
-        .submit(() -> {
-          GalleryFiles.write(file, backupDir, gallery);
-          return Boolean.TRUE;
-        })
-        .thenApply(done -> (Void) null)
-        .whenComplete((done, failure) -> {
-          if (failure != null) {
-            LOG.error("Can't write {}", file, failure);
-          }
-        });
+    return pending(
+        new Undo.OfGallery(gallery.id(), before, Optional.of(gallery)),
+        writer
+            .submit(() -> {
+              GalleryFiles.write(file, backupDir, gallery);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't write {}", file, failure);
+              }
+            }));
   }
 
   /** Removes a gallery and its file, keeping a backup (questions 269). */
   public CompletableFuture<Void> remove(Gallery gallery) {
+    Optional<Gallery> before = gallery(gallery.id());
     config.set(config.get().withoutGallery(gallery.id()));
     Path file = galleryFile.apply(gallery.id());
     Path backupDir = backups.resolve("galleries");
-    return writer
-        .submit(() -> {
-          com.petepeterepeat.seasons.core.store.AtomicFiles.deleteKeepingBackup(file, backupDir);
-          return Boolean.TRUE;
-        })
-        .thenApply(done -> (Void) null)
-        .whenComplete((done, failure) -> {
-          if (failure != null) {
-            LOG.error("Can't remove {}", file, failure);
-          }
-        });
+    return pending(
+        new Undo.OfGallery(gallery.id(), before, Optional.empty()),
+        writer
+            .submit(() -> {
+              com.petepeterepeat.seasons.core.store.AtomicFiles.deleteKeepingBackup(
+                  file, backupDir);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't remove {}", file, failure);
+              }
+            }));
   }
 
   // Undo (questions 275)
@@ -320,24 +330,33 @@ public final class HallService {
     return source.player().map(p -> p.uuid().toString()).orElse("console");
   }
 
-  /** Remembers a gallery as it is now, about to become {@code after}, for the source's undo. */
-  public void rememberUndo(
-      com.petepeterepeat.seasons.core.command.CommandSource source, Gallery after) {
-    undos.put(
-        undoKey(source), new Undo.OfGallery(after.id(), gallery(after.id()), Optional.of(after)));
+  /** A save and its undo, until the command that made it claims it. */
+  private record Pending(CompletableFuture<Void> save, Undo undo) {}
+
+  /** The latest saves' undos, newest last; a save nobody claims soon drops off. */
+  private final List<Pending> unclaimed = new ArrayList<>();
+
+  private CompletableFuture<Void> pending(Undo undo, CompletableFuture<Void> save) {
+    unclaimed.add(new Pending(save, undo));
+    if (unclaimed.size() > 16) {
+      unclaimed.removeFirst();
+    }
+    return save;
   }
 
-  /** Remembers a gallery about to be removed. */
-  public void rememberRemoval(
-      com.petepeterepeat.seasons.core.command.CommandSource source, Gallery removed) {
-    undos.put(
-        undoKey(source), new Undo.OfGallery(removed.id(), Optional.of(removed), Optional.empty()));
-  }
-
-  /** Remembers hall.yml as it is now, about to become {@code after}. */
-  public void rememberUndo(
-      com.petepeterepeat.seasons.core.command.CommandSource source, HallLayout after) {
-    undos.put(undoKey(source), new Undo.OfHall(layout(), after));
+  /**
+   * Makes a save the source's last Hall edit, which {@code /hof undo} puts back (questions 275).
+   * Every command edit goes through {@link CellEdits#saved}, which claims it.
+   */
+  @SuppressWarnings("ReferenceEquality") // The very save just made, not an equal one.
+  public void claimUndo(
+      com.petepeterepeat.seasons.core.command.CommandSource source, CompletableFuture<Void> save) {
+    for (int i = unclaimed.size() - 1; i >= 0; i--) {
+      if (unclaimed.get(i).save() == save) {
+        undos.put(undoKey(source), unclaimed.remove(i).undo());
+        return;
+      }
+    }
   }
 
   /** What an undo came to. */
@@ -366,6 +385,8 @@ public final class HallService {
         undos.remove(undoKey(source));
         CompletableFuture<Void> saved =
             before.isPresent() ? save(before.get()) : remove(after.orElseThrow());
+        // An undo is no edit of its own to undo (one level, questions 275).
+        unclaimed.removeLast();
         yield new UndoResult.Undone("galleries/" + id + ".yml", saved, before);
       }
       case Undo.OfHall(HallLayout before, HallLayout after) -> {
@@ -373,7 +394,9 @@ public final class HallService {
           yield new UndoResult.Changed("hall.yml");
         }
         undos.remove(undoKey(source));
-        yield new UndoResult.Undone("hall.yml", saveHall(before), Optional.empty());
+        CompletableFuture<Void> saved = saveHall(before);
+        unclaimed.removeLast();
+        yield new UndoResult.Undone("hall.yml", saved, Optional.empty());
       }
     };
   }

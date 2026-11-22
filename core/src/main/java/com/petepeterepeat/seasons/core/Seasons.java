@@ -28,6 +28,8 @@ import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
+import com.petepeterepeat.seasons.core.hall.CellFixes;
+import com.petepeterepeat.seasons.core.hall.CellRows;
 import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
@@ -593,14 +595,20 @@ public final class Seasons implements SeasonsApi {
             stamper,
             help);
     wanding.bindLinks(hallCommands::addLink);
+    CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
     HallOutlines outlining = new HallOutlines(platform, config, halls, wanding);
+    outlining.bindPreviews(rows::previews);
     outlines = outlining;
     hallCommands.bindOutlines(outlining);
     outlining.start();
     CommandNode hof =
         hallCommands
             .root()
-            .merge(new HallLists(platform, config, halls, players, cellEdits).root());
+            .merge(new HallLists(platform, config, halls, players, cellEdits).root())
+            .merge(
+                new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
+                    .root())
+            .merge(rows.root());
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
       children.add(curation.command());
