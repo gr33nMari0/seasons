@@ -764,6 +764,13 @@ public final class ConfigLoader {
               "launch.requireManual",
               "only true is built: launch is by /season launch or the launch button"));
     }
+    int bedDistance = config.hof().entry().bedDistance();
+    if (bedDistance < 0 || bedDistance > 16) {
+      // The bed check scans the cube around the player (questions 261).
+      problems.add(
+          ConfigProblem.atPath(
+              CONFIG, "hof.entry.bedDistance", "must be between 0 and 16, not " + bedDistance));
+    }
     int pets = config.pets().maxPerPlayer();
     if (pets < 0 || pets > 10) {
       problems.add(

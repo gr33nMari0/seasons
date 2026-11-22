@@ -17,6 +17,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFiles;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.zone.Zone;
@@ -38,6 +39,7 @@ final class SpawnCommands {
   private final SeasonService seasons;
   private final Path backups;
   private final CommandHelp help;
+  private final java.util.function.BiConsumer<PlayerId, Position> go;
 
   /**
    * @param backups {@code <world>/seasons/backups/seasons}
@@ -49,7 +51,8 @@ final class SpawnCommands {
       ConfigEdits edits,
       SeasonService seasons,
       Path backups,
-      CommandHelp help) {
+      CommandHelp help,
+      java.util.function.BiConsumer<PlayerId, Position> go) {
     this.platform = platform;
     this.config = config;
     this.loader = loader;
@@ -57,6 +60,104 @@ final class SpawnCommands {
     this.seasons = seasons;
     this.backups = backups;
     this.help = help;
+    this.go = go;
+  }
+
+  /**
+   * {@code /season tp}: an admin's own teleport to a spawn, candidate or waypoint (questions 271).
+   */
+  CommandNode tpNode() {
+    return CommandNode.literal("tp")
+        .permission(PERMISSION_ADMIN_SEASON)
+        .then(
+            CommandNode.literal("spawn")
+                .executes(this::tpSpawn)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::tpSpawn)))
+        .then(
+            CommandNode.literal("candidate")
+                .then(
+                    CommandNode.argument("name", ArgumentType.word()).executes(this::tpCandidate)))
+        .then(
+            CommandNode.literal("marker")
+                .then(
+                    CommandNode.argument("set", ArgumentType.word())
+                        .then(
+                            CommandNode.argument("name", ArgumentType.greedy())
+                                .executes(this::tpMarker))))
+        .build();
+  }
+
+  void tpSpawn(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    int season =
+        arguments.values().containsKey("season")
+            ? arguments.integer("season")
+            : next.getAsInt() - 1;
+    Optional<Position> spawn = config.get().season(season).flatMap(SeasonFile::spawn);
+    if (spawn.isEmpty()) {
+      source.reply(messages().get("spawn.show-none", "season", Integer.toString(season)));
+      return;
+    }
+    go.accept(source.player().get(), middle(spawn.get()));
+  }
+
+  void tpCandidate(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    String name = arguments.string("name");
+    Optional<Position> at =
+        config
+            .get()
+            .season(next.getAsInt())
+            .flatMap(f -> Optional.ofNullable(f.spawnCandidates().get(name)));
+    if (at.isEmpty()) {
+      source.reply(unknown(next.getAsInt(), name));
+      return;
+    }
+    go.accept(source.player().get(), middle(at.get()));
+  }
+
+  void tpMarker(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    String set = arguments.string("set");
+    String name = arguments.string("name").strip();
+    Optional<com.petepeterepeat.seasons.core.map.Waypoint> found =
+        config.get().waypoints().find(set, name);
+    if (found.isEmpty()) {
+      source.reply(messages().get("marker.unknown", "set", set, "name", name));
+      return;
+    }
+    go.accept(source.player().get(), middle(found.get().at()));
+  }
+
+  private static Position middle(Position block) {
+    return new Position(
+        block.dimension(),
+        block.blockX() + 0.5,
+        block.blockY(),
+        block.blockZ() + 0.5,
+        block.yaw(),
+        0f);
   }
 
   /** The {@code spawn} node under {@code /season}. */

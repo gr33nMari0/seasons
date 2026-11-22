@@ -288,6 +288,29 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
                                 .executes(this::cellInfo))))
+        .then(
+            CommandNode.literal("tp")
+                .permission(PERMISSION_ADMIN)
+                .then(CommandNode.literal("hub").executes(this::tpHub))
+                .then(
+                    CommandNode.literal("gallery")
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::tpGallery)))
+                .then(
+                    CommandNode.literal("cell")
+                        .then(
+                            CommandNode.argument("cell", ArgumentType.id()).executes(this::tpCell)))
+                .then(
+                    CommandNode.literal("player")
+                        .then(
+                            CommandNode.argument("player", ArgumentType.word())
+                                .executes(this::tpPlayer)))
+                .then(
+                    CommandNode.literal("link")
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::tpLink))))
         .then(CommandNode.literal("wand").permission(PERMISSION_ADMIN).executes(wand::give))
         .then(
             CommandNode.literal("stamp")
@@ -1408,6 +1431,81 @@ public final class HallCommands {
       return;
     }
     stamper.get().stamp(source, arguments);
+  }
+
+  // Admin teleports (questions 271)
+
+  private Optional<PlayerId> admin(CommandSource source) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+    }
+    return source.player();
+  }
+
+  void tpHub(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    if (player.isEmpty()) {
+      return;
+    }
+    Optional<Position> spawn = visits.hallEntry();
+    if (spawn.isEmpty()) {
+      source.reply(messages().get("hof.visit.no-spawn"));
+      return;
+    }
+    visits.adminGo(player.get(), spawn.get());
+  }
+
+  void tpGallery(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    Optional<Gallery> found = player.isEmpty() ? Optional.empty() : gallery(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Optional<Position> to = hall.galleryEntry(found.get());
+    if (to.isEmpty()) {
+      source.reply(messages().get("hof.tp.nowhere", "what", found.get().id()));
+      return;
+    }
+    visits.adminGo(player.get(), to.get());
+  }
+
+  void tpCell(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    Optional<HallService.CellRef> found =
+        player.isEmpty() ? Optional.empty() : cell(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Optional<Position> to =
+        hall.arrival(found.get()).or(() -> hall.galleryEntry(found.get().gallery()));
+    if (to.isEmpty()) {
+      source.reply(messages().get("hof.tp.nowhere", "what", found.get().key()));
+      return;
+    }
+    visits.adminGo(player.get(), to.get());
+  }
+
+  void tpPlayer(CommandSource source, Arguments arguments) {
+    admin(source).ifPresent(p -> visits.adminGoTo(p, arguments.string("player")));
+  }
+
+  void tpLink(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    if (player.isEmpty()) {
+      return;
+    }
+    String id = arguments.string("link");
+    Optional<HallLayout.Link> link = hall.layout().link(id);
+    if (link.isEmpty()) {
+      source.reply(messages().get("hof.link.unknown", "link", id));
+      return;
+    }
+    Position block = link.get().block();
+    // Beside the link, on top of its block: a plate is stood on, a button is beside a wall.
+    visits.adminGo(
+        player.get(),
+        HallService.standOn(
+            Position.of(block.dimension(), block.blockX(), block.blockY() + 1, block.blockZ())));
   }
 
   // Helpers

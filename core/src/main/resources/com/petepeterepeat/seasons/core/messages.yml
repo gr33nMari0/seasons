@@ -463,6 +463,10 @@ hof:
     between-seasons: "<red>Links out of the Hall wait for the next season to launch.</red>"
     locked: "<red>That leads into land locked until <until>.</red>"
     arrived: "<gray>You followed the link.</gray>"
+  tp:
+    arrived: "<gray>You're there.</gray>"
+    between-seasons: "<red>Leaving the Hall waits for the next season to launch, unless you hold seasons.hof.roam.</red>"
+    nowhere: "<red><what> has no entry to go to.</red>"
   sealed:
     no-drop: "<red>You can't drop items in the Hall of Fame.</red>"
     no-pearl: "<red>Ender pearls and chorus fruit don't work in the Hall of Fame.</red>"
@@ -851,6 +855,7 @@ help:
     season.marker.add.name: "waypoint name [--at x y z]"
     season.marker.move.name: "waypoint name [--at x y z]"
     season.marker.remove.name: "waypoint name"
+    season.tp.marker.name: "waypoint name"
     pet.remove.name: "pet name"
     id: "id"
     season.zone.add.id: "new zone id"
@@ -927,6 +932,10 @@ help:
     cancel: "Cancel the end countdown."
     reload: "Reload every Seasons file, all or nothing."
     validate: "Check every Seasons file without reloading."
+    tp:
+      spawn: "Go to a season's spawn, this season's by default."
+      candidate: "Go to a spawn candidate."
+      marker: "Go to a waypoint."
   hof: "Visit the Hall of Fame, a season's gallery or a player's cell."
   hof.leave: "Go back to where you left from."
   hof.gate: "Open or shut your own cell's gate."
@@ -958,6 +967,12 @@ help:
     unassign: "Free a cell for a season."
     info: "Show a cell's owner and anchors."
   hof.wand: "Get the wand for selections and anchors."
+  hof.tp:
+    hub: "Go to the Hall spawn, with no entry checks."
+    gallery: "Go to a gallery's entry."
+    cell: "Go to a cell's entry."
+    player: "Go to a player's cell."
+    link: "Go to a link."
   hof.stamp: "Paste copies of a cell template where you stand."
   hof.claim: "Claim a free cell, where cells are claimed."
   hof.swap: "Swap cells with another player; both run it."

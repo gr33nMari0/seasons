@@ -75,7 +75,7 @@ class ConfigCommandsTest {
     assertThat(run("/season config get schedule.reminders"))
         .containsExactly("schedule.reminders = [7d, 1d, 1h, 10m]");
     assertThat(run("/season config get hof.entry"))
-        .startsWith("hof.entry:", "hof.entry.bedDistance = 3")
+        .startsWith("hof.entry:", "hof.entry.requireBed = true", "hof.entry.bedDistance = 3")
         .contains("hof.entry.rateLimit = 5s");
     assertThat(run("/season config get hof.nope"))
         .containsExactly(
@@ -111,7 +111,7 @@ class ConfigCommandsTest {
 
     assertThat(run("/season config set hof.entry 5"))
         .containsExactly(
-            "hof.entry is a section: set one of its keys, such as hof.entry.bedDistance.");
+            "hof.entry is a section: set one of its keys, such as hof.entry.requireBed.");
     assertThat(run("/season config set schema-version 2").getFirst())
         .startsWith("There's no setting called schema-version.");
     assertThat(run("/season config set pets.maxPerPlayer 11"))

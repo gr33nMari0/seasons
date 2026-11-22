@@ -133,6 +133,7 @@ public record SeasonsConfig(
     /**
      * Where and when /hof works.
      *
+     * @param requireBed whether /hof needs a bed near at all (questions 261)
      * @param bedDistance how near a bed a player must stand
      * @param anyBed any bed of any kind, or only their own respawn bed
      * @param noHostiles refused with monsters near, as vanilla refuses sleep
@@ -144,6 +145,7 @@ public record SeasonsConfig(
      */
     @ConfigSerializable
     public record Entry(
+        boolean requireBed,
         int bedDistance,
         boolean anyBed,
         boolean noHostiles,

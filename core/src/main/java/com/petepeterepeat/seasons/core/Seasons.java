@@ -560,8 +560,11 @@ public final class Seasons implements SeasonsApi {
     cellEdits.bindHelp(help);
     Path seasonBackups = world.resolve("backups").resolve("seasons");
     List<CommandNode> nodes = new ArrayList<>();
-    nodes.add(
-        new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups, help).node());
+    SpawnCommands spawnCommands =
+        new SpawnCommands(
+            platform, config, loader, edits, seasons, seasonBackups, help, visiting::adminGo);
+    nodes.add(spawnCommands.node());
+    nodes.add(spawnCommands.tpNode());
     nodes.addAll(
         new ZoneCommands(
                 platform, config, loader, edits, seasons, zoning, seasonBackups, wanding::selection)

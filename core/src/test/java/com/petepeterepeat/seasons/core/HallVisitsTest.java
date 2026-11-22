@@ -424,6 +424,52 @@ class HallVisitsTest {
   }
 
   @Test
+  void roamersAreNeverHeldInTheHall() {
+    fake.conveniences.add(alex.id());
+    run("/season end --now");
+    fake.player(alex).position = INSIDE;
+    fake.tick();
+    fake.player(alex).position = OUTSIDE;
+    fake.tick();
+    // Out they stay, and /hof leave from inside takes them to the season spawn (questions 263).
+    assertThat(at(alex)).isEqualTo(OUTSIDE);
+    fake.player(alex).position = INSIDE;
+    fake.tick();
+    hof(alex, "/hof leave");
+    assertThat(lastHeard(alex))
+        .isEqualTo("There was no spot to send you back to, so you're at the season spawn.");
+  }
+
+  @Test
+  void anywhereHoldersSkipEveryCheckButTheRateLimit() {
+    fake.conveniences.add(alex.id());
+    fake.blocks.clear();
+    fake.monsters.add(Position.of(OVERWORLD, 104, 64, 100));
+    decide(new Intent.TakeDamage(alex.id()));
+    TestSource source = new TestSource(Optional.of(alex.id()));
+    TestCommands.run(fake.commands.get(1), source, "/hof");
+    assertThat(at(alex)).isEqualTo(ENTRY);
+    TestCommands.run(fake.commands.get(1), source, "/hof");
+    assertThat(lastHeard(alex)).isEqualTo("Wait a few seconds before trying /hof again.");
+  }
+
+  @Test
+  void withoutTheBedRuleOnlyTheOtherChecksApply() throws IOException {
+    java.nio.file.Path config = dir.resolve("plugins/Seasons/config.yml");
+    java.nio.file.Files.createDirectories(config.getParent());
+    java.nio.file.Files.writeString(
+        config, "schema-version: 1\nhof:\n  entry: { requireBed: false }\n");
+    run("/season reload");
+    fake.blocks.clear();
+    fake.monsters.add(Position.of(OVERWORLD, 104, 64, 100));
+    hof(alex, "/hof");
+    assertThat(lastHeard(alex)).isEqualTo("Monsters are nearby.");
+    fake.monsters.clear();
+    hof(alex, "/hof");
+    assertThat(at(alex)).isEqualTo(ENTRY);
+  }
+
+  @Test
   void insideNothingIsDroppedPickedUpPearledOrRiddenButCushionsAreSeats() {
     visit();
     assertThat(decide(new Intent.DropItem(alex.id()))).isNotEqualTo(Decision.allow());

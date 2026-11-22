@@ -112,6 +112,9 @@ public final class EntryChecks {
   }
 
   private static Optional<Failure> bed(SeasonsConfig.Hof.Entry rules, Situation s) {
+    if (!rules.requireBed()) {
+      return Optional.empty();
+    }
     int reach = rules.bedDistance();
     String distance = Integer.toString(reach);
     if (!rules.anyBed()) {

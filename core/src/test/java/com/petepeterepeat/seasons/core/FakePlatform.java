@@ -222,6 +222,12 @@ public final class FakePlatform {
   /** Whether giving an item throws, as an unexpected failure part-way through a withdrawal. */
   public boolean giveFails;
 
+  private static final Set<String> ADMIN_CONVENIENCES =
+      Set.of("seasons.hof.anywhere", "seasons.hof.roam");
+
+  /** Who holds seasons.hof.anywhere and seasons.hof.roam. */
+  public final Set<PlayerId> conveniences = new java.util.HashSet<>();
+
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
@@ -1139,9 +1145,11 @@ public final class FakePlatform {
         shownDisplays,
         menus,
         (root, aliases) -> commands.add(root),
-        // Everyone holds every node except the bypass nodes, which only those a test names get.
+        // Everyone holds every node except the bypass nodes and the admin conveniences (questions
+        // 262 and 263), which only those a test names get.
         (player, node) ->
             (!node.endsWith(".bypass") || bypassing.contains(player))
+                && (!ADMIN_CONVENIENCES.contains(node) || conveniences.contains(player))
                 && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player))
                 && !denied.getOrDefault(player, Set.of()).contains(node),
         events,

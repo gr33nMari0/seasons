@@ -55,6 +55,12 @@ public final class HallVisits {
   /** Permission for {@code /hof} and {@code /hof leave}. */
   public static final String PERMISSION_VISIT = "seasons.hof.visit";
 
+  /** Skips every {@code /hof} entry check but the rate limit; ops by default (questions 262). */
+  public static final String PERMISSION_ANYWHERE = "seasons.hof.anywhere";
+
+  /** Never held in the Hall, the Intermission included; ops by default (questions 263). */
+  public static final String PERMISSION_ROAM = "seasons.hof.roam";
+
   private static final Logger LOG = LoggerFactory.getLogger(HallVisits.class);
   private static final Duration SWEEP = Duration.ofMillis(500);
   private static final String OVERWORLD = "minecraft:overworld";
@@ -212,8 +218,11 @@ public final class HallVisits {
       moveTo(player, destination, "hof.visit.arrived");
       return;
     }
+    // Admins skip every check but the rate limit (questions 262).
+    boolean anywhere = platform.permissions().has(player, PERMISSION_ANYWHERE);
     Instant visited = lastVisit.get(player);
-    if (rules.cooldown().isPositive()
+    if (!anywhere
+        && rules.cooldown().isPositive()
         && visited != null
         && now.isBefore(visited.plus(rules.cooldown()))) {
       Duration left = Duration.between(now, visited.plus(rules.cooldown()));
@@ -238,7 +247,7 @@ public final class HallVisits {
                 Optional.ofNullable(lastDamage.get(player)),
                 now),
             needsBed);
-    if (failed.isPresent()) {
+    if (!anywhere && failed.isPresent()) {
       tell(
           player,
           "hof.entry." + failed.get().key(),
@@ -249,7 +258,7 @@ public final class HallVisits {
     // way back: a free teleport home. So it is turned down now, by the same rules.
     int radius = config.get().config().hof().returnSafety().hostileRadius();
     Optional<String> unsafe = ReturnSafety.unsafe(at, blocks(), hostiles(at, radius), radius);
-    if (save && unsafe.isPresent()) {
+    if (!anywhere && save && unsafe.isPresent()) {
       tell(player, "hof.entry.unsafe", "reason", messages().text("hof.unsafe." + unsafe.get()));
       return;
     }
@@ -333,6 +342,11 @@ public final class HallVisits {
     return arrival;
   }
 
+  /** {@code /hof tp player <name>}, or a season: as {@code /hof} would land, as an admin goes. */
+  public void adminGoTo(PlayerId player, String target) {
+    destination(player, Optional.of(target)).ifPresent(to -> adminGo(player, to));
+  }
+
   /** A season's recorded spawn, if it has one. */
   public Optional<Position> seasonSpawn(int season) {
     return seasonSpawn.apply(season);
@@ -384,7 +398,7 @@ public final class HallVisits {
 
   /** A link that leads out into the world: refused into locked land and between seasons. */
   private void away(PlayerId player, Position to) {
-    if (state.get().map(s -> !playing(s)).orElse(false)) {
+    if (state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
       tell(player, "hof.link.between-seasons");
       return;
     }
@@ -438,6 +452,78 @@ public final class HallVisits {
             layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())));
   }
 
+  /**
+   * An admin's own teleport (questions 271): there, with no entry checks, through the floor search
+   * every Seasons teleport makes, with arrival immunity. Into the Hall from outside saves the spot
+   * as {@code /hof} does; out of it drops the saved spot and gives back the game mode. Out of the
+   * Hall during the Intermission only for roamers, and never into land locked for them.
+   */
+  public void adminGo(PlayerId player, Position to) {
+    if (moving.contains(player)) {
+      return;
+    }
+    Position at = platform.players().position(player);
+    boolean fromIn = halls.inHall(at);
+    if (halls.inHall(to)) {
+      if (fromIn) {
+        moveTo(player, to, "hof.tp.arrived");
+        return;
+      }
+      Optional<HallReturn> back = Optional.of(new HallReturn(at, modeOutside(player)));
+      moving.add(player);
+      var _ =
+          saveReturn(player, back)
+              .whenCompleteAsync(
+                  (saved, failure) -> {
+                    moving.remove(player);
+                    if (failure != null) {
+                      tell(player, "hof.visit.failed");
+                      return;
+                    }
+                    moveTo(
+                        player,
+                        to,
+                        "hof.tp.arrived",
+                        () -> {
+                          var _ = saveReturn(player, Optional.empty());
+                        });
+                  },
+                  serverThread);
+      return;
+    }
+    if (fromIn && state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
+      tell(player, "hof.tp.between-seasons");
+      return;
+    }
+    Optional<String> until = locked.apply(player, to);
+    if (until.isPresent()) {
+      tell(player, "hof.link.locked", "until", until.get());
+      return;
+    }
+    moving.add(player);
+    var _ =
+        platform
+            .players()
+            .teleportSafely(player, to)
+            .whenCompleteAsync(
+                (moved, failure) -> {
+                  moving.remove(player);
+                  if (failure != null || !Boolean.TRUE.equals(moved)) {
+                    tell(player, "hof.visit.failed");
+                    return;
+                  }
+                  if (fromIn) {
+                    inside.remove(player);
+                    restoreMode(player);
+                    forgetReturn(player);
+                  }
+                  arrived(player);
+                  immunity.grant(player, config.get().config().hof().arrivalImmunity());
+                  tell(player, "hof.tp.arrived");
+                },
+                serverThread);
+  }
+
   /** Moves a player within or into the Hall, with arrival immunity. */
   private void moveTo(PlayerId player, Position destination, String messageKey) {
     moveTo(player, destination, messageKey, () -> {});
@@ -488,7 +574,7 @@ public final class HallVisits {
       returnTo(player, back.get(), "hof.leave.returned");
       return;
     }
-    if (state.get().map(s -> !playing(s)).orElse(false)) {
+    if (state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
       tell(player, "hof.leave.to-entry");
       return;
     }
@@ -618,7 +704,7 @@ public final class HallVisits {
       dropStaleReturn(player);
       return;
     }
-    if (!kept()) {
+    if (!kept() || roams(player)) {
       if (halls.inHall(platform.players().position(player))) {
         // Back in already, such as by a teleport straight after: nothing to let go of.
         inside.add(player);
@@ -936,6 +1022,11 @@ public final class HallVisits {
         .cellAt(platform.players().position(player))
         .filter(ref -> halls.canTakeOut(player, ref))
         .isPresent();
+  }
+
+  /** Whether a player is never held in the Hall (questions 263). */
+  private boolean roams(PlayerId player) {
+    return platform.permissions().has(player, PERMISSION_ROAM);
   }
 
   private boolean bypasses(PlayerId player) {

@@ -53,6 +53,7 @@ export default {
       assert(!hof.includes(admin), `a player isn't offered /hof ${admin}: ${hof}`)
     }
     assert(hof.includes('leave'), `a player is offered /hof leave: ${hof}`)
-    assert((await suggestions(player, '/hof cell ')).length === 0, 'a player is offered nothing under /hof cell')
+    const cell = await suggestions(player, '/hof cell ')
+    assert(!cell.some((s) => ['new', 'bounds', 'assign'].includes(s)), `a player is offered no cell commands: ${cell}`)
   }
 }

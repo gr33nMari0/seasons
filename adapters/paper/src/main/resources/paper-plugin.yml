@@ -72,3 +72,9 @@ permissions:
   seasons.hof.bypass:
     description: Ignore Hall of Fame protection. Never granted by default
     default: false
+  seasons.hof.anywhere:
+    description: Use /hof with no bed near and skip its other entry checks but the rate limit
+    default: op
+  seasons.hof.roam:
+    description: Leave the Hall of Fame by any route, the Intermission included
+    default: op
