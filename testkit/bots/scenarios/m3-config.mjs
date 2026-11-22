@@ -39,7 +39,7 @@ export default {
     // Refusals change nothing.
     const written = ctx.readFile(CONFIG)
     await ctx.command(admin, '/season config get hof.nope', /^There's no setting called hof\.nope\./)
-    await ctx.command(admin, '/season config set hof.entry 5', /^hof\.entry is a section: set one of its keys, such as hof\.entry\.bedDistance\.$/)
+    await ctx.command(admin, '/season config set hof.entry 5', /^hof\.entry is a section: set one of its keys, such as hof\.entry\.requireBed\.$/)
     await ctx.command(admin, '/season config set schema-version 2', /^There's no setting called schema-version\./)
     await ctx.command(admin, '/season config set pets.maxPerPlayer lots', /^pets\.maxPerPlayer wasn't changed: /)
     await ctx.command(admin, '/season config set pets.maxPerPlayer 11', /^pets\.maxPerPlayer wasn't changed: config\.yml, at pets\.maxPerPlayer: must be between 0 and 10, not 11$/)

@@ -586,7 +586,7 @@ hof:
     no-selection: "<red>Select the first cell with the wand, or give it with --from x1 y1 z1 x2 y2 z2.</red>"
     same-axis: "<red>--across must cross the row: along x, across z, or the other way.</red>"
     usage: "<red>Use /hof cell row <gallery> <count> [--along +x|-x|+z|-z] [--wall 0-4] [--across +x|-x|+z|-z <width>] [--like <cell>] [--from x1 y1 z1 x2 y2 z2].</red>"
-  plaque:
+  plaque-size:
     bad-scale: "<red>A plaque's scale is 0.25 to 4.</red>"
     none: "<red><cell> has no plaque anchor.</red>"
     scaled: "<green>The plaque of <cell> is now <size> times its size.</green>"

@@ -81,7 +81,7 @@ public final class PlaqueScale {
     } catch (NumberFormatException e) {
       // Falls through to the refusal.
     }
-    source.reply(messages().get("hof.plaque.bad-scale"));
+    source.reply(messages().get("hof.plaque-size.bad-scale"));
     return Optional.empty();
   }
 
@@ -98,14 +98,14 @@ public final class PlaqueScale {
     HallService.CellRef ref = found.ref();
     Optional<Anchor> plaque = ref.cell().anchor(AnchorType.PLAQUE);
     if (plaque.isEmpty()) {
-      source.reply(messages().get("hof.plaque.none", "cell", ref.key()));
+      source.reply(messages().get("hof.plaque-size.none", "cell", ref.key()));
       return;
     }
     Gallery next = withScale(ref, plaque.get(), size.get());
     edits.saved(
         source,
         hall.save(next),
-        messages().get("hof.plaque.scaled", "cell", ref.key(), "size", text(size.get())),
+        messages().get("hof.plaque-size.scaled", "cell", ref.key(), "size", text(size.get())),
         () -> redraw(next));
   }
 
@@ -127,7 +127,7 @@ public final class PlaqueScale {
     edits.saved(
         source,
         hall.save(next),
-        messages().get("hof.plaque.gallery-scaled", "gallery", id, "size", text(size.get())),
+        messages().get("hof.plaque-size.gallery-scaled", "gallery", id, "size", text(size.get())),
         () -> redraw(next));
   }
 
@@ -159,7 +159,8 @@ public final class PlaqueScale {
     redraw(next);
     platform
         .players()
-        .actionBar(player, messages().get("hof.plaque.bar", "cell", ref.key(), "size", text(size)));
+        .actionBar(
+            player, messages().get("hof.plaque-size.bar", "cell", ref.key(), "size", text(size)));
     return Optional.of(new Decision.Deny(Optional.empty()));
   }
 
