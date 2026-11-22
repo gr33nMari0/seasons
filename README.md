@@ -1,5 +1,9 @@
 # Seasons
 
+![Seasons: every season ends. Its legends stay in the Hall of Fame.](docs/images/banner.png)
+
+[![Hangar downloads](https://img.shields.io/hangar/dt/SeasonsMC?label=Hangar&style=flat)](https://hangar.papermc.io/gr33nMari0/SeasonsMC) [![Modrinth](https://img.shields.io/badge/Modrinth-seasonsmc-00af5c?logo=modrinth&style=flat)](https://modrinth.com/project/seasonsmc) [![GitHub release](https://img.shields.io/github/v/release/gr33nMari0/seasons?style=flat)](https://github.com/gr33nMari0/seasons/releases)
+
 Seasons runs a season format on one Minecraft world that never resets. When a season ends, everyone's gear is archived into a Hall of Fame: each player gets a cell with a figure wearing their armour, a plaque and their whole inventory to look at. Then everyone starts again with nothing at a fresh spawn far out in new land. The old world stays locked until the group votes for Homecoming, and then the whole world opens up again. Nothing anyone built is ever wiped.
 
 It is a server-side Paper plugin: players install nothing.
@@ -8,6 +12,8 @@ It is a server-side Paper plugin: players install nothing.
 - **Rollover.** Reminders count down to a planned end you set. At a live event, `/season end` starts a ten-minute countdown, archives everyone online and resets them. Anyone offline is archived when they next log in. `/season launch` takes everyone to the new spawn with a fanfare.
 - **Old world.** Zones you draw lock the old world (block, no-build or announce) until `/season unlock homecoming`. Ender chests go into a vault that opens at Homecoming.
 - **Extras.** A dragon egg for each season's slayer, season firsts, awards with trophies, a season card for every player, registered pets that travel to the new spawn, a museum, curation of archived items, BlueMap areas and waypoints, and Discord posts.
+
+![How a season works: play, the season ends, gear goes into the Hall of Fame, everyone starts at a new spawn, and Homecoming reopens the old world.](docs/images/gallery-1-season-loop.png)
 
 Every step that moves items is journalled, so a crash at any moment leaves every item exactly once: archived or still carried, never both and never lost.
 
