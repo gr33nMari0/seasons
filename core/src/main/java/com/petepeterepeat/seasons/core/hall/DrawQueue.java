@@ -22,6 +22,7 @@ final class DrawQueue {
   private final long budgetNanos;
   private final ArrayDeque<Job> waiting = new ArrayDeque<>();
   private boolean scheduled;
+  private boolean stopped;
 
   /** One cell's drawing: its first step, which gives the rest, and those still to run. */
   private static final class Job {
@@ -60,13 +61,25 @@ final class DrawQueue {
    */
   CompletableFuture<Void> submitSteps(Supplier<List<Runnable>> first) {
     Job job = new Job(first);
+    if (stopped) {
+      return job.done;
+    }
     waiting.add(job);
     schedule();
     return job.done;
   }
 
+  /**
+   * Stops drawing: what waits is dropped, nothing more is drawn and its futures never complete, as
+   * when Seasons stops. A drain already handed to the next tick finds nothing to do.
+   */
+  void stop() {
+    stopped = true;
+    waiting.clear();
+  }
+
   private void schedule() {
-    if (!scheduled) {
+    if (!scheduled && !stopped) {
       scheduled = true;
       nextTick.accept(this::drain);
     }

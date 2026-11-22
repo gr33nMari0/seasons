@@ -128,6 +128,12 @@ public final class HallRenderer implements DisplayRenderer {
         : current.handle((drawn, failure) -> null);
   }
 
+  /** Stops drawing, as Seasons stops: nothing queued is drawn after it. On the server thread. */
+  public void stop() {
+    drawing.stop();
+    underWay.clear();
+  }
+
   @Override
   public void remove(PlayerId player, int season) {
     hall.cellOf(player, season).ifPresent(this::clear);

@@ -120,4 +120,21 @@ class DrawQueueTest {
     tick();
     assertThat(drawn).containsExactly(2);
   }
+
+  @Test
+  void aStoppedQueueDrawsNothingMore() {
+    var _ = queue.submit(draw(1));
+    var _ = queue.submit(draw(2));
+    var _ = queue.submit(draw(3));
+    tick();
+    assertThat(drawn).containsExactly(1, 2);
+
+    queue.stop();
+    tick();
+    var _ = queue.submit(draw(4));
+    tick();
+
+    assertThat(drawn).containsExactly(1, 2);
+    assertThat(nextTick).isEmpty();
+  }
 }

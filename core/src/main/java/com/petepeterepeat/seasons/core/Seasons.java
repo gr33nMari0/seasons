@@ -144,6 +144,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable HallService hallService;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
+  private @Nullable HallRenderer hallRenderer;
   private @Nullable Gates gates;
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
@@ -266,6 +267,7 @@ public final class Seasons implements SeasonsApi {
         new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
     visits = visiting;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
+    hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
     Museum museum =
         new Museum(
@@ -862,6 +864,10 @@ public final class Seasons implements SeasonsApi {
     }
     if (reconciler != null) {
       reconciler.stop();
+    }
+    // Cells still queued to be drawn would otherwise go on being drawn by a stopped Seasons.
+    if (hallRenderer != null) {
+      hallRenderer.stop();
     }
     if (outlines != null) {
       outlines.stop();
