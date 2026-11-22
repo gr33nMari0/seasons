@@ -45,6 +45,7 @@
     "a39-egg-wall": 32.6,
     "a40-reload": 3.4,
     "a41-dry-run": 5.9,
+    "a43-performance": 85.0,
     "a44-cushion-build": 4.2,
     "a44-cushion-sit": 1.8,
     "a45-homecoming-build": 10.8,
@@ -102,5 +103,6 @@
     "m4-museum": 22.0,
     "m4-museum-crash-stored": 19.7,
     "m4-museum-crash-taken": 21.0,
-    "m4-slayer-rules": 22.8
+    "m4-slayer-rules": 22.8,
+    "m6-metrics-off": 2.5
 }

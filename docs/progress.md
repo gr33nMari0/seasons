@@ -10,10 +10,11 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M3 Old world | Done (#13, #15, #16, #18) | A16 to A19, A30 to A36, A41, A45; A30, A32, A33, A35 and A41 again for the `outside`, `y-above` and `y-below` shapes |
 | M4 Season extras | Done (#22, #23, #24) | A37 to A39, A42; A6, A9, A13 and A14 widened |
 | M5 Cell tooling | Done (#25) | No lettered scenarios of its own (the spec's milestone list gives it none); A30, A41 and A51 widened, and its own `m5-*` |
-| Post-M5 Hub, links and decoration | On `post-m5-hof-preparation` | A52 to A59; A4, A6, A20, A23 and A41 widened |
-| Post-M5 Setting up the Hall | On `post-m5-hall-setup` | A60 to A76; A26, A41, A53, A54, A55 and A58 widened; `m2-access-gate` changed |
-| Security fixes | On `security-fixes` | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
-| M6 and M7 | Not started | See On hold, below |
+| Post-M5 Hub, links and decoration | Done (#26) | A52 to A59; A4, A6, A20, A23 and A41 widened |
+| Post-M5 Setting up the Hall | Done (#27) | A60 to A76; A26, A41, A53, A54, A55 and A58 widened; `m2-access-gate` changed |
+| Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
+| M6 Public release | On `m6-release` | A43, `m6-metrics-off`; the full suite; see M6, below |
+| M7 Seasons Web | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -382,6 +383,29 @@ Built: workstation inputs in `PaperInventories` (`inputSlots`, settle, loose, cl
 
 Departures from the review's fix plan: the failed-archive scenario changes the inventory with `/scenario act-at` rather than switching the M1 fix off; launch keeps refusing only while an online player is unarchived (a pending player who leaves is held again at their next login); the journal is still compacted only at launch (questions 288). The review's Low items (L1 to L7) wait for a later branch.
 
+## M6
+
+**Public release** (branch `m6-release`; readings in `docs/questions.md` 289 to 294, ADR 0006, ADR 0003's M6 amendment). Each scenario and unit test was written first and failed before its code.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A43 with 20 bots, 30 zones and a full rollover (end, Intermission, launch, a minute of the Frontier, Homecoming), Seasons adds under 1 ms a tick on average and drawing displays never more than 5 ms to a tick, measured by the tick meter, with Paper's bundled spark profiling alongside | `a43-performance.mjs` (`@isolated`); unit: `TickMeterTest`, `DrawQueueTest` |
+| No scenario server reports to bStats: it is off for every plugin before each boot | `m6-metrics-off.mjs`; unit: `UsageChartsTest` |
+| Every setting is described, and the bundled `config.yml`, `secrets.template.yml` and `docs/config.md` are generated from the descriptions | unit: `ConfigReferenceTest` |
+
+Built:
+
+- **A43.** `scenario/TickMeter`, `MeteredDisplays`, the meter in `ScenarioScheduler` and `ScenarioHooks#meter`; `/scenario perf warm|start|stop` in the test plugin (`ScenarioPerf`). Drawing cells now goes through `hall/DrawQueue`, 2 ms a tick and at least one cell. Before that, A43 measured 2.4 ms a tick on average and a 65 ms tick of drawing; now about 0.4 ms and 2 to 3 ms. Scenario servers take 40 players, and a scenario can set its own timeout.
+- **bStats.** Shaded and relocated into both jars: Seasons as 35499 with `usage/UsageCharts` (`PaperMetrics`), Seasons Web as 35500. `runServer` and the scenario shard turn bStats off before every boot.
+- **Config reference.** A Configurate `@Comment` on every setting of `SeasonsConfig` and `Secrets`; `ConfigReference` (a build tool in the core's tests) and `./gradlew :core:configReference` write the bundled files and `docs/config.md`.
+- **CI.** A `newest-api` job compiles against `paperApiNewest` (`-PpaperApi`), required by the `build` check.
+- **Publishing.** `release.yml` uploads its jars, then publishes the Seasons jar to Hangar (`io.papermc.hangar-publish-plugin`) and Modrinth (Minotaur) from jobs of their own, with `HANGAR_API_TOKEN` and `MODRINTH_TOKEN`; a version with a hyphen is a beta.
+- **Docs.** A README for server owners; building, layout and releasing in CONTRIBUTING.
+
+Before the first public release: create the Hangar project (with a `Beta` channel) and the Modrinth project, set `hangarProject` and `modrinthProject` in `gradle.properties` if they differ from the placeholders, and add the two secrets (questions 292).
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
@@ -390,10 +414,6 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | --- | --- | --- |
 | The `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
 | Recovering `--force` displaced items in the curator view | Later | Questions 23 and 221: no command of the spec's opens a displaced file |
-| bStats, with a plugin id per jar | M6 | Question 3 |
-| CI across every supported version, compiling against the newest Paper API with deprecations as errors | M6 | Milestone list ("CI across supported versions"); question 5 |
-| Performance scenario A43 | M6 | Milestone list |
-| Generated config docs (config.yml comments from annotations) | M6 | Milestone list ("generated config docs") |
-| Hangar and Modrinth listings | M6 | Milestone list |
+| Seasons Web on Hangar and Modrinth | M7 | Questions 292 |
 | Seasons Web: the web server and API, `/web link\|sessions\|logout\|privacy`, `seasons.web` and `seasons.web.admin`, privacy flags in the player record, firsts copied into archives | M7 | Milestone list; question 56; A48, A49 |
 | Fabric and NeoForge adapters; Bedrock players through Geyser | Later | Milestone list ("Later: Seasons Adapters") |
