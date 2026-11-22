@@ -90,4 +90,34 @@ class DrawQueueTest {
     var _ = queue.submit(draw(3));
     assertThat(nextTick).hasSize(1);
   }
+
+  @Test
+  void aCellIsDrawnADisplayAtATimeAndFinishedBeforeTheNextStarts() {
+    CompletableFuture<Void> first =
+        queue.submitSteps(() -> {
+          drawn.add(10);
+          return List.of(draw(11), draw(12), draw(13));
+        });
+    CompletableFuture<Void> second = queue.submit(draw(2));
+
+    tick();
+    assertThat(drawn).containsExactly(10, 11, 12);
+    assertThat(first).isNotDone();
+
+    tick();
+    assertThat(drawn).containsExactly(10, 11, 12, 13, 2);
+    assertThat(first).isCompleted();
+    assertThat(second).isCompleted();
+  }
+
+  @Test
+  void stopsBeforeAStepThatWouldRunPastTheBudget() {
+    var _ = queue.submit(() -> now.addAndGet(1_500_000));
+    var _ = queue.submit(draw(2));
+
+    tick();
+    assertThat(drawn).isEmpty();
+    tick();
+    assertThat(drawn).containsExactly(2);
+  }
 }

@@ -241,11 +241,15 @@ public final class Reconciler {
 
   /**
    * Compares a cell's displays with what it should show and repairs the difference. Its chunks are
-   * loaded.
+   * loaded. A cell the renderer is drawing is left to it.
    *
    * @return how many repairs it made
    */
   int reconcile(HallService.CellRef ref, List<HallRenderer.Planned> expected) {
+    if (renderer.drawing(ref)) {
+      // Being drawn a display at a time: what is missing now is on its way.
+      return 0;
+    }
     Bounds bounds = ref.cell().bounds().orElseThrow();
     Displays displays = platform.displays();
     // Every display in the cell, and every one of the cell's own anywhere in its chunks, so one
