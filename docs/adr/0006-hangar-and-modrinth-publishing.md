@@ -23,3 +23,7 @@ In `release.yml` the existing job uploads its `dist/` folder, and two jobs, `han
 - The Hangar project needs a `Beta` channel (new projects have `Release` and `Snapshot`), and both store projects must exist before the first tag (docs/questions.md 292).
 - Seasons Web is not listed on either store until M7 gives it something to do; its jar stays on the GitHub Release.
 - Alternatives rejected: calling each store's HTTP API with `curl` from the workflow (multipart uploads, JSON payloads and error handling written by hand, for what the stores' own plugins already do); third-party GitHub Actions for the uploads (another publisher holding both tokens).
+
+## Amendment: store pages (after 1.0.0)
+
+The store pages are kept in the repository too (`docs/listing/`, `docs/images/`) and synced by `listing.yml`. Hangar's main page goes through the same Hangar plugin (`pages { resourcePage(...) }`, task `syncAllPagesToHangar`). Minotaur can sync only Modrinth's description, not the summary, categories, links, icon or gallery, so `.github/scripts/modrinth-listing.sh` sets all of them, description included, with `curl` and `jq` (both on GitHub's runners) against Modrinth's v2 API. That is the hand-written HTTP rejected above for uploads, accepted here because it is a handful of small, re-runnable requests with no release riding on them. No new dependency.

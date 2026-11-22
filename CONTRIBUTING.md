@@ -49,6 +49,10 @@ The full design is in [docs/spec.md](docs/spec.md).
 
 Set `version` in `gradle.properties` (for example `1.0.0`, or `1.1.0-beta.1` for a beta), move the changelog's Unreleased entries under that version, merge to `main` and wait for the build to pass. Then `git tag v1.0.0 && git push origin v1.0.0`. `release.yml` attaches both jars and `SHA256SUMS` to a GitHub Release, then publishes the Seasons jar to Hangar and Modrinth with that version's changelog section (ADR 0006). A version with a hyphen is a pre-release on GitHub, the `Beta` channel on Hangar and a beta on Modrinth. The Hangar project (`hangarProject` in `gradle.properties`, with a `Beta` channel) and the Modrinth project (`modrinthProject`) must exist, and the repository needs the secrets `HANGAR_API_TOKEN` and `MODRINTH_TOKEN`. A failed store upload can be re-run on its own from the workflow run. Afterwards set the version to the next `-SNAPSHOT`.
 
+## Store pages
+
+The store pages come from the repository. `docs/listing/hangar.md` is Hangar's main page and `docs/listing/modrinth.md` is Modrinth's description; they differ only in the badges at the top and the card at the bottom. `docs/listing/modrinth.json` holds Modrinth's summary, categories, links, licence, icon and gallery, and the pictures are in `docs/images/` (the descriptions show the banner from there, on `main`). `listing.yml` syncs both stores whenever these change on `main`, or when run by hand (`gh workflow run listing.yml`). A Modrinth gallery image is uploaded only if no image has its title yet, so to replace one, delete it on Modrinth and run the workflow. Hangar's API takes only pages, so on Hangar the icon (`docs/images/icon.png`), summary, keywords and links are set in the project's settings by hand. The Hangar key needs the "edit page" permission as well as "create version", and the Modrinth token needs "write projects".
+
 ## Reporting dupes or exploits
 
 Never in a public issue. See [SECURITY.md](SECURITY.md).
