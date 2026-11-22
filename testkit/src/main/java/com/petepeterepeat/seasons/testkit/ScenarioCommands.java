@@ -705,7 +705,15 @@ final class ScenarioCommands implements BasicCommand, Listener {
       sender.sendMessage("Placing " + type.getKey() + " was refused");
       return;
     }
-    player.getWorld().addEntity(entity);
+    if (entity instanceof org.bukkit.entity.LivingEntity) {
+      // As the game's own placing of an armour stand item adds it: with the DEFAULT spawn reason,
+      // which the creature spawn event then sees.
+      player
+          .getWorld()
+          .spawn(at, kind, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.DEFAULT);
+    } else {
+      player.getWorld().addEntity(entity);
+    }
     sender.sendMessage("Placed " + type.getKey() + " at " + describe(at));
   }
 

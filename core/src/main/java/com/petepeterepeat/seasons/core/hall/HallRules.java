@@ -139,6 +139,10 @@ public final class HallRules implements HallGuard {
       return Optional.empty();
     }
     String type = platform.world().block(block).type();
+    if (legacyKept(player, block) && holdsSomething(block)) {
+      // A hand-built cell's real items stay put, even for builders (questions 281).
+      return refused(player, "break", type, block, "hof.rules.legacy");
+    }
     if (bypasses(player)) {
       return bypassed(player, "break", type, block);
     }
@@ -247,9 +251,10 @@ public final class HallRules implements HallGuard {
    */
   private Optional<Decision> open(PlayerId player, List<Position> blocks) {
     Optional<Position> inHall = blocks.stream().filter(halls::inHall).findFirst();
+    boolean kept = inHall.isPresent() && blocks.stream().anyMatch(b -> legacyKept(player, b));
     if (inHall.isEmpty()
-        || bypasses(player)
-        || oneCell(blocks, ref -> halls.canTakeOut(player, ref))) {
+        || (bypasses(player) && !kept)
+        || (!kept && oneCell(blocks, ref -> halls.canTakeOut(player, ref)))) {
       return Optional.empty();
     }
     Position block = inHall.get();
@@ -295,6 +300,10 @@ public final class HallRules implements HallGuard {
   private Optional<Decision> entity(PlayerId player, Position at, String verb, String type) {
     if (!halls.inHall(at)) {
       return Optional.empty();
+    }
+    if (legacyKept(player, at) && DECORATION.contains(path(type))) {
+      // A hand-built cell's stands and frames keep their gear, even from builders (questions 281).
+      return refused(player, verb, type, at, "hof.rules.legacy");
     }
     if (bypasses(player)) {
       return bypassed(player, verb, type, at);
@@ -392,6 +401,24 @@ public final class HallRules implements HallGuard {
     String key = first.get().key();
     return blocks.stream()
         .allMatch(block -> halls.cellAt(block).filter(ref -> ref.key().equals(key)).isPresent());
+  }
+
+  /**
+   * Whether a position is in a legacy gallery and the player doesn't hold the bypass node, so its
+   * real items are view-only for them, builders included (questions 281).
+   */
+  private boolean legacyKept(PlayerId player, Position at) {
+    return halls.galleries().stream()
+            .anyMatch(g -> g.kind() == Gallery.Kind.LEGACY && g.contains(at))
+        && !platform.permissions().has(player, HallService.BYPASS);
+  }
+
+  private boolean holdsSomething(Position block) {
+    return platform
+        .inventories()
+        .container(block)
+        .map(items -> items.stream().anyMatch(Optional::isPresent))
+        .orElse(false);
   }
 
   /**

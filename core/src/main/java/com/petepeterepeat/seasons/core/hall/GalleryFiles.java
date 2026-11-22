@@ -101,10 +101,10 @@ public final class GalleryFiles {
     try {
       kind = Gallery.Kind.valueOf(kindName.toUpperCase(Locale.ROOT));
     } catch (IllegalArgumentException e) {
-      throw new Invalid("kind", "is season or museum, not " + kindName);
+      throw new Invalid("kind", "is season, museum or legacy, not " + kindName);
     }
     int season = node.node("season").getInt(0);
-    if (kind == Gallery.Kind.SEASON && season < 1) {
+    if (kind != Gallery.Kind.MUSEUM && season < 1) {
       throw new Invalid("season", "a season's gallery needs its season number");
     }
     String dimension = node.node("dimension").getString("minecraft:overworld");

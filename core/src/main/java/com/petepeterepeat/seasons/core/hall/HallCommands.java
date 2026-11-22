@@ -174,7 +174,11 @@ public final class HallCommands {
                                 .then(
                                     CommandNode.argument(
                                             "season", ArgumentType.integer(1, Integer.MAX_VALUE))
-                                        .executes(this::galleryCreate))))
+                                        .executes(this::galleryCreate)
+                                        .then(
+                                            CommandNode.argument("options", ArgumentType.greedy())
+                                                .suggests((s, t) -> List.of("--legacy"))
+                                                .executes(this::galleryCreate)))))
                 .then(
                     CommandNode.literal("bounds")
                         .then(
@@ -419,10 +423,29 @@ public final class HallCommands {
     }
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+    boolean legacy = false;
+    for (String option : Splitter.split(arguments.optionalString("options").orElse(""))) {
+      if (!option.equals("--legacy")) {
+        source.reply(messages().get("hof.gallery.bad-option", "option", option));
+        return;
+      }
+      legacy = true;
+    }
+    Gallery made = Gallery.create(id, season, dimension);
+    if (legacy) {
+      // Hand-built cells kept as they are (questions 281).
+      made = made.withKind(Gallery.Kind.LEGACY);
+    }
     saved(
         source,
-        hall.save(Gallery.create(id, season, dimension)),
-        messages().get("hof.gallery.created", "gallery", id, "season", Integer.toString(season)),
+        hall.save(made),
+        messages()
+            .get(
+                legacy ? "hof.gallery.created-legacy" : "hof.gallery.created",
+                "gallery",
+                id,
+                "season",
+                Integer.toString(season)),
         "hof.gallery.create",
         "gallery",
         id);

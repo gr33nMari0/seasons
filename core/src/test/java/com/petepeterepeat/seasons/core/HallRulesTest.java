@@ -234,6 +234,36 @@ class HallRulesTest {
   }
 
   @Test
+  void aLegacyGallerysItemsAreViewOnlyForBuildersToo() throws IOException {
+    Files.writeString(
+        dir.resolve("world/seasons/galleries/season-1.yml"),
+        """
+        schema-version: 1
+        id: season-1
+        kind: legacy
+        season: 1
+        bounds: { min: [40, 60, 0], max: [60, 80, 20] }
+        cells:
+          a:
+            bounds: { min: [41, 60, 1], max: [50, 70, 9] }
+        """);
+    run("/season reload");
+    Position chest = Position.of("minecraft:overworld", 44, 64, 4);
+    container(chest, CHEST, Optional.of(FakeItems.item("minecraft:diamond", 3)));
+    fake.player(alex).gameMode = com.petepeterepeat.seasons.core.port.GameMode.CREATIVE;
+
+    // A builder opens a copy, can't break it or touch a stand; a bypass holder can.
+    assertThat(text(decide(new Intent.OpenContainer(alex.id(), chest)))).isEqualTo("(quietly)");
+    assertThat(fake.copies).hasSize(1);
+    assertThat(text(decide(new Intent.BreakBlock(alex.id(), chest))))
+        .isEqualTo("This hand-built cell is kept as it is.");
+    assertThat(text(decide(new Intent.HurtEntity(alex.id(), chest, "minecraft:armor_stand"))))
+        .isEqualTo("This hand-built cell is kept as it is.");
+    fake.bypassing.add(alex.id());
+    assertThat(decide(new Intent.OpenContainer(alex.id(), chest))).isEqualTo(Decision.allow());
+  }
+
+  @Test
   void aDecoratedPotShowsACopyAndTakesNothing() {
     Optional<NeutralItem> emerald = Optional.of(FakeItems.item("minecraft:emerald", 1));
     container(IN_C1, POT, emerald);

@@ -149,6 +149,7 @@ public final class HallLists {
           switch (gallery.kind()) {
             case SEASON -> "Season " + season;
             case MUSEUM -> messages().text("hof.list.museum");
+            case LEGACY -> messages().text("hof.list.legacy", "season", Integer.toString(season));
           };
       source.reply(
           messages()

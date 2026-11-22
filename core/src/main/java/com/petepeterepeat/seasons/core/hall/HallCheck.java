@@ -80,6 +80,11 @@ public final class HallCheck {
       } else if (hall.hub().isPresent() && !joined.contains(id)) {
         found.add(messages.get("hof.check.apart", "gallery", id));
       }
+      if (gallery.kind() == Gallery.Kind.LEGACY) {
+        // Kept as built: no figures, sizes or entries to look at (questions 281).
+        found.add(messages.get("hof.check.legacy", "gallery", id));
+        continue;
+      }
       if (gallery.entry().isEmpty()) {
         found.add(messages.get("hof.check.no-entry", "gallery", id));
       }

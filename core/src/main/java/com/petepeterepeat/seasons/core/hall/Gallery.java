@@ -66,7 +66,12 @@ public record Gallery(
   /** A season's gallery, or the museum, which has no owners. */
   public enum Kind {
     SEASON,
-    MUSEUM
+    MUSEUM,
+    /**
+     * Hand-built cells kept as they are (questions 281): protected as Hall, but never drawn in,
+     * assigned, locked or gated.
+     */
+    LEGACY
   }
 
   /**
