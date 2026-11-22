@@ -5,11 +5,14 @@ import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.core.Seasons;
 import com.petepeterepeat.seasons.core.port.Capabilities;
 import com.petepeterepeat.seasons.core.port.Capability;
+import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.Scheduler;
+import com.petepeterepeat.seasons.core.scenario.MeteredDisplays;
 import com.petepeterepeat.seasons.core.scenario.ScenarioClock;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import com.petepeterepeat.seasons.core.scenario.ScenarioScheduler;
+import com.petepeterepeat.seasons.core.scenario.TickMeter;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.integrations.discord.DiscordWebhooks;
 import java.io.IOException;
@@ -68,9 +71,15 @@ public final class SeasonsPlugin extends JavaPlugin {
     // Only on a scenario test server, and only from the JVM's start-up flags (docs/adr/0003).
     PaperDragonFight dragonFight = new PaperDragonFight();
     Optional<ScenarioHooks> hooks = Optional.empty();
+    Displays shown = displays;
     if (Boolean.getBoolean(ScenarioHooks.PROPERTY)) {
       ScenarioClock movable = new ScenarioClock(clock);
-      ScenarioScheduler catchingUp = new ScenarioScheduler(scheduler, movable);
+      // The server thread's own CPU time, so the bots sharing the machine don't count (A43).
+      java.lang.management.ThreadMXBean threads =
+          java.lang.management.ManagementFactory.getThreadMXBean();
+      TickMeter meter = new TickMeter(threads::getCurrentThreadCpuTime);
+      ScenarioScheduler catchingUp = new ScenarioScheduler(scheduler, movable, meter);
+      shown = new MeteredDisplays(displays, meter);
       hooks =
           Optional.of(new ScenarioHooks(() -> Runtime.getRuntime().halt(0), movable, catchingUp));
       clock = movable;
@@ -85,7 +94,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             advancements,
             new PaperWorld(),
             entities,
-            displays,
+            shown,
             menus,
             new PaperCommands(this, text),
             new PaperPermissions(players),

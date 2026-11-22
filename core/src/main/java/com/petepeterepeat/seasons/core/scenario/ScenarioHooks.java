@@ -122,6 +122,14 @@ public final class ScenarioHooks implements CrashPoints {
     return clock.instant();
   }
 
+  /**
+   * The meter timing what Seasons adds to each tick on the server thread (A43). The test plugin
+   * marks the ticks and times Seasons' listeners with it.
+   */
+  public TickMeter meter() {
+    return scheduler.meter();
+  }
+
   /** Seasons' delayed and repeating tasks still to run, for the leak check after a reset. */
   public int scheduledTasks() {
     return scheduler.active();

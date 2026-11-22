@@ -14,18 +14,35 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Seasons' scheduler on a scenario server: the platform's own, plus a note of every delayed and
  * repeating global task, so that moving the {@link ScenarioClock} forward can run at once what
- * would have come due in the time skipped (docs/adr/0003). Every other server uses the platform's
- * scheduler directly.
+ * would have come due in the time skipped (docs/adr/0003). Every task that runs on the server
+ * thread is timed by the {@link TickMeter} (A43). Every other server uses the platform's scheduler
+ * directly.
  */
 public final class ScenarioScheduler implements Scheduler {
   private final Scheduler platform;
   private final Clock clock;
+  private final TickMeter meter;
   private final Set<Delayed> delayed = ConcurrentHashMap.newKeySet();
   private final Set<Repeating> repeating = ConcurrentHashMap.newKeySet();
 
   public ScenarioScheduler(Scheduler platform, Clock clock) {
+    this(platform, clock, new TickMeter(System::nanoTime));
+  }
+
+  public ScenarioScheduler(Scheduler platform, Clock clock, TickMeter meter) {
     this.platform = platform;
     this.clock = clock;
+    this.meter = meter;
+  }
+
+  /** The meter that times the tasks this scheduler runs. */
+  public TickMeter meter() {
+    return meter;
+  }
+
+  private Runnable timed(Runnable task) {
+    String label = task.getClass().getName();
+    return () -> meter.measure(TickMeter.Kind.TASK, label, task);
   }
 
   /**
@@ -55,19 +72,19 @@ public final class ScenarioScheduler implements Scheduler {
 
   @Override
   public void runGlobal(Runnable task) {
-    platform.runGlobal(task);
+    platform.runGlobal(timed(task));
   }
 
   @Override
   public void runGlobalLater(Duration delay, Runnable task) {
-    Delayed later = new Delayed(clock.millis() + delay.toMillis(), task);
+    Delayed later = new Delayed(clock.millis() + delay.toMillis(), timed(task));
     delayed.add(later);
     platform.runGlobalLater(delay, later::run);
   }
 
   @Override
   public ScheduledTask runGlobalRepeating(Duration period, Runnable task) {
-    Repeating every = new Repeating(period.toMillis(), task, clock.millis());
+    Repeating every = new Repeating(period.toMillis(), timed(task), clock.millis());
     repeating.add(every);
     ScheduledTask scheduled = platform.runGlobalRepeating(period, every::run);
     return () -> {
@@ -78,12 +95,12 @@ public final class ScenarioScheduler implements Scheduler {
 
   @Override
   public void runForPlayer(PlayerId player, Runnable task) {
-    platform.runForPlayer(player, task);
+    platform.runForPlayer(player, timed(task));
   }
 
   @Override
   public void runAt(Position position, Runnable task) {
-    platform.runAt(position, task);
+    platform.runAt(position, timed(task));
   }
 
   @Override

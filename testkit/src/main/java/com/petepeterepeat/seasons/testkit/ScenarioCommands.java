@@ -170,6 +170,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code sync <id> [ticks] [player...]} answers {@code Synced <id>} once the current tick (or
  *       that many more) has finished, to the sender and to each player named, so anything sent to
  *       them before has arrived when they read it
+ *   <li>{@code perf start|stop} starts Seasons' tick meter, or stops it and prints what Seasons
+ *       added to the ticks it watched, for A43; see {@link ScenarioPerf}
  *   <li>{@code bluemap} prints every marker in Seasons' marker sets on every BlueMap map, read
  *       through BlueMap's API, on a scenario server that has BlueMap (docs/adr/0004); see {@link
  *       ScenarioBlueMap}
@@ -178,13 +180,16 @@ import org.bukkit.util.Vector;
 final class ScenarioCommands implements BasicCommand, Listener {
   private final Plugin plugin;
   private final Supplier<CompletableFuture<List<String>>> reset;
+  private final ScenarioPerf perf;
 
   /** Players {@code /scenario move} is putting where their client would have gone. */
   private final Set<UUID> clientMoving = new HashSet<>();
 
-  ScenarioCommands(Plugin plugin, Supplier<CompletableFuture<List<String>>> reset) {
+  ScenarioCommands(
+      Plugin plugin, Supplier<CompletableFuture<List<String>>> reset, ScenarioPerf perf) {
     this.plugin = plugin;
     this.reset = reset;
+    this.perf = perf;
   }
 
   Optional<ScenarioHooks> hooks() {
@@ -328,6 +333,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
               "Clock " + now + " offset " + Duration.between(Instant.now(), now).toMillis());
         }
         case "sync" -> sync(sender, args);
+        case "perf" -> perf.run(sender, hooks, args);
         case "bluemap" -> {
           // BlueMap's classes are there only when it is installed.
           if (plugin.getServer().getPluginManager().getPlugin("BlueMap") == null) {
@@ -341,7 +347,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
                 "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
                     + "|portal-pair|bucket|ignite|permit|console|swap-hands|scroll|vault-return|tame|chest|leash|forget-pet"
-                    + "|dragon|reset|clock|sync|bluemap ...");
+                    + "|dragon|reset|clock|sync|perf|bluemap ...");
       }
     } catch (RuntimeException e) {
       sender.sendMessage("Scenario command failed: " + e);

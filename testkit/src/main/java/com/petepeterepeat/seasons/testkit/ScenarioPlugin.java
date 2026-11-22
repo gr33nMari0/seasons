@@ -85,7 +85,9 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
     ScenarioWorld resettable = new ScenarioWorld(this, Path.of(property("seasons.scenario.state")));
     getServer().getPluginManager().registerEvents(resettable, this);
     world = resettable;
-    ScenarioCommands commands = new ScenarioCommands(this, this::reset);
+    ScenarioPerf perf = new ScenarioPerf(this);
+    getServer().getPluginManager().registerEvents(perf, this);
+    ScenarioCommands commands = new ScenarioCommands(this, this::reset, perf);
     getServer().getPluginManager().registerEvents(commands, this);
     getLifecycleManager()
         .registerEventHandler(
