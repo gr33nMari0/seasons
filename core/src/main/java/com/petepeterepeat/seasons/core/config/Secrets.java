@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.config;
 
 import java.net.URI;
 import java.util.Optional;
+import org.spongepowered.configurate.objectmapping.meta.Comment;
 
 /**
  * {@code plugins/Seasons/secrets.yml}, overridden by the environment variables {@code
@@ -12,7 +13,10 @@ import java.util.Optional;
  * @param discordWebhook the public Discord channel's webhook
  * @param adminWebhook the admins' webhook for alerts
  */
-public record Secrets(Optional<URI> discordWebhook, Optional<URI> adminWebhook) {
+public record Secrets(
+    @Comment("Discord webhook for reminders and announcements.") Optional<URI> discordWebhook,
+    @Comment("Discord webhook for admin alerts (tripwire hits, recovery runs, reconcile repairs).")
+        Optional<URI> adminWebhook) {
   public static Secrets none() {
     return new Secrets(Optional.empty(), Optional.empty());
   }
