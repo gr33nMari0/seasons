@@ -85,6 +85,8 @@ import org.bukkit.util.Vector;
  *   <li>{@code act-at <POINT> <player> <give|empty> [crash]} when archiving them reaches that step,
  *       gives them a stone, or empties their inventory and ender chest, and saves their file, on
  *       the server thread before archiving goes on; with {@code crash}, halts the server then
+ *   <li>{@code hold <player>} holds the player as a transaction such as a vault withdrawal does,
+ *       until {@code release <player>}
  *   <li>{@code archive <player> <season>} prints what their archive and record hold
  *   <li>{@code card <player> <season>} prints their season card, its lines joined by {@code |}
  *   <li>{@code open-archive <viewer> <owner> <season>} opens an archive view
@@ -209,6 +211,13 @@ final class ScenarioCommands implements BasicCommand, Listener {
           sender.sendMessage("Armed save point " + point + " for " + args[2]);
         }
         case "act-at" -> actAt(sender, hooks, args);
+        case "hold" ->
+            sender.sendMessage(
+                hooks.hold(id(args[1])) ? "Holding " + args[1] : args[1] + " is held already");
+        case "release" -> {
+          hooks.release(id(args[1]));
+          sender.sendMessage("Released " + args[1]);
+        }
         case "archive" -> {
           var _ =
               hooks

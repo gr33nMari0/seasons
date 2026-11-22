@@ -65,7 +65,8 @@ public final class ScenarioHooks implements CrashPoints {
       SerialWriter writer,
       Supplier<ConfigSnapshot> config,
       java.util.concurrent.Executor serverThread,
-      java.util.function.BiFunction<PlayerId, Integer, CompletableFuture<List<String>>> cards) {}
+      java.util.function.BiFunction<PlayerId, Integer, CompletableFuture<List<String>>> cards,
+      com.petepeterepeat.seasons.core.guard.ArchiveHold hold) {}
 
   /**
    * @param halt stops the server dead, as a crash would
@@ -247,6 +248,19 @@ public final class ScenarioHooks implements CrashPoints {
     } catch (java.io.IOException e) {
       throw new java.io.UncheckedIOException(e);
     }
+  }
+
+  /**
+   * Holds a player as a transaction would, such as a vault withdrawal, until {@link #release};
+   * false if they were held already.
+   */
+  public boolean hold(PlayerId player) {
+    return wired().hold().hold(player);
+  }
+
+  /** Lets go of a player {@link #hold} held. */
+  public void release(PlayerId player) {
+    wired().hold().release(player);
   }
 
   /** Hands an item back to a player on their vault's Returned page. */

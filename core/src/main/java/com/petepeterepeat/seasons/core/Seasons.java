@@ -687,7 +687,8 @@ public final class Seasons implements SeasonsApi {
                   (player, season) ->
                       halls
                           .card(player, season)
-                          .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of()))));
+                          .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of())),
+                  hold));
     }
   }
 
