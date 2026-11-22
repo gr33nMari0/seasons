@@ -16,6 +16,16 @@ public interface Displays {
    */
   UUID spawnText(Position position, Message text, String tag);
 
+  /** Spawns a text display at a size, such as a plaque's (questions 278). */
+  default UUID spawnText(Position position, Message text, String tag, double scale) {
+    return spawnText(position, text, tag);
+  }
+
+  /** Sets a text display's size; false if there is no such display. */
+  default boolean scaleText(UUID display, double scale) {
+    return false;
+  }
+
   /** Spawns a figure. */
   UUID spawnFigure(Figure figure);
 
@@ -48,4 +58,30 @@ public interface Displays {
    * @return how many were removed
    */
   int removeTagged(Position min, Position max, String tagPrefix);
+
+  /**
+   * One outline box an admin sees (questions 276): its corners, inclusive, what it marks, which
+   * sets its colour, and a label over it, if any.
+   */
+  record Outline(Position min, Position max, String kind, Optional<String> label) {
+    /** The kinds, each its own colour. */
+    public static final List<String> KINDS =
+        List.of(
+            "hub",
+            "gallery",
+            "cell",
+            "focus",
+            "gate",
+            "entry",
+            "exit",
+            "link",
+            "selection",
+            "preview");
+  }
+
+  /**
+   * Shows a player exactly these outlines, seen by nobody else and never saved with the world; an
+   * empty list takes away what they were shown.
+   */
+  default void outline(PlayerId viewer, List<Outline> boxes) {}
 }

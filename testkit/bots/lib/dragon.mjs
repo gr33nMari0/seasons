@@ -27,7 +27,7 @@ export async function dragonInfo (ctx, admin) {
 
 /** Puts players in the End beside the exit portal, its chunks kept loaded, and waits for a dragon. */
 export async function toTheEnd (ctx, admin, names) {
-  await ctx.command(admin, '/execute in minecraft:the_end run forceload add -32 -32 32 32', /^(Marked|No chunks were marked)/)
+  await ctx.command(admin, '/execute in minecraft:the_end run forceload add -32 -32 32 32', /^(Marked|No chunks were marked)/, 60_000) // generating them first
   for (const [i, name] of names.entries()) {
     await ctx.command(admin, `/execute in minecraft:the_end run tp ${name} ${4 * i} 90 40`, /^Teleported /)
   }

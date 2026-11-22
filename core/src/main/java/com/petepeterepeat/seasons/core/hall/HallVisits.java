@@ -55,6 +55,12 @@ public final class HallVisits {
   /** Permission for {@code /hof} and {@code /hof leave}. */
   public static final String PERMISSION_VISIT = "seasons.hof.visit";
 
+  /** Skips every {@code /hof} entry check but the rate limit; ops by default (questions 262). */
+  public static final String PERMISSION_ANYWHERE = "seasons.hof.anywhere";
+
+  /** Never held in the Hall, the Intermission included; ops by default (questions 263). */
+  public static final String PERMISSION_ROAM = "seasons.hof.roam";
+
   private static final Logger LOG = LoggerFactory.getLogger(HallVisits.class);
   private static final Duration SWEEP = Duration.ofMillis(500);
   private static final String OVERWORLD = "minecraft:overworld";
@@ -212,8 +218,11 @@ public final class HallVisits {
       moveTo(player, destination, "hof.visit.arrived");
       return;
     }
+    // Admins skip every check but the rate limit (questions 262).
+    boolean anywhere = platform.permissions().has(player, PERMISSION_ANYWHERE);
     Instant visited = lastVisit.get(player);
-    if (rules.cooldown().isPositive()
+    if (!anywhere
+        && rules.cooldown().isPositive()
         && visited != null
         && now.isBefore(visited.plus(rules.cooldown()))) {
       Duration left = Duration.between(now, visited.plus(rules.cooldown()));
@@ -238,7 +247,7 @@ public final class HallVisits {
                 Optional.ofNullable(lastDamage.get(player)),
                 now),
             needsBed);
-    if (failed.isPresent()) {
+    if (!anywhere && failed.isPresent()) {
       tell(
           player,
           "hof.entry." + failed.get().key(),
@@ -249,7 +258,7 @@ public final class HallVisits {
     // way back: a free teleport home. So it is turned down now, by the same rules.
     int radius = config.get().config().hof().returnSafety().hostileRadius();
     Optional<String> unsafe = ReturnSafety.unsafe(at, blocks(), hostiles(at, radius), radius);
-    if (save && unsafe.isPresent()) {
+    if (!anywhere && save && unsafe.isPresent()) {
       tell(player, "hof.entry.unsafe", "reason", messages().text("hof.unsafe." + unsafe.get()));
       return;
     }
@@ -279,6 +288,57 @@ public final class HallVisits {
                 serverThread);
   }
 
+  /**
+   * Into the Hall through a link area: the entry checks but the bed and movement, no saved spot.
+   */
+  private void enterFlying(PlayerId player, Position destination) {
+    SeasonsConfig.Hof.Entry rules = config.get().config().hof().entry();
+    SeasonsConfig.Hof.Entry flying =
+        new SeasonsConfig.Hof.Entry(
+            false,
+            rules.bedDistance(),
+            rules.anyBed(),
+            rules.noHostiles(),
+            rules.noDamageFor(),
+            false,
+            rules.noHazards(),
+            rules.cooldown(),
+            rules.rateLimit());
+    Position at = platform.players().position(player);
+    if (halls.inHall(at)) {
+      moveTo(player, destination, "hof.visit.arrived");
+      return;
+    }
+    boolean anywhere = platform.permissions().has(player, PERMISSION_ANYWHERE);
+    Optional<EntryChecks.Failure> failed =
+        EntryChecks.check(
+            flying,
+            new EntryChecks.Situation(
+                at,
+                platform.players().movement(player),
+                blocks(),
+                platform.players().bed(player),
+                platform
+                    .entities()
+                    .hostiles(
+                        at,
+                        EntryChecks.MONSTER_REACH,
+                        EntryChecks.MONSTER_HEIGHT,
+                        EntryChecks.MONSTER_REACH),
+                Optional.ofNullable(lastDamage.get(player)),
+                clock.instant()),
+            false);
+    if (!anywhere && failed.isPresent()) {
+      tell(
+          player,
+          "hof.entry." + failed.get().key(),
+          failed.get().placeholders().toArray(String[]::new));
+      return;
+    }
+    lastVisit.put(player, clock.instant());
+    moveTo(player, destination, "hof.visit.arrived");
+  }
+
   /** Where {@code /hof} with this target lands, telling the player if nowhere. */
   private Optional<Position> destination(PlayerId player, Optional<String> target) {
     if (target.isEmpty()) {
@@ -293,9 +353,9 @@ public final class HallVisits {
       int season = Integer.parseInt(text);
       Optional<Position> entry =
           halls.seasonGalleries(season).stream()
-              .flatMap(g -> g.entry().stream())
+              .filter(g -> g.entry().isPresent())
               .findFirst()
-              .map(HallService::standOn);
+              .flatMap(halls::galleryEntry);
       if (entry.isEmpty()) {
         tell(player, "hof.visit.no-season", "season", text);
       }
@@ -333,6 +393,11 @@ public final class HallVisits {
     return arrival;
   }
 
+  /** {@code /hof tp player <name>}, or a season: as {@code /hof} would land, as an admin goes. */
+  public void adminGoTo(PlayerId player, String target) {
+    destination(player, Optional.of(target)).ifPresent(to -> adminGo(player, to));
+  }
+
   /** A season's recorded spawn, if it has one. */
   public Optional<Position> seasonSpawn(int season) {
     return seasonSpawn.apply(season);
@@ -350,6 +415,15 @@ public final class HallVisits {
    * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked.
    */
   public void takeLink(PlayerId player, HallLayout.Link link) {
+    takeLink(player, link, false);
+  }
+
+  /**
+   * @param throughArea passed through the link's area rather than clicking or standing on its
+   *     block: no movement checks, so an elytra flight can take it, and no spot saved, since it may
+   *     be in the air (questions 279)
+   */
+  private void takeLink(PlayerId player, HallLayout.Link link, boolean throughArea) {
     if (held.test(player) || moving.contains(player) || !attempt(player)) {
       return;
     }
@@ -368,7 +442,11 @@ public final class HallVisits {
           tell(player, "hof.visit.no-spawn");
           return;
         }
-        enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+        if (throughArea) {
+          enterFlying(player, spawn.get());
+        } else {
+          enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+        }
       }
       case HallLayout.Target.SeasonSpawn(int season) -> {
         Optional<Position> spawn = seasonSpawn.apply(season);
@@ -384,7 +462,7 @@ public final class HallVisits {
 
   /** A link that leads out into the world: refused into locked land and between seasons. */
   private void away(PlayerId player, Position to) {
-    if (state.get().map(s -> !playing(s)).orElse(false)) {
+    if (state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
       tell(player, "hof.link.between-seasons");
       return;
     }
@@ -435,7 +513,161 @@ public final class HallVisits {
     return layout
         .linkAt(at)
         .or(() ->
-            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())));
+            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())))
+        .or(() ->
+            layout.links().values().stream()
+                .filter(l -> l.area().map(a -> a.contains(at)).orElse(false))
+                .findFirst());
+  }
+
+  /** Every exit that is an area: the hub's and the galleries' (questions 279). */
+  private List<Bounds> exitAreas() {
+    List<Bounds> areas = new ArrayList<>(halls.layout().areas().exits());
+    for (Gallery gallery : halls.galleries()) {
+      areas.addAll(gallery.areas().exits());
+    }
+    return areas;
+  }
+
+  /**
+   * A move through an exit or link area (questions 279): worked out on the line from where it
+   * starts to where it ends, at the feet and at the head, so a fast flight can't skip a plane one
+   * block thick. Fires once until the player is out of the area again.
+   */
+  private void crossings(PlayerId player, Position from, Position to) {
+    if (moving.contains(player) || held.test(player)) {
+      return;
+    }
+    if (!bypasses(player) && (halls.inHall(from) || halls.inHall(to))) {
+      for (Bounds area : exitAreas()) {
+        if (!area.contains(from) && crosses(area, from, to)) {
+          later(() ->
+              savedReturn(player).ifPresent(back -> returnTo(player, back, "hof.leave.returned")));
+          return;
+        }
+      }
+    }
+    for (HallLayout.Link link : halls.layout().links().values()) {
+      if (link.area().isPresent()
+          && !link.area().get().contains(from)
+          && crosses(link.area().get(), from, to)
+          && !link.id().equals(standingOnLink.get(player))) {
+        standingOnLink.put(player, link.id());
+        later(() -> takeLink(player, link, true));
+        return;
+      }
+    }
+  }
+
+  /** Whether the line from {@code from} to {@code to}, at the feet or the head, passes a box. */
+  static boolean crosses(Bounds box, Position from, Position to) {
+    if (!box.dimension().equals(from.dimension()) || !box.dimension().equals(to.dimension())) {
+      return false;
+    }
+    for (double lift : new double[] {0.1, 1.5}) {
+      if (segment(box, from.x(), from.y() + lift, from.z(), to.x(), to.y() + lift, to.z())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean segment(
+      Bounds box, double x0, double y0, double z0, double x1, double y1, double z1) {
+    double[] start = {x0, y0, z0};
+    double[] delta = {x1 - x0, y1 - y0, z1 - z0};
+    double[] min = {box.minX(), box.minY(), box.minZ()};
+    double[] max = {box.maxX() + 1, box.maxY() + 1, box.maxZ() + 1};
+    double enter = 0;
+    double leave = 1;
+    for (int i = 0; i < 3; i++) {
+      if (Math.abs(delta[i]) < 1e-9) {
+        if (start[i] < min[i] || start[i] > max[i]) {
+          return false;
+        }
+        continue;
+      }
+      double t1 = (min[i] - start[i]) / delta[i];
+      double t2 = (max[i] - start[i]) / delta[i];
+      enter = Math.max(enter, Math.min(t1, t2));
+      leave = Math.min(leave, Math.max(t1, t2));
+      if (enter > leave) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * An admin's own teleport (questions 271): there, with no entry checks, through the floor search
+   * every Seasons teleport makes, with arrival immunity. Into the Hall from outside saves the spot
+   * as {@code /hof} does; out of it drops the saved spot and gives back the game mode. Out of the
+   * Hall during the Intermission only for roamers, and never into land locked for them.
+   */
+  public void adminGo(PlayerId player, Position to) {
+    if (moving.contains(player)) {
+      return;
+    }
+    Position at = platform.players().position(player);
+    boolean fromIn = halls.inHall(at);
+    if (halls.inHall(to)) {
+      if (fromIn) {
+        moveTo(player, to, "hof.tp.arrived");
+        return;
+      }
+      Optional<HallReturn> back = Optional.of(new HallReturn(at, modeOutside(player)));
+      moving.add(player);
+      var _ =
+          saveReturn(player, back)
+              .whenCompleteAsync(
+                  (saved, failure) -> {
+                    moving.remove(player);
+                    if (failure != null) {
+                      tell(player, "hof.visit.failed");
+                      return;
+                    }
+                    moveTo(
+                        player,
+                        to,
+                        "hof.tp.arrived",
+                        () -> {
+                          var _ = saveReturn(player, Optional.empty());
+                        });
+                  },
+                  serverThread);
+      return;
+    }
+    if (fromIn && state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
+      tell(player, "hof.tp.between-seasons");
+      return;
+    }
+    Optional<String> until = locked.apply(player, to);
+    if (until.isPresent()) {
+      tell(player, "hof.link.locked", "until", until.get());
+      return;
+    }
+    moving.add(player);
+    var _ =
+        platform
+            .players()
+            .teleportSafely(player, to)
+            .whenCompleteAsync(
+                (moved, failure) -> {
+                  moving.remove(player);
+                  if (failure != null || !Boolean.TRUE.equals(moved)) {
+                    tell(player, "hof.visit.failed");
+                    return;
+                  }
+                  if (fromIn) {
+                    inside.remove(player);
+                    restoreMode(player);
+                    forgetReturn(player);
+                  }
+                  arrived(player);
+                  immunity.grant(player, config.get().config().hof().arrivalImmunity());
+                  tell(player, "hof.tp.arrived");
+                },
+                serverThread);
   }
 
   /** Moves a player within or into the Hall, with arrival immunity. */
@@ -488,7 +720,7 @@ public final class HallVisits {
       returnTo(player, back.get(), "hof.leave.returned");
       return;
     }
-    if (state.get().map(s -> !playing(s)).orElse(false)) {
+    if (state.get().map(s -> !playing(s)).orElse(false) && !roams(player)) {
       tell(player, "hof.leave.to-entry");
       return;
     }
@@ -618,7 +850,7 @@ public final class HallVisits {
       dropStaleReturn(player);
       return;
     }
-    if (!kept()) {
+    if (!kept() || roams(player)) {
       if (halls.inHall(platform.players().position(player))) {
         // Back in already, such as by a teleport straight after: nothing to let go of.
         inside.add(player);
@@ -736,6 +968,7 @@ public final class HallVisits {
 
   private Optional<Decision> moved(Intent.Move move) {
     PlayerId player = move.player();
+    crossings(player, move.from(), move.to());
     Optional<Decision> closed = closedCell(player, move.from(), move.to());
     if (closed.isPresent()) {
       return closed;
@@ -910,6 +1143,9 @@ public final class HallVisits {
     for (Gallery gallery : halls.galleries()) {
       exits.addAll(gallery.exits());
     }
+    if (exitAreas().stream().anyMatch(area -> area.contains(at))) {
+      return true;
+    }
     for (Position exit : exits) {
       if (exit.dimension().equals(at.dimension())
           && exit.blockX() == at.blockX()
@@ -936,6 +1172,11 @@ public final class HallVisits {
         .cellAt(platform.players().position(player))
         .filter(ref -> halls.canTakeOut(player, ref))
         .isPresent();
+  }
+
+  /** Whether a player is never held in the Hall (questions 263). */
+  private boolean roams(PlayerId player) {
+    return platform.permissions().has(player, PERMISSION_ROAM);
   }
 
   private boolean bypasses(PlayerId player) {

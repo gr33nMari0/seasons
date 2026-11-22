@@ -61,6 +61,9 @@ public final class Wand {
   private final Map<PlayerId, Selection> selections = new HashMap<>();
   private final Map<PlayerId, String> cells = new HashMap<>();
 
+  /** Admins whose corners take the block against the face clicked (questions 272). */
+  private final Set<PlayerId> placing = new HashSet<>();
+
   /**
    * @param season the season being played, if one is recorded
    */
@@ -111,6 +114,98 @@ public final class Wand {
   public void left(PlayerId player) {
     selections.remove(player);
     cells.remove(player);
+    placing.remove(player);
+  }
+
+  /** Whether an admin's corners take the block against the face clicked. */
+  public boolean placeMode(PlayerId player) {
+    return placing.contains(player);
+  }
+
+  /** An admin's selection as it stands, half made or whole. */
+  public Optional<Selection> rawSelection(PlayerId player) {
+    return Optional.ofNullable(selections.get(player));
+  }
+
+  /** The cell an admin's next finished selection sets the bounds of, if any (questions 273). */
+  public Optional<HallService.CellRef> wandCell(PlayerId player) {
+    Optional<HallService.CellRef> ref = focused(player);
+    return ref.filter(r -> r.cell().bounds().isEmpty() || redefining.contains(player));
+  }
+
+  /** Admins whose wand cell is being redefined: its next selection replaces its bounds. */
+  private final Set<PlayerId> redefining = new HashSet<>();
+
+  /** {@code /hof cell redefine}: the cell's next selection replaces its bounds (questions 273). */
+  public void redefine(PlayerId player, HallService.CellRef ref) {
+    cells.put(player, ref.key());
+    redefining.add(player);
+  }
+
+  /** {@code /hof wand mode block|place}. */
+  public void mode(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    String mode = arguments.string("mode");
+    if (!mode.equals("block") && !mode.equals("place")) {
+      source.reply(messages().get("hof.wand.bad-mode"));
+      return;
+    }
+    setMode(source.player().get(), mode.equals("place"));
+  }
+
+  private void setMode(PlayerId player, boolean place) {
+    if (place) {
+      placing.add(player);
+    } else {
+      placing.remove(player);
+    }
+    platform
+        .players()
+        .sendMessage(player, messages().get(place ? "hof.wand.place-mode" : "hof.wand.block-mode"));
+  }
+
+  /** {@code /hof sel pos1|pos2 [position]}: a corner by command, as the wand sets one. */
+  public void selCorner(CommandSource source, Arguments arguments, int corner) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    PlayerId player = source.player().get();
+    Position standing = platform.players().position(player);
+    Position at;
+    Optional<String> typed = arguments.optionalString("at");
+    if (typed.isPresent()) {
+      com.petepeterepeat.seasons.core.command.Positions.Read read =
+          com.petepeterepeat.seasons.core.command.Positions.typed(
+              typed.get(), Optional.of(standing), standing.dimension(), 0f);
+      if (read instanceof com.petepeterepeat.seasons.core.command.Positions.Read.Failed failed) {
+        source.reply(messages().get(failed.messageKey()));
+        return;
+      }
+      at = block(((com.petepeterepeat.seasons.core.command.Positions.Read.Block) read).block());
+    } else {
+      at = block(standing);
+    }
+    corner(player, corner, at, true);
+  }
+
+  /** {@code /hof sel info}. */
+  public void selInfo(CommandSource source, Arguments arguments) {
+    Optional<Bounds> box = source.player().flatMap(this::selection);
+    if (box.isEmpty()) {
+      source.reply(messages().get("hof.wand.no-selection"));
+      return;
+    }
+    source.reply(selected("hof.wand.selection", box.get()));
+  }
+
+  /** {@code /hof sel clear}. */
+  public void selClear(CommandSource source, Arguments arguments) {
+    source.player().ifPresent(selections::remove);
+    source.reply(messages().get("hof.wand.cleared"));
   }
 
   /**
@@ -118,6 +213,16 @@ public final class Wand {
    * player may not use the wand, so the click goes on as if no wand were held.
    */
   public Optional<Decision> decide(Intent intent) {
+    if (intent instanceof Intent.WandSwap swap) {
+      boolean admin =
+          platform.permissions().has(swap.player(), HallCommands.PERMISSION_ADMIN)
+              || platform.permissions().has(swap.player(), PERMISSION_ZONES);
+      if (!admin) {
+        return Optional.of(Decision.allow());
+      }
+      setMode(swap.player(), !placing.contains(swap.player()));
+      return Optional.of(new Decision.Deny(Optional.empty()));
+    }
     if (!(intent instanceof Intent.UseWand use)) {
       return Optional.empty();
     }
@@ -125,7 +230,12 @@ public final class Wand {
     boolean hallAdmin = platform.permissions().has(player, HallCommands.PERMISSION_ADMIN);
     boolean zoneAdmin = hallAdmin || platform.permissions().has(player, PERMISSION_ZONES);
     if (use.sneaking() && zoneAdmin) {
-      corner(player, use.left() ? 1 : 2, block(use.block()));
+      Position clicked = block(use.block());
+      corner(
+          player,
+          use.left() ? 1 : 2,
+          placing.contains(player) ? offset(clicked, use.face()) : clicked,
+          false);
       return Optional.of(new Decision.Deny(Optional.empty()));
     }
     if (!hallAdmin) {
@@ -137,7 +247,10 @@ public final class Wand {
     return Optional.of(new Decision.Deny(Optional.empty()));
   }
 
-  private void corner(PlayerId player, int corner, Position at) {
+  /**
+   * @param typed set by command, so said in chat rather than on the action bar
+   */
+  private void corner(PlayerId player, int corner, Position at, boolean typed) {
     Selection current = selections.get(player);
     Selection next =
         corner == 1 || current == null
@@ -150,31 +263,27 @@ public final class Wand {
     if (bounds.isEmpty()) {
       Message line =
           messages().get("hof.wand.corner", CellEdits.place("n", Integer.toString(corner), at));
-      platform.players().actionBar(player, line);
+      if (typed) {
+        platform.players().sendMessage(player, line);
+      } else {
+        platform.players().actionBar(player, line);
+      }
       return;
     }
     Bounds box = bounds.get();
-    platform
-        .players()
-        .sendMessage(
-            player,
-            messages()
-                .get(
-                    "hof.wand.selected",
-                    "from",
-                    CellEdits.corner(box.min()),
-                    "to",
-                    CellEdits.corner(box.max()),
-                    "dimension",
-                    box.dimension(),
-                    "sx",
-                    Integer.toString(box.maxX() - box.minX() + 1),
-                    "sy",
-                    Integer.toString(box.maxY() - box.minY() + 1),
-                    "sz",
-                    Integer.toString(box.maxZ() - box.minZ() + 1)));
+    platform.players().sendMessage(player, selected("hof.wand.selected", box));
     Optional<HallService.CellRef> focused = focused(player);
     if (focused.isEmpty() || !platform.permissions().has(player, HallCommands.PERMISSION_ADMIN)) {
+      return;
+    }
+    if (redefining.contains(player)) {
+      // A cell being redefined takes the selection whatever its bounds (questions 273).
+      Gallery gallery = focused.get().gallery();
+      if (gallery.bounds().map(g -> g.contains(box.min()) && g.contains(box.max())).orElse(true)
+          && edits.redefine(source(player), focused.get(), box)) {
+        cells.remove(player);
+        redefining.remove(player);
+      }
       return;
     }
     if (focused.get().cell().bounds().isPresent()) {
@@ -191,6 +300,24 @@ public final class Wand {
       // Once only: later selections are only selections (questions 228).
       cells.remove(player);
     }
+  }
+
+  private Message selected(String key, Bounds box) {
+    return messages()
+        .get(
+            key,
+            "from",
+            CellEdits.corner(box.min()),
+            "to",
+            CellEdits.corner(box.max()),
+            "dimension",
+            box.dimension(),
+            "sx",
+            Integer.toString(box.maxX() - box.minX() + 1),
+            "sy",
+            Integer.toString(box.maxY() - box.minY() + 1),
+            "sz",
+            Integer.toString(box.maxZ() - box.minZ() + 1));
   }
 
   private Optional<HallService.CellRef> focused(PlayerId player) {

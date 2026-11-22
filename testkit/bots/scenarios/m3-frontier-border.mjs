@@ -8,7 +8,7 @@
 // bots read the border packets their client gets.
 import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
-import { bed, hallToVisit, hof, standAt } from '../lib/visits.mjs'
+import { bed, hallToVisit, hof, middle, standAt, waitNear } from '../lib/visits.mjs'
 import { SPAWN, WORLD_BORDER, forceload, outsideCircle, permit, trackBorder } from '../lib/zones.mjs'
 
 const RADIUS = 60
@@ -79,6 +79,9 @@ export default {
     // A bypass holder never has one.
     const quinn = await ctx.join('Quinn')
     trackBorder(quinn)
+    // A first-time joiner after launch is sent to the spawn once their login settles; that comes
+    // first, or it lands after the teleport below and moves Quinn back.
+    await waitNear(ctx, admin, 'Quinn', middle(SPAWN), 4)
     await permit(ctx, admin, 'Quinn', 'seasons.zone.bypass')
     await standAt(ctx, admin, 'Quinn', { x: SPAWN.x + 5, y: FLOOR, z: SPAWN.z })
     await ctx.sync(admin, [quinn], 20)

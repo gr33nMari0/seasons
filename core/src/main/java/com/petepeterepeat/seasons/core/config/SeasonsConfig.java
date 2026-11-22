@@ -29,6 +29,7 @@ public record SeasonsConfig(
     Deaths deaths,
     Curate curate,
     Wand wand,
+    Admin admin,
     Map<String, Award> awards) {
   public SeasonsConfig {
     awards = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(awards));
@@ -132,6 +133,7 @@ public record SeasonsConfig(
     /**
      * Where and when /hof works.
      *
+     * @param requireBed whether /hof needs a bed near at all (questions 261)
      * @param bedDistance how near a bed a player must stand
      * @param anyBed any bed of any kind, or only their own respawn bed
      * @param noHostiles refused with monsters near, as vanilla refuses sleep
@@ -143,6 +145,7 @@ public record SeasonsConfig(
      */
     @ConfigSerializable
     public record Entry(
+        boolean requireBed,
         int bedDistance,
         boolean anyBed,
         boolean noHostiles,
@@ -185,9 +188,27 @@ public record SeasonsConfig(
    * The Hall admins' wand (questions 226).
    *
    * @param item the item {@code /hof wand} gives, marked as Seasons' own
+   * @param outlines how far and how many of the Hall's outlines an admin sees (questions 276)
    */
   @ConfigSerializable
-  public record Wand(String item) {}
+  public record Wand(String item, Outlines outlines) {
+    /**
+     * The outlines.
+     *
+     * @param range how far away a box is still drawn, in blocks
+     * @param max how many boxes at most, nearest first
+     */
+    @ConfigSerializable
+    public record Outlines(int range, int max) {}
+  }
+
+  /**
+   * Admin conveniences.
+   *
+   * @param hints whether a setup step suggests the commands that usually come next (questions 268)
+   */
+  @ConfigSerializable
+  public record Admin(boolean hints) {}
 
   /**
    * The deaths display.

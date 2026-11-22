@@ -14,7 +14,7 @@ export default {
     const admin = await ctx.admin()
     const pat = await ctx.join('Pat')
     await launchFrontier(ctx, admin)
-    await ctx.command(admin, `/execute in ${NETHER} run forceload add -64 -64 64 64`, /^(Marked|No chunks were marked)/)
+    await ctx.command(admin, `/execute in ${NETHER} run forceload add -64 -64 64 64`, /^(Marked|No chunks were marked)/, 60_000) // generating them first
     await ctx.command(admin, `/execute in ${NETHER} run tp SeasonsAdmin 0.5 ${ROOF} 0.5`, /^Teleported /)
     await ctx.eventually(async () => assert((await ctx.entityData(admin, 'SeasonsAdmin', 'Dimension')) === `"${NETHER}"`, 'the admin is in the Nether'))
     await ctx.command(admin, '/season zone add old-nether cylinder 40 --max-y 127', /^Added zone old-nether: /)

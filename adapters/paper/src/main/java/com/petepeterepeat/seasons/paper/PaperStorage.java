@@ -24,4 +24,12 @@ final class PaperStorage implements Storage {
   public Path worldDataDirectory() {
     return server.getWorlds().getFirst().getWorldFolder().toPath().resolve("seasons");
   }
+
+  /** Disables Seasons on the next tick, after the command that asked has finished. */
+  @Override
+  public void stopSeasons() {
+    server
+        .getGlobalRegionScheduler()
+        .execute(plugin, () -> server.getPluginManager().disablePlugin(plugin));
+  }
 }

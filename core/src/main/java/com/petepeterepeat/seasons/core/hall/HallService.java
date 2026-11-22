@@ -232,7 +232,67 @@ public final class HallService {
 
   /** Where plain {@code /hof} lands: the Hall spawn, standing in its block (questions 244). */
   public Optional<Position> hallSpawn() {
-    return layout().spawn().map(HallService::standOn);
+    return layout().spawn().map(spawn -> land(spawn, layout().areas().entry()));
+  }
+
+  /** How close another player may already stand to a spot an arrival is given (questions 279). */
+  private static final double APART = 1.5;
+
+  /**
+   * Where to land at a point that may be a box (questions 279): in a box, the free floor spot (a
+   * solid block under two free ones) nearest its middle with nobody within 1.5 blocks, else the
+   * nearest; with none, the point itself. Faces the point's way.
+   */
+  Position land(Position point, Optional<Bounds> area) {
+    if (area.isEmpty()) {
+      return standOn(point);
+    }
+    Bounds box = area.get();
+    double cx = (box.minX() + box.maxX() + 1) / 2.0;
+    double cy = box.minY();
+    double cz = (box.minZ() + box.maxZ() + 1) / 2.0;
+    List<Position> others =
+        platform.players().online().stream()
+            .map(p -> platform.players().position(p.id()))
+            .filter(at -> at.dimension().equals(box.dimension()))
+            .toList();
+    Position best = null;
+    double bestDistance = Double.MAX_VALUE;
+    Position free = null;
+    double freeDistance = Double.MAX_VALUE;
+    for (int x = box.minX(); x <= box.maxX(); x++) {
+      for (int y = box.minY(); y <= box.maxY(); y++) {
+        for (int z = box.minZ(); z <= box.maxZ(); z++) {
+          String d = box.dimension();
+          if (!platform.world().block(Position.of(d, x, y - 1, z)).solid()
+              || !platform.world().block(Position.of(d, x, y, z)).passable()
+              || !platform.world().block(Position.of(d, x, y + 1, z)).passable()) {
+            continue;
+          }
+          double mx = x + 0.5;
+          double my = y;
+          double mz = z + 0.5;
+          double distance = Math.hypot(Math.hypot(mx - cx, mz - cz), y - cy);
+          Position spot = new Position(d, mx, y, mz, point.yaw(), 0f);
+          if (distance < bestDistance) {
+            best = spot;
+            bestDistance = distance;
+          }
+          boolean crowded =
+              others.stream()
+                  .anyMatch(
+                      o -> Math.hypot(o.x() - mx, o.z() - mz) < APART && Math.abs(o.y() - my) < 2);
+          if (!crowded && distance < freeDistance) {
+            free = spot;
+            freeDistance = distance;
+          }
+        }
+      }
+    }
+    if (free != null) {
+      return free;
+    }
+    return best != null ? best : standOn(point);
   }
 
   /** Whether hall.yml was left out at startup, so it mustn't be written over. */
@@ -250,40 +310,160 @@ public final class HallService {
       return CompletableFuture.failedFuture(
           new IllegalStateException("hall.yml was left out at startup; fix it and /season reload"));
     }
+    HallLayout before = layout();
     config.set(config.get().withHall(hall));
     Path file = hallFile;
     Path backupDir = backups.resolve("hall");
-    return writer
-        .submit(() -> {
-          HallFiles.write(file, backupDir, hall);
-          return Boolean.TRUE;
-        })
-        .thenApply(done -> (Void) null)
-        .whenComplete((done, failure) -> {
-          if (failure != null) {
-            LOG.error("Can't write {}", file, failure);
-          }
-        });
+    return pending(
+        new Undo.OfHall(before, hall),
+        writer
+            .submit(() -> {
+              HallFiles.write(file, backupDir, hall);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't write {}", file, failure);
+              }
+            }));
   }
 
   /**
    * Saves a gallery: the live config has it at once, and its file is written on the writer thread.
    */
   public CompletableFuture<Void> save(Gallery gallery) {
+    Optional<Gallery> before = gallery(gallery.id());
     config.set(config.get().withGallery(gallery));
     Path file = galleryFile.apply(gallery.id());
     Path backupDir = backups.resolve("galleries");
-    return writer
-        .submit(() -> {
-          GalleryFiles.write(file, backupDir, gallery);
-          return Boolean.TRUE;
-        })
-        .thenApply(done -> (Void) null)
-        .whenComplete((done, failure) -> {
-          if (failure != null) {
-            LOG.error("Can't write {}", file, failure);
-          }
-        });
+    return pending(
+        new Undo.OfGallery(gallery.id(), before, Optional.of(gallery)),
+        writer
+            .submit(() -> {
+              GalleryFiles.write(file, backupDir, gallery);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't write {}", file, failure);
+              }
+            }));
+  }
+
+  /** Removes a gallery and its file, keeping a backup (questions 269). */
+  public CompletableFuture<Void> remove(Gallery gallery) {
+    Optional<Gallery> before = gallery(gallery.id());
+    config.set(config.get().withoutGallery(gallery.id()));
+    Path file = galleryFile.apply(gallery.id());
+    Path backupDir = backups.resolve("galleries");
+    return pending(
+        new Undo.OfGallery(gallery.id(), before, Optional.empty()),
+        writer
+            .submit(() -> {
+              com.petepeterepeat.seasons.core.store.AtomicFiles.deleteKeepingBackup(
+                  file, backupDir);
+              return Boolean.TRUE;
+            })
+            .thenApply(done -> (Void) null)
+            .whenComplete((done, failure) -> {
+              if (failure != null) {
+                LOG.error("Can't remove {}", file, failure);
+              }
+            }));
+  }
+
+  // Undo (questions 275)
+
+  /** What {@code /hof undo} puts back: a file as it was before an edit, and as the edit left it. */
+  private sealed interface Undo {
+    record OfGallery(String id, Optional<Gallery> before, Optional<Gallery> after)
+        implements Undo {}
+
+    record OfHall(HallLayout before, HallLayout after) implements Undo {}
+  }
+
+  private final Map<String, Undo> undos = new HashMap<>();
+
+  private static String undoKey(com.petepeterepeat.seasons.core.command.CommandSource source) {
+    return source.player().map(p -> p.uuid().toString()).orElse("console");
+  }
+
+  /** A save and its undo, until the command that made it claims it. */
+  private record Pending(CompletableFuture<Void> save, Undo undo) {}
+
+  /** The latest saves' undos, newest last; a save nobody claims soon drops off. */
+  private final List<Pending> unclaimed = new ArrayList<>();
+
+  private CompletableFuture<Void> pending(Undo undo, CompletableFuture<Void> save) {
+    unclaimed.add(new Pending(save, undo));
+    if (unclaimed.size() > 16) {
+      unclaimed.removeFirst();
+    }
+    return save;
+  }
+
+  /**
+   * Makes a save the source's last Hall edit, which {@code /hof undo} puts back (questions 275).
+   * Every command edit goes through {@link CellEdits#saved}, which claims it.
+   */
+  @SuppressWarnings("ReferenceEquality") // The very save just made, not an equal one.
+  public void claimUndo(
+      com.petepeterepeat.seasons.core.command.CommandSource source, CompletableFuture<Void> save) {
+    for (int i = unclaimed.size() - 1; i >= 0; i--) {
+      if (unclaimed.get(i).save() == save) {
+        undos.put(undoKey(source), unclaimed.remove(i).undo());
+        return;
+      }
+    }
+  }
+
+  /** What an undo came to. */
+  public sealed interface UndoResult {
+    record Nothing() implements UndoResult {}
+
+    record Changed(String file) implements UndoResult {}
+
+    record Undone(String file, CompletableFuture<Void> saved, Optional<Gallery> gallery)
+        implements UndoResult {}
+  }
+
+  /**
+   * {@code /hof undo}: the source's last Hall edit put back, if its file is as the edit left it.
+   */
+  public UndoResult undo(com.petepeterepeat.seasons.core.command.CommandSource source) {
+    Undo undo = undos.get(undoKey(source));
+    if (undo == null) {
+      return new UndoResult.Nothing();
+    }
+    return switch (undo) {
+      case Undo.OfGallery(String id, Optional<Gallery> before, Optional<Gallery> after) -> {
+        if (!gallery(id).equals(after)) {
+          yield new UndoResult.Changed("galleries/" + id + ".yml");
+        }
+        undos.remove(undoKey(source));
+        CompletableFuture<Void> saved =
+            before.isPresent() ? save(before.get()) : remove(after.orElseThrow());
+        // An undo is no edit of its own to undo (one level, questions 275).
+        unclaimed.removeLast();
+        yield new UndoResult.Undone("galleries/" + id + ".yml", saved, before);
+      }
+      case Undo.OfHall(HallLayout before, HallLayout after) -> {
+        if (!layout().equals(after)) {
+          yield new UndoResult.Changed("hall.yml");
+        }
+        undos.remove(undoKey(source));
+        CompletableFuture<Void> saved = saveHall(before);
+        unclaimed.removeLast();
+        yield new UndoResult.Undone("hall.yml", saved, Optional.empty());
+      }
+    };
+  }
+
+  /** Records a Hall edit in the audit log. */
+  public void audited(String actor, String action, String target, String details) {
+    audit.record(actor, action, target, "ok", details);
   }
 
   /** What a cell argument names. */
@@ -386,14 +566,14 @@ public final class HallService {
 
   /** Where a player stands in a gallery outside its cells: its entry, else the Hall spawn. */
   public Optional<Position> galleryEntry(Gallery gallery) {
-    return gallery.entry().map(HallService::standOn).or(this::hallSpawn);
+    return gallery.entry().map(entry -> land(entry, gallery.areas().entry())).or(this::hallSpawn);
   }
 
   /** Where to send a player to their cell: its entry anchor, else in front of its figure. */
   public Optional<Position> arrival(CellRef ref) {
     Optional<Anchor> entry = ref.cell().anchor(AnchorType.ENTRY);
     if (entry.isPresent()) {
-      return Optional.of(standOn(entry.get().at()));
+      return Optional.of(land(entry.get().at(), entry.get().area()));
     }
     Optional<Anchor> figure = ref.cell().anchor(AnchorType.FIGURE);
     if (figure.isPresent()) {

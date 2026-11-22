@@ -102,6 +102,14 @@ final class PaperMenus implements Menus, Listener {
   }
 
   @Override
+  public void closeOwn(PlayerId viewer) {
+    players
+        .player(viewer)
+        .filter(player -> isViewOnly(player.getOpenInventory().getTopInventory()))
+        .ifPresent(Player::closeInventory);
+  }
+
+  @Override
   public void openChoice(PlayerId viewer, Message title, List<Choice> choices, Chosen chosen) {
     Player player =
         players.player(viewer).orElseThrow(() -> new IllegalStateException(viewer + " is offline"));

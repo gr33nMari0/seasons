@@ -203,14 +203,23 @@ public final class SeasonService {
 
   /** {@code /season schedule end}. */
   public Transition scheduleEnd(ZonedDateTime at) {
-    Transition transition = apply(new ScheduleEnd(Optional.of(at)));
+    return schedule(Optional.of(at));
+  }
+
+  /** {@code /season schedule clear}: no planned end, so no reminders (questions 269). */
+  public Transition clearPlannedEnd() {
+    return schedule(Optional.empty());
+  }
+
+  private Transition schedule(Optional<ZonedDateTime> at) {
+    Transition transition = apply(new ScheduleEnd(at));
     if (transition instanceof Changed changed) {
       int season = changed.state().season();
       Path file = seasonFile(season);
       Path backups = backupsDirectory.resolve("seasons");
       writer
           .submit(() -> {
-            SeasonFiles.writePlannedEnd(file, backups, season, Optional.of(at));
+            SeasonFiles.writePlannedEnd(file, backups, season, at);
             return Boolean.TRUE;
           })
           .exceptionally(e -> logFailure("Can't write " + file, e));

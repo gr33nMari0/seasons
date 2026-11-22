@@ -11,6 +11,7 @@ import com.petepeterepeat.seasons.core.archive.Unarchiver;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigCommands;
@@ -27,17 +28,22 @@ import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
+import com.petepeterepeat.seasons.core.hall.CellFixes;
+import com.petepeterepeat.seasons.core.hall.CellRows;
 import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
+import com.petepeterepeat.seasons.core.hall.HallLists;
+import com.petepeterepeat.seasons.core.hall.HallOutlines;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
+import com.petepeterepeat.seasons.core.hall.PlaqueScale;
 import com.petepeterepeat.seasons.core.hall.Reconciler;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.hall.Stamper;
@@ -116,6 +122,7 @@ public final class Seasons implements SeasonsApi {
 
   private @Nullable SeasonService service;
   private @Nullable SeasonCommands commands;
+  private @Nullable CommandHelp commandHelp;
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
   private @Nullable FirstsTracker firsts;
@@ -124,6 +131,10 @@ public final class Seasons implements SeasonsApi {
   private @Nullable AdminAlerts alerts;
   private @Nullable Curation curation;
   private @Nullable Wand wand;
+  private @Nullable HallOutlines outlines;
+  private @Nullable PlaqueScale plaqueScale;
+  private @Nullable ResetCommand reset;
+  private boolean stopped;
 
   /** How long after an admin joins they hear about galleries left out at startup. */
   private static final java.time.Duration LEFT_OUT_NOTICE_DELAY = java.time.Duration.ofSeconds(3);
@@ -172,6 +183,19 @@ public final class Seasons implements SeasonsApi {
   public void start() {
     Path world = platform.storage().worldDataDirectory();
     Executor serverThread = platform.scheduler()::runGlobal;
+    // A reset a crash cut short is finished first, so a half-deleted folder never loads as real
+    // data (questions 283); its leftover displays go once the server is running.
+    try {
+      List<com.petepeterepeat.seasons.core.hall.Bounds> leftover =
+          ResetCommand.finishInterrupted(world, platform.storage().configDirectory());
+      if (!leftover.isEmpty()) {
+        serverThread.execute(() -> {
+          var _ = ResetCommand.removeDisplays(platform, leftover);
+        });
+      }
+    } catch (IOException | RuntimeException e) {
+      LOG.error("Can't finish the interrupted /season reset; remove what is left by hand", e);
+    }
     ConfigLoader loader =
         new ConfigLoader(
             platform.storage().configDirectory(),
@@ -424,7 +448,7 @@ public final class Seasons implements SeasonsApi {
     if (curation != null) {
       halls.bindCuration(curation);
       curation.start();
-      platform.events().chat(curation);
+      // Set below with the reset's, which comes first.
     }
     halls.start();
     if (gates != null) {
@@ -533,6 +557,8 @@ public final class Seasons implements SeasonsApi {
                 intent ->
                     wanding
                         .decide(intent)
+                        .or(() ->
+                            plaqueScale == null ? Optional.empty() : plaqueScale.decide(intent))
                         .or(() -> visiting.decide(intent))
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
@@ -543,9 +569,46 @@ public final class Seasons implements SeasonsApi {
     platform.events().hall(hallRules);
     platform.events().zones(zoning);
     ConfigEdits edits = new ConfigEdits(platform, config, loader, writer, audit, seasons::reloaded);
+    CommandHelp help =
+        new CommandHelp(
+            () -> config.get().messages(),
+            (source, node) ->
+                source.player().map(p -> platform.permissions().has(p, node)).orElse(true),
+            () -> config.get().config().admin().hints());
+    TemplateLibrary library = new TemplateLibrary(world.resolve("templates"), platform.templates());
+    CommandSuggestions suggestions =
+        new CommandSuggestions(
+            platform, config, () -> Optional.of(players), seasons::state, library::names);
+    help.choices(suggestions);
+    commandHelp = help;
+    cellEdits.bindHelp(help);
     Path seasonBackups = world.resolve("backups").resolve("seasons");
     List<CommandNode> nodes = new ArrayList<>();
-    nodes.add(new SpawnCommands(platform, config, loader, edits, seasons, seasonBackups).node());
+    SpawnCommands spawnCommands =
+        new SpawnCommands(
+            platform, config, loader, edits, seasons, seasonBackups, help, visiting::adminGo);
+    nodes.add(spawnCommands.node());
+    nodes.add(spawnCommands.tpNode());
+    ResetCommand resetting =
+        new ResetCommand(
+            platform,
+            config,
+            seasons::state,
+            Optional.ofNullable(journal),
+            hold,
+            halls,
+            players,
+            world,
+            platform.storage().configDirectory(),
+            clock,
+            this::stop);
+    reset = resetting;
+    nodes.add(resetting.node());
+    Curation chatting = curation;
+    platform
+        .events()
+        .chat((player, text) ->
+            resetting.typed(player, text) || (chatting != null && chatting.typed(player, text)));
     nodes.addAll(
         new ZoneCommands(
                 platform, config, loader, edits, seasons, zoning, seasonBackups, wanding::selection)
@@ -554,7 +617,8 @@ public final class Seasons implements SeasonsApi {
         new MarkerCommands(platform, config, loader, edits, world.resolve("backups"), maps::status)
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
-    platform.commands().register(built.root(nodes));
+    built.bindHelp(help);
+    platform.commands().register(help.decorate(built.root(nodes), suggestions));
     HallCommands hallCommands =
         new HallCommands(
             platform,
@@ -567,18 +631,36 @@ public final class Seasons implements SeasonsApi {
             players,
             cellEdits,
             wanding,
-            stamper);
+            stamper,
+            help);
     wanding.bindLinks(hallCommands::addLink);
-    CommandNode hof = hallCommands.root();
+    CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
+    PlaqueScale plaques = new PlaqueScale(platform, config, halls, cellEdits);
+    plaqueScale = plaques;
+    HallOutlines outlining = new HallOutlines(platform, config, halls, wanding);
+    outlining.bindPreviews(rows::previews);
+    outlines = outlining;
+    hallCommands.bindOutlines(outlining);
+    outlining.start();
+    CommandNode hof =
+        hallCommands
+            .root()
+            .merge(new HallLists(platform, config, halls, players, cellEdits).root())
+            .merge(
+                new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
+                    .root())
+            .merge(rows.root())
+            .merge(plaques.root());
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
       children.add(curation.command());
       hof = new CommandNode(hof.name(), hof.argument(), hof.permission(), children, hof.action());
     }
-    platform.commands().register(hof, List.of("halloffame"));
-    vault.ifPresent(v -> platform.commands().register(v.command(), List.of()));
-    platform.commands().register(pets.command(), List.of());
-    platform.commands().register(museum.command(), List.of());
+    platform.commands().register(help.decorate(hof, suggestions), List.of("halloffame"));
+    vault.ifPresent(
+        v -> platform.commands().register(help.decorate(v.command(), suggestions), List.of()));
+    platform.commands().register(help.decorate(pets.command(), suggestions), List.of());
+    platform.commands().register(help.decorate(museum.command(), suggestions), List.of());
     platform.events().pets(pets);
     platform.events().dragon(fight);
     login.ifPresent(l -> l.markPlaying(platform.players().online()));
@@ -627,6 +709,14 @@ public final class Seasons implements SeasonsApi {
       private void tellAboutLeftOutFiles(PlayerRef player) {
         ConfigSnapshot snapshot = config.get();
         if (platform.players().find(player.id()).isPresent()
+            && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)
+            && service != null
+            && service.state().isPresent()
+            && store != null) {
+          SeasonCommands.recordsAhead(snapshot.messages(), service.state().get(), store)
+              .forEach(line -> platform.players().sendMessage(player.id(), line));
+        }
+        if (platform.players().find(player.id()).isPresent()
             && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
           snapshot
@@ -662,6 +752,12 @@ public final class Seasons implements SeasonsApi {
         login.ifPresent(l -> l.left(player));
         if (wand != null) {
           wand.left(player);
+        }
+        if (outlines != null) {
+          outlines.left(player);
+        }
+        if (reset != null) {
+          reset.left(player);
         }
         if (curation != null) {
           curation.left(player);
@@ -741,6 +837,11 @@ public final class Seasons implements SeasonsApi {
 
   /** Stops the lifecycle and finishes queued writes and posts. */
   public void stop() {
+    // Once: a reset stops Seasons itself before the platform does (questions 283).
+    if (stopped) {
+      return;
+    }
+    stopped = true;
     if (service != null) {
       service.stop();
     }
@@ -752,6 +853,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (reconciler != null) {
       reconciler.stop();
+    }
+    if (outlines != null) {
+      outlines.stop();
     }
     if (gates != null) {
       gates.stop();
@@ -813,6 +917,11 @@ public final class Seasons implements SeasonsApi {
   /** The command handlers, once started. */
   Optional<SeasonCommands> commands() {
     return Optional.ofNullable(commands);
+  }
+
+  /** Help and hints over every registered command, for tests. */
+  Optional<CommandHelp> commandHelp() {
+    return Optional.ofNullable(commandHelp);
   }
 
   /** Player records, once started. */

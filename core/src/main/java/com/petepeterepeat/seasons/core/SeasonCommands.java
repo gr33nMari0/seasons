@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Flags;
@@ -86,6 +87,8 @@ final class SeasonCommands {
   private final Optional<String> journalError;
   private final List<ConfigProblem> startupProblems;
   private final Services services;
+  private CommandHelp help =
+      new CommandHelp(Messages::defaults, (source, node) -> true, () -> false);
 
   /**
    * What the archive commands work with. The archiving services are empty when the journal couldn't
@@ -132,6 +135,11 @@ final class SeasonCommands {
     this.services = services;
   }
 
+  /** Where next steps come from (questions 268). */
+  void bindHelp(CommandHelp next) {
+    this.help = next;
+  }
+
   /**
    * @param more further nodes under {@code /season}, such as the spawn and zone commands
    */
@@ -156,7 +164,26 @@ final class SeasonCommands {
                     CommandNode.literal("end")
                         .then(
                             CommandNode.argument("time", ArgumentType.greedy())
-                                .executes(this::scheduleEnd))))
+                                .executes(this::scheduleEnd)))
+                .then(CommandNode.literal("show").executes(this::scheduleShow))
+                .then(CommandNode.literal("clear").executes(this::scheduleClear)))
+        .then(
+            CommandNode.literal("players")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::players)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::players)
+                        .then(
+                            CommandNode.argument("which", ArgumentType.word())
+                                .suggests(
+                                    (source, typed) -> List.of("online", "archived", "pending"))
+                                .executes(this::players)))
+                .then(
+                    CommandNode.argument("which", ArgumentType.word())
+                        .suggests((source, typed) -> List.of("online", "archived", "pending"))
+                        .executes(this::players)))
+        .then(CommandNode.literal("list").permission(PERMISSION_ADMIN_SEASON).executes(this::list))
         .then(
             CommandNode.literal("end")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -247,6 +274,8 @@ final class SeasonCommands {
                       HumanTime.time(at.atZone(ZoneId.systemDefault())))));
     }
     state.ifPresent(current -> playerStatus(source, messages, current));
+    state.ifPresent(
+        current -> recordsAhead(messages, current, services.players()).forEach(source::reply));
     journalStatus(source, messages);
     for (Map.Entry<String, List<ConfigProblem>> gallery :
         config.get().galleriesLeftOut().entrySet()) {
@@ -456,6 +485,7 @@ final class SeasonCommands {
     Transition transition = seasons.init(season);
     reply(source, transition, "init.done");
     if (transition instanceof Transition.Changed) {
+      help.after(source, "season.init");
       // Everyone online now is playing the season init recorded.
       services.login().ifPresent(login -> login.markPlaying(platform.players().online()));
     }
@@ -479,6 +509,10 @@ final class SeasonCommands {
       refuse(source, refused);
       return;
     }
+    // Every change is audited (A65).
+    services
+        .audit()
+        .record(actor(source), "schedule-set", "season-" + season(), "ok", at.toString());
     String key =
         config.get().config().schedule().autoEnd() ? "schedule.done-auto" : "schedule.done";
     source.reply(
@@ -492,6 +526,159 @@ final class SeasonCommands {
             HumanTime.time(at, ZoneOffset.UTC)));
     if (Duration.between(clock.instant(), at.toInstant()).compareTo(Duration.ofDays(7)) < 0) {
       source.reply(messages.get("schedule.soon"));
+    }
+  }
+
+  void scheduleShow(CommandSource source, Arguments arguments) {
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    plannedEnd(source, "status", state.get());
+  }
+
+  void scheduleClear(CommandSource source, Arguments arguments) {
+    Transition transition = seasons.clearPlannedEnd();
+    if (transition instanceof Transition.Refused refused) {
+      refuse(source, refused);
+      return;
+    }
+    services.audit().record(actor(source), "schedule-clear", "season-" + season(), "ok", "");
+    source.reply(messages().get("schedule.cleared", "season", season()));
+  }
+
+  /**
+   * {@code /season players [season] [online|archived|pending]}: each player's record for a season,
+   * the one on record by default (questions 269).
+   */
+  void players(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    int season =
+        arguments.values().containsKey("season")
+            ? arguments.integer("season")
+            : state.get().season();
+    Optional<String> which = arguments.optionalString("which");
+    if (which.isPresent() && !List.of("online", "archived", "pending").contains(which.get())) {
+      source.reply(messages.get("players.which"));
+      return;
+    }
+    java.util.Set<PlayerId> online = new java.util.HashSet<>();
+    platform.players().online().forEach(p -> online.add(p.id()));
+    List<PlayerRecord> records =
+        services.players().all().stream()
+            .sorted(java.util.Comparator.comparing(PlayerRecord::lastName))
+            .toList();
+    int shown = 0;
+    for (PlayerRecord record : records) {
+      boolean played = record.seasons().containsKey(season);
+      boolean archived = record.archivedThrough() >= season;
+      boolean keep =
+          switch (which.orElse("")) {
+            case "online" -> online.contains(record.id());
+            case "archived" -> archived;
+            case "pending" -> played && !archived;
+            default -> true;
+          };
+      if (!keep) {
+        continue;
+      }
+      shown++;
+      String playedText =
+          record.seasons().isEmpty()
+              ? messages.text("players.none-played")
+              : messages.text(
+                  record.seasons().size() == 1 ? "players.played-one" : "players.played",
+                  "seasons",
+                  String.join(
+                      ", ",
+                      record.seasons().keySet().stream().sorted().map(String::valueOf).toList()));
+      String status =
+          archived
+              ? messages.text("players.archived", "season", Integer.toString(season))
+              : played
+                  ? messages.text("players.pending")
+                  : messages.text("players.not-played", "season", Integer.toString(season));
+      String cell =
+          services
+              .hall()
+              .cellOf(record.id(), season)
+              .map(ref -> messages.text("players.cell", "cell", ref.key()))
+              .orElseGet(() -> messages.text("players.no-cell"));
+      source.reply(
+          messages.get(
+              "players.line",
+              "name",
+              record.lastName(),
+              "played",
+              playedText,
+              "status",
+              status,
+              "cell",
+              cell));
+    }
+    if (shown == 0) {
+      source.reply(messages.get("players.none"));
+    }
+  }
+
+  /** {@code /season list}: every season with a file or a gallery. */
+  void list(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    java.util.TreeSet<Integer> numbers = new java.util.TreeSet<>(config.get().seasons().keySet());
+    seasons.state().ifPresent(s -> numbers.add(s.season()));
+    config.get().allGalleries().forEach(g -> numbers.add(g.season()));
+    if (numbers.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    for (int number : numbers) {
+      String record =
+          seasons
+              .state()
+              .filter(s -> s.season() == number)
+              .map(s -> messages.text("seasons.on-record", "phase", phase(messages, s.phase())))
+              .orElse("");
+      String spawn =
+          config
+              .get()
+              .season(number)
+              .flatMap(f -> f.spawn())
+              .map(at ->
+                  messages.text(
+                      "seasons.spawn", "at", at.blockX() + ", " + at.blockY() + ", " + at.blockZ()))
+              .orElseGet(() -> messages.text("seasons.no-spawn"));
+      List<String> galleries =
+          config.get().allGalleries().stream()
+              .filter(g -> g.season() == number)
+              .map(g -> g.id())
+              .toList();
+      String galleryText =
+          galleries.isEmpty()
+              ? messages.text("seasons.no-galleries")
+              : messages.text("seasons.galleries", "galleries", String.join(", ", galleries));
+      long archived =
+          services.players().all().stream()
+              .filter(r -> r.archivedThrough() >= number && r.seasons().containsKey(number))
+              .count();
+      source.reply(
+          messages.get(
+              "seasons.line",
+              "season",
+              Integer.toString(number),
+              "record",
+              record,
+              "spawn",
+              spawn,
+              "galleries",
+              galleryText,
+              "archived",
+              Long.toString(archived)));
     }
   }
 
@@ -511,9 +698,11 @@ final class SeasonCommands {
     Transition transition = seasons.end(flags.has(NOW));
     if (transition instanceof Transition.Refused refused) {
       refuse(source, refused);
+      return;
     } else if (flags.has(NOW)) {
       source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
     }
+    help.after(source, "season.end");
   }
 
   void launch(CommandSource source, Arguments arguments) {
@@ -1007,6 +1196,28 @@ final class SeasonCommands {
             Integer.toString(spawn.blockZ()),
             "dimension",
             spawn.dimension()));
+    help.after(source, "season.launch.dry-run");
+  }
+
+  /**
+   * Records archived beyond the season on record, which archiving would skip, as after season.json
+   * alone was reset by hand (questions 284).
+   */
+  static List<com.petepeterepeat.seasons.core.message.Message> recordsAhead(
+      Messages messages, SeasonState state, PlayerStore players) {
+    int done = LoginPlan.isBetweenSeasons(state.phase()) ? state.season() : state.season() - 1;
+    return players.all().stream()
+        .filter(r -> r.archivedThrough() > done)
+        .map(r ->
+            messages.get(
+                "records.ahead",
+                "name",
+                r.lastName(),
+                "through",
+                Integer.toString(r.archivedThrough()),
+                "season",
+                Integer.toString(state.season())))
+        .toList();
   }
 
   /** The players line for the last finished season, and the season's furthest block. */

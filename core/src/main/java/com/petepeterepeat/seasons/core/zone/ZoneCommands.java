@@ -5,6 +5,8 @@ import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
+import com.petepeterepeat.seasons.core.command.Words;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -38,6 +40,7 @@ public final class ZoneCommands {
   public static final String PERMISSION_SEASON = "seasons.admin.season";
 
   private static final String OVERWORLD = "minecraft:overworld";
+  private static final String REPLACE = "--replace";
 
   private final Platform platform;
   private final ConfigHolder config;
@@ -102,6 +105,9 @@ public final class ZoneCommands {
                 CommandNode.literal("remove")
                     .then(CommandNode.argument("id", ArgumentType.word()).executes(this::remove)))
             .then(CommandNode.literal("list").executes(this::list))
+            .then(
+                CommandNode.literal("info")
+                    .then(CommandNode.argument("id", ArgumentType.word()).executes(this::info)))
             .build(),
         CommandNode.literal("unlock")
             .permission(PERMISSION_SEASON)
@@ -127,11 +133,22 @@ public final class ZoneCommands {
       source.reply(messages.get("zone.bad-id"));
       return;
     }
-    if (file(season.getAsInt()).map(f -> f.zones().containsKey(id)).orElse(false)) {
+    List<String> typed = new java.util.ArrayList<>(Words.of(arguments.string("shape")));
+    // --replace redraws a zone's shape, keeping its modes (questions 269).
+    boolean replace = !typed.isEmpty() && typed.getLast().equals(REPLACE);
+    if (replace) {
+      typed.removeLast();
+    }
+    Optional<Zone> before = file(season.getAsInt()).map(f -> f.zones().get(id));
+    if (before.isPresent() && !replace) {
       source.reply(messages.get("zone.exists", "id", id));
       return;
     }
-    List<String> words = List.of(arguments.string("shape").trim().split("\\s+"));
+    if (typed.isEmpty()) {
+      source.reply(messages.get("zone.bad-shape"));
+      return;
+    }
+    List<String> words = List.copyOf(typed);
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
     Optional<Bounds> selected = source.player().flatMap(selection);
@@ -145,7 +162,7 @@ public final class ZoneCommands {
         shape = cylinder(platform.players().position(source.player().get()), words);
       }
       case "box" -> {
-        if (words.size() == 1) {
+        if (words.size() == 1 || (words.size() == 2 && words.get(1).equals(Positions.SELECTION))) {
           if (selected.isEmpty()) {
             source.reply(messages.get("zone.box-corners", "id", id));
             return;
@@ -157,7 +174,7 @@ public final class ZoneCommands {
                   ZoneShape.Box.between(
                       b.minX(), b.minY(), b.minZ(), b.maxX(), b.maxY(), b.maxZ()));
         } else {
-          shape = box(words);
+          shape = box(words, source.player().map(p -> platform.players().position(p)), dimension);
         }
       }
       case "outside" -> {
@@ -167,7 +184,10 @@ public final class ZoneCommands {
             return;
           }
           shape = outsideCircle(platform.players().position(source.player().get()), words);
-        } else if (words.size() == 2 && words.get(1).equals("box")) {
+        } else if ((words.size() == 2 && words.get(1).equals("box"))
+            || (words.size() == 3
+                && words.get(1).equals("box")
+                && words.get(2).equals(Positions.SELECTION))) {
           if (selected.isEmpty()) {
             source.reply(messages.get("zone.outside-corners", "id", id));
             return;
@@ -176,7 +196,7 @@ public final class ZoneCommands {
           dimension = b.dimension();
           shape = Optional.of(ZoneShape.OutsideBox.between(b.minX(), b.minZ(), b.maxX(), b.maxZ()));
         } else {
-          shape = outsideBox(words);
+          shape = outsideBox(words, source.player().map(p -> platform.players().position(p)));
         }
       }
       case "y-above", "y-below" -> shape = height(words);
@@ -186,7 +206,20 @@ public final class ZoneCommands {
       source.reply(messages.get("zone.bad-shape"));
       return;
     }
-    Zone zone = Zone.drawn(id, dimension, shape.get());
+    Zone drawn = Zone.drawn(id, dimension, shape.get());
+    Zone zone =
+        before
+            .map(old ->
+                new Zone(
+                    id,
+                    drawn.dimension(),
+                    drawn.shape(),
+                    old.mode(),
+                    old.lockedUntil(),
+                    old.afterUnlock(),
+                    old.exempt(),
+                    old.message()))
+            .orElse(drawn);
     Optional<Position> spawn = file(season.getAsInt()).flatMap(SeasonFile::spawn);
     if (spawn.isPresent() && zone.contains(spawn.get())) {
       Position at = spawn.get();
@@ -226,13 +259,13 @@ public final class ZoneCommands {
     edit(
         source,
         number,
-        new Change("zones." + id, NONE, summary(zone)),
+        new Change("zones." + id, before.map(this::summary).orElse(NONE), summary(zone)),
         file -> SeasonFiles.writeZone(file, backups, number, zone),
         () ->
             source.reply(
                 messages()
                     .get(
-                        "zone.added",
+                        before.isPresent() ? "zone.replaced" : "zone.added",
                         "id",
                         id,
                         "shape",
@@ -270,20 +303,32 @@ public final class ZoneCommands {
     }
   }
 
-  /** {@code box <x1> <y1> <z1> <x2> <y2> <z2>}. */
-  private static Optional<ZoneShape> box(List<String> words) {
-    if (words.size() != 7) {
+  /** {@code box <position> <position>}, each typed as questions 264 allows. */
+  private static Optional<ZoneShape> box(
+      List<String> words, Optional<Position> origin, String dimension) {
+    Positions.Read first = Positions.block(words, 1, origin, dimension);
+    if (!(first instanceof Positions.Read.Block a)) {
       return Optional.empty();
     }
-    try {
-      int[] c = new int[6];
-      for (int i = 0; i < 6; i++) {
-        c[i] = Integer.parseInt(words.get(i + 1));
-      }
-      return Optional.of(ZoneShape.Box.between(c[0], c[1], c[2], c[3], c[4], c[5]));
-    } catch (IllegalArgumentException e) {
+    Positions.Read second = Positions.block(words, 1 + a.used(), origin, dimension);
+    if (!(second instanceof Positions.Read.Block b) || 1 + a.used() + b.used() != words.size()) {
       return Optional.empty();
     }
+    Position p = a.block();
+    Position q = b.block();
+    return Optional.of(
+        ZoneShape.Box.between(
+            p.blockX(), p.blockY(), p.blockZ(), q.blockX(), q.blockY(), q.blockZ()));
+  }
+
+  /** One x or z typed as a number or {@code ~n} relative to the sender. */
+  private static int flat(String word, Optional<Position> origin, boolean x) {
+    if (word.startsWith("~")) {
+      double base = origin.map(o -> x ? o.x() : o.z()).orElseThrow(IllegalArgumentException::new);
+      String rest = word.substring(1);
+      return (int) Math.floor(base + (rest.isEmpty() ? 0 : Double.parseDouble(rest)));
+    }
+    return Integer.parseInt(word);
   }
 
   /** {@code outside circle <radius>}, centred on the block at {@code at}, as a cylinder is. */
@@ -300,14 +345,14 @@ public final class ZoneCommands {
   }
 
   /** {@code outside box <x1> <z1> <x2> <z2>}. */
-  private static Optional<ZoneShape> outsideBox(List<String> words) {
+  private static Optional<ZoneShape> outsideBox(List<String> words, Optional<Position> origin) {
     if (words.size() != 6 || !words.get(1).equals("box")) {
       return Optional.empty();
     }
     try {
       int[] c = new int[4];
       for (int i = 0; i < 4; i++) {
-        c[i] = Integer.parseInt(words.get(i + 2));
+        c[i] = flat(words.get(i + 2), origin, i % 2 == 0);
       }
       return Optional.of(ZoneShape.OutsideBox.between(c[0], c[1], c[2], c[3]));
     } catch (IllegalArgumentException e) {
@@ -448,6 +493,41 @@ public final class ZoneCommands {
               "now",
               zones.live(season) ? zones.now(zone.id()).id() : ZoneMode.OFF.id()));
     }
+  }
+
+  /** {@code zone info <id>}: one zone, from the file being edited or the season being played. */
+  void info(CommandSource source, Arguments arguments) {
+    String id = arguments.string("id");
+    OptionalInt editing = zones.editingSeason();
+    int played = seasons.state().map(s -> s.season()).orElse(editing.orElse(0));
+    for (int season : new int[] {editing.orElse(played), played}) {
+      Optional<Zone> zone = file(season).map(f -> f.zones().get(id));
+      if (zone.isPresent()) {
+        source.reply(line(zone.get(), season));
+        return;
+      }
+    }
+    source.reply(messages().get("zone.unknown", "id", id));
+  }
+
+  private com.petepeterepeat.seasons.core.message.Message line(Zone zone, int season) {
+    return messages()
+        .get(
+            "zone.line",
+            "id",
+            zone.id(),
+            "shape",
+            describe(zone.shape()),
+            "dimension",
+            zone.dimension(),
+            "mode",
+            zone.mode().id(),
+            "until",
+            zones.until(zone),
+            "after",
+            zone.afterUnlock().id(),
+            "now",
+            zones.live(season) ? zones.now(zone.id()).id() : ZoneMode.OFF.id());
   }
 
   // Unlocking

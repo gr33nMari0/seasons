@@ -132,6 +132,12 @@ import org.bukkit.util.Vector;
  *   <li>{@code ignite <player> <x> <y> <z>} lights a block with flint and steel as the player: TNT
  *       is primed ({@code TNTPrimeEvent}), anything else set alight ({@code BlockIgniteEvent})
  *   <li>{@code permit <player> <node>} gives the player a permission until they leave
+ *   <li>{@code scroll <player> <slot> [sneak]} scrolls the hotbar to a slot as the player, firing
+ *       {@code PlayerItemHeldEvent}, and holds that slot unless it is cancelled
+ *   <li>{@code swap-hands <player>} presses swap-hands as the player, firing {@code
+ *       PlayerSwapHandItemsEvent}, and swaps unless it is cancelled
+ *   <li>{@code console <command...>} runs a command as a sender that isn't a player, as the console
+ *       would, and passes what it is told back prefixed "Console: "
  *   <li>{@code vault-return <player> <item> <count>} hands a stack back to the player on their
  *       vault's Returned page, as a curator's return or an undelivered dragon egg will
  *   <li>{@code tame <tag> <player>} tames the entity with a scoreboard tag to a player
@@ -268,6 +274,9 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "console" -> console(sender, args);
+        case "swap-hands" -> swapHands(sender, args);
+        case "scroll" -> scroll(sender, args);
         case "vault-return" -> vaultReturn(sender, hooks, args);
         case "tame" -> tame(sender, args);
         case "stat" -> stat(sender, args);
@@ -305,7 +314,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
             sender.sendMessage(
                 "Usage: /scenario crash-at|save-at|archive|card|open-archive|place|break|use|move|pearl"
                     + "|use-item|consume|drop|sit|glide|open|place-entity|hit|ride|chorus|portal"
-                    + "|portal-pair|bucket|ignite|permit|vault-return|tame|chest|leash|forget-pet"
+                    + "|portal-pair|bucket|ignite|permit|console|swap-hands|scroll|vault-return|tame|chest|leash|forget-pet"
                     + "|dragon|reset|clock|sync|bluemap ...");
       }
     } catch (RuntimeException e) {
@@ -696,7 +705,15 @@ final class ScenarioCommands implements BasicCommand, Listener {
       sender.sendMessage("Placing " + type.getKey() + " was refused");
       return;
     }
-    player.getWorld().addEntity(entity);
+    if (entity instanceof org.bukkit.entity.LivingEntity) {
+      // As the game's own placing of an armour stand item adds it: with the DEFAULT spawn reason,
+      // which the creature spawn event then sees.
+      player
+          .getWorld()
+          .spawn(at, kind, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.DEFAULT);
+    } else {
+      player.getWorld().addEntity(entity);
+    }
     sender.sendMessage("Placed " + type.getKey() + " at " + describe(at));
   }
 
@@ -887,6 +904,78 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     block.setType(Material.FIRE);
     sender.sendMessage("Lit " + describe(block.getLocation()));
+  }
+
+  /**
+   * Runs a command as a sender that isn't a player, as the console does, and passes each line it is
+   * told back to the sender, prefixed "Console: ".
+   */
+  private void console(CommandSender sender, String[] args) {
+    String command = String.join(" ", java.util.Arrays.asList(args).subList(1, args.length));
+    CommandSender console =
+        plugin
+            .getServer()
+            .createCommandSender(feedback ->
+                sender.sendMessage(
+                    "Console: "
+                        + net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+                            .plainText()
+                            .serialize(feedback)));
+    plugin.getServer().dispatchCommand(console, command);
+  }
+
+  /**
+   * Scrolls the hotbar to a slot as the player, firing PlayerItemHeldEvent; held unless cancelled.
+   */
+  private void scroll(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't scroll for " + args[1]);
+      return;
+    }
+    int slot = Integer.parseInt(args[2]);
+    boolean sneak = args.length > 3 && args[3].equals("sneak");
+    boolean was = player.isSneaking();
+    if (sneak) {
+      player.setSneaking(true);
+    }
+    org.bukkit.event.player.PlayerItemHeldEvent event =
+        new org.bukkit.event.player.PlayerItemHeldEvent(
+            player, player.getInventory().getHeldItemSlot(), slot);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (sneak) {
+      player.setSneaking(was);
+    }
+    if (!event.isCancelled()) {
+      player.getInventory().setHeldItemSlot(slot);
+    }
+    sender.sendMessage(
+        "Scrolled "
+            + args[1]
+            + " to slot "
+            + slot
+            + ": "
+            + (event.isCancelled() ? "refused" : "done"));
+  }
+
+  /** Presses swap-hands as the player, firing PlayerSwapHandItemsEvent; swaps unless cancelled. */
+  private void swapHands(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't swap hands for " + args[1]);
+      return;
+    }
+    ItemStack main = player.getInventory().getItemInMainHand();
+    ItemStack off = player.getInventory().getItemInOffHand();
+    org.bukkit.event.player.PlayerSwapHandItemsEvent event =
+        new org.bukkit.event.player.PlayerSwapHandItemsEvent(player, off, main);
+    plugin.getServer().getPluginManager().callEvent(event);
+    if (!event.isCancelled()) {
+      player.getInventory().setItemInMainHand(event.getMainHandItem());
+      player.getInventory().setItemInOffHand(event.getOffHandItem());
+    }
+    sender.sendMessage(
+        "Swapped hands for " + args[1] + ": " + (event.isCancelled() ? "refused" : "done"));
   }
 
   private void permit(CommandSender sender, String[] args) {

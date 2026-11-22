@@ -24,7 +24,7 @@ export default {
     await ctx.command(admin, '/season zone add mine box 900 -64 900 920 0 920', /^Added zone mine: a box from 900, -64, 900 to 920, 0, 920 in minecraft:overworld, block until Homecoming and off after\.$/)
 
     // Refusals.
-    await ctx.command(admin, '/season zone add base cylinder 5', /^There's already a zone called base\.$/)
+    await ctx.command(admin, '/season zone add base cylinder 5', /^There's already a zone called base\. Add --replace to redraw it\.$/)
     await ctx.command(admin, '/season zone add Bad_Id cylinder 5', /^Zone ids are /)
     await ctx.command(admin, '/season zone add homecoming cylinder 5', /^Zone ids are /)
     await ctx.command(admin, '/season zone add mine2 box', /^Give both corners: /)

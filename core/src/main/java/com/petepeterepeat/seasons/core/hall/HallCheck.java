@@ -45,6 +45,25 @@ public final class HallCheck {
       Predicate<Position> air,
       IntFunction<Optional<Position>> seasonSpawn,
       Messages messages) {
+    return run(hall, galleries, air, at -> "", "", at -> true, seasonSpawn, messages);
+  }
+
+  /**
+   * Checks a Hall, with what the world holds.
+   *
+   * @param blockType the block at a position, for gate planes (questions 280)
+   * @param gateBlock {@code cells.gateBlock}, namespaced
+   * @param floor whether a player can stand at a position, for entries and the Hall spawn
+   */
+  public static Report run(
+      HallLayout hall,
+      Collection<Gallery> galleries,
+      Predicate<Position> air,
+      java.util.function.Function<Position, String> blockType,
+      String gateBlock,
+      Predicate<Position> floor,
+      IntFunction<Optional<Position>> seasonSpawn,
+      Messages messages) {
     List<Message> found = new ArrayList<>();
     List<Gallery> sorted = galleries.stream().sorted(Comparator.comparing(Gallery::id)).toList();
     if (hall.hub().isEmpty()) {
@@ -61,9 +80,19 @@ public final class HallCheck {
       } else if (hall.hub().isPresent() && !joined.contains(id)) {
         found.add(messages.get("hof.check.apart", "gallery", id));
       }
+      if (gallery.kind() == Gallery.Kind.LEGACY) {
+        // Kept as built: no figures, sizes or entries to look at (questions 281).
+        found.add(messages.get("hof.check.legacy", "gallery", id));
+        continue;
+      }
       if (gallery.entry().isEmpty()) {
         found.add(messages.get("hof.check.no-entry", "gallery", id));
       }
+      gallery
+          .areas()
+          .entry()
+          .filter(area -> area.blocks().stream().noneMatch(floor))
+          .ifPresent(area -> found.add(messages.get("hof.check.no-floor", "what", id)));
       Optional<String> usual = usualSize(gallery);
       for (Cell cell : gallery.cells()) {
         String key = id + ":" + cell.id();
@@ -85,6 +114,32 @@ public final class HallCheck {
         if (gallery.kind() == Gallery.Kind.SEASON && cell.anchor(AnchorType.FIGURE).isEmpty()) {
           found.add(messages.get("hof.check.cell-no-figure", "cell", key));
         }
+        // Decoration of the gate's own block would go when the gate opens (questions 280).
+        Optional<Bounds> plane = cell.gate();
+        if (plane.isPresent() && !cell.gateShut()) {
+          for (Position block : plane.get().blocks()) {
+            if (blockType.apply(block).equals(gateBlock)) {
+              found.add(
+                  messages.get(
+                      "hof.check.gate-own-block",
+                      "cell",
+                      key,
+                      "block",
+                      gateBlock,
+                      "x",
+                      Integer.toString(block.blockX()),
+                      "y",
+                      Integer.toString(block.blockY()),
+                      "z",
+                      Integer.toString(block.blockZ())));
+              break;
+            }
+          }
+        }
+        cell.anchor(AnchorType.ENTRY)
+            .flatMap(Anchor::area)
+            .filter(area -> area.blocks().stream().noneMatch(floor))
+            .ifPresent(area -> found.add(messages.get("hof.check.no-floor", "what", key)));
       }
     }
     for (HallLayout.Link link : hall.links().values()) {

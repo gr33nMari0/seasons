@@ -123,6 +123,37 @@ class WandTest {
   }
 
   @Test
+  void placeModeTakesTheBlockAgainstTheFace() {
+    hof("/hof wand mode place");
+    click(5, 63, 5, "up", true, true);
+    click(9, 63, 9, "east", false, true);
+    assertThat(said())
+        .contains(
+            "The wand's corners now take the block against the face you click.",
+            "Selected 5, 63, 5 to 10, 64, 9 in minecraft:overworld: 6 × 2 × 5 blocks.");
+    // Swap-hands toggles it back, and the swap is taken over.
+    assertThat(fake.handler.decide(new Intent.WandSwap(admin.id())))
+        .isInstanceOf(Decision.Deny.class);
+    click(5, 63, 5, "up", true, true);
+    click(9, 63, 9, "east", false, true);
+    assertThat(said())
+        .contains("Selected 5, 63, 5 to 9, 63, 9 in minecraft:overworld: 5 × 1 × 5 blocks.");
+  }
+
+  @Test
+  void selCommandsFollowTheSameRules() {
+    fake.player(admin).position = new Position(OVERWORLD, 10.5, 64, 10.5, 0f, 0f);
+    hof("/hof sel pos1 ~ ~ ~");
+    assertThat(said()).contains("Corner 1: 10, 64, 10");
+    hof("/hof sel pos2 ~2 ~1 ~2");
+    assertThat(hof("/hof sel info").text())
+        .containsExactly(
+            "Selection: 10, 64, 10 to 12, 65, 12 in minecraft:overworld: 3 × 2 × 3 blocks.");
+    hof("/hof sel clear");
+    assertThat(hof("/hof sel info").text().getFirst()).startsWith("No selection.");
+  }
+
+  @Test
   void cornersMakeASelectionAndCornerOneStartsANewOne() {
     assertThat(click(5, 63, 5, "up", true, true)).isInstanceOf(Decision.Deny.class);
     assertThat(fake.player(admin).actionBars)

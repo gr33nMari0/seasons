@@ -643,7 +643,12 @@ public final class HallImporter {
       cell = cell.withAnchor(Anchor.of(AnchorType.TROPHY, block(frame.at())));
     }
     cell = cell.withOwner(season, Optional.of(owner)).withImported(true);
-    return gallery.withCell(cell);
+    Gallery next = gallery.withCell(cell);
+    // A legacy gallery whose every cell is imported is a season's gallery (questions 281).
+    if (next.kind() == Gallery.Kind.LEGACY && next.cells().stream().allMatch(Cell::imported)) {
+      next = next.withKind(Gallery.Kind.SEASON);
+    }
+    return next;
   }
 
   private Optional<HallService.CellRef> cellRef(ImportedCell imported) {

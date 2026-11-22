@@ -767,7 +767,7 @@ class ZonesTest {
         .asString()
         .startsWith("Give both corners");
     assertThat(run("/season zone add tower box 0 0 0 1 1 1").text())
-        .containsExactly("There's already a zone called tower.");
+        .containsExactly("There's already a zone called tower. Add --replace to redraw it.");
     assertThat(run("/season zone remove tower").text()).containsExactly("Removed zone tower.");
     assertThat(guard().blocks(Position.of(OVERWORLD, 205, 64, 200))).isFalse();
   }

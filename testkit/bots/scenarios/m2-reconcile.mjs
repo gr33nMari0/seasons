@@ -30,7 +30,8 @@ export default {
     await ctx.command(admin, `/summon minecraft:text_display ${X + 3} ${FLOOR + 1} ${Z + 3} {Tags:["stray"],BukkitValues:{"seasons:display":"season-1/owner/7/plaque"}}`, /^Summoned /)
     assert(!await ctx.holds(admin, `entity ${figure}`), 'the figure has left its cell')
 
-    await reloadChunks(ctx, admin, { x: X, z: Z }, { x: X + 16, z: Z + 10 }, { x: X, y: FLOOR, z: Z })
+    // The box takes in the moved figure at X + 21, so its chunk is sure to have unloaded and loaded again.
+    await reloadChunks(ctx, admin, { x: X, z: Z }, { x: X + 21, z: Z + 10 }, { x: X, y: FLOOR, z: Z })
     await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'a figure is back in the cell once its chunk loads'))
     await ctx.eventually(async () => assert(!await ctx.holds(admin, 'entity @e[tag=stray]'), 'the stray display is removed'))
     await ctx.eventually(async () => assert(!await ctx.holds(admin, `entity @e[type=minecraft:mannequin,x=${X + 21},y=${FLOOR},z=${Z + 3},dx=0,dy=1,dz=0]`), 'the figure moved out of its cell is removed'))

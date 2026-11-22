@@ -77,7 +77,7 @@ public enum Operation {
       case VAULT_WITHDRAW, VAULT_WITHDRAW_DONE -> Optional.of(VAULT_WITHDRAW);
       case MUSEUM_STARTED, MUSEUM_DONE -> Optional.of(MUSEUM);
       case STAMP_STARTED, STAMP_DONE -> Optional.of(STAMP);
-      case EGG_DELIVERED, PET_TRAVELLED, GATE_SET -> Optional.empty();
+      case EGG_DELIVERED, PET_TRAVELLED, GATE_SET, RESET_STARTED -> Optional.empty();
     };
   }
 }

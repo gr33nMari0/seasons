@@ -70,6 +70,11 @@ final class PaperInventories implements Inventories {
     return player.getInventory().addItem(wand).isEmpty();
   }
 
+  @Override
+  public boolean holdsWand(PlayerId id) {
+    return players.player(id).map(p -> isWand(p.getInventory().getItemInMainHand())).orElse(false);
+  }
+
   /** Whether an item is the Seasons wand: marked as Seasons' own, whatever its kind. */
   boolean isWand(@Nullable ItemStack item) {
     return item != null

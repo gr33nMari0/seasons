@@ -97,7 +97,8 @@ class MarkerCommandsTest {
     start(MapPublisher.NONE);
 
     assertThat(run("/season marker add hubs Hub"))
-        .containsExactly("Stand where the waypoint goes and run this in game.");
+        .containsExactly(
+            "Stand where the waypoint goes and run this in game, or give it after --at.");
     assertThat(runAsAlex("/season marker add Mega_Projects Hub").getFirst())
         .startsWith("Waypoint sets are lower-case letters");
     assertThat(runAsAlex("/season marker add hubs " + "x".repeat(65)))

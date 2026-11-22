@@ -32,9 +32,23 @@ public final class TestSource implements CommandSource {
     replies.add(message);
   }
 
+  private boolean hints;
+
+  /**
+   * Keeps next-step hints in {@link #text}; without this, they are left out, so tests of other
+   * replies needn't list them (questions 268).
+   */
+  public TestSource withHints() {
+    hints = true;
+    return this;
+  }
+
   /** The replies as plain text, with default messages. */
   public List<String> text() {
-    return replies.stream().map(TestSource::plain).toList();
+    return replies.stream()
+        .map(TestSource::plain)
+        .filter(line -> hints || !line.startsWith("Next: "))
+        .toList();
   }
 
   public static String plain(Message message) {

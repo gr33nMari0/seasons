@@ -16,6 +16,7 @@ import java.util.Optional;
  * @param cells in the order they were made
  * @param settings what the gallery sets for itself; the rest comes from config.yml
  * @param launch the launch button's block, if the gallery has one (questions 172)
+ * @param areas its entry as a box, and exits that are areas (questions 279)
  */
 public record Gallery(
     String id,
@@ -27,16 +28,50 @@ public record Gallery(
     List<Position> exits,
     List<Cell> cells,
     Settings settings,
-    Optional<Position> launch) {
+    Optional<Position> launch,
+    Areas areas) {
   public Gallery {
     exits = List.copyOf(exits);
     cells = List.copyOf(cells);
   }
 
+  public Gallery(
+      String id,
+      Kind kind,
+      int season,
+      String dimension,
+      Optional<Bounds> bounds,
+      Optional<Position> entry,
+      List<Position> exits,
+      List<Cell> cells,
+      Settings settings,
+      Optional<Position> launch) {
+    this(id, kind, season, dimension, bounds, entry, exits, cells, settings, launch, Areas.NONE);
+  }
+
+  /**
+   * Where arrivals spread and exits that are areas (questions 279).
+   *
+   * @param entry the entry as a box, from the entry point; empty for a single block
+   * @param exits exits that are boxes, beside the single-block exits
+   */
+  public record Areas(Optional<Bounds> entry, List<Bounds> exits) {
+    public static final Areas NONE = new Areas(Optional.empty(), List.of());
+
+    public Areas {
+      exits = List.copyOf(exits);
+    }
+  }
+
   /** A season's gallery, or the museum, which has no owners. */
   public enum Kind {
     SEASON,
-    MUSEUM
+    MUSEUM,
+    /**
+     * Hand-built cells kept as they are (questions 281): protected as Hall, but never drawn in,
+     * assigned, locked or gated.
+     */
+    LEGACY
   }
 
   /**
@@ -48,7 +83,8 @@ public record Gallery(
       Optional<SeasonsConfig.CellAccess> access,
       Optional<FigureRenderer> renderer,
       Optional<Boolean> lockAtEnd,
-      Optional<Duration> afterArchive) {
+      Optional<Duration> afterArchive,
+      Optional<Double> plaqueScale) {
     /** Everything from config.yml. */
     public static final Settings NONE =
         new Settings(
@@ -56,7 +92,28 @@ public record Gallery(
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
             Optional.empty());
+
+    public Settings(
+        Optional<SeasonsConfig.CellAssignment> assignment,
+        Optional<SeasonsConfig.CellAccess> access,
+        Optional<FigureRenderer> renderer,
+        Optional<Boolean> lockAtEnd,
+        Optional<Duration> afterArchive) {
+      this(assignment, access, renderer, lockAtEnd, afterArchive, Optional.empty());
+    }
+
+    public Settings withPlaqueScale(Optional<Double> next) {
+      return new Settings(assignment, access, renderer, lockAtEnd, afterArchive, next);
+    }
+  }
+
+  /** The plaque text size for a cell's plaque anchor: its own, else the gallery's, else 1. */
+  public double plaqueScale(Anchor plaque) {
+    return plaque.scale().isPresent()
+        ? plaque.scale().getAsDouble()
+        : settings.plaqueScale().orElse(1.0);
   }
 
   public static Gallery create(String id, int season, String dimension) {
@@ -113,26 +170,86 @@ public record Gallery(
 
   public Gallery withBounds(Bounds next) {
     return new Gallery(
-        id, kind, season, dimension, Optional.of(next), entry, exits, cells, settings, launch);
+        id,
+        kind,
+        season,
+        dimension,
+        Optional.of(next),
+        entry,
+        exits,
+        cells,
+        settings,
+        launch,
+        areas);
   }
 
   public Gallery withEntry(Position next) {
+    return withEntry(next, Optional.empty());
+  }
+
+  /** The entry, a block or a box from it (questions 279). */
+  public Gallery withEntry(Position next, Optional<Bounds> area) {
     return new Gallery(
-        id, kind, season, dimension, bounds, Optional.of(next), exits, cells, settings, launch);
+        id,
+        kind,
+        season,
+        dimension,
+        bounds,
+        Optional.of(next),
+        exits,
+        cells,
+        settings,
+        launch,
+        new Areas(area, areas.exits()));
+  }
+
+  /** An exit that is a box. */
+  public Gallery withExitArea(Bounds area) {
+    List<Bounds> next = new ArrayList<>(areas.exits());
+    next.add(area);
+    return new Gallery(
+        id,
+        kind,
+        season,
+        dimension,
+        bounds,
+        entry,
+        exits,
+        cells,
+        settings,
+        launch,
+        new Areas(areas.entry(), next));
+  }
+
+  /** The same gallery as another kind, such as a legacy gallery once imported (questions 281). */
+  public Gallery withKind(Kind next) {
+    return new Gallery(
+        id, next, season, dimension, bounds, entry, exits, cells, settings, launch, areas);
   }
 
   public Gallery withExit(Position exit) {
     List<Position> next = new ArrayList<>(exits);
     next.add(exit);
-    return new Gallery(id, kind, season, dimension, bounds, entry, next, cells, settings, launch);
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, next, cells, settings, launch, areas);
   }
 
   public Gallery withLaunch(Optional<Position> next) {
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, settings, next);
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, exits, cells, settings, next, areas);
   }
 
   public Gallery withSettings(Settings next) {
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, next, launch);
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, exits, cells, next, launch, areas);
+  }
+
+  /** Without the cell with that id. */
+  public Gallery withoutCell(String cellId) {
+    List<Cell> next = new ArrayList<>(cells);
+    next.removeIf(c -> c.id().equals(cellId));
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, exits, next, settings, launch, areas);
   }
 
   /** Replaces the cell with the same id, or adds it at the end. */
@@ -149,6 +266,7 @@ public record Gallery(
     } else {
       next.add(cell);
     }
-    return new Gallery(id, kind, season, dimension, bounds, entry, exits, next, settings, launch);
+    return new Gallery(
+        id, kind, season, dimension, bounds, entry, exits, next, settings, launch, areas);
   }
 }

@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -63,23 +64,65 @@ public final class MarkerCommands {
                             CommandNode.argument("name", ArgumentType.greedy())
                                 .executes(this::add))))
         .then(
+            CommandNode.literal("move")
+                .then(
+                    CommandNode.argument("set", ArgumentType.word())
+                        .then(
+                            CommandNode.argument("name", ArgumentType.greedy())
+                                .executes(this::move))))
+        .then(
             CommandNode.literal("remove")
                 .then(
                     CommandNode.argument("set", ArgumentType.word())
                         .then(
                             CommandNode.argument("name", ArgumentType.greedy())
                                 .executes(this::remove))))
+        .then(
+            CommandNode.literal("list")
+                .executes(this::list)
+                .then(CommandNode.argument("set", ArgumentType.word()).executes(this::list)))
         .build();
+  }
+
+  /** The flag that puts a typed position after a waypoint's name (questions 264). */
+  static final String AT = " --at ";
+
+  /** A waypoint's name and, after {@code --at}, where it goes. */
+  private record Named(String name, Optional<String> at) {
+    static Named of(String text) {
+      String padded = " " + text.strip() + " ";
+      int at = padded.lastIndexOf(AT);
+      if (at < 0) {
+        return new Named(text.strip(), Optional.empty());
+      }
+      return new Named(
+          padded.substring(0, at).strip(), Optional.of(padded.substring(at + AT.length()).strip()));
+    }
+  }
+
+  /** Where the waypoint goes: typed after --at, or where the sender stands; empty if neither. */
+  private Optional<Position> where(CommandSource source, Optional<String> typed) {
+    Optional<Position> origin = source.player().map(p -> platform.players().position(p));
+    if (typed.isEmpty()) {
+      if (origin.isEmpty()) {
+        source.reply(messages().get("marker.player-only"));
+      }
+      return origin;
+    }
+    String dimension = origin.map(Position::dimension).orElse("minecraft:overworld");
+    Positions.Read read = Positions.typed(typed.get(), origin, dimension, Positions.facing(origin));
+    if (read instanceof Positions.Read.Block block) {
+      return Optional.of(block.block());
+    }
+    source.reply(messages().get(((Positions.Read.Failed) read).messageKey()));
+    return Optional.empty();
   }
 
   void add(CommandSource source, Arguments arguments) {
     Messages messages = messages();
     String set = arguments.string("set");
-    String name = arguments.string("name").strip();
-    if (source.player().isEmpty()) {
-      source.reply(messages.get("marker.player-only"));
-      return;
-    }
+    Named named = Named.of(arguments.string("name"));
+    String name = named.name();
     if (leftOut(source)) {
       return;
     }
@@ -96,7 +139,11 @@ public final class MarkerCommands {
       source.reply(messages.get("marker.exists", "set", set, "name", existing.get().name()));
       return;
     }
-    Position at = platform.players().position(source.player().get());
+    Optional<Position> found = where(source, named.at());
+    if (found.isEmpty()) {
+      return;
+    }
+    Position at = found.get();
     edits.edit(
         source,
         new ConfigEdits.Change(target(set, name), ConfigEdits.NONE, ConfigEdits.describe(at)),
@@ -124,6 +171,89 @@ public final class MarkerCommands {
             source.reply(messages().get("marker.no-map"));
           }
         });
+  }
+
+  /** {@code marker move <set> <name> [--at <position>]}. */
+  void move(CommandSource source, Arguments arguments) {
+    String set = arguments.string("set");
+    Named named = Named.of(arguments.string("name"));
+    if (leftOut(source)) {
+      return;
+    }
+    Optional<Waypoint> existing = config.get().waypoints().find(set, named.name());
+    if (existing.isEmpty()) {
+      source.reply(messages().get("marker.unknown", "set", set, "name", named.name()));
+      return;
+    }
+    Optional<Position> found = where(source, named.at());
+    if (found.isEmpty()) {
+      return;
+    }
+    Waypoint waypoint = existing.get();
+    Position at = found.get();
+    edits.edit(
+        source,
+        new ConfigEdits.Change(
+            target(set, waypoint.name()),
+            ConfigEdits.describe(waypoint.at()),
+            ConfigEdits.describe(at)),
+        loader.markersFile(),
+        () ->
+            WaypointFiles.add(
+                loader.markersFile(), backups, set, new Waypoint(waypoint.name(), at)),
+        "marker.failed",
+        () ->
+            source.reply(
+                messages()
+                    .get(
+                        "marker.moved",
+                        "name",
+                        waypoint.name(),
+                        "set",
+                        set,
+                        "x",
+                        Integer.toString(at.blockX()),
+                        "y",
+                        Integer.toString(at.blockY()),
+                        "z",
+                        Integer.toString(at.blockZ()),
+                        "dimension",
+                        at.dimension())));
+  }
+
+  /** {@code marker list [set]}: every waypoint, or one set's. */
+  void list(CommandSource source, Arguments arguments) {
+    Optional<String> only = arguments.optionalString("set");
+    var sets = config.get().waypoints().sets();
+    boolean any = false;
+    for (var entry : new java.util.TreeMap<>(sets).entrySet()) {
+      if (only.isPresent() && !only.get().equals(entry.getKey())) {
+        continue;
+      }
+      for (Waypoint waypoint : entry.getValue()) {
+        any = true;
+        Position at = waypoint.at();
+        source.reply(
+            messages()
+                .get(
+                    "marker.line",
+                    "set",
+                    entry.getKey(),
+                    "name",
+                    waypoint.name(),
+                    "x",
+                    Integer.toString(at.blockX()),
+                    "y",
+                    Integer.toString(at.blockY()),
+                    "z",
+                    Integer.toString(at.blockZ()),
+                    "dimension",
+                    at.dimension()));
+      }
+    }
+    if (!any) {
+      source.reply(messages().get("marker.none"));
+    }
   }
 
   void remove(CommandSource source, Arguments arguments) {

@@ -10,6 +10,10 @@ import { writeMuseum } from '../lib/museum.mjs'
 
 const secrets = (discord, alerts) => `schema-version: 1\ndiscordWebhook: "${discord.url}"\nadminWebhook: "${alerts.url}"\n`
 
+// The gear is put back once, by this reconcile or by a pass the figure's chunk loads had queued
+// already, which can come first when the server is busy; either way it is one repair, alerted alike.
+const REPAIRED = /^Reconciled season-2: [01] repairs?\.$/
+
 export default {
   name: 'm4-admin-webhook',
   sessions: [
@@ -26,7 +30,7 @@ export default {
       const figure = at('minecraft:mannequin', cells.Owner.figure)
       await ctx.eventually(async () => assert(await ctx.holds(admin, `entity ${figure}`), 'the figure stands'))
       await ctx.command(admin, `/item replace entity ${figure} weapon.mainhand with minecraft:dirt`, /^Replaced /)
-      await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: 1 repair\.$/, 20_000)
+      await ctx.command(admin, '/hof reconcile season-2', REPAIRED, 20_000)
       await alerts.waitFor(new RegExp(`^Reconciliation repaired ${cells.Owner.key}: fixed the figure's gear$`), 20_000)
       assert(!discord.posts.some((p) => /Reconciliation/.test(p.content)), 'not on the public channel')
 
@@ -53,7 +57,7 @@ export default {
       const before = alerts.attempts.length
       await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: 0 repairs\.$/, 20_000)
       await ctx.command(admin, '/item replace entity @e[type=minecraft:mannequin,limit=1] weapon.mainhand with minecraft:dirt', /^Replaced /)
-      await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2: 1 repair\.$/, 20_000)
+      await ctx.command(admin, '/hof reconcile season-2', REPAIRED, 20_000)
       await ctx.sync(admin, [], 120)
       assert(alerts.attempts.length === before, 'no admin webhook, no alert posted')
       assert(!discord.posts.some((p) => /Reconciliation/.test(p.content)), 'and none on the public channel')

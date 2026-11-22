@@ -15,4 +15,9 @@ final class PaperPermissions implements Permissions {
   public boolean has(PlayerId id, String node) {
     return players.player(id).map(player -> player.hasPermission(node)).orElse(false);
   }
+
+  @Override
+  public boolean isOperator(PlayerId id) {
+    return players.player(id).map(org.bukkit.entity.Player::isOp).orElse(false);
+  }
 }

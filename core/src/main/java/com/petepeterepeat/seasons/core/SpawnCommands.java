@@ -5,8 +5,10 @@ import static com.petepeterepeat.seasons.core.Seasons.PERMISSION_ADMIN_SEASON;
 
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -15,6 +17,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFiles;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
+import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.zone.Zone;
@@ -35,6 +38,8 @@ final class SpawnCommands {
   private final ConfigEdits edits;
   private final SeasonService seasons;
   private final Path backups;
+  private final CommandHelp help;
+  private final java.util.function.BiConsumer<PlayerId, Position> go;
 
   /**
    * @param backups {@code <world>/seasons/backups/seasons}
@@ -45,13 +50,114 @@ final class SpawnCommands {
       ConfigLoader loader,
       ConfigEdits edits,
       SeasonService seasons,
-      Path backups) {
+      Path backups,
+      CommandHelp help,
+      java.util.function.BiConsumer<PlayerId, Position> go) {
     this.platform = platform;
     this.config = config;
     this.loader = loader;
     this.edits = edits;
     this.seasons = seasons;
     this.backups = backups;
+    this.help = help;
+    this.go = go;
+  }
+
+  /**
+   * {@code /season tp}: an admin's own teleport to a spawn, candidate or waypoint (questions 271).
+   */
+  CommandNode tpNode() {
+    return CommandNode.literal("tp")
+        .permission(PERMISSION_ADMIN_SEASON)
+        .then(
+            CommandNode.literal("spawn")
+                .executes(this::tpSpawn)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::tpSpawn)))
+        .then(
+            CommandNode.literal("candidate")
+                .then(
+                    CommandNode.argument("name", ArgumentType.word()).executes(this::tpCandidate)))
+        .then(
+            CommandNode.literal("marker")
+                .then(
+                    CommandNode.argument("set", ArgumentType.word())
+                        .then(
+                            CommandNode.argument("name", ArgumentType.greedy())
+                                .executes(this::tpMarker))))
+        .build();
+  }
+
+  void tpSpawn(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    int season =
+        arguments.values().containsKey("season")
+            ? arguments.integer("season")
+            : next.getAsInt() - 1;
+    Optional<Position> spawn = config.get().season(season).flatMap(SeasonFile::spawn);
+    if (spawn.isEmpty()) {
+      source.reply(messages().get("spawn.show-none", "season", Integer.toString(season)));
+      return;
+    }
+    go.accept(source.player().get(), middle(spawn.get()));
+  }
+
+  void tpCandidate(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    String name = arguments.string("name");
+    Optional<Position> at =
+        config
+            .get()
+            .season(next.getAsInt())
+            .flatMap(f -> Optional.ofNullable(f.spawnCandidates().get(name)));
+    if (at.isEmpty()) {
+      source.reply(unknown(next.getAsInt(), name));
+      return;
+    }
+    go.accept(source.player().get(), middle(at.get()));
+  }
+
+  void tpMarker(CommandSource source, Arguments arguments) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    String set = arguments.string("set");
+    String name = arguments.string("name").strip();
+    Optional<com.petepeterepeat.seasons.core.map.Waypoint> found =
+        config.get().waypoints().find(set, name);
+    if (found.isEmpty()) {
+      source.reply(messages().get("marker.unknown", "set", set, "name", name));
+      return;
+    }
+    go.accept(source.player().get(), middle(found.get().at()));
+  }
+
+  private static Position middle(Position block) {
+    return new Position(
+        block.dimension(),
+        block.blockX() + 0.5,
+        block.blockY(),
+        block.blockZ() + 0.5,
+        block.yaw(),
+        0f);
   }
 
   /** The {@code spawn} node under {@code /season}. */
@@ -61,13 +167,36 @@ final class SpawnCommands {
         .then(
             CommandNode.literal("set")
                 .executes(this::set)
+                .then(
+                    CommandNode.literal("at")
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy()).executes(this::set)))
                 .then(CommandNode.argument("candidate", ArgumentType.word()).executes(this::set)))
+        .then(
+            CommandNode.literal("show")
+                .executes(this::show)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::show)))
+        .then(CommandNode.literal("clear").executes(this::clear))
         .then(
             CommandNode.literal("candidate")
                 .then(
                     CommandNode.literal("add")
                         .then(
-                            CommandNode.argument("name", ArgumentType.word()).executes(this::add)))
+                            CommandNode.argument("name", ArgumentType.word())
+                                .executes(this::add)
+                                .then(
+                                    CommandNode.argument("at", ArgumentType.greedy())
+                                        .executes(this::add))))
+                .then(
+                    CommandNode.literal("move")
+                        .then(
+                            CommandNode.argument("name", ArgumentType.word())
+                                .executes(this::move)
+                                .then(
+                                    CommandNode.argument("at", ArgumentType.greedy())
+                                        .executes(this::move))))
                 .then(
                     CommandNode.literal("remove")
                         .then(
@@ -83,7 +212,8 @@ final class SpawnCommands {
   void set(CommandSource source, Arguments arguments) {
     Messages messages = messages();
     Optional<String> candidate = arguments.optionalString("candidate");
-    if (candidate.isEmpty() && source.player().isEmpty()) {
+    Optional<String> typed = arguments.optionalString("at");
+    if (candidate.isEmpty() && typed.isEmpty() && source.player().isEmpty()) {
       source.reply(messages.get("spawn.player-only"));
       return;
     }
@@ -103,6 +233,12 @@ final class SpawnCommands {
         return;
       }
       at = found.get();
+    } else if (typed.isPresent()) {
+      Optional<Position> read = typed(source, typed.get());
+      if (read.isEmpty()) {
+        return;
+      }
+      at = read.get();
     } else {
       at = platform.players().position(source.player().get());
     }
@@ -133,6 +269,7 @@ final class SpawnCommands {
                   ? place("spawn.set-candidate", season, at, "name", candidate.get())
                   : place("spawn.set", season, at));
           warnIfFar(source, at);
+          help.after(source, "season.spawn.set");
         });
   }
 
@@ -146,12 +283,16 @@ final class SpawnCommands {
       source.reply(messages.get("season.none"));
       return;
     }
-    if (source.player().isEmpty()) {
+    Optional<String> typed = arguments.optionalString("at");
+    if (source.player().isEmpty() && typed.isEmpty()) {
       source.reply(messages.get("spawn.candidate.player-only"));
       return;
     }
     int season = next.getAsInt();
-    if (!SeasonFile.CANDIDATE_NAME.matcher(name).matches()) {
+    // "at" and "here" read as positions in the commands that take a candidate (questions 265).
+    if (!SeasonFile.CANDIDATE_NAME.matcher(name).matches()
+        || name.equals("at")
+        || name.equals(Positions.HERE)) {
       source.reply(messages.get("spawn.candidate.bad-name"));
       return;
     }
@@ -161,20 +302,15 @@ final class SpawnCommands {
           messages.get("spawn.candidate.exists", "season", Integer.toString(season), "name", name));
       return;
     }
-    Position at = platform.players().position(source.player().get());
-    Optional<Zone> holding = file.flatMap(f -> f.zoneHolding(at));
-    if (holding.isPresent()) {
-      source.reply(
-          messages.get(
-              "spawn.candidate.inside",
-              "season",
-              Integer.toString(season),
-              "zone",
-              holding.get().id()));
+    Optional<Position> found =
+        typed.isPresent()
+            ? typed(source, typed.get())
+            : Optional.of(platform.players().position(source.player().get()));
+    if (found.isEmpty()) {
       return;
     }
-    if (config.get().inHall(at)) {
-      source.reply(messages.get("spawn.candidate.in-hall", "season", Integer.toString(season)));
+    Position at = found.get();
+    if (!candidateFits(source, season, file, at)) {
       return;
     }
     edits.edit(
@@ -190,6 +326,138 @@ final class SpawnCommands {
           source.reply(place("spawn.candidate.added", season, at, "name", name));
           warnIfFar(source, at);
         });
+  }
+
+  /** {@code candidate move <name> [position]}: the same candidate somewhere else. */
+  void move(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    String name = arguments.string("name");
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    Optional<String> typed = arguments.optionalString("at");
+    if (source.player().isEmpty() && typed.isEmpty()) {
+      source.reply(messages.get("spawn.candidate.player-only"));
+      return;
+    }
+    int season = next.getAsInt();
+    Optional<SeasonFile> file = config.get().season(season);
+    Optional<Position> before =
+        file.flatMap(f -> Optional.ofNullable(f.spawnCandidates().get(name)));
+    if (before.isEmpty()) {
+      source.reply(unknown(season, name));
+      return;
+    }
+    Optional<Position> found =
+        typed.isPresent()
+            ? typed(source, typed.get())
+            : Optional.of(platform.players().position(source.player().get()));
+    if (found.isEmpty()) {
+      return;
+    }
+    Position at = found.get();
+    if (!candidateFits(source, season, file, at)) {
+      return;
+    }
+    edits.edit(
+        source,
+        new ConfigEdits.Change(
+            "seasons/" + season + ".yml spawnCandidates." + name,
+            ConfigEdits.describe(before.get()),
+            ConfigEdits.describe(at)),
+        loader.seasonFile(season),
+        () -> SeasonFiles.writeCandidate(loader.seasonFile(season), backups, season, name, at),
+        "spawn.candidate.failed",
+        () -> {
+          source.reply(place("spawn.candidate.moved", season, at, "name", name));
+          warnIfFar(source, at);
+        });
+  }
+
+  /** Whether a candidate may go there: outside every zone and the Hall; if not, says why. */
+  private boolean candidateFits(
+      CommandSource source, int season, Optional<SeasonFile> file, Position at) {
+    Messages messages = messages();
+    Optional<Zone> holding = file.flatMap(f -> f.zoneHolding(at));
+    if (holding.isPresent()) {
+      source.reply(
+          messages.get(
+              "spawn.candidate.inside",
+              "season",
+              Integer.toString(season),
+              "zone",
+              holding.get().id()));
+      return false;
+    }
+    if (config.get().inHall(at)) {
+      source.reply(messages.get("spawn.candidate.in-hall", "season", Integer.toString(season)));
+      return false;
+    }
+    return true;
+  }
+
+  /** {@code spawn show [season]}: a season's spawn, the next season's by default. */
+  void show(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    int season =
+        arguments.values().containsKey("season") ? arguments.integer("season") : next.getAsInt();
+    Optional<Position> spawn = config.get().season(season).flatMap(SeasonFile::spawn);
+    if (spawn.isEmpty()) {
+      source.reply(messages.get("spawn.show-none", "season", Integer.toString(season)));
+      return;
+    }
+    source.reply(
+        place(
+            "spawn.show",
+            season,
+            spawn.get(),
+            "distance",
+            Long.toString(SeasonFile.distanceFromOrigin(spawn.get()))));
+  }
+
+  /** {@code spawn clear}: the next season has no spawn again, so launch waits for one. */
+  void clear(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    int season = next.getAsInt();
+    Optional<Position> spawn = config.get().season(season).flatMap(SeasonFile::spawn);
+    if (spawn.isEmpty()) {
+      source.reply(messages.get("spawn.show-none", "season", Integer.toString(season)));
+      return;
+    }
+    edits.edit(
+        source,
+        new ConfigEdits.Change(
+            "seasons/" + season + ".yml spawn",
+            ConfigEdits.describe(spawn.get()),
+            ConfigEdits.NONE),
+        loader.seasonFile(season),
+        () -> SeasonFiles.clearSpawn(loader.seasonFile(season), backups, season),
+        "spawn.failed",
+        () -> source.reply(messages().get("spawn.cleared", "season", Integer.toString(season))));
+  }
+
+  /** A position typed after a command, in the sender's dimension; empty after saying why not. */
+  private Optional<Position> typed(CommandSource source, String text) {
+    Optional<Position> origin = source.player().map(p -> platform.players().position(p));
+    String dimension = origin.map(Position::dimension).orElse("minecraft:overworld");
+    Positions.Read read = Positions.typed(text, origin, dimension, Positions.facing(origin));
+    if (read instanceof Positions.Read.Block block) {
+      return Optional.of(block.block());
+    }
+    source.reply(messages().get(((Positions.Read.Failed) read).messageKey()));
+    return Optional.empty();
   }
 
   void remove(CommandSource source, Arguments arguments) {

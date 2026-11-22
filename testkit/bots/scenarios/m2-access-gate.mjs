@@ -2,8 +2,8 @@
 // @sessions 2
 // Access mode gate (questions 169): the gate plane is iron bars while the cell is locked and air
 // while its owner may decorate it. The owner inside when it shuts goes to the gallery entry; a
-// visitor can't break it; a gate changed by /setblock is put back and audited; it is never set over
-// a chest, which keeps its items; after a restart it is still shut.
+// visitor can't break it; a gate changed by /setblock is put back and audited; a chest in its plane
+// keeps its items and the gate shuts around it (questions 280); after a restart it is still shut.
 import { assert } from '../lib/context.mjs'
 import { GATE, gateGallery, waitGate } from '../lib/gates.mjs'
 import { FLOOR, breakBlock, inside } from '../lib/hall.mjs'
@@ -49,19 +49,14 @@ export default {
       const repairs = audit(ctx).filter((e) => e.action === 'reconcile' && e.target === c1.key)
       assert(repairs.some((e) => /gate/.test(e.details)), `the repair is audited: ${JSON.stringify(repairs)}`)
 
-      // A gate is never set over a block with contents: the chest keeps its diamond, admins are
-      // told, and the gate is set once the chest is gone.
+      // A chest in the plane keeps its diamond, and the gate shuts around it (questions 280).
       await ctx.command(admin, '/season decorate open', /^The decorating window for Season 2 is open: /)
       await waitGate(ctx, admin, AIR)
-      const warned = ctx.waitForMessages(admin, new RegExp(`^The gate of cell ${c1.key} is left as it is: the block at 22, ${FLOOR}, ${GATE.z} in its plane holds something`))
       await ctx.command(admin, `/setblock 22 ${FLOOR} ${GATE.z} minecraft:chest`, /^Changed the block/)
       await ctx.command(admin, `/item replace block 22 ${FLOOR} ${GATE.z} container.0 with minecraft:diamond`, /^Replaced /)
-      await warned
       await ctx.command(admin, '/season decorate close', /^The decorating window for Season 2 is closed\.$/)
-      await ctx.sync(admin, [], 40)
+      await ctx.eventually(async () => assert(await ctx.holds(admin, `block 21 ${FLOOR} ${GATE.z} ${BARS}`), 'the rest of the gate shuts'))
       assert(await ctx.holds(admin, `block 22 ${FLOOR} ${GATE.z} minecraft:chest{Items:[{id:"minecraft:diamond"}]}`), 'the chest keeps its diamond')
-      assert(await ctx.holds(admin, `block 21 ${FLOOR} ${GATE.z} ${AIR}`), 'and the rest of the gate waits')
-      assert(audit(ctx).some((e) => e.action === 'gate' && e.target === c1.key && /^contents at /.test(e.details)), 'it is audited')
       await ctx.command(admin, `/setblock 22 ${FLOOR} ${GATE.z} ${AIR}`, /^Changed the block/)
       await waitGate(ctx, admin, BARS)
     },

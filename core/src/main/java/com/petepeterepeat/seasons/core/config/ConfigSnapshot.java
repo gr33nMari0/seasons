@@ -175,6 +175,24 @@ public record ConfigSnapshot(
     return galleries.values();
   }
 
+  /** The same files without a gallery, as {@code /hof gallery remove} leaves them. */
+  public ConfigSnapshot withoutGallery(String id) {
+    Map<String, Gallery> next = new TreeMap<>(galleries);
+    next.remove(id);
+    return new ConfigSnapshot(
+        config,
+        messages,
+        secrets,
+        seasons,
+        next,
+        galleriesLeftOut,
+        waypoints,
+        markersLeftOut,
+        settings,
+        hall,
+        hallLeftOut);
+  }
+
   /** The same files with one gallery added or replaced, as a {@code /hof} command leaves them. */
   public ConfigSnapshot withGallery(Gallery gallery) {
     Map<String, Gallery> next = new TreeMap<>(galleries);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.hall;
 
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -21,11 +22,22 @@ public final class CellEdits {
   private final Platform platform;
   private final ConfigHolder config;
   private final HallService hall;
+  private Optional<CommandHelp> help = Optional.empty();
 
   public CellEdits(Platform platform, ConfigHolder config, HallService hall) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
+  }
+
+  /** Where next steps come from (questions 268), once the commands are built. */
+  public void bindHelp(CommandHelp next) {
+    this.help = Optional.of(next);
+  }
+
+  /** Offers the next steps after a setup step. */
+  void hint(CommandSource source, String key, String... placeholders) {
+    help.ifPresent(h -> h.after(source, key, placeholders));
   }
 
   /**
@@ -72,7 +84,8 @@ public final class CellEdits {
                 "from",
                 corner(bounds.min()),
                 "to",
-                corner(bounds.max())));
+                corner(bounds.max())),
+        () -> hint(source, "hof.gallery.bounds", "gallery", gallery.id()));
   }
 
   /**
@@ -212,19 +225,98 @@ public final class CellEdits {
 
   /** Replies once the gallery file is written, so the file on disk matches what was said. */
   void saved(CommandSource source, CompletableFuture<Void> save, Message message) {
+    saved(source, save, message, () -> {});
+  }
+
+  /**
+   * {@code /hof cell redefine}'s selection (questions 273): new bounds, inside the gallery and
+   * clear of other cells as always, but anchors left outside are taken off and listed rather than
+   * stopping it. Gate corners beside the bounds stay, as questions 250 allows.
+   */
+  public boolean redefine(CommandSource source, HallService.CellRef ref, Bounds bounds) {
+    Gallery gallery = ref.gallery();
+    if (held(source, gallery)) {
+      return false;
+    }
+    if (gallery.bounds().isPresent() && !gallery.bounds().get().contains(bounds)) {
+      source.reply(
+          messages().get("hof.cell.outside-gallery", "cell", ref.key(), "gallery", gallery.id()));
+      return false;
+    }
+    for (Cell other : gallery.cells()) {
+      if (!other.id().equals(ref.cell().id())
+          && other.bounds().map(b -> b.overlaps(bounds)).orElse(false)) {
+        source.reply(
+            messages()
+                .get(
+                    "hof.cell.overlaps",
+                    "cell",
+                    ref.key(),
+                    "other",
+                    gallery.id() + ":" + other.id()));
+        return false;
+      }
+    }
+    List<Anchor> kept = new ArrayList<>();
+    List<String> dropped = new ArrayList<>();
+    for (Anchor anchor : ref.cell().anchors()) {
+      if (GalleryRules.fits(bounds, anchor)) {
+        kept.add(anchor);
+      } else {
+        dropped.add(anchor.type().id() + " at " + corner(anchor.at()));
+      }
+    }
+    Cell cell = ref.cell();
+    Cell next =
+        new Cell(
+            cell.id(),
+            Optional.of(bounds),
+            kept,
+            cell.owners(),
+            cell.imported(),
+            cell.pose(),
+            cell.gateShut());
+    Gallery after = gallery.withCell(next);
+    saved(
+        source,
+        hall.save(after),
+        messages()
+            .get(
+                "hof.cell.bounds",
+                "cell",
+                ref.key(),
+                "from",
+                corner(bounds.min()),
+                "to",
+                corner(bounds.max())),
+        () -> {
+          if (!dropped.isEmpty()) {
+            source.reply(
+                messages()
+                    .get("hof.cell.redefined-dropped", "anchors", String.join(", ", dropped)));
+          }
+          source.reply(messages().get("hof.undo.offer"));
+        });
+    return true;
+  }
+
+  /** Replies once the file is written, then, if it was, runs {@code then}, such as a hint. */
+  void saved(CommandSource source, CompletableFuture<Void> save, Message message, Runnable then) {
+    hall.claimUndo(source, save);
     var _ =
         save.whenComplete((done, failure) ->
             platform
                 .scheduler()
-                .runGlobal(() ->
+                .runGlobal(() -> {
+                  if (failure == null) {
+                    source.reply(message);
+                    then.run();
+                  } else {
                     source.reply(
-                        failure == null
-                            ? message
-                            : messages()
-                                .get(
-                                    "hof.save-failed",
-                                    "error",
-                                    String.valueOf(failure.getMessage())))));
+                        messages()
+                            .get("hof.save-failed", "error", String.valueOf(failure.getMessage())));
+                  }
+                }));
   }
 
   static String corner(Position at) {

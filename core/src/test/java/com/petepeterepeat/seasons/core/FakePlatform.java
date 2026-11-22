@@ -222,6 +222,18 @@ public final class FakePlatform {
   /** Whether giving an item throws, as an unexpected failure part-way through a withdrawal. */
   public boolean giveFails;
 
+  private static final Set<String> ADMIN_CONVENIENCES =
+      Set.of("seasons.hof.anywhere", "seasons.hof.roam");
+
+  /** Who holds seasons.hof.anywhere and seasons.hof.roam. */
+  public final Set<PlayerId> conveniences = new java.util.HashSet<>();
+
+  /** Players given the wand who have put it away. */
+  public final Set<PlayerId> wandAway = new java.util.HashSet<>();
+
+  /** The outlines each player is shown (questions 276). */
+  public final Map<PlayerId, List<Displays.Outline>> outlined = new HashMap<>();
+
   /** Who holds the bypass nodes. */
   public final Set<PlayerId> bypassing = new java.util.HashSet<>();
 
@@ -678,6 +690,11 @@ public final class FakePlatform {
           }
 
           @Override
+          public boolean holdsWand(PlayerId player) {
+            return wands.contains(player) && !wandAway.contains(player);
+          }
+
+          @Override
           public boolean isArchived(NeutralItem item) {
             return archivedItems.contains(item);
           }
@@ -1021,6 +1038,15 @@ public final class FakePlatform {
             gone.forEach(displays::remove);
             return gone.size();
           }
+
+          @Override
+          public void outline(PlayerId viewer, List<Displays.Outline> boxes) {
+            if (boxes.isEmpty()) {
+              outlined.remove(viewer);
+            } else {
+              outlined.put(viewer, List.copyOf(boxes));
+            }
+          }
         };
     DragonFight dragon =
         new DragonFight() {
@@ -1139,9 +1165,11 @@ public final class FakePlatform {
         shownDisplays,
         menus,
         (root, aliases) -> commands.add(root),
-        // Everyone holds every node except the bypass nodes, which only those a test names get.
+        // Everyone holds every node except the bypass nodes and the admin conveniences (questions
+        // 262 and 263), which only those a test names get.
         (player, node) ->
             (!node.endsWith(".bypass") || bypassing.contains(player))
+                && (!ADMIN_CONVENIENCES.contains(node) || conveniences.contains(player))
                 && !(node.startsWith("seasons.admin.") && withoutAdmin.contains(player))
                 && !denied.getOrDefault(player, Set.of()).contains(node),
         events,

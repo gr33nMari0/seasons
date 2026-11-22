@@ -112,7 +112,11 @@ public final class HallRenderer implements DisplayRenderer {
 
     Position at();
 
-    record Text(Position at, Message text, String tag) implements Planned {}
+    record Text(Position at, Message text, String tag, double scale) implements Planned {
+      public Text(Position at, Message text, String tag) {
+        this(at, text, tag, 1.0);
+      }
+    }
 
     record Shape(Figure figure) implements Planned {
       @Override
@@ -202,7 +206,8 @@ public final class HallRenderer implements DisplayRenderer {
                 new Planned.Text(
                     above(anchor.at(), PLAQUE_HEIGHT),
                     plaque(messages, archive, won),
-                    new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString())));
+                    new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString(),
+                    ref.gallery().plaqueScale(anchor))));
     if (archive.imported().isPresent()) {
       List<ImportedCell.Frame> frames = new ArrayList<>(archive.imported().get().frames());
       for (Anchor trophy : ref.cell().anchors(AnchorType.TROPHY)) {
@@ -225,7 +230,8 @@ public final class HallRenderer implements DisplayRenderer {
   UUID spawn(Planned planned) {
     return switch (planned) {
       case Planned.Shape shape -> platform.displays().spawnFigure(shape.figure());
-      case Planned.Text text -> platform.displays().spawnText(text.at(), text.text(), text.tag());
+      case Planned.Text text ->
+          platform.displays().spawnText(text.at(), text.text(), text.tag(), text.scale());
       case Planned.Item item -> platform.displays().spawnItem(item.at(), item.item(), item.tag());
     };
   }

@@ -181,6 +181,35 @@ final class PaperHallGuard implements Listener {
     }
   }
 
+  /** A placement the Hall's rules allowed: its kind, block and tick (questions 282). */
+  private record Allowed(
+      org.bukkit.entity.EntityType type, String world, int x, int y, int z, int tick) {
+    static Allowed of(Entity entity, int tick) {
+      Location at = entity.getLocation();
+      return new Allowed(
+          entity.getType(),
+          at.getWorld().getName(),
+          at.getBlockX(),
+          at.getBlockY(),
+          at.getBlockZ(),
+          tick);
+    }
+  }
+
+  private final java.util.Set<Allowed> allowedPlacements = new java.util.HashSet<>();
+
+  /** Remembers a creature's placement the rules let through, for its spawn the same tick. */
+  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+  void onEntityPlaced(EntityPlaceEvent event) {
+    if (event.getPlayer() != null
+        && event.getEntity() instanceof org.bukkit.entity.LivingEntity
+        && protects(event.getEntity().getLocation())) {
+      int tick = org.bukkit.Bukkit.getCurrentTick();
+      allowedPlacements.removeIf(a -> a.tick() != tick);
+      allowedPlacements.add(Allowed.of(event.getEntity(), tick));
+    }
+  }
+
   private void placed(org.bukkit.event.Cancellable event, Player player, Entity entity) {
     events.decide(
         event,
@@ -380,6 +409,13 @@ final class PaperHallGuard implements Listener {
     if (reason != CreatureSpawnEvent.SpawnReason.CUSTOM
         && reason != CreatureSpawnEvent.SpawnReason.COMMAND
         && protects(event.getLocation())) {
+      // An armour stand a player placed, where the Hall's rules allowed it (questions 282): its
+      // placement and its spawn come in the same tick at the same block.
+      int tick = org.bukkit.Bukkit.getCurrentTick();
+      if (reason == CreatureSpawnEvent.SpawnReason.DEFAULT
+          && allowedPlacements.remove(Allowed.of(event.getEntity(), tick))) {
+        return;
+      }
       event.setCancelled(true);
     }
   }

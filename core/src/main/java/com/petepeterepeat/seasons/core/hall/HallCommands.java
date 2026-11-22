@@ -3,8 +3,10 @@ package com.petepeterepeat.seasons.core.hall;
 
 import com.petepeterepeat.seasons.core.command.ArgumentType;
 import com.petepeterepeat.seasons.core.command.Arguments;
+import com.petepeterepeat.seasons.core.command.CommandHelp;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.message.Message;
@@ -74,6 +76,7 @@ public final class HallCommands {
   private final CellEdits edits;
   private final Wand wand;
   private final Optional<Stamper> stamper;
+  private final CommandHelp help;
 
   /**
    * @param importer empty when the journal couldn't be opened, so imports are refused
@@ -89,7 +92,8 @@ public final class HallCommands {
       PlayerStore players,
       CellEdits edits,
       Wand wand,
-      Optional<Stamper> stamper) {
+      Optional<Stamper> stamper,
+      CommandHelp help) {
     this.platform = platform;
     this.config = config;
     this.hall = hall;
@@ -101,6 +105,7 @@ public final class HallCommands {
     this.edits = edits;
     this.wand = wand;
     this.stamper = stamper;
+    this.help = help;
   }
 
   public CommandNode root() {
@@ -169,7 +174,11 @@ public final class HallCommands {
                                 .then(
                                     CommandNode.argument(
                                             "season", ArgumentType.integer(1, Integer.MAX_VALUE))
-                                        .executes(this::galleryCreate))))
+                                        .executes(this::galleryCreate)
+                                        .then(
+                                            CommandNode.argument("options", ArgumentType.greedy())
+                                                .suggests((s, t) -> List.of("--legacy"))
+                                                .executes(this::galleryCreate)))))
                 .then(
                     CommandNode.literal("bounds")
                         .then(
@@ -283,7 +292,61 @@ public final class HallCommands {
                         .then(
                             CommandNode.argument("cell", ArgumentType.id())
                                 .executes(this::cellInfo))))
-        .then(CommandNode.literal("wand").permission(PERMISSION_ADMIN).executes(wand::give))
+        .then(
+            CommandNode.literal("tp")
+                .permission(PERMISSION_ADMIN)
+                .then(CommandNode.literal("hub").executes(this::tpHub))
+                .then(
+                    CommandNode.literal("gallery")
+                        .then(
+                            CommandNode.argument("gallery", ArgumentType.word())
+                                .executes(this::tpGallery)))
+                .then(
+                    CommandNode.literal("cell")
+                        .then(
+                            CommandNode.argument("cell", ArgumentType.id()).executes(this::tpCell)))
+                .then(
+                    CommandNode.literal("player")
+                        .then(
+                            CommandNode.argument("player", ArgumentType.word())
+                                .executes(this::tpPlayer)))
+                .then(
+                    CommandNode.literal("link")
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::tpLink))))
+        .then(
+            CommandNode.literal("wand")
+                .permission(PERMISSION_ADMIN)
+                .executes(wand::give)
+                .then(
+                    CommandNode.literal("mode")
+                        .then(
+                            CommandNode.argument("mode", ArgumentType.word())
+                                .executes(wand::mode))))
+        .then(
+            CommandNode.literal("sel")
+                .permission(PERMISSION_ADMIN)
+                .then(
+                    CommandNode.literal("pos1")
+                        .executes((source, args) -> wand.selCorner(source, args, 1))
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes((source, args) -> wand.selCorner(source, args, 1))))
+                .then(
+                    CommandNode.literal("pos2")
+                        .executes((source, args) -> wand.selCorner(source, args, 2))
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes((source, args) -> wand.selCorner(source, args, 2))))
+                .then(CommandNode.literal("info").executes(wand::selInfo))
+                .then(CommandNode.literal("clear").executes(wand::selClear)))
+        .then(
+            CommandNode.literal("show")
+                .permission(PERMISSION_ADMIN)
+                .then(CommandNode.literal("on").executes((source, args) -> show(source, true)))
+                .then(CommandNode.literal("off").executes((source, args) -> show(source, false))))
+        .then(CommandNode.literal("undo").permission(PERMISSION_ADMIN).executes(this::undo))
         .then(
             CommandNode.literal("stamp")
                 .permission(PERMISSION_ADMIN)
@@ -360,10 +423,32 @@ public final class HallCommands {
     }
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+    boolean legacy = false;
+    for (String option : Splitter.split(arguments.optionalString("options").orElse(""))) {
+      if (!option.equals("--legacy")) {
+        source.reply(messages().get("hof.gallery.bad-option", "option", option));
+        return;
+      }
+      legacy = true;
+    }
+    Gallery made = Gallery.create(id, season, dimension);
+    if (legacy) {
+      // Hand-built cells kept as they are (questions 281).
+      made = made.withKind(Gallery.Kind.LEGACY);
+    }
     saved(
         source,
-        hall.save(Gallery.create(id, season, dimension)),
-        messages().get("hof.gallery.created", "gallery", id, "season", Integer.toString(season)));
+        hall.save(made),
+        messages()
+            .get(
+                legacy ? "hof.gallery.created-legacy" : "hof.gallery.created",
+                "gallery",
+                id,
+                "season",
+                Integer.toString(season)),
+        "hof.gallery.create",
+        "gallery",
+        id);
   }
 
   void galleryBounds(CommandSource source, Arguments arguments) {
@@ -382,14 +467,8 @@ public final class HallCommands {
    */
   private Optional<Bounds> corners(CommandSource source, Arguments arguments, Gallery gallery) {
     Optional<String> given = arguments.optionalString("corners");
-    if (given.isPresent() && !given.get().isBlank()) {
-      Optional<int[]> corners = numbers(given.get(), 6);
-      if (corners.isEmpty()) {
-        source.reply(messages().get("hof.cell.corners"));
-        return Optional.empty();
-      }
-      int[] c = corners.get();
-      return Optional.of(Bounds.between(gallery.dimension(), c[0], c[1], c[2], c[3], c[4], c[5]));
+    if (given.isPresent() && !given.get().isBlank() && !isSelection(given.get())) {
+      return typedBox(source, given.get(), gallery.dimension());
     }
     Optional<Bounds> selected = source.player().flatMap(wand::selection);
     if (selected.isEmpty()) {
@@ -420,15 +499,31 @@ public final class HallCommands {
     if (edits.held(source, found.get())) {
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), found.get().dimension());
-    if (at.isEmpty()) {
+    Optional<String> typed = arguments.optionalString("at");
+    Optional<Spot> spot;
+    if (typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().startsWith(Positions.SELECTION))) {
+      spot = spot(source, typed, found.get().dimension());
+    } else {
+      spot =
+          position(source, typed, found.get().dimension())
+              .map(at -> new Spot(at, Optional.empty()));
+    }
+    if (spot.isEmpty()) {
       return;
     }
+    Position at = spot.get().point();
+    Optional<Bounds> area = spot.get().area();
     saved(
         source,
-        hall.save(found.get().withEntry(at.get())),
-        messages().get("hof.gallery.entry", place("gallery", found.get().id(), at.get())));
+        hall.save(found.get().withEntry(at, area)),
+        area.isPresent()
+            ? messages()
+                .get(
+                    "hof.gallery.entry-area",
+                    with(areaText(area.get()), "gallery", found.get().id()))
+            : messages().get("hof.gallery.entry", place("gallery", found.get().id(), at)));
   }
 
   void galleryExit(CommandSource source, Arguments arguments) {
@@ -439,8 +534,23 @@ public final class HallCommands {
     if (edits.held(source, found.get())) {
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), found.get().dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if (typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().equals(Positions.SELECTION))) {
+      Optional<Spot> spot = spot(source, typed, found.get().dimension());
+      if (spot.isEmpty()) {
+        return;
+      }
+      Bounds area = spot.get().area().orElseThrow();
+      saved(
+          source,
+          hall.save(found.get().withExitArea(area)),
+          messages()
+              .get("hof.gallery.exit-area", with(areaText(area), "gallery", found.get().id())));
+      return;
+    }
+    Optional<Position> at = position(source, typed, found.get().dimension());
     if (at.isEmpty()) {
       return;
     }
@@ -633,26 +743,114 @@ public final class HallCommands {
                 "from",
                 CellEdits.corner(hub.min()),
                 "to",
-                CellEdits.corner(hub.max())));
+                CellEdits.corner(hub.max())),
+        "hof.hall.hub");
   }
 
   /** A box from typed corners in a dimension, or else the player's wand selection. */
   private Optional<Bounds> box(CommandSource source, Arguments arguments, String dimension) {
     Optional<String> given = arguments.optionalString("corners");
-    if (given.isPresent() && !given.get().isBlank()) {
-      Optional<int[]> corners = numbers(given.get(), 6);
-      if (corners.isEmpty()) {
-        source.reply(messages().get("hof.cell.corners"));
-        return Optional.empty();
-      }
-      int[] c = corners.get();
-      return Optional.of(Bounds.between(dimension, c[0], c[1], c[2], c[3], c[4], c[5]));
+    if (given.isPresent() && !given.get().isBlank() && !isSelection(given.get())) {
+      return typedBox(source, given.get(), dimension);
     }
     Optional<Bounds> selected = source.player().flatMap(wand::selection);
     if (selected.isEmpty()) {
       source.reply(messages().get("hof.cell.corners"));
     }
     return selected;
+  }
+
+  private static boolean isSelection(String text) {
+    return text.trim().equals(Positions.SELECTION);
+  }
+
+  /** A box typed as two positions, each absolute, relative or {@code here} (questions 264). */
+  Optional<Bounds> typedBox(CommandSource source, String text, String dimension) {
+    List<String> words = List.of(Splitter.split(text));
+    Optional<Position> origin = origin(source);
+    Positions.Read first = Positions.block(words, 0, origin, dimension);
+    if (first instanceof Positions.Read.Block a) {
+      Positions.Read second = Positions.block(words, a.used(), origin, dimension);
+      if (second instanceof Positions.Read.Block b && a.used() + b.used() == words.size()) {
+        Position p = a.block();
+        Position q = b.block();
+        return Optional.of(
+            Bounds.between(
+                dimension, p.blockX(), p.blockY(), p.blockZ(), q.blockX(), q.blockY(), q.blockZ()));
+      }
+      if (second instanceof Positions.Read.Failed failed
+          && failed.messageKey().equals(Positions.CONSOLE)) {
+        source.reply(messages().get(Positions.CONSOLE));
+        return Optional.empty();
+      }
+    } else if (first instanceof Positions.Read.Failed failed
+        && failed.messageKey().equals(Positions.CONSOLE)) {
+      source.reply(messages().get(Positions.CONSOLE));
+      return Optional.empty();
+    }
+    source.reply(messages().get("position.box"));
+    return Optional.empty();
+  }
+
+  /** A point, or a box from its first corner (questions 279), as typed. */
+  private record Spot(Position point, Optional<Bounds> area) {}
+
+  /**
+   * A typed point {@code <position> [yaw]}, or a box {@code <position> <position> [yaw]} or {@code
+   * sel [yaw]}, at most 32 blocks a side; with nothing typed, where the sender stands.
+   */
+  private Optional<Spot> spot(CommandSource source, Optional<String> given, String dimension) {
+    if (given.isEmpty() || given.get().isBlank()) {
+      return standing(source, Optional.empty(), dimension)
+          .map(at -> new Spot(at, Optional.empty()));
+    }
+    List<String> words = new ArrayList<>(List.of(Splitter.split(given.get())));
+    Optional<Float> yaw = Optional.empty();
+    if (words.size() == 2 || words.size() == 4 || words.size() == 7) {
+      yaw = Positions.yaw(words.getLast());
+      if (yaw.isPresent()) {
+        words.removeLast();
+      }
+    }
+    Optional<Bounds> box;
+    if (words.size() == 1 && words.getFirst().equals(Positions.SELECTION)) {
+      box = source.player().flatMap(wand::selection);
+      if (box.isEmpty()) {
+        source.reply(messages().get("hof.cell.corners"));
+        return Optional.empty();
+      }
+    } else if (words.size() == 6
+        || (words.size() >= 2 && words.contains(Positions.HERE) && words.size() <= 4)) {
+      box = typedBox(source, String.join(" ", words), dimension);
+      if (box.isEmpty()) {
+        return Optional.empty();
+      }
+    } else {
+      return standing(source, given, dimension).map(at -> new Spot(at, Optional.empty()));
+    }
+    Bounds b = box.get();
+    if (b.maxX() - b.minX() >= GalleryFiles.MAX_AREA
+        || b.maxY() - b.minY() >= GalleryFiles.MAX_AREA
+        || b.maxZ() - b.minZ() >= GalleryFiles.MAX_AREA) {
+      source.reply(
+          messages().get("hof.area.too-big", "max", Integer.toString(GalleryFiles.MAX_AREA)));
+      return Optional.empty();
+    }
+    float facing = yaw.orElse(origin(source).map(at -> Wand.facing(at.yaw())).orElse(0f));
+    Position min = b.min();
+    return Optional.of(
+        new Spot(
+            new Position(b.dimension(), min.blockX(), min.blockY(), min.blockZ(), facing, 0f),
+            Optional.of(b)));
+  }
+
+  private static String[] areaText(Bounds b) {
+    return new String[] {"from", CellEdits.corner(b.min()), "to", CellEdits.corner(b.max())};
+  }
+
+  /** Where the sender stands and faces, or empty for the console. */
+  private Optional<Position> origin(CommandSource source) {
+    return source.player().map(p -> platform.players().position(p));
   }
 
   void hallSpawn(CommandSource source, Arguments arguments) {
@@ -664,18 +862,23 @@ public final class HallCommands {
       source.reply(messages().get("hof.hall.no-hub"));
       return;
     }
-    Optional<Position> at = standing(source, arguments.optionalString("at"), layout.dimension());
-    if (at.isEmpty()) {
+    Optional<Spot> spot = spot(source, arguments.optionalString("at"), layout.dimension());
+    if (spot.isEmpty()) {
       return;
     }
-    if (!layout.inHub(at.get())) {
+    Position at = spot.get().point();
+    if (!layout.inHub(at)
+        || spot.get().area().map(a -> !layout.hub().orElseThrow().contains(a)).orElse(false)) {
       source.reply(messages().get("hof.hall.spawn-outside"));
       return;
     }
     saved(
         source,
-        hall.saveHall(layout.withSpawn(at.get())),
-        messages().get("hof.hall.spawn", xyz(at.get())));
+        hall.saveHall(layout.withSpawn(at, spot.get().area())),
+        spot.get().area().isPresent()
+            ? messages().get("hof.hall.spawn-area", areaText(spot.get().area().get()))
+            : messages().get("hof.hall.spawn", xyz(at)),
+        "hof.hall.spawn");
   }
 
   /**
@@ -684,7 +887,12 @@ public final class HallCommands {
   private Optional<Position> standing(
       CommandSource source, Optional<String> given, String dimension) {
     if (given.isPresent() && !given.get().isBlank()) {
-      return position(source, given, dimension);
+      // Typed: no facing unless typed, but here faces the sender's way, as standing there does.
+      Optional<Float> facing =
+          given.get().trim().startsWith(Positions.HERE)
+              ? origin(source).map(at -> Wand.facing(at.yaw()))
+              : Optional.empty();
+      return typedPosition(source, given.get(), dimension, facing);
     }
     if (source.player().isEmpty()) {
       source.reply(messages().get("hof.cell.anchor-where"));
@@ -705,7 +913,25 @@ public final class HallCommands {
       saved(source, hall.saveHall(layout.withoutExits()), messages().get("hof.hall.no-exits"));
       return;
     }
-    Optional<Position> at = position(source, arguments.optionalString("at"), layout.dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if ((typed.isPresent() && Splitter.split(typed.get()).length >= 6)
+        || typed.map(t -> t.trim().equals(Positions.SELECTION)).orElse(false)) {
+      Optional<Spot> spot = spot(source, typed, layout.dimension());
+      if (spot.isEmpty()) {
+        return;
+      }
+      Bounds area = spot.get().area().orElseThrow();
+      if (!layout.hub().map(h -> h.contains(area)).orElse(false)) {
+        source.reply(messages().get("hof.hall.exit-outside"));
+        return;
+      }
+      saved(
+          source,
+          hall.saveHall(layout.withExitArea(area)),
+          messages().get("hof.hall.exit-area", areaText(area)));
+      return;
+    }
+    Optional<Position> at = position(source, typed, layout.dimension());
     if (at.isEmpty()) {
       return;
     }
@@ -725,6 +951,15 @@ public final class HallCommands {
             hall.layout(),
             hall.galleries(),
             at -> platform.world().block(at).type().equals("minecraft:air"),
+            at -> platform.world().block(at).type(),
+            Gates.blockId(config.get().config().cells().gateBlock()),
+            at ->
+                platform
+                        .world()
+                        .block(
+                            Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ()))
+                        .solid()
+                    && platform.world().block(at).passable(),
             visits::seasonSpawn,
             messages());
     source.reply(messages().get("hof.check.header"));
@@ -771,6 +1006,33 @@ public final class HallCommands {
         return;
       }
       words.subList(0, 2).clear();
+    }
+    if (!words.isEmpty() && words.getFirst().equals("area")) {
+      // A link that is an area, taken by passing through it (questions 279).
+      String dimension =
+          source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
+      Optional<Spot> spot =
+          spot(source, Optional.of(String.join(" ", words.subList(1, words.size()))), dimension);
+      if (spot.isEmpty()) {
+        return;
+      }
+      if (spot.get().area().isEmpty()) {
+        source.reply(messages().get("hof.link.usage"));
+        return;
+      }
+      Bounds area = spot.get().area().get();
+      HallLayout.Link link = new HallLayout.Link(id, area.min(), to, Optional.of(area));
+      String[] where = with(areaText(area), "link", id);
+      saved(
+          source,
+          hall.saveHall(hall.layout().withLink(link)),
+          to.isPresent()
+              ? messages()
+                  .get(
+                      "hof.link.added-area",
+                      with(with(areaText(area), "link", id), "dest", describe(to.get())))
+              : messages().get("hof.link.added-area-nowhere", where));
+      return;
     }
     if (!words.isEmpty() && words.size() != 3) {
       source.reply(messages().get("hof.link.usage"));
@@ -929,7 +1191,10 @@ public final class HallCommands {
     saved(
         source,
         hall.save(next),
-        messages().get("hof.cell.created", "cell", id, "gallery", gallery.id()));
+        messages().get("hof.cell.created", "cell", id, "gallery", gallery.id()),
+        "hof.cell.new",
+        "cell",
+        gallery.id() + ":" + id);
   }
 
   void cellBounds(CommandSource source, Arguments arguments) {
@@ -957,8 +1222,22 @@ public final class HallCommands {
       source.reply(messages().get("hof.cell.anchor-no-bounds", "cell", ref.key()));
       return;
     }
-    Optional<Position> at =
-        position(source, arguments.optionalString("at"), ref.gallery().dimension());
+    Optional<String> typed = arguments.optionalString("at");
+    if (type.get() == AnchorType.ENTRY
+        && typed.isPresent()
+        && (Splitter.split(typed.get()).length >= 6
+            || typed.get().trim().startsWith(Positions.SELECTION))) {
+      // An entry may be a box arrivals spread over (questions 279).
+      Optional<Spot> spot = spot(source, typed, ref.gallery().dimension());
+      if (spot.isPresent()) {
+        edits.anchor(
+            source,
+            ref,
+            Anchor.of(AnchorType.ENTRY, spot.get().point()).withArea(spot.get().area()));
+      }
+      return;
+    }
+    Optional<Position> at = position(source, typed, ref.gallery().dimension());
     if (at.isEmpty()) {
       return;
     }
@@ -1367,11 +1646,136 @@ public final class HallCommands {
     stamper.get().stamp(source, arguments);
   }
 
+  // Outlines and undo (questions 275 and 276)
+
+  private Optional<HallOutlines> outlines = Optional.empty();
+
+  /** Where {@code /hof show} goes. */
+  public void bindOutlines(HallOutlines next) {
+    this.outlines = Optional.of(next);
+  }
+
+  private void show(CommandSource source, boolean on) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    outlines.ifPresent(o -> o.show(source.player().get(), on));
+    source.reply(messages().get(on ? "hof.show.on" : "hof.show.off"));
+  }
+
+  void undo(CommandSource source, Arguments arguments) {
+    switch (hall.undo(source)) {
+      case HallService.UndoResult.Nothing nothing ->
+          source.reply(messages().get("hof.undo.nothing"));
+      case HallService.UndoResult.Changed changed ->
+          source.reply(messages().get("hof.undo.changed", "file", changed.file()));
+      case HallService.UndoResult.Undone undone ->
+          edits.saved(
+              source,
+              undone.saved(),
+              messages().get("hof.undo.done", "file", undone.file()),
+              () -> {
+                hall.audited(actor(source), "undo", undone.file(), "");
+                undone
+                    .gallery()
+                    .ifPresent(g -> {
+                      var _ = reconciler.reconcile(g);
+                    });
+              });
+    }
+  }
+
+  // Admin teleports (questions 271)
+
+  private Optional<PlayerId> admin(CommandSource source) {
+    if (source.player().isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+    }
+    return source.player();
+  }
+
+  void tpHub(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    if (player.isEmpty()) {
+      return;
+    }
+    Optional<Position> spawn = visits.hallEntry();
+    if (spawn.isEmpty()) {
+      source.reply(messages().get("hof.visit.no-spawn"));
+      return;
+    }
+    visits.adminGo(player.get(), spawn.get());
+  }
+
+  void tpGallery(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    Optional<Gallery> found = player.isEmpty() ? Optional.empty() : gallery(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Optional<Position> to = hall.galleryEntry(found.get());
+    if (to.isEmpty()) {
+      source.reply(messages().get("hof.tp.nowhere", "what", found.get().id()));
+      return;
+    }
+    visits.adminGo(player.get(), to.get());
+  }
+
+  void tpCell(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    Optional<HallService.CellRef> found =
+        player.isEmpty() ? Optional.empty() : cell(source, arguments);
+    if (found.isEmpty()) {
+      return;
+    }
+    Optional<Position> to =
+        hall.arrival(found.get()).or(() -> hall.galleryEntry(found.get().gallery()));
+    if (to.isEmpty()) {
+      source.reply(messages().get("hof.tp.nowhere", "what", found.get().key()));
+      return;
+    }
+    visits.adminGo(player.get(), to.get());
+  }
+
+  void tpPlayer(CommandSource source, Arguments arguments) {
+    admin(source).ifPresent(p -> visits.adminGoTo(p, arguments.string("player")));
+  }
+
+  void tpLink(CommandSource source, Arguments arguments) {
+    Optional<PlayerId> player = admin(source);
+    if (player.isEmpty()) {
+      return;
+    }
+    String id = arguments.string("link");
+    Optional<HallLayout.Link> link = hall.layout().link(id);
+    if (link.isEmpty()) {
+      source.reply(messages().get("hof.link.unknown", "link", id));
+      return;
+    }
+    Position block = link.get().block();
+    // Beside the link, on top of its block: a plate is stood on, a button is beside a wall.
+    visits.adminGo(
+        player.get(),
+        HallService.standOn(
+            Position.of(block.dimension(), block.blockX(), block.blockY() + 1, block.blockZ())));
+  }
+
   // Helpers
 
   /** Replies once the gallery file is written, so the file on disk matches what was said. */
   private void saved(CommandSource source, CompletableFuture<Void> save, Message message) {
     edits.saved(source, save, message);
+  }
+
+  /** As {@link #saved}, offering the next steps once it is written (questions 268). */
+  private void saved(
+      CommandSource source,
+      CompletableFuture<Void> save,
+      Message message,
+      String hint,
+      String... placeholders) {
+    edits.saved(source, save, message, () -> help.after(source, hint, placeholders));
   }
 
   private Optional<Gallery> gallery(CommandSource source, Arguments arguments) {
@@ -1402,24 +1806,7 @@ public final class HallCommands {
   private Optional<Position> position(
       CommandSource source, Optional<String> given, String dimension) {
     if (given.isPresent() && !given.get().isBlank()) {
-      String[] words = Splitter.split(given.get().trim());
-      if (words.length == 3 || words.length == 4) {
-        try {
-          float yaw = words.length == 4 ? Float.parseFloat(words[3]) : 0f;
-          return Optional.of(
-              new Position(
-                  dimension,
-                  Integer.parseInt(words[0]),
-                  Integer.parseInt(words[1]),
-                  Integer.parseInt(words[2]),
-                  yaw,
-                  0f));
-        } catch (NumberFormatException e) {
-          // Falls through to the reply below.
-        }
-      }
-      source.reply(messages().get("hof.cell.anchor-where"));
-      return Optional.empty();
+      return typedPosition(source, given.get(), dimension, Optional.empty());
     }
     Optional<Position> looked =
         source.player().flatMap(p -> platform.players().targetBlock(p, REACH));
@@ -1433,20 +1820,35 @@ public final class HallCommands {
         new Position(block.dimension(), block.blockX(), block.blockY(), block.blockZ(), yaw, 0f));
   }
 
-  private static Optional<int[]> numbers(String text, int count) {
-    String[] words = Splitter.split(text.trim());
-    if (words.length != count) {
-      return Optional.empty();
-    }
-    int[] values = new int[count];
-    try {
-      for (int i = 0; i < count; i++) {
-        values[i] = Integer.parseInt(words[i]);
+  /**
+   * A position typed as {@code <position> [yaw]} (questions 264); with no yaw, {@code yaw} or else
+   * 0.
+   */
+  Optional<Position> typedPosition(
+      CommandSource source, String text, String dimension, Optional<Float> yaw) {
+    List<String> words = List.of(Splitter.split(text));
+    Positions.Read read = Positions.block(words, 0, origin(source), dimension);
+    if (read instanceof Positions.Read.Block block) {
+      Optional<Float> typedYaw = Optional.empty();
+      if (words.size() == block.used() + 1) {
+        typedYaw = Positions.yaw(words.get(block.used()));
       }
-    } catch (NumberFormatException e) {
+      if (words.size() == block.used() || typedYaw.isPresent()) {
+        Position at = block.block();
+        return Optional.of(
+            new Position(
+                dimension,
+                at.blockX(),
+                at.blockY(),
+                at.blockZ(),
+                typedYaw.or(() -> yaw).orElse(0f),
+                0f));
+      }
+      source.reply(messages().get(Positions.BAD));
       return Optional.empty();
     }
-    return Optional.of(values);
+    source.reply(messages().get(((Positions.Read.Failed) read).messageKey()));
+    return Optional.empty();
   }
 
   private static String[] place(String key, String value, Position at) {

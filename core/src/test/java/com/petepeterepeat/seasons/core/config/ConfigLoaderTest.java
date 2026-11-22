@@ -290,6 +290,15 @@ class ConfigLoaderTest {
   }
 
   @Test
+  void bedDistanceIsZeroToSixteen() throws IOException {
+    write("config.yml", "schema-version: 1\nhof:\n  entry: { bedDistance: 17 }\n");
+
+    assertThat(loader(Map.of()).load().problems())
+        .extracting(problem -> problem.path().orElseThrow())
+        .containsExactly("hof.entry.bedDistance");
+  }
+
+  @Test
   void unknownKeysWarn() throws IOException {
     write(
         "config.yml",
