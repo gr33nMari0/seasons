@@ -45,6 +45,7 @@ final class PaperMenus implements Menus, Listener {
   private final PaperItemCodec codec;
   private final PaperText text;
   private final NamespacedKey archivedKey;
+  private final ArchivedTag tag;
 
   PaperMenus(
       Server server,
@@ -57,6 +58,7 @@ final class PaperMenus implements Menus, Listener {
     this.codec = codec;
     this.text = text;
     this.archivedKey = archivedKey;
+    this.tag = new ArchivedTag(archivedKey);
   }
 
   @Override
@@ -215,14 +217,12 @@ final class PaperMenus implements Menus, Listener {
     }
   }
 
-  /** A throwaway copy decoded from the stored bytes, never the archived item itself, tagged. */
+  /**
+   * A throwaway copy decoded from the stored bytes, never the archived item itself, tagged, with
+   * whatever it holds tagged too.
+   */
   private ItemStack copy(Optional<NeutralItem> item) {
-    ItemStack copy = codec.decode(item);
-    if (!copy.isEmpty()) {
-      copy.editPersistentDataContainer(
-          data -> data.set(archivedKey, PersistentDataType.BOOLEAN, true));
-    }
-    return copy;
+    return tag.tag(codec.decode(item));
   }
 
   private ItemStack button(Material material, Message label) {

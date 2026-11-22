@@ -44,6 +44,8 @@ public final class ScenarioHooks implements CrashPoints {
 
   private final Map<PlayerId, CrashPoint> armed = new ConcurrentHashMap<>();
   private final Map<PlayerId, CrashPoint> saveAt = new ConcurrentHashMap<>();
+  private final Map<PlayerId, Map.Entry<CrashPoint, Runnable>> actions = new ConcurrentHashMap<>();
+  private volatile boolean halted;
   private volatile Runnable save = () -> {};
   private final List<Runnable> beforeHalt = new CopyOnWriteArrayList<>();
   private final Runnable halt;
@@ -63,7 +65,8 @@ public final class ScenarioHooks implements CrashPoints {
       SerialWriter writer,
       Supplier<ConfigSnapshot> config,
       java.util.concurrent.Executor serverThread,
-      java.util.function.BiFunction<PlayerId, Integer, CompletableFuture<List<String>>> cards) {}
+      java.util.function.BiFunction<PlayerId, Integer, CompletableFuture<List<String>>> cards,
+      com.petepeterepeat.seasons.core.guard.ArchiveHold hold) {}
 
   /**
    * @param halt stops the server dead, as a crash would
@@ -95,6 +98,7 @@ public final class ScenarioHooks implements CrashPoints {
     LOG.warn("Scenario reset: Seasons starts again as a fresh install");
     armed.clear();
     saveAt.clear();
+    actions.clear();
     wiring = null;
     restart.accept(() -> {
       scheduler.forgetDelayed();
@@ -140,6 +144,27 @@ public final class ScenarioHooks implements CrashPoints {
     saveAt.put(player, point);
   }
 
+  /**
+   * Runs {@code action} the next time {@code player} reaches {@code point}, on the thread that
+   * reaches it, such as changing what they carry between the copy and the clear. The action may
+   * call {@link #haltNow}.
+   */
+  public void armAction(CrashPoint point, PlayerId player, Runnable action) {
+    actions.put(player, Map.entry(point, action));
+  }
+
+  /** Stops the server dead now, as a crash point does. */
+  public void haltNow() {
+    halted = true;
+    beforeHalt.forEach(Runnable::run);
+    halt.run();
+  }
+
+  @Override
+  public boolean halted() {
+    return halted;
+  }
+
   /** How {@link #armSave} saves the worlds; set by the test plugin. */
   public void onSave(Runnable save) {
     this.save = save;
@@ -156,12 +181,16 @@ public final class ScenarioHooks implements CrashPoints {
       LOG.warn("Scenario save point {} reached for {}: saving the worlds", point, player);
       save.run();
     }
+    Map.Entry<CrashPoint, Runnable> action = actions.get(player);
+    if (action != null && action.getKey() == point && actions.remove(player, action)) {
+      LOG.warn("Scenario action at {} for {}", point, player);
+      action.getValue().run();
+    }
     if (armed.get(player) != point) {
       return;
     }
     LOG.warn("Scenario crash point {} reached for {}: halting the server", point, player);
-    beforeHalt.forEach(Runnable::run);
-    halt.run();
+    haltNow();
   }
 
   /**
@@ -219,6 +248,19 @@ public final class ScenarioHooks implements CrashPoints {
     } catch (java.io.IOException e) {
       throw new java.io.UncheckedIOException(e);
     }
+  }
+
+  /**
+   * Holds a player as a transaction would, such as a vault withdrawal, until {@link #release};
+   * false if they were held already.
+   */
+  public boolean hold(PlayerId player) {
+    return wired().hold().hold(player);
+  }
+
+  /** Lets go of a player {@link #hold} held. */
+  public void release(PlayerId player) {
+    wired().hold().release(player);
   }
 
   /** Hands an item back to a player on their vault's Returned page. */

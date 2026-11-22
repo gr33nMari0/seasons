@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import com.destroystokyo.paper.event.player.PlayerPostRespawnEvent;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
@@ -75,12 +76,15 @@ import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
+import org.bukkit.event.player.PlayerItemMendEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
@@ -299,6 +303,15 @@ final class PaperEvents implements Events, Listener {
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onPlace(BlockPlaceEvent event) {
     Player player = event.getPlayer();
+    // An archived copy is never placed: a shulker box copy would unpack untagged items (security
+    // review M3). It is deleted where it was held, as the tripwire does.
+    if (inventories.isArchived(event.getItemInHand())) {
+      event.setCancelled(true);
+      String found = PaperInventories.describe(event.getItemInHand());
+      player.getInventory().setItem(event.getHand(), null);
+      report(Optional.of(id(player)), "placed as a block", List.of(found));
+      return;
+    }
     apply(
         event,
         player,
@@ -362,6 +375,30 @@ final class PaperEvents implements Events, Listener {
         event,
         event.getPlayer(),
         new Intent.Consume(id(event.getPlayer()), event.getItem().getType().getKey().asString()));
+  }
+
+  /** An orb picked up can mend what the player wears (security review M1). */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onExperience(PlayerPickupExperienceEvent event) {
+    apply(event, event.getPlayer(), new Intent.PickupExperience(id(event.getPlayer())));
+  }
+
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onMend(PlayerItemMendEvent event) {
+    apply(event, event.getPlayer(), new Intent.WearItem(id(event.getPlayer())));
+  }
+
+  /** Wear that isn't from a hit, such as an elytra while gliding. */
+  @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+  void onWear(PlayerItemDamageEvent event) {
+    apply(event, event.getPlayer(), new Intent.WearItem(id(event.getPlayer())));
+  }
+
+  /** Any command, another plugin's included, can change what a player carries. */
+  @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+  void onCommand(PlayerCommandPreprocessEvent event) {
+    apply(
+        event, event.getPlayer(), new Intent.RunCommand(id(event.getPlayer()), event.getMessage()));
   }
 
   /** Scrolling the hotbar with the wand held: a plaque looked at while sneaking resizes. */
@@ -706,6 +743,22 @@ final class PaperEvents implements Events, Listener {
     String found = PaperInventories.describe(item.getItemStack());
     item.getScheduler().run(plugin, task -> item.remove(), null);
     report(Optional.empty(), ON_THE_GROUND, List.of(found));
+  }
+
+  /**
+   * Any container opened, outside Seasons' own menus: archived copies stashed in it are deleted
+   * (security review M3), so a chest anywhere is no hiding place.
+   */
+  @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+  void onOpenPurge(InventoryOpenEvent event) {
+    Inventory top = event.getInventory();
+    if (PaperMenus.isViewOnly(top) || !(event.getPlayer() instanceof Player player)) {
+      return;
+    }
+    List<String> removed = inventories.purge(top);
+    if (!removed.isEmpty()) {
+      report(Optional.of(id(player)), IN_A_CONTAINER, removed);
+    }
   }
 
   @EventHandler(priority = EventPriority.MONITOR)

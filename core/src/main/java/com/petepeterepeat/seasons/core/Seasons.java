@@ -125,6 +125,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable CommandHelp commandHelp;
   private @Nullable PlayerStore store;
   private @Nullable Tripwire tripwire;
+  private @Nullable LoginService loginService;
   private @Nullable FirstsTracker firsts;
   private @Nullable Pets pets;
   private @Nullable Dragon dragon;
@@ -328,6 +329,9 @@ public final class Seasons implements SeasonsApi {
           new Vault(
               platform, config, this::state, writer, journal, vaults, hold, audit, crash, clock);
       replay.register(Operation.VAULT_WITHDRAW, vaulting.recovery());
+      vaulting.bindArchiveOpen((player, season) ->
+          replay.open(player).stream()
+              .anyMatch(op -> op.operation() == Operation.ARCHIVE && op.season() == season));
       replay.register(Operation.MUSEUM, museum.recovery());
       Curation curating =
           new Curation(
@@ -482,6 +486,8 @@ public final class Seasons implements SeasonsApi {
                 platform.scheduler(),
                 clock,
                 pets::loggedIn));
+    login.ifPresent(LoginService::start);
+    loginService = login.orElse(null);
     Tripwire wire =
         new Tripwire(
             platform.players(), platform.inventories(), platform.scheduler(), audit, adminAlerts);
@@ -563,7 +569,9 @@ public final class Seasons implements SeasonsApi {
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
                         .or(() -> zoning.decide(intent)),
-                visiting::damaged));
+                visiting::damaged,
+                player -> platform.permissions().has(player, SeasonService.ADMIN_PERMISSION),
+                () -> config.get().messages()));
     platform.events().sessions(sessions(login));
     platform.events().tripwire(wire);
     platform.events().hall(hallRules);
@@ -682,7 +690,8 @@ public final class Seasons implements SeasonsApi {
                   (player, season) ->
                       halls
                           .card(player, season)
-                          .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of()))));
+                          .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of())),
+                  hold));
     }
   }
 
@@ -865,6 +874,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (tripwire != null) {
       tripwire.stop();
+    }
+    if (loginService != null) {
+      loginService.stop();
     }
     if (zones != null) {
       zones.stop();

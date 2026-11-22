@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
+import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
 import com.petepeterepeat.seasons.core.port.Sessions;
 import com.petepeterepeat.seasons.core.season.Phase;
@@ -15,6 +16,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +42,14 @@ public final class LoginService implements Sessions {
   private final Clock clock;
   private final java.util.function.Consumer<PlayerId> settled;
   private final Executor serverThread;
+  private final Scheduler scheduler;
+  private final java.util.Set<PlayerId> retrying = ConcurrentHashMap.newKeySet();
+  private final java.util.Set<PlayerId> waiting = ConcurrentHashMap.newKeySet();
+  private @org.jspecify.annotations.Nullable ScheduledTask sweep;
+
+  /** How long a pending player waits before their archive is tried again (security review H2). */
+  public static final Duration RETRY = Duration.ofSeconds(10);
+
   private final Map<PlayerId, Instant> joinedAt = new ConcurrentHashMap<>();
 
   public LoginService(
@@ -61,6 +71,47 @@ public final class LoginService implements Sessions {
     this.entry = entry;
     this.clock = clock;
     this.serverThread = scheduler::runGlobal;
+    this.scheduler = scheduler;
+    archiver.onPending(this::retryLater);
+  }
+
+  /**
+   * A player whose archive didn't go through stays held, and their login plan runs again on the
+   * next sweep, until it goes through or they leave (security review H2).
+   */
+  private void retryLater(PlayerId player) {
+    waiting.add(player);
+  }
+
+  /** Every {@link #RETRY}: runs again the login plan of each pending player not already running. */
+  public void start() {
+    sweep = scheduler.runGlobalRepeating(RETRY, this::retryPending);
+  }
+
+  public void stop() {
+    ScheduledTask running = sweep;
+    if (running != null) {
+      running.cancel();
+      sweep = null;
+    }
+  }
+
+  /** Runs again the login plan of each pending player, once each. */
+  public void retryPending() {
+    for (PlayerId player : List.copyOf(waiting)) {
+      waiting.remove(player);
+      Optional<PlayerRecord> record = store.find(player);
+      if (!hold.isPending(player) || record.isEmpty() || !retrying.add(player)) {
+        continue;
+      }
+      var _ =
+          follow(new PlayerRef(player, record.get().lastName()), true)
+              .exceptionally(e -> {
+                LOG.error("Archiving {} again stopped", player, e);
+                return null;
+              })
+              .whenComplete((done, failure) -> retrying.remove(player));
+    }
   }
 
   /**
@@ -100,6 +151,9 @@ public final class LoginService implements Sessions {
   @Override
   public void left(PlayerId player) {
     hold.releaseArriving(player);
+    // Gone: their next login tries again, and holds them meanwhile.
+    hold.clearPending(player);
+    waiting.remove(player);
     Instant joined = joinedAt.remove(player);
     Optional<SeasonState> current = state.get();
     if (joined == null || current.isEmpty() || !isPlaying(current.get().phase())) {

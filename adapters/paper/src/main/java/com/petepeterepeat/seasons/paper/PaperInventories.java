@@ -31,9 +31,9 @@ import org.jspecify.annotations.Nullable;
 final class PaperInventories implements Inventories {
   private final PaperPlayers players;
   private final PaperItemCodec codec;
-  private final NamespacedKey archivedKey;
   private final NamespacedKey wandKey;
   private final PaperText text;
+  private final ArchivedTag tag;
   private int dataVersion;
 
   /**
@@ -47,7 +47,7 @@ final class PaperInventories implements Inventories {
       PaperText text) {
     this.players = players;
     this.codec = codec;
-    this.archivedKey = archivedKey;
+    this.tag = new ArchivedTag(archivedKey);
     this.wandKey = wandKey;
     this.text = text;
   }
@@ -97,9 +97,21 @@ final class PaperInventories implements Inventories {
   /** Checks the room first, so the stack goes in whole or not at all; nothing is dropped. */
   @Override
   public boolean give(PlayerId id, NeutralItem item) {
-    Player player = online(id);
-    PlayerInventory inventory = player.getInventory();
+    PlayerInventory inventory = online(id).getInventory();
     ItemStack stack = codec.decode(item);
+    if (!hasRoom(inventory, stack)) {
+      return false;
+    }
+    return inventory.addItem(stack).isEmpty();
+  }
+
+  @Override
+  public boolean fits(PlayerId id, NeutralItem item) {
+    return hasRoom(online(id).getInventory(), codec.decode(item));
+  }
+
+  /** Whether the whole stack fits: empty slots, and room on similar stacks. */
+  private static boolean hasRoom(PlayerInventory inventory, ItemStack stack) {
     int room = 0;
     for (ItemStack slot : inventory.getStorageContents()) {
       if (slot == null || slot.isEmpty()) {
@@ -108,19 +120,16 @@ final class PaperInventories implements Inventories {
         room += Math.max(0, slot.getMaxStackSize() - slot.getAmount());
       }
       if (room >= stack.getAmount()) {
-        break;
+        return true;
       }
     }
-    if (room < stack.getAmount()) {
-      return false;
-    }
-    return inventory.addItem(stack).isEmpty();
+    return room >= stack.getAmount();
   }
 
   /**
-   * Cursor and crafting-grid items go into free inventory slots first. Whatever doesn't fit stays
-   * where it is, so a crash or a failed write never loses it, and the menu stays open, because
-   * closing it would drop those items.
+   * Cursor, crafting-grid and workstation-input items go into free inventory slots first. Whatever
+   * doesn't fit stays where it is, so a crash or a failed write never loses it, and the menu stays
+   * open, because closing it would drop those items.
    */
   @Override
   public List<NeutralItem> settle(PlayerId id) {
@@ -141,6 +150,15 @@ final class PaperInventories implements Inventories {
         }
       }
       crafting.setMatrix(matrix);
+    }
+    // An anvil's, a stonecutter's or a villager's inputs, and the like: the game hands them back
+    // to the player when the menu closes, so they are the player's too (security review H1).
+    Inventory top = player.getOpenInventory().getTopInventory();
+    for (int slot : inputSlots(top)) {
+      ItemStack stack = top.getItem(slot);
+      if (stack != null && !stack.isEmpty()) {
+        top.setItem(slot, leftover(inventory.addItem(stack.clone())));
+      }
     }
     List<NeutralItem> loose = loose(player);
     if (loose.isEmpty()) {
@@ -163,6 +181,11 @@ final class PaperInventories implements Inventories {
     // real chest, furnace or the like, which is never cleared.
     if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
       crafting.setMatrix(new ItemStack[crafting.getMatrix().length]);
+    }
+    // A workstation's inputs too, or closing it would hand them back (security review H1).
+    Inventory top = player.getOpenInventory().getTopInventory();
+    for (int slot : inputSlots(top)) {
+      top.setItem(slot, null);
     }
     if (enderChest) {
       player.getEnderChest().clear();
@@ -210,9 +233,13 @@ final class PaperInventories implements Inventories {
     List<String> removed = new ArrayList<>();
     purge(player.getInventory(), removed);
     purge(player.getEnderChest(), removed);
-    if (isArchived(player.getItemOnCursor())) {
-      removed.add(describe(player.getItemOnCursor()));
+    ItemStack cursor = player.getItemOnCursor();
+    if (tag.isTagged(cursor)) {
+      removed.add(describe(cursor));
       player.setItemOnCursor(null);
+    } else if (tag.isArchived(cursor)) {
+      removed.addAll(tag.stripNested(cursor));
+      player.setItemOnCursor(cursor);
     }
     Inventory top = player.getOpenInventory().getTopInventory();
     // Seasons' own menus show tagged copies on purpose: the view, the vault and choice menus.
@@ -266,9 +293,12 @@ final class PaperInventories implements Inventories {
     return isArchived(codec.decode(item));
   }
 
-  /** Whether a stack carries the tag every archive-view copy has. */
+  /**
+   * Whether a stack carries the tag every archive-view copy has, or holds such a copy inside it, as
+   * a bundle or shulker box can (security review M3).
+   */
   boolean isArchived(@Nullable ItemStack stack) {
-    return stack != null && !stack.isEmpty() && stack.getPersistentDataContainer().has(archivedKey);
+    return tag.isArchived(stack);
   }
 
   /** Such as {@code 3 × minecraft:stone}, for the audit log. */
@@ -276,13 +306,20 @@ final class PaperInventories implements Inventories {
     return stack.getAmount() + " × " + stack.getType().getKey().asString();
   }
 
+  /**
+   * Deletes archived copies from an inventory: a tagged stack whole, and a tagged copy inside an
+   * untagged bundle or shulker box taken out of it, the rest kept.
+   */
   private void purge(Inventory inventory, List<String> removed) {
     @Nullable ItemStack[] contents = inventory.getContents();
     for (int slot = 0; slot < contents.length; slot++) {
       ItemStack stack = contents[slot];
-      if (isArchived(stack)) {
+      if (tag.isTagged(stack)) {
         removed.add(describe(stack));
         inventory.setItem(slot, null);
+      } else if (stack != null && tag.isArchived(stack)) {
+        removed.addAll(tag.stripNested(stack));
+        inventory.setItem(slot, stack);
       }
     }
   }
@@ -290,14 +327,38 @@ final class PaperInventories implements Inventories {
   private List<NeutralItem> loose(Player player) {
     List<NeutralItem> loose = new ArrayList<>();
     codec.encode(player.getItemOnCursor()).ifPresent(loose::add);
-    if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
+    Inventory top = player.getOpenInventory().getTopInventory();
+    if (top instanceof CraftingInventory crafting) {
       for (ItemStack stack : crafting.getMatrix()) {
         if (stack != null) {
           codec.encode(stack).ifPresent(loose::add);
         }
       }
     }
+    for (int slot : inputSlots(top)) {
+      ItemStack stack = top.getItem(slot);
+      if (stack != null) {
+        codec.encode(stack).ifPresent(loose::add);
+      }
+    }
     return loose;
+  }
+
+  /**
+   * The input slots of a menu the game empties into the player's inventory, or drops, when it
+   * closes: the workstations and the villager's trade. Never a result slot, and never a container
+   * that belongs to the world, such as a chest or a furnace.
+   */
+  static List<Integer> inputSlots(@Nullable Inventory top) {
+    if (top == null) {
+      return List.of();
+    }
+    return switch (top.getType()) {
+      case ANVIL, GRINDSTONE, ENCHANTING, CARTOGRAPHY, MERCHANT -> List.of(0, 1);
+      case SMITHING, LOOM -> List.of(0, 1, 2);
+      case STONECUTTER, BEACON -> List.of(0);
+      default -> List.of();
+    };
   }
 
   /** What {@code addItem} couldn't place, as one stack (it was given one), or nothing. */

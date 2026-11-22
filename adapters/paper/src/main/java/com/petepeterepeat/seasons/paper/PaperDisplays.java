@@ -55,6 +55,7 @@ final class PaperDisplays implements Displays {
   private final PaperItemCodec codec;
   private final NamespacedKey tagKey;
   private final NamespacedKey archivedKey;
+  private final ArchivedTag archivedTag;
 
   PaperDisplays(
       Server server,
@@ -67,6 +68,7 @@ final class PaperDisplays implements Displays {
     this.codec = codec;
     this.tagKey = tagKey;
     this.archivedKey = archivedKey;
+    this.archivedTag = new ArchivedTag(archivedKey);
   }
 
   private @org.jspecify.annotations.Nullable PaperOutlines outlines;
@@ -344,11 +346,6 @@ final class PaperDisplays implements Displays {
 
   /** A throwaway copy of an archived item, tagged so the tripwire knows it anywhere else. */
   private ItemStack copy(Optional<NeutralItem> item) {
-    ItemStack copy = codec.decode(item);
-    if (!copy.isEmpty()) {
-      copy.editPersistentDataContainer(
-          data -> data.set(archivedKey, PersistentDataType.BOOLEAN, true));
-    }
-    return copy;
+    return archivedTag.tag(codec.decode(item));
   }
 }

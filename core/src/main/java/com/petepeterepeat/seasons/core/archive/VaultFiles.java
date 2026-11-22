@@ -163,6 +163,11 @@ public final class VaultFiles {
     root.put("returned", ArchiveFiles.slots(returned));
     root.put("returned-size", returned.size());
     root.put("returned-at", at.toEpochMilli());
+    // A vault given an item before any page was sealed still says which game data its items are.
+    if (!(root.get("DataVersion") instanceof Integer)
+        && Nbt.read(item.nbt()).get("DataVersion") instanceof Integer version) {
+      root.put("DataVersion", version);
+    }
     if (ref.isPresent()) {
       List<Map<String, Object>> deliveries = new ArrayList<>(deliveries(root));
       Map<String, Object> entry = new LinkedHashMap<>();

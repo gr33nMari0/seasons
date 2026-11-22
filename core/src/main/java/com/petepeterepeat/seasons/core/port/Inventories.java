@@ -39,6 +39,13 @@ public interface Inventories {
   boolean give(PlayerId player, NeutralItem item);
 
   /**
+   * Whether the whole stack would fit in the player's inventory now, as {@link #give} checks, so a
+   * withdrawal that can't be given is refused before anything is journalled or written (security
+   * review M2). Call on the player's thread.
+   */
+  boolean fits(PlayerId player, NeutralItem item);
+
+  /**
    * Gives an online player the Seasons wand (questions 226): one of {@code item}, named and marked
    * {@code seasons:wand}, which the adapter raises {@code UseWand} for. Nothing if it doesn't fit.
    *

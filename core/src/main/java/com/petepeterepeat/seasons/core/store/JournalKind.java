@@ -5,7 +5,17 @@ package com.petepeterepeat.seasons.core.store;
 public enum JournalKind {
   ARCHIVE_STARTED,
   VAULT_SEALED,
+  /**
+   * The player matched their copy and is about to be cleared: only after this may recovery take an
+   * empty inventory as cleared (security review H3).
+   */
+  ARCHIVE_CLEARING,
   ARCHIVE_DONE,
+  /**
+   * An archive that stopped while the server ran on, put back before the player was cleared: its
+   * vault page removed and its file moved aside. Closes the operation (security review H2).
+   */
+  ARCHIVE_ABORTED,
   UNARCHIVE_STARTED,
   UNARCHIVE_DONE,
   VAULT_WITHDRAW,

@@ -59,6 +59,38 @@ class JournalRecoveryTest {
   }
 
   @Test
+  void anAbortedArchiveIsClosed() {
+    List<OpenOperation> open =
+        JournalRecovery.openOperations(
+            List.of(
+                entry(1, ARCHIVE_STARTED, ALEX, 2),
+                entry(2, VAULT_SEALED, ALEX, 2),
+                entry(3, JournalKind.ARCHIVE_ABORTED, ALEX, 2)));
+
+    assertThat(open).isEmpty();
+  }
+
+  @Test
+  void eachPlayersOpenOperationsFollowTheJournalAsItChanges() throws Exception {
+    Journal journal = Journal.open(dir.resolve("journal.log"), writer, CLOCK);
+    JournalRecovery recovery = new JournalRecovery(journal, Runnable::run);
+    assertThat(recovery.open(ALEX)).isEmpty();
+
+    journal.append(ARCHIVE_STARTED, ALEX, 2, "h").join();
+    journal.append(ARCHIVE_STARTED, SAM, 2, "h").join();
+    assertThat(recovery.open(ALEX)).singleElement().extracting(OpenOperation::season).isEqualTo(2);
+    assertThat(recovery.open(SAM)).hasSize(1);
+
+    journal.append(ARCHIVE_DONE, ALEX, 2, "h").join();
+    assertThat(recovery.open(ALEX)).isEmpty();
+    assertThat(recovery.open(SAM)).hasSize(1);
+
+    journal.compact(entry -> entry.player().equals(Optional.of(SAM))).join();
+    assertThat(recovery.open(ALEX)).isEmpty();
+    assertThat(recovery.open(SAM)).hasSize(1);
+  }
+
+  @Test
   void theKeyIsPlayerAndSeason() {
     List<OpenOperation> open =
         JournalRecovery.openOperations(

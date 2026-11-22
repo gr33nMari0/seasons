@@ -18,6 +18,7 @@ import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.EnumSet;
@@ -212,6 +213,32 @@ class VaultTest {
   }
 
   @Test
+  void aBurstOfClicksWithAFullInventoryJournalsNothing() throws IOException {
+    PlayerRef pat = sealedAndLaunched();
+    run("/season unlock homecoming");
+    fake.player(pat).inventory =
+        new InventorySnapshot(
+            FakeItems.empty(36).stream()
+                .map(slot -> Optional.of(FakeItems.item("minecraft:stone", 64)))
+                .toList(),
+            FakeItems.empty(4),
+            Optional.empty(),
+            FakeItems.empty(27));
+    vault(pat);
+    String journal = Files.readString(dir.resolve("world/seasons/data/journal.log"));
+    int before = fake.sent.size();
+
+    for (int i = 0; i < 100; i++) {
+      menu().taken().clicked(0, 0);
+    }
+
+    assertThat(said(pat, before))
+        .containsExactly("Your inventory is full, so it stays in your vault.");
+    assertThat(Files.readString(dir.resolve("world/seasons/data/journal.log"))).isEqualTo(journal);
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+  }
+
+  @Test
   void theReturnedPageCanBeWithdrawnFromAtOnce() throws IOException {
     PlayerRef pat = sealedAndLaunched();
     NeutralItem diamonds = FakeItems.item("minecraft:diamond", 3);
@@ -240,6 +267,44 @@ class VaultTest {
     menu().taken().clicked(1, 0);
     assertThat(said(pat, before))
         .containsExactly("Your vault is read-only until the next season starts.");
+  }
+
+  @Test
+  void aPageWhoseArchiveIsStillOpenCantBeWithdrawnFrom() throws IOException {
+    start();
+    PlayerRef pat = fake.join("Pat");
+    fake.player(pat).inventory = FakeItems.gear();
+    run("/season init 2");
+    hooks.arm(CrashPoint.VAULT_SEALED, pat.id());
+    run("/season end --now");
+    restart();
+    // Pat kept the ender chest the vault page copies, and changed what they carry.
+    fake.player(pat).inventory =
+        new InventorySnapshot(
+            List.of(Optional.of(FakeItems.item("minecraft:stone", 1))),
+            FakeItems.empty(4),
+            Optional.empty(),
+            FakeItems.gear().enderChest());
+    PlayerRef admin = fake.join("Admin");
+    fake.player(admin).position = Position.of("minecraft:overworld", 500, -60, 300);
+    TestCommands.run(
+        fake.commands.getFirst(), new TestSource(Optional.of(admin.id())), "/season spawn set");
+    fake.leave(admin);
+    run("/season launch");
+    run("/season unlock homecoming");
+    join("Pat");
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+
+    vault(pat);
+    int before = fake.sent.size();
+    menu().taken().clicked(0, 0);
+
+    assertThat(said(pat, before))
+        .containsExactly(
+            "That page waits until your archive for its season is finished. An admin has been"
+                + " told.");
+    assertThat(page(pat, 2).orElseThrow().getFirst()).contains(EMERALDS);
+    assertThat(carried(pat, "minecraft:emerald")).isZero();
   }
 
   @Test

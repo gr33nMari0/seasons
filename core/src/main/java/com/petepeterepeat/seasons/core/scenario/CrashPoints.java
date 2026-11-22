@@ -13,4 +13,12 @@ public interface CrashPoints {
   CrashPoints NONE = (point, player) -> {};
 
   void reached(CrashPoint point, PlayerId player);
+
+  /**
+   * Whether a crash point has stopped the server, which in a test may carry on after the halt: work
+   * a crash would never run, such as putting a failed archive back, is skipped then.
+   */
+  default boolean halted() {
+    return false;
+  }
 }
