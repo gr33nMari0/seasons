@@ -169,6 +169,33 @@ public record ArchiveRecord(
         honours);
   }
 
+  /**
+   * The same record with more overflow after what it has, such as items that turned up after the
+   * clear. Overflow isn't in the content hash, which stays as it was.
+   */
+  public ArchiveRecord withMoreOverflow(List<NeutralItem> more) {
+    List<Optional<NeutralItem>> next = new java.util.ArrayList<>(overflow);
+    more.forEach(item -> next.add(Optional.of(item)));
+    return new ArchiveRecord(
+        player,
+        name,
+        season,
+        created,
+        inventory,
+        next,
+        enderChestPolicy,
+        advancements,
+        experience,
+        statistics,
+        furthest,
+        finalPosition,
+        skin,
+        contentHash,
+        heldSlot,
+        imported,
+        honours);
+  }
+
   /** The same record with its honours. */
   public ArchiveRecord withHonours(Honours next) {
     return new ArchiveRecord(

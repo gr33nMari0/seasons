@@ -313,6 +313,10 @@ public final class FakePlatform {
   public static final class FakePlayer {
     public InventorySnapshot inventory = FakeItems.EMPTY;
     public List<NeutralItem> cursor = new ArrayList<>();
+
+    /** What a menu they have open hands back to the inventory when the next clear closes it. */
+    public List<NeutralItem> handedBackOnClose = new ArrayList<>();
+
     public Position position = Position.of("minecraft:overworld", 10, 64, 10);
     public Experience experience = new Experience(5, 0.5f, 100);
     public Map<String, Map<String, Instant>> advancements = new HashMap<>();
@@ -659,6 +663,19 @@ public final class FakePlatform {
                     FakeItems.empty(was.armour().size()),
                     Optional.empty(),
                     enderChest ? FakeItems.empty(was.enderChest().size()) : was.enderChest());
+            // Closing the menu, as clearing does, hands its inputs back into the inventory.
+            List<NeutralItem> back = state(player).handedBackOnClose;
+            if (!back.isEmpty()) {
+              List<Optional<NeutralItem>> storage =
+                  new ArrayList<>(state(player).inventory.storage());
+              for (int i = 0; i < back.size() && i < storage.size(); i++) {
+                storage.set(i, Optional.of(back.get(i)));
+              }
+              InventorySnapshot now = state(player).inventory;
+              state(player).inventory =
+                  new InventorySnapshot(storage, now.armour(), now.offHand(), now.enderChest());
+              back.clear();
+            }
           }
 
           @Override

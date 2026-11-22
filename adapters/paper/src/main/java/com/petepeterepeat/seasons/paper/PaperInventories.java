@@ -118,9 +118,9 @@ final class PaperInventories implements Inventories {
   }
 
   /**
-   * Cursor and crafting-grid items go into free inventory slots first. Whatever doesn't fit stays
-   * where it is, so a crash or a failed write never loses it, and the menu stays open, because
-   * closing it would drop those items.
+   * Cursor, crafting-grid and workstation-input items go into free inventory slots first. Whatever
+   * doesn't fit stays where it is, so a crash or a failed write never loses it, and the menu stays
+   * open, because closing it would drop those items.
    */
   @Override
   public List<NeutralItem> settle(PlayerId id) {
@@ -141,6 +141,15 @@ final class PaperInventories implements Inventories {
         }
       }
       crafting.setMatrix(matrix);
+    }
+    // An anvil's, a stonecutter's or a villager's inputs, and the like: the game hands them back
+    // to the player when the menu closes, so they are the player's too (security review H1).
+    Inventory top = player.getOpenInventory().getTopInventory();
+    for (int slot : inputSlots(top)) {
+      ItemStack stack = top.getItem(slot);
+      if (stack != null && !stack.isEmpty()) {
+        top.setItem(slot, leftover(inventory.addItem(stack.clone())));
+      }
     }
     List<NeutralItem> loose = loose(player);
     if (loose.isEmpty()) {
@@ -163,6 +172,11 @@ final class PaperInventories implements Inventories {
     // real chest, furnace or the like, which is never cleared.
     if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
       crafting.setMatrix(new ItemStack[crafting.getMatrix().length]);
+    }
+    // A workstation's inputs too, or closing it would hand them back (security review H1).
+    Inventory top = player.getOpenInventory().getTopInventory();
+    for (int slot : inputSlots(top)) {
+      top.setItem(slot, null);
     }
     if (enderChest) {
       player.getEnderChest().clear();
@@ -290,14 +304,38 @@ final class PaperInventories implements Inventories {
   private List<NeutralItem> loose(Player player) {
     List<NeutralItem> loose = new ArrayList<>();
     codec.encode(player.getItemOnCursor()).ifPresent(loose::add);
-    if (player.getOpenInventory().getTopInventory() instanceof CraftingInventory crafting) {
+    Inventory top = player.getOpenInventory().getTopInventory();
+    if (top instanceof CraftingInventory crafting) {
       for (ItemStack stack : crafting.getMatrix()) {
         if (stack != null) {
           codec.encode(stack).ifPresent(loose::add);
         }
       }
     }
+    for (int slot : inputSlots(top)) {
+      ItemStack stack = top.getItem(slot);
+      if (stack != null) {
+        codec.encode(stack).ifPresent(loose::add);
+      }
+    }
     return loose;
+  }
+
+  /**
+   * The input slots of a menu the game empties into the player's inventory, or drops, when it
+   * closes: the workstations and the villager's trade. Never a result slot, and never a container
+   * that belongs to the world, such as a chest or a furnace.
+   */
+  static List<Integer> inputSlots(@Nullable Inventory top) {
+    if (top == null) {
+      return List.of();
+    }
+    return switch (top.getType()) {
+      case ANVIL, GRINDSTONE, ENCHANTING, CARTOGRAPHY, MERCHANT -> List.of(0, 1);
+      case SMITHING, LOOM -> List.of(0, 1, 2);
+      case STONECUTTER, BEACON -> List.of(0);
+      default -> List.of();
+    };
   }
 
   /** What {@code addItem} couldn't place, as one stack (it was given one), or nothing. */

@@ -187,6 +187,25 @@ class ArchivingTest {
   }
 
   @Test
+  void whatAMenuHandsBackAfterTheClearGoesIntoTheRecordNotThePlayer() throws IOException {
+    start();
+    PlayerRef alex = withGear("Alex");
+    NeutralItem diamonds = FakeItems.item("minecraft:diamond", 64);
+    fake.player(alex).handedBackOnClose.add(diamonds);
+    run("/season init 2");
+
+    run("/season end --now");
+
+    assertThat(isEmpty(alex)).isTrue();
+    ArchiveRecord archived = archive(alex, 2).orElseThrow();
+    assertThat(archived.inventory()).isEqualTo(FakeItems.gear());
+    assertThat(archived.overflow()).containsExactly(Optional.of(diamonds));
+    assertThat(record(alex).archivedThrough()).isEqualTo(2);
+    assertThat(Files.readString(dir.resolve("world/seasons/audit/2026-11.jsonl")))
+        .contains("\"action\":\"late-items\"");
+  }
+
+  @Test
   void infoGivesTheArchiveStatus() throws IOException {
     start();
     PlayerRef alex = withGear("Alex");

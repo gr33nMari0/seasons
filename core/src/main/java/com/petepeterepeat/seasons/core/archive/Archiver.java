@@ -38,6 +38,7 @@ import com.petepeterepeat.seasons.core.store.RecoveryHandler;
 import com.petepeterepeat.seasons.core.store.RecoveryOutcome;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -435,18 +436,39 @@ public final class Archiver implements RolloverArchiver {
               + " cleared");
     }
     clearAndReset(player, archive.clearsEnderChest());
+    // Whatever turned up after the clear, as a menu the game empties into the inventory as it
+    // closes: never handed back, but taken into the record too (security review H1).
+    List<NeutralItem> late = late(player);
+    if (!late.isEmpty()) {
+      platform.inventories().clear(player, false);
+    }
     platform.players().saveData(player);
     crash.reached(CrashPoint.RESET, player);
     PlayerRecord record = store.getOrCreate(player, archive.name()).withArchived(archive.season());
-    return store
-        .putNow(record)
-        .thenCompose(saved ->
-            journal.append(
-                JournalKind.ARCHIVE_DONE, player, archive.season(), archive.contentHash()))
-        .thenApply(entry -> {
-          crash.reached(CrashPoint.ARCHIVE_DONE, player);
-          return (Outcome) new Outcome.Archived(archive);
-        })
+    CompletableFuture<ArchiveRecord> kept =
+        late.isEmpty()
+            ? CompletableFuture.completedFuture(archive)
+            : writer.submit(() -> {
+              ArchiveRecord with = archive.withMoreOverflow(late);
+              archives.rewrite(with);
+              audit.record(
+                  AuditLog.SEASONS,
+                  "late-items",
+                  archive.name(),
+                  "archived",
+                  late.size() + " stack(s) appeared after the clear and went into the record");
+              return with;
+            });
+    return kept.thenCompose(stored ->
+            store
+                .putNow(record)
+                .thenCompose(saved ->
+                    journal.append(
+                        JournalKind.ARCHIVE_DONE, player, archive.season(), archive.contentHash()))
+                .thenApply(entry -> {
+                  crash.reached(CrashPoint.ARCHIVE_DONE, player);
+                  return (Outcome) new Outcome.Archived(stored);
+                }))
         .thenApplyAsync(
             outcome -> {
               try {
@@ -457,6 +479,17 @@ public final class Archiver implements RolloverArchiver {
               return outcome;
             },
             serverThread);
+  }
+
+  /** What a player holds after the clear: nothing, unless something handed items back. */
+  private List<NeutralItem> late(PlayerId player) {
+    InventorySnapshot after = platform.inventories().snapshot(player);
+    List<NeutralItem> late = new ArrayList<>();
+    after.storage().forEach(item -> item.ifPresent(late::add));
+    after.armour().forEach(item -> item.ifPresent(late::add));
+    after.offHand().ifPresent(late::add);
+    late.addAll(platform.inventories().loose(player));
+    return late;
   }
 
   private boolean looseMatches(PlayerId player, ArchiveRecord archive) {

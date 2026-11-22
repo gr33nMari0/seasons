@@ -26,6 +26,10 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - A museum cell can have several trophy anchors, such as an egg wall: each egg plinth shows its own season's egg.
 - The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Taran" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
 
+### Security
+
+- Archiving takes what sits in an open anvil's, stonecutter's, smithing table's, grindstone's, enchanting table's, loom's, cartography table's, beacon's or villager's input slots, with the cursor and crafting grid; before, a full inventory and an item on the cursor kept such a menu open, and closing it after the clear handed its inputs back for the new season. Anything that still turns up in the inventory after the clear goes into the record, never back to the player, and is audited as `late-items` (security review H1).
+
 ## [1.0.0-beta.1] - 2026-11-20
 
 ### Added
