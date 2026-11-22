@@ -397,7 +397,7 @@ Passing end to end on Paper 26.3:
 
 Built:
 
-- **A43.** `scenario/TickMeter`, `MeteredDisplays`, the meter in `ScenarioScheduler` and `ScenarioHooks#meter`; `/scenario perf warm|start|stop` in the test plugin (`ScenarioPerf`). Drawing cells now goes through `hall/DrawQueue`, 2 ms a tick and at least one cell. Before that, A43 measured 2.4 ms a tick on average and a 65 ms tick of drawing; now about 0.4 ms and 2 to 3 ms. Scenario servers take 40 players, and a scenario can set its own timeout.
+- **A43.** `scenario/TickMeter`, `MeteredDisplays`, the meter in `ScenarioScheduler` and `ScenarioHooks#meter`; `/scenario perf warm|start|stop` in the test plugin (`ScenarioPerf`). Drawing cells now goes through `hall/DrawQueue`, a display at a time within 2 ms a tick (the clearing and the figure together), a cell's steps before the next cell's; reconciliation looks again at a cell once its draw is done. `m4-admin-webhook` waits for the Intermission's award redraw before changing a figure. Before that, A43 measured 2.4 ms a tick on average and a 65 ms tick of drawing; now about 0.4 ms and 2 to 3 ms. Scenario servers take 40 players, and a scenario can set its own timeout.
 - **bStats.** Shaded and relocated into both jars: Seasons as 35499 with `usage/UsageCharts` (`PaperMetrics`), Seasons Web as 35500. `runServer` and the scenario shard turn bStats off before every boot.
 - **Config reference.** A Configurate `@Comment` on every setting of `SeasonsConfig` and `Secrets`; `ConfigReference` (a build tool in the core's tests) and `./gradlew :core:configReference` write the bundled files and `docs/config.md`.
 - **CI.** A `newest-api` job compiles against `paperApiNewest` (`-PpaperApi`), required by the `build` check.

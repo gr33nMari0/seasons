@@ -32,7 +32,7 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ### Changed
 
-- Displays are drawn a few cells a tick, within 2 ms, so a rollover no longer draws every cell in one tick (A43).
+- Displays are drawn a few at a time, within 2 ms a tick, so a rollover no longer draws every cell in one tick (A43). A cell being drawn again keeps its figure throughout.
 - The bundled `config.yml` describes every setting on its own line, with its choices; nested settings such as `hof.entry` and `wand.outlines` are written as sections rather than one-line maps. Defaults are unchanged, and existing files keep working.
 
 ### Security
