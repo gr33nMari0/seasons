@@ -75,6 +75,25 @@ public final class AtomicFiles {
     write(file, data);
   }
 
+  /**
+   * Deletes a file, first copying it into {@code backupDir} as {@link #writeKeepingBackups} does.
+   */
+  public static void deleteKeepingBackup(Path file, Path backupDir) throws IOException {
+    if (Files.exists(file)) {
+      Files.createDirectories(backupDir);
+      String name = file.getFileName().toString();
+      Files.copy(
+          file,
+          backupDir.resolve(name + "." + BACKUP_STAMP.format(Instant.now())),
+          REPLACE_EXISTING);
+      Files.delete(file);
+      Path parent = file.toAbsolutePath().getParent();
+      if (parent != null) {
+        syncDirectory(parent);
+      }
+    }
+  }
+
   /** Makes the rename itself durable. Some file systems can't open a directory; that's fine. */
   private static void syncDirectory(Path dir) {
     try (FileChannel channel = FileChannel.open(dir, READ)) {

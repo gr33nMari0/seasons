@@ -29,7 +29,7 @@ export default {
 
     // Refusals.
     await ctx.command(admin, '/season spawn candidate add north-mesa', /^Season 3 already has a spawn candidate called north-mesa\.$/)
-    await ctx.command(admin, '/season spawn candidate add North_Mesa', /^Candidate names are /)
+    await ctx.command(admin, '/season spawn candidate add North_Mesa', /^Candidate names start with a letter/)
     await ctx.command(admin, '/season spawn candidate remove nowhere', /^Season 3 has no spawn candidate called nowhere\.$/)
     await ctx.command(admin, '/season spawn set nowhere', /^Season 3 has no spawn candidate called nowhere\.$/)
 

@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Positions;
+import com.petepeterepeat.seasons.core.command.Words;
 import com.petepeterepeat.seasons.core.config.ConfigEdits;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigLoader;
@@ -39,6 +40,7 @@ public final class ZoneCommands {
   public static final String PERMISSION_SEASON = "seasons.admin.season";
 
   private static final String OVERWORLD = "minecraft:overworld";
+  private static final String REPLACE = "--replace";
 
   private final Platform platform;
   private final ConfigHolder config;
@@ -103,6 +105,9 @@ public final class ZoneCommands {
                 CommandNode.literal("remove")
                     .then(CommandNode.argument("id", ArgumentType.word()).executes(this::remove)))
             .then(CommandNode.literal("list").executes(this::list))
+            .then(
+                CommandNode.literal("info")
+                    .then(CommandNode.argument("id", ArgumentType.word()).executes(this::info)))
             .build(),
         CommandNode.literal("unlock")
             .permission(PERMISSION_SEASON)
@@ -128,11 +133,22 @@ public final class ZoneCommands {
       source.reply(messages.get("zone.bad-id"));
       return;
     }
-    if (file(season.getAsInt()).map(f -> f.zones().containsKey(id)).orElse(false)) {
+    List<String> typed = new java.util.ArrayList<>(Words.of(arguments.string("shape")));
+    // --replace redraws a zone's shape, keeping its modes (questions 269).
+    boolean replace = !typed.isEmpty() && typed.getLast().equals(REPLACE);
+    if (replace) {
+      typed.removeLast();
+    }
+    Optional<Zone> before = file(season.getAsInt()).map(f -> f.zones().get(id));
+    if (before.isPresent() && !replace) {
       source.reply(messages.get("zone.exists", "id", id));
       return;
     }
-    List<String> words = List.of(arguments.string("shape").trim().split("\\s+"));
+    if (typed.isEmpty()) {
+      source.reply(messages.get("zone.bad-shape"));
+      return;
+    }
+    List<String> words = List.copyOf(typed);
     String dimension =
         source.player().map(p -> platform.players().position(p).dimension()).orElse(OVERWORLD);
     Optional<Bounds> selected = source.player().flatMap(selection);
@@ -190,7 +206,20 @@ public final class ZoneCommands {
       source.reply(messages.get("zone.bad-shape"));
       return;
     }
-    Zone zone = Zone.drawn(id, dimension, shape.get());
+    Zone drawn = Zone.drawn(id, dimension, shape.get());
+    Zone zone =
+        before
+            .map(old ->
+                new Zone(
+                    id,
+                    drawn.dimension(),
+                    drawn.shape(),
+                    old.mode(),
+                    old.lockedUntil(),
+                    old.afterUnlock(),
+                    old.exempt(),
+                    old.message()))
+            .orElse(drawn);
     Optional<Position> spawn = file(season.getAsInt()).flatMap(SeasonFile::spawn);
     if (spawn.isPresent() && zone.contains(spawn.get())) {
       Position at = spawn.get();
@@ -230,13 +259,13 @@ public final class ZoneCommands {
     edit(
         source,
         number,
-        new Change("zones." + id, NONE, summary(zone)),
+        new Change("zones." + id, before.map(this::summary).orElse(NONE), summary(zone)),
         file -> SeasonFiles.writeZone(file, backups, number, zone),
         () ->
             source.reply(
                 messages()
                     .get(
-                        "zone.added",
+                        before.isPresent() ? "zone.replaced" : "zone.added",
                         "id",
                         id,
                         "shape",
@@ -464,6 +493,41 @@ public final class ZoneCommands {
               "now",
               zones.live(season) ? zones.now(zone.id()).id() : ZoneMode.OFF.id()));
     }
+  }
+
+  /** {@code zone info <id>}: one zone, from the file being edited or the season being played. */
+  void info(CommandSource source, Arguments arguments) {
+    String id = arguments.string("id");
+    OptionalInt editing = zones.editingSeason();
+    int played = seasons.state().map(s -> s.season()).orElse(editing.orElse(0));
+    for (int season : new int[] {editing.orElse(played), played}) {
+      Optional<Zone> zone = file(season).map(f -> f.zones().get(id));
+      if (zone.isPresent()) {
+        source.reply(line(zone.get(), season));
+        return;
+      }
+    }
+    source.reply(messages().get("zone.unknown", "id", id));
+  }
+
+  private com.petepeterepeat.seasons.core.message.Message line(Zone zone, int season) {
+    return messages()
+        .get(
+            "zone.line",
+            "id",
+            zone.id(),
+            "shape",
+            describe(zone.shape()),
+            "dimension",
+            zone.dimension(),
+            "mode",
+            zone.mode().id(),
+            "until",
+            zones.until(zone),
+            "after",
+            zone.afterUnlock().id(),
+            "now",
+            zones.live(season) ? zones.now(zone.id()).id() : ZoneMode.OFF.id());
   }
 
   // Unlocking

@@ -135,6 +135,13 @@ public record Gallery(
     return new Gallery(id, kind, season, dimension, bounds, entry, exits, cells, next, launch);
   }
 
+  /** Without the cell with that id. */
+  public Gallery withoutCell(String cellId) {
+    List<Cell> next = new ArrayList<>(cells);
+    next.removeIf(c -> c.id().equals(cellId));
+    return new Gallery(id, kind, season, dimension, bounds, entry, exits, next, settings, launch);
+  }
+
   /** Replaces the cell with the same id, or adds it at the end. */
   public Gallery withCell(Cell cell) {
     List<Cell> next = new ArrayList<>(cells);

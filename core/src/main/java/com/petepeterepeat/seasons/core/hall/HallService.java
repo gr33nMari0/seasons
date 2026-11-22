@@ -286,6 +286,29 @@ public final class HallService {
         });
   }
 
+  /** Removes a gallery and its file, keeping a backup (questions 269). */
+  public CompletableFuture<Void> remove(Gallery gallery) {
+    config.set(config.get().withoutGallery(gallery.id()));
+    Path file = galleryFile.apply(gallery.id());
+    Path backupDir = backups.resolve("galleries");
+    return writer
+        .submit(() -> {
+          com.petepeterepeat.seasons.core.store.AtomicFiles.deleteKeepingBackup(file, backupDir);
+          return Boolean.TRUE;
+        })
+        .thenApply(done -> (Void) null)
+        .whenComplete((done, failure) -> {
+          if (failure != null) {
+            LOG.error("Can't remove {}", file, failure);
+          }
+        });
+  }
+
+  /** Records a Hall edit in the audit log. */
+  public void audited(String actor, String action, String target, String details) {
+    audit.record(actor, action, target, "ok", details);
+  }
+
   /** What a cell argument names. */
   public sealed interface Resolved {
     record Found(CellRef ref) implements Resolved {}

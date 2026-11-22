@@ -49,6 +49,36 @@ public record CommandNode(
     return argument.isEmpty();
   }
 
+  /**
+   * Two trees with the same root as one: children with the same literal word are merged in turn;
+   * any other child of {@code more} is added. {@code more}'s action and permission count only where
+   * this tree has none.
+   */
+  public CommandNode merge(CommandNode more) {
+    List<CommandNode> merged = new java.util.ArrayList<>(children);
+    for (CommandNode child : more.children()) {
+      int at = -1;
+      for (int i = 0; i < merged.size(); i++) {
+        CommandNode mine = merged.get(i);
+        if (mine.isLiteral() && child.isLiteral() && mine.name().equals(child.name())) {
+          at = i;
+        }
+      }
+      if (at < 0) {
+        merged.add(child);
+      } else {
+        merged.set(at, merged.get(at).merge(child));
+      }
+    }
+    return new CommandNode(
+        name,
+        argument,
+        permission.or(more::permission),
+        merged,
+        action.or(more::action),
+        suggester.or(more::suggester));
+  }
+
   /** This node with other children. */
   public CommandNode withChildren(List<CommandNode> next) {
     return new CommandNode(name, argument, permission, next, action, suggester);

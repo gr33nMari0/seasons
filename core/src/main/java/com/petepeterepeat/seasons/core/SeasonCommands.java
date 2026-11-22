@@ -164,7 +164,26 @@ final class SeasonCommands {
                     CommandNode.literal("end")
                         .then(
                             CommandNode.argument("time", ArgumentType.greedy())
-                                .executes(this::scheduleEnd))))
+                                .executes(this::scheduleEnd)))
+                .then(CommandNode.literal("show").executes(this::scheduleShow))
+                .then(CommandNode.literal("clear").executes(this::scheduleClear)))
+        .then(
+            CommandNode.literal("players")
+                .permission(PERMISSION_ADMIN_SEASON)
+                .executes(this::players)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::players)
+                        .then(
+                            CommandNode.argument("which", ArgumentType.word())
+                                .suggests(
+                                    (source, typed) -> List.of("online", "archived", "pending"))
+                                .executes(this::players)))
+                .then(
+                    CommandNode.argument("which", ArgumentType.word())
+                        .suggests((source, typed) -> List.of("online", "archived", "pending"))
+                        .executes(this::players)))
+        .then(CommandNode.literal("list").permission(PERMISSION_ADMIN_SEASON).executes(this::list))
         .then(
             CommandNode.literal("end")
                 .permission(PERMISSION_ADMIN_SEASON)
@@ -501,6 +520,158 @@ final class SeasonCommands {
             HumanTime.time(at, ZoneOffset.UTC)));
     if (Duration.between(clock.instant(), at.toInstant()).compareTo(Duration.ofDays(7)) < 0) {
       source.reply(messages.get("schedule.soon"));
+    }
+  }
+
+  void scheduleShow(CommandSource source, Arguments arguments) {
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages().get("season.none"));
+      return;
+    }
+    plannedEnd(source, "status", state.get());
+  }
+
+  void scheduleClear(CommandSource source, Arguments arguments) {
+    Transition transition = seasons.clearPlannedEnd();
+    if (transition instanceof Transition.Refused refused) {
+      refuse(source, refused);
+      return;
+    }
+    source.reply(messages().get("schedule.cleared", "season", season()));
+  }
+
+  /**
+   * {@code /season players [season] [online|archived|pending]}: each player's record for a season,
+   * the one on record by default (questions 269).
+   */
+  void players(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    Optional<SeasonState> state = seasons.state();
+    if (state.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    int season =
+        arguments.values().containsKey("season")
+            ? arguments.integer("season")
+            : state.get().season();
+    Optional<String> which = arguments.optionalString("which");
+    if (which.isPresent() && !List.of("online", "archived", "pending").contains(which.get())) {
+      source.reply(messages.get("players.which"));
+      return;
+    }
+    java.util.Set<PlayerId> online = new java.util.HashSet<>();
+    platform.players().online().forEach(p -> online.add(p.id()));
+    List<PlayerRecord> records =
+        services.players().all().stream()
+            .sorted(java.util.Comparator.comparing(PlayerRecord::lastName))
+            .toList();
+    int shown = 0;
+    for (PlayerRecord record : records) {
+      boolean played = record.seasons().containsKey(season);
+      boolean archived = record.archivedThrough() >= season;
+      boolean keep =
+          switch (which.orElse("")) {
+            case "online" -> online.contains(record.id());
+            case "archived" -> archived;
+            case "pending" -> played && !archived;
+            default -> true;
+          };
+      if (!keep) {
+        continue;
+      }
+      shown++;
+      String playedText =
+          record.seasons().isEmpty()
+              ? messages.text("players.none-played")
+              : messages.text(
+                  record.seasons().size() == 1 ? "players.played-one" : "players.played",
+                  "seasons",
+                  String.join(
+                      ", ",
+                      record.seasons().keySet().stream().sorted().map(String::valueOf).toList()));
+      String status =
+          archived
+              ? messages.text("players.archived", "season", Integer.toString(season))
+              : played
+                  ? messages.text("players.pending")
+                  : messages.text("players.not-played", "season", Integer.toString(season));
+      String cell =
+          services
+              .hall()
+              .cellOf(record.id(), season)
+              .map(ref -> messages.text("players.cell", "cell", ref.key()))
+              .orElseGet(() -> messages.text("players.no-cell"));
+      source.reply(
+          messages.get(
+              "players.line",
+              "name",
+              record.lastName(),
+              "played",
+              playedText,
+              "status",
+              status,
+              "cell",
+              cell));
+    }
+    if (shown == 0) {
+      source.reply(messages.get("players.none"));
+    }
+  }
+
+  /** {@code /season list}: every season with a file or a gallery. */
+  void list(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    java.util.TreeSet<Integer> numbers = new java.util.TreeSet<>(config.get().seasons().keySet());
+    seasons.state().ifPresent(s -> numbers.add(s.season()));
+    config.get().allGalleries().forEach(g -> numbers.add(g.season()));
+    if (numbers.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    for (int number : numbers) {
+      String record =
+          seasons
+              .state()
+              .filter(s -> s.season() == number)
+              .map(s -> messages.text("seasons.on-record", "phase", phase(messages, s.phase())))
+              .orElse("");
+      String spawn =
+          config
+              .get()
+              .season(number)
+              .flatMap(f -> f.spawn())
+              .map(at ->
+                  messages.text(
+                      "seasons.spawn", "at", at.blockX() + ", " + at.blockY() + ", " + at.blockZ()))
+              .orElseGet(() -> messages.text("seasons.no-spawn"));
+      List<String> galleries =
+          config.get().allGalleries().stream()
+              .filter(g -> g.season() == number)
+              .map(g -> g.id())
+              .toList();
+      String galleryText =
+          galleries.isEmpty()
+              ? messages.text("seasons.no-galleries")
+              : messages.text("seasons.galleries", "galleries", String.join(", ", galleries));
+      long archived =
+          services.players().all().stream()
+              .filter(r -> r.archivedThrough() >= number && r.seasons().containsKey(number))
+              .count();
+      source.reply(
+          messages.get(
+              "seasons.line",
+              "season",
+              Integer.toString(number),
+              "record",
+              record,
+              "spawn",
+              spawn,
+              "galleries",
+              galleryText,
+              "archived",
+              Long.toString(archived)));
     }
   }
 

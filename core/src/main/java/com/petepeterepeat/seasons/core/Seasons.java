@@ -33,6 +33,7 @@ import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
+import com.petepeterepeat.seasons.core.hall.HallLists;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
@@ -590,7 +591,10 @@ public final class Seasons implements SeasonsApi {
             stamper,
             help);
     wanding.bindLinks(hallCommands::addLink);
-    CommandNode hof = hallCommands.root();
+    CommandNode hof =
+        hallCommands
+            .root()
+            .merge(new HallLists(platform, config, halls, players, cellEdits).root());
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());
       children.add(curation.command());
