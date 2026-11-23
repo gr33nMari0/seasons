@@ -32,7 +32,7 @@ Every step that moves items is journalled, so a crash at any moment leaves every
 
 Seasons sits idle until you record a season. Installing it mid-season is fine.
 
-**Seasons Web**, the optional live dashboard (`SeasonsWeb-<version>.jar`), arrives in a later release. You don't need it.
+**Seasons Web**, the optional live dashboard (`SeasonsWeb-<version>.jar`), turns your server into a page for phones, iPads and second monitors: the season clock, who's online and where (never coordinates), the event feed, your BlueMap, leaderboards, profiles, the Hall of Fame and the museum, plus a second-screen mode at `/screen` for an iPad on a stand. Install it beside Seasons, set `enabled: true` and your https `public-url` in `plugins/SeasonsWeb/web.yml`, and put a Cloudflare Tunnel or HTTPS proxy in front of it. Players log in by typing `/web link <code>` in game. Every widget has a visibility setting in `web.yml`. You don't need it.
 
 ## Your first season
 

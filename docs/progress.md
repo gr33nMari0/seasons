@@ -15,7 +15,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
-| M7 Seasons Web | Part 1 (web server and API) built on `m7-web-api`; part 2 (dashboard, connect page) not started | A49; A48's API half; `m7-*`; see M7 part 1, below |
+| M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page) on `m7-dashboard` | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -461,6 +461,41 @@ Built:
 
 Left for part 2: the dashboard page, second-screen mode, the connect page, the museum browser and season history, Seasons Web on Hangar and Modrinth.
 
+## M7 part 2: the dashboard and the connect page
+
+**The dashboard page, second-screen mode and the public site** (branch `m7-dashboard`; plan in `docs/plans/m7-dashboard.md`; readings in `docs/questions.md` 303 to 316; ADR 0007). The scenarios were written first, then the code. With A48's page half, both of M7's scenarios pass, so M7 is done.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A48, page half (A48 in full with part 1's API half): a visitor's page shows the season clock, who's online with dimension and region, the feed (a join arriving live), the map framed from its own address and Season 2's Hall, with no leaderboards, only Alex's profile summary and no coordinates anywhere; logged in by the code the page shows, leaderboards appear and Alex's profile shows full statistics and the sword as "Edge, Diamond Sword, Sharpness V"; every answer to a request carrying the session is `private, no-store` | `a48-public-dashboard.mjs` (Chromium through the tunnel); unit: `AssetsTest`, `WebTest#thePageSettingsSayWhatThisViewerMaySee`; JS: `format.test.mjs` |
+| A49 | unchanged (`a49-proxy-client-ip.mjs`); every browser scenario also reaches Seasons Web through the tunnel's `CF-Connecting-IP` |
+| The live widgets: countdowns to the planned end and a dated Homecoming by the server's clock (the browser's an hour fast), the end's countdown when it starts, who's online, the deaths board after a death with the viewer's row marked, the feed with a first, an announce-zone entry and a phase change, Spotify's embed and each link | `m7-dashboard-live.mjs`; unit: `ApiReferenceTest#homecomingIsPlanned…`, `WebTest#theSeasonSaysWhenHomecomingIsPlanned…`; JS: `clock.test.mjs`, `format.test.mjs` |
+| Reference pages: season history (both seasons, the one now marked, its players), the Hall browser by season, the museum's trophy with its label, season and credit, the zones in force and Homecoming in words, waypoints with Nether coordinates by floor division, and the converter both ways with negative numbers | `m7-dashboard-reference.mjs`; unit: `ApiReferenceTest`, `WebTest#historyAndTheMuseum…`; JS: `convert.test.mjs` |
+| Profiles: Alex's season card with every statistic in words, the first Alex won, the cell linking to the gallery; gear as text with enchantments in roman numerals (a book's stored one too), a trim and a stack's count, each with our own icon; a visitor sees Sam's summary until `profiles: public`; `/web privacy` shows on Alex's leaderboard | `m7-dashboard-profile.mjs`; JS: `format.test.mjs`, `page.test.mjs` (icons) |
+| Player-written text stays text: an item named `<img src=x onerror=alert(1)>`, a waypoint and a link label with markup show as written, make no element and run no script | `m7-dashboard-text.mjs`; JS: `page.test.mjs` (no code that parses HTML) |
+| Visibility on the page: a hidden region, map (as a link too) and players-only feed are left out and never asked for, public leaderboards shown, the feed appears once logged in; `public: false` shows only the login | `m7-dashboard-visibility.mjs`; unit: `WebTest#aHiddenMapIsNoLinkEither`, `VisibilityTest` |
+| The map framed when its CSP names the dashboard; a card linking to it with `X-Frame-Options: DENY`, `frame-ancestors` naming another site, or nothing answering; a frame that never loads gives way to the card after 10 s | `m7-dashboard-map.mjs` (stand-in maps); unit: `FramingTest`, `WebConfigTest#theMapIsTheFirstFramedLink` |
+| Logging in on the page in Chromium and WebKit without a reload, no cookie readable by script; an expired code offers a new one; `/web logout all` sends the page back to the public view with a notice | `m7-dashboard-login.mjs` |
+| Admin widgets: health, Sam waiting to be archived, the audit log without positions, for `seasons.web.admin` only, not for an op alone | `m7-dashboard-admin.mjs`; unit: `ApiReferenceTest#pendingPlayers…`, `#anAuditEntryWithoutItsDetails`, `WebTest#historyAndTheMuseumArePublicAndTheAdminListsAreForAdmins` |
+| Second-screen mode in WebKit at iPad sizes: web.yml's widgets in order (an unknown one a load warning), dark, large type, nothing to scroll; a join, a leave and a restart of Seasons Web followed with no reload; the wake lock asked for on load and again on coming back into view; without the API it says so; upright, it asks to be turned | `m7-second-screen.mjs`; unit: `WebConfigTest#screens…`; JS: `wake.test.mjs`, `stream.test.mjs` |
+| The page keeps the security rules on every route, logged in or not: no CSP violation, script error or request to another site; its files typed, with ETags and 304s, and nothing else served | `m7-dashboard-csp.mjs`; unit: `AssetsTest` (no image or texture in the jar), `WebTest#thePageAndItsFiles…` |
+| The connect page end to end: served from its own address, given the dashboard's, it names the server and lands on its dashboard, where logging in works | `m7-connect.mjs` |
+| The public site: addresses accepted and refused with reasons; only a Seasons instance accepted and a dashboard on another site never followed; the flow in Chromium and WebKit (an instance, not https, junk, not Seasons, no answer, a timeout, `?server=`); a CSP on every page, nothing from another site, every link resolving | `site/test/address.test.mjs`, `instance.test.mjs`, `connect.spec.mjs`, `site.spec.mjs` (`npm test`, the `site` job in `build.yml`) |
+
+Built:
+
+- **Seasons API 1.3.** `SeasonSummary`, `MuseumView`, `PendingPlayer`, `AuditEntry`, `SeasonView#plannedHomecoming`; in Seasons, `core/snapshot/ApiReference` (pure) behind `ApiService#seasons`, `museum`, `pending` and `audit`.
+- **Seasons Web.** `Assets` (the page's files from the jar), `Framing` and `MapProbe`, `screens:` in `WebSettings` checked by `WebConfig`, the five new endpoints and `plannedHomecoming` in `Routes`, `dashboard.*` in `messages.yml`, `Messages#section`.
+- **The page.** Plain HTML, CSS and ES modules in `web/src/main/resources/.../dashboard/`, no build step: `app.mjs` (routes, refresh, stream, second screen), `live.mjs` and `pages.mjs` (widgets), `login.mjs`, `format.mjs`, `items.mjs`, `convert.mjs`, `clock.mjs`, `stream.mjs`, `wake.mjs`, `dom.mjs` (text nodes only), `icons.svg` (ours). `:web:jsTest` runs their unit tests with `node --test` under `check`.
+- **The public site.** `site/public` (home, `connect/`), `site/test`, `.github/workflows/pages.yml`, and a `site` job required by the `build` check.
+- **Tests.** ADR 0007: Playwright 1.65.0 (test-only) with Chromium and WebKit; `testkit/bots/lib/tunnel.mjs` (an HTTPS proxy adding `CF-Connecting-IP`, stand-in maps, a static site) and `lib/browser.mjs`; CI installs and caches the browsers. Timings for the new scenarios in `testkit/scenario-timings.json`.
+
+Different from the plan: the egg wall is checked by `ApiReferenceTest` rather than a scenario (a dragon kill by a player needs a full End fight), and AFK, shown from part 1's flag, by part 1's scenarios rather than a new one; a CORS refusal isn't a case of its own in `connect.spec.mjs`, since Playwright answers stubbed requests as CORS allows (it fails the fetch as no answer does); the site's tests run with `npm test` in their own CI job rather than a Gradle task.
+
+Needs the owner: switch the repository's Pages source to "GitHub Actions" (until then `pages.yml` fails at its deploy step); for a custom address, add `site/public/CNAME` and its Cloudflare record.
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
@@ -470,5 +505,4 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | The `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
 | Recovering `--force` displaced items in the curator view | Later | Questions 23 and 221: no command of the spec's opens a displaced file |
 | Seasons Web on Hangar and Modrinth | M7 | Questions 292 |
-| Seasons Web part 2: the dashboard page with the embedded BlueMap, profiles and second-screen mode, the connect page on the public site, the museum browser and season history, and A48's page half | M7 | Milestone list; questions 302 |
 | Fabric and NeoForge adapters; Bedrock players through Geyser | Later | Milestone list ("Later: Seasons Adapters") |

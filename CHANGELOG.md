@@ -10,6 +10,11 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - Logging in to the dashboard with a code: `/web link <code>`, with `/web sessions`, `/web logout [id|all]` and `/web privacy` to hide yourself from leaderboards.
 - Seasons API 1.2: snapshots of the season and who's online, profiles, galleries, archived gear as text, leaderboards, waypoints and events, for Seasons Web and other plugins.
 - `api.refresh` and `api.afkAfter` in `config.yml`.
+- The Seasons Web dashboard (M7 part 2): one page for phones, iPads and second monitors, with the season clock and its countdowns, who's online, leaderboards, the live event feed, the embedded BlueMap (a link when the map can't be framed), the Hall of Fame browser, the museum, season history, rules and zones, shared waypoints, an Overworld and Nether coordinate converter, links with Spotify's embed, and for `seasons.web.admin` server health, players waiting to be archived and the audit log. Logging in shows a code to type with `/web link`. Profiles show every season card, statistic and award, and archived gear as text.
+- Second-screen mode at `/screen`: a landscape layout for an iPad on a stand, dark with large type, kept up to date and awake. `screens:` in `web.yml` sets its widgets and their order.
+- The public site, with a connect page that finds a server's dashboard from its address, published by GitHub Pages from `site/`.
+- Seasons API 1.3: season history, the museum, players waiting to be archived, the audit log without details, and when Homecoming is planned. Seasons Web needs Seasons API 1.3.
+- New `web.yml` visibility keys: `museum`, `history`, `converter`, `pending-players`, `audit-log`.
 
 ## [1.1.0] - 2026-11-23
 
