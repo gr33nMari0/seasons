@@ -45,6 +45,8 @@ export async function startTunnel (ctx, { ip = `198.51.100.${(++visitors % 250) 
       (answer) => {
         res.writeHead(answer.statusCode, answer.headers)
         answer.pipe(res)
+        // A stream cut off upstream, as when Seasons Web restarts, is cut off for the browser too.
+        answer.on('close', () => { if (!res.writableEnded) res.destroy() })
       })
     upstream.on('error', () => {
       if (!res.headersSent) res.writeHead(502)

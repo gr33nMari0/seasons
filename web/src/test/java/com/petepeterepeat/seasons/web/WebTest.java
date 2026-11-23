@@ -409,4 +409,19 @@ class WebTest {
         .contains("\"plannedHomecoming\":\"2026-12-24T08:00:00Z\"")
         .contains("\"name\":\"old base\",\"mode\":\"block\"");
   }
+
+  @Test
+  void aHiddenMapIsNoLinkEither() throws Exception {
+    Files.writeString(
+        dir.resolve("plugin/web.yml"),
+        "enabled: true\nbind: 127.0.0.1:"
+            + port
+            + "\nlinks:\n  - { label: Map, url: \"https://map.example.com\", embed: frame }\n"
+            + "  - { label: Discord, url: \"https://discord.gg/x\" }\n"
+            + "visibility:\n  map: hidden\n");
+    assertThat(web.reload()).startsWith("listening on");
+    String links = get("/api/v1/links", "").body();
+    assertThat(links).contains("Discord").doesNotContain("map.example.com");
+    assertThat(get("/api/v1/dashboard", "").body()).contains("\"map\":null");
+  }
 }

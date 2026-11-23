@@ -132,10 +132,11 @@ export default {
     await page.goto('/')
     await page.waitForWidget('leaderboards', /Deaths/i)
     await page.waitForWidget('leaderboards', /Play time/i)
-    const afterLogin = page.responses.slice(before).filter((r) => r.url.startsWith(origin + '/api/') && !r.url.includes('/auth/'))
-    assert(afterLogin.length > 0, 'the page asked the API after logging in')
-    for (const r of afterLogin) {
-      assert(r.headers['cache-control'] === 'private, no-store', `${r.url} after logging in is private, no-store: ${r.headers['cache-control']}`)
+    // Every answer to a request that carried the session, whatever it asked for.
+    const withSession = page.responses.slice(before).filter((r) => r.session && r.url.startsWith(origin + '/api/'))
+    assert(withSession.length > 0, 'the page asked the API logged in')
+    for (const r of withSession) {
+      assert(r.headers['cache-control'] === 'private, no-store', `${r.url} logged in is private, no-store: ${r.headers['cache-control']}`)
     }
     page.check('the dashboard logged in')
   }

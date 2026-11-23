@@ -49,8 +49,8 @@ export default {
 
     // The zones in force in plain words, and the waypoints with their Nether coordinates.
     await page.goto('/')
-    const rules = await page.waitForWidget('rules', /old-base/)
-    assert(/Locked until Homecoming/i.test(rules), `the zone's rule in words: ${rules}`)
+    const rules = await page.waitForWidget('rules', /old base/)
+    assert(/Locked: nobody goes in/.test(rules) && /Homecoming comes when the group votes/.test(rules), `the zone's rule and Homecoming in words: ${rules}`)
     const waypoints = await page.waitForWidget('waypoints', /Far Camp/)
     assert(/Big Tree/.test(waypoints) && /50, -60, 50/.test(waypoints), `Big Tree: ${waypoints}`)
     assert(/Nether -13, -2/.test(waypoints) && /Nether 6, 6/.test(waypoints), `Nether coordinates by floor division: ${waypoints}`)

@@ -111,8 +111,13 @@ export async function openPage (ctx, origin, path = '/', { engine = 'chromium', 
     const url = request.url()
     page.requests.push(url)
   })
-  context.on('response', (response) => {
-    page.responses.push({ url: response.url(), status: response.status(), headers: response.headers() })
+  context.on('response', async (response) => {
+    const entry = { url: response.url(), status: response.status(), headers: response.headers(), session: false }
+    page.responses.push(entry)
+    try {
+      const sent = await response.request().allHeaders()
+      entry.session = /__Host-seasons_session=/.test(sent.cookie ?? '')
+    } catch {}
   })
   page.page = await context.newPage()
   page.page.on('console', (message) => {

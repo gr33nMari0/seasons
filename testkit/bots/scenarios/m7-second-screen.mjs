@@ -5,7 +5,7 @@
 // join, a leave and Seasons Web restarting; it holds the screen awake and asks again when it comes
 // back into view; without the Wake Lock API it says so and carries on; held upright it asks to be
 // turned.
-import { MINUTE, SECOND, assert } from '../lib/context.mjs'
+import { MINUTE, SECOND, assert, sleep } from '../lib/context.mjs'
 import { IPAD_LANDSCAPE, dashboard, openPage } from '../lib/browser.mjs'
 
 export default {
@@ -63,7 +63,11 @@ export default {
     await page.waitForWidget('online', /Sam/, 45 * SECOND)
     await ctx.leave(sam)
     await ctx.eventually(async () => assert(!/Sam/.test(await page.widget('online')), 'Sam has left'), 45 * SECOND)
+    const streams = () => page.apiPaths().filter((p) => p === '/api/v1/events').length
+    const opened = streams()
     await ctx.command(admin, '/scenario web reload', /^Web reloaded: listening on /)
+    await ctx.eventually(async () => assert(streams() > opened, 'the feed opened again'), 30 * SECOND)
+    await sleep(SECOND)
     await ctx.join('Taylor')
     await page.waitForWidget('event-feed', /Taylor joined/, 45 * SECOND)
     assert(await page.page.evaluate(() => window.__notReloaded === true), 'all without a reload')

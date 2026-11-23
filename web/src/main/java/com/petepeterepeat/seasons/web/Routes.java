@@ -833,7 +833,12 @@ final class Routes {
       return denied.get();
     }
     JsonArray list = new JsonArray();
+    Optional<WebSettings.Link> map = config.map();
     for (WebSettings.Link link : config.links()) {
+      // A hidden map is hidden as a link too.
+      if (map.isPresent() && link.equals(map.get()) && !sees("map", viewer)) {
+        continue;
+      }
       JsonObject o = new JsonObject();
       o.addProperty("label", link.label());
       o.addProperty("url", link.url());

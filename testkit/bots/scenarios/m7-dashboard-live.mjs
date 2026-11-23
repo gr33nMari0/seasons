@@ -9,6 +9,7 @@ import { FLOOR } from '../lib/hall.mjs'
 import { dashboard, loginOnPage, openPage } from '../lib/browser.mjs'
 import { middle, move, standAt } from '../lib/visits.mjs'
 import { box, launchFrontier } from '../lib/zones.mjs'
+import { WebClient } from '../lib/web.mjs'
 
 const SEASON_FILE = 'world/dimensions/minecraft/overworld/seasons/seasons/3.yml'
 const PLAYLIST = 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M'
@@ -28,12 +29,14 @@ export default {
     ].join('\n'))
     await launchFrontier(ctx, admin)
 
-    // The end in 2 days 3½ hours, Homecoming on a date 5 days 6 hours away.
+    // The end in 2 days 3½ hours, Homecoming on a date 5 days 6½ hours away.
     await ctx.command(admin, `/season schedule end ${ctx.isoIn(2 * DAY + 3 * HOUR + 30 * MINUTE)}`, /^Season 3 now ends at /)
-    const homecoming = ctx.isoIn(5 * DAY + 6 * HOUR).replace(/\.\d+Z$/, 'Z')
+    const homecoming = ctx.isoIn(5 * DAY + 6 * HOUR + 30 * MINUTE).replace(/\.\d+Z$/, 'Z')
     const file = ctx.readFile(SEASON_FILE).replace(/homecoming:[^\n]*\n( +[^\n]*\n)*/, '') + `homecoming:\n  unlock: { date: "${homecoming}" }\n`
     ctx.writeFile(SEASON_FILE, file)
     await ctx.command(admin, '/season reload', /^Reloaded /)
+    const api = new WebClient(ctx)
+    await ctx.eventually(async () => assert((await api.get('/api/v1/season')).json.plannedHomecoming, 'Homecoming planned'))
 
     // This browser's clock is an hour fast; the countdowns follow the server's.
     const page = await openPage(ctx, origin, '/', { offsetMs: HOUR })
@@ -46,8 +49,10 @@ export default {
 
     // Leaderboards need a login; Alex's own row is marked.
     await loginOnPage(ctx, page, alex)
+    // Past the arrival immunity after launch, which a kill can't get through.
+    await ctx.advance(admin, 6 * SECOND)
     await ctx.command(admin, '/kill Sam', /^Killed Sam/)
-    const boards = await page.waitForWidget('leaderboards', /Deaths.*Sam\b/i, 60 * SECOND)
+    const boards = await page.waitForWidget('leaderboards', /Deaths 1\. Sam 1\b/, 60 * SECOND)
     assert(/Play time/i.test(boards) && /Distance/i.test(boards), `the three boards: ${boards}`)
     const you = page.page.locator('[data-widget="leaderboards"] [data-you]')
     await you.first().waitFor({ timeout: 15 * SECOND })
