@@ -636,7 +636,7 @@ public final class Seasons implements SeasonsApi {
             .node());
     nodes.add(new ConfigCommands(config, loader, edits, world.resolve("backups")).node());
     built.bindHelp(help);
-    platform.commands().register(help.decorate(built.root(nodes), suggestions));
+    platform.commands().register(help.decorate(built.root(nodes), suggestions), List.of("seasons"));
     HallCommands hallCommands =
         new HallCommands(
             platform,

@@ -324,6 +324,7 @@ final class SeasonCommands {
     Optional<SeasonState> state = seasons.state();
     if (state.isEmpty()) {
       source.reply(messages.get("info.no-season"));
+      source.reply(messages.get("info.idle", "usage", "<season>"));
       return;
     }
     SeasonState current = state.get();
