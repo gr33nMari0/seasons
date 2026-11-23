@@ -21,6 +21,7 @@ base.archivesName = "seasons-testkit"
 dependencies {
     compileOnly(libs.paper.api)
     compileOnly(project(":adapters:paper", "shadowRuntimeElements"))
+    compileOnly(project(":web"))
     compileOnly(libs.bluemap.api)
     testImplementation("org.junit.jupiter:junit-jupiter-params")
 }
@@ -271,6 +272,7 @@ val scenarioRuns = minecraftVersions.map { version ->
                     outputDirectory.set(File(out, "shard-$k"))
                     serverPort.set(25700 + 10 * k)
                     webhookPort.set(25701 + 10 * k)
+                    webPort.set(25702 + 10 * k)
                     shared.set(isolation == "shared")
                     jvmArgs.set(
                         listOf(

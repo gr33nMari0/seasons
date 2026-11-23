@@ -40,6 +40,9 @@ public interface ShardParameters extends WorkParameters {
 
   Property<Integer> getWebhookPort();
 
+  /** The shard's own port for Seasons Web's dashboard, which scenarios write into web.yml. */
+  Property<Integer> getWebPort();
+
   /** JVM arguments every boot gets, before the per-boot ones. */
   ListProperty<String> getJvmArgs();
 

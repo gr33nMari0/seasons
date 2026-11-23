@@ -198,6 +198,16 @@ final class ScenarioCommands implements BasicCommand, Listener {
     return Optional.ofNullable(registration).map(RegisteredServiceProvider::getProvider);
   }
 
+  /** Seasons Web's scenario hooks, when Seasons Web is installed and running. */
+  Optional<com.petepeterepeat.seasons.web.WebScenarioHooks> webHooks() {
+    RegisteredServiceProvider<com.petepeterepeat.seasons.web.WebScenarioHooks> registration =
+        plugin
+            .getServer()
+            .getServicesManager()
+            .getRegistration(com.petepeterepeat.seasons.web.WebScenarioHooks.class);
+    return Optional.ofNullable(registration).map(RegisteredServiceProvider::getProvider);
+  }
+
   @Override
   public void execute(CommandSourceStack stack, String[] args) {
     CommandSender sender = stack.getSender();
@@ -328,9 +338,23 @@ final class ScenarioCommands implements BasicCommand, Listener {
                                   : "Reset leaked: " + leaks));
         }
         case "clock" -> {
+          if (args.length > 1) {
+            webHooks().ifPresent(web -> web.advance(duration(args[1])));
+          }
           Instant now = args.length > 1 ? hooks.advance(duration(args[1])) : hooks.now();
           sender.sendMessage(
               "Clock " + now + " offset " + Duration.between(Instant.now(), now).toMillis());
+        }
+        case "web" -> {
+          // Seasons Web's hooks (docs/adr/0003): read web.yml again.
+          Optional<com.petepeterepeat.seasons.web.WebScenarioHooks> web = webHooks();
+          if (web.isEmpty()) {
+            sender.sendMessage("Seasons Web's scenario hooks are off");
+          } else if (args.length > 1 && args[1].equals("reload")) {
+            sender.sendMessage("Web reloaded: " + web.get().reload());
+          } else {
+            sender.sendMessage("Usage: /scenario web reload");
+          }
         }
         case "sync" -> sync(sender, args);
         case "perf" -> perf.run(sender, hooks, args);
