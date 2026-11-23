@@ -18,6 +18,8 @@ import org.spongepowered.configurate.objectmapping.meta.Setting;
  * @param name the server's name on the connect page; empty for the server's MOTD
  * @param open whether visitors who aren't logged in see the public widgets ({@code public})
  * @param visibility each widget's or field's visibility: public, players, admins or hidden
+ * @param screens second-screen layouts by name, shown at {@code /screen/<name>}; {@code
+ *     second-screen} is the one at {@code /screen}
  */
 @ConfigSerializable
 record WebSettings(
@@ -33,10 +35,12 @@ record WebSettings(
     Sessions sessions,
     RateLimits rateLimits,
     Stream stream,
-    Cache cache) {
+    Cache cache,
+    Map<String, Screen> screens) {
   WebSettings {
     links = List.copyOf(links);
     visibility = Map.copyOf(visibility);
+    screens = Map.copyOf(screens);
   }
 
   /**
@@ -79,6 +83,19 @@ record WebSettings(
    */
   @ConfigSerializable
   record Stream(int maxPerIp, int maxPerAccount, int maxTotal, int queue) {}
+
+  /**
+   * A second screen: a landscape layout of widgets, in order.
+   *
+   * @param layout {@code landscape}, the only layout
+   * @param widgets widget names, such as {@code season-clock} or {@code event-feed}
+   */
+  @ConfigSerializable
+  record Screen(String layout, List<String> widgets) {
+    Screen {
+      widgets = List.copyOf(widgets);
+    }
+  }
 
   /** How long public responses may be cached by a proxy. */
   @ConfigSerializable

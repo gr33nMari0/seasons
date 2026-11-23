@@ -5,12 +5,16 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.petepeterepeat.seasons.api.ArchiveView;
+import com.petepeterepeat.seasons.api.AuditEntry;
 import com.petepeterepeat.seasons.api.GalleryView;
 import com.petepeterepeat.seasons.api.LeaderboardEntry;
 import com.petepeterepeat.seasons.api.Leaderboards;
+import com.petepeterepeat.seasons.api.MuseumView;
 import com.petepeterepeat.seasons.api.OnlinePlayer;
+import com.petepeterepeat.seasons.api.PendingPlayer;
 import com.petepeterepeat.seasons.api.PlayerName;
 import com.petepeterepeat.seasons.api.PlayerProfile;
+import com.petepeterepeat.seasons.api.SeasonSummary;
 import com.petepeterepeat.seasons.api.SeasonView;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.api.WaypointView;
@@ -47,6 +51,9 @@ final class Routes {
   private static final Pattern HALL_PLAYER = Pattern.compile("/api/v1/hall/(\\d{1,4})/([^/]+)");
   private static final long WAIT_SECONDS = 10;
 
+  /** How many of the audit log's last entries an admin sees. */
+  static final int AUDIT_ENTRIES = 50;
+
   /** Server health, sampled on the server thread. */
   record Health(List<Double> tps, double tickMs, long usedBytes, long maxBytes) {
     Health {
@@ -63,7 +70,8 @@ final class Routes {
       String ip,
       Map<String, String> cookies,
       String userAgent,
-      long bodyLength) {}
+      long bodyLength,
+      String ifNoneMatch) {}
 
   private final WebConfig config;
   private final Supplier<Optional<SeasonsApi>> api;
@@ -75,6 +83,8 @@ final class Routes {
   private final Supplier<Messages> messages;
   private final String version;
   private final Clock clock;
+  private final Assets assets;
+  private final Supplier<Framing.State> framing;
 
   Routes(
       WebConfig config,
@@ -86,7 +96,9 @@ final class Routes {
       Supplier<String> serverName,
       Supplier<Messages> messages,
       String version,
-      Clock clock) {
+      Clock clock,
+      Assets assets,
+      Supplier<Framing.State> framing) {
     this.config = config;
     this.api = api;
     this.sessions = sessions;
@@ -97,9 +109,20 @@ final class Routes {
     this.messages = messages;
     this.version = version;
     this.clock = clock;
+    this.assets = assets;
+    this.framing = framing;
   }
 
   Reply route(Request r) {
+    Optional<Assets.Asset> asset = assets.find(r.path());
+    if (asset.isPresent()) {
+      // The page and its files are the same for everyone.
+      return method(r, "GET")
+          .orElseGet(() ->
+              Assets.reply(
+                  asset.get(),
+                  r.ifNoneMatch().isEmpty() ? Optional.empty() : Optional.of(r.ifNoneMatch())));
+    }
     Reply reply = dispatch(r);
     // A response to a logged-in player depends on who they are: never cached for anyone else.
     return r.viewer() instanceof Viewer.Player && !r.path().equals(WELL_KNOWN)
@@ -109,9 +132,6 @@ final class Routes {
 
   private Reply dispatch(Request r) {
     String path = r.path();
-    if (path.equals("/") || path.equals("/index.html")) {
-      return method(r, "GET").orElseGet(Routes::page);
-    }
     if (path.equals(WELL_KNOWN)) {
       return method(r, "GET").orElseGet(this::wellKnown);
     }
@@ -138,6 +158,21 @@ final class Routes {
     }
     if (path.equals("/api/v1/admin/health")) {
       return method(r, "GET").orElseGet(() -> health(r.viewer()));
+    }
+    if (path.equals("/api/v1/dashboard")) {
+      return method(r, "GET").orElseGet(() -> dashboard(r.viewer()));
+    }
+    if (path.equals("/api/v1/seasons")) {
+      return method(r, "GET").orElseGet(() -> seasons(r.viewer()));
+    }
+    if (path.equals("/api/v1/museum")) {
+      return method(r, "GET").orElseGet(() -> museum(r.viewer()));
+    }
+    if (path.equals("/api/v1/admin/pending")) {
+      return method(r, "GET").orElseGet(() -> pending(r.viewer()));
+    }
+    if (path.equals("/api/v1/admin/audit")) {
+      return method(r, "GET").orElseGet(() -> audit(r.viewer()));
     }
     Matcher m = HALL_PLAYER.matcher(path);
     if (m.matches()) {
@@ -183,19 +218,67 @@ final class Routes {
     return config.visibility().allows(key, viewer);
   }
 
-  // Pages
+  // The page's own settings
 
-  private static Reply page() {
-    return Reply.html(
-        """
-        <!doctype html>
-        <html lang="en"><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Seasons</title></head>
-        <body><h1>Seasons</h1>
-        <p>This server's Seasons dashboard is running. Its page arrives in a later version;
-        its API answers under /api/v1.</p></body></html>
-        """);
+  /** Widgets the page has but the API has no key of its own for: they show with another's. */
+  private static final Map<String, String> PAGE_ONLY = Map.of("rules", "season");
+
+  /**
+   * What the page needs to draw itself for this viewer: who they are, the widgets and fields they
+   * may see, the map and whether it can be framed, the second screens, and the page's text from
+   * messages.yml.
+   */
+  private Reply dashboard(Viewer viewer) {
+    JsonObject o = new JsonObject();
+    o.addProperty("name", serverName.get());
+    o.addProperty("version", version);
+    o.addProperty("public", config.visibility().open());
+    JsonObject who = new JsonObject();
+    if (viewer instanceof Viewer.Player p) {
+      who.addProperty("kind", "player");
+      who.addProperty("uuid", p.id().toString());
+      who.addProperty("name", p.name());
+      who.addProperty("admin", p.admin());
+    } else {
+      who.addProperty("kind", "anonymous");
+    }
+    o.add("viewer", who);
+    JsonArray widgets = new JsonArray();
+    for (String w : Visibility.WIDGETS) {
+      if (sees(w, viewer)) {
+        widgets.add(w);
+      }
+    }
+    PAGE_ONLY.forEach((w, key) -> {
+      if (sees(key, viewer)) {
+        widgets.add(w);
+      }
+    });
+    o.add("widgets", widgets);
+    JsonObject fields = new JsonObject();
+    for (String key : Visibility.DEFAULTS.keySet()) {
+      fields.addProperty(key, sees(key, viewer));
+    }
+    o.add("fields", fields);
+    Optional<WebSettings.Link> map = config.map();
+    if (map.isPresent() && sees("map", viewer)) {
+      JsonObject m = new JsonObject();
+      m.addProperty("label", map.get().label());
+      m.addProperty("url", map.get().url());
+      m.addProperty("framing", framing.get().text());
+      o.add("map", m);
+    } else {
+      o.add("map", JsonNull.INSTANCE);
+    }
+    JsonObject screens = new JsonObject();
+    config.screens().forEach((name, list) -> screens.add(name, strings(list)));
+    o.add("screens", screens);
+    o.addProperty("refresh", 30);
+    JsonObject texts = new JsonObject();
+    messages.get().section("dashboard").forEach(texts::addProperty);
+    o.add("texts", texts);
+    o.addProperty("now", clock.instant().toString());
+    return Reply.ok(o);
   }
 
   private Reply wellKnown() {
@@ -315,6 +398,7 @@ final class Routes {
       s.countdownEndsAt().ifPresent(v -> o.addProperty("countdownEndsAt", v.toString()));
       s.launchedAt().ifPresent(v -> o.addProperty("launchedAt", v.toString()));
       s.homecomingAt().ifPresent(v -> o.addProperty("homecomingAt", v.toString()));
+      s.plannedHomecoming().ifPresent(v -> o.addProperty("plannedHomecoming", v.toString()));
       JsonArray zones = new JsonArray();
       for (SeasonView.ZoneView z : s.zones()) {
         JsonObject zone = new JsonObject();
@@ -480,30 +564,157 @@ final class Routes {
     if (sees("hall.gear", viewer)) {
       JsonArray gear = new JsonArray();
       for (ArchiveView.ItemView item : a.items()) {
-        JsonObject i = new JsonObject();
-        i.addProperty("section", item.section());
-        i.addProperty("id", item.id());
-        i.addProperty("count", item.count());
-        item.name().ifPresent(n -> i.addProperty("name", n));
-        JsonArray enchantments = new JsonArray();
-        for (ArchiveView.Enchantment e : item.enchantments()) {
-          JsonObject en = new JsonObject();
-          en.addProperty("id", e.id());
-          en.addProperty("level", e.level());
-          enchantments.add(en);
-        }
-        i.add("enchantments", enchantments);
-        item.trim()
-            .ifPresent(t -> {
-              JsonObject trim = new JsonObject();
-              trim.addProperty("pattern", t.pattern());
-              trim.addProperty("material", t.material());
-              i.add("trim", trim);
-            });
-        gear.add(i);
+        gear.add(item(item));
       }
       o.add("gear", gear);
     }
+    return Reply.ok(o);
+  }
+
+  /** An item as text: its section, id, count, name, enchantments and trim. */
+  static JsonObject item(ArchiveView.ItemView item) {
+    JsonObject i = new JsonObject();
+    i.addProperty("section", item.section());
+    i.addProperty("id", item.id());
+    i.addProperty("count", item.count());
+    item.name().ifPresent(n -> i.addProperty("name", n));
+    JsonArray enchantments = new JsonArray();
+    for (ArchiveView.Enchantment e : item.enchantments()) {
+      JsonObject en = new JsonObject();
+      en.addProperty("id", e.id());
+      en.addProperty("level", e.level());
+      enchantments.add(en);
+    }
+    i.add("enchantments", enchantments);
+    item.trim()
+        .ifPresent(t -> {
+          JsonObject trim = new JsonObject();
+          trim.addProperty("pattern", t.pattern());
+          trim.addProperty("material", t.material());
+          i.add("trim", trim);
+        });
+    return i;
+  }
+
+  // Seasons, the museum and the admin lists (Seasons API 1.3)
+
+  private Reply seasons(Viewer viewer) {
+    Optional<Reply> denied = deny("history", viewer);
+    if (denied.isPresent()) {
+      return denied.get();
+    }
+    Optional<SeasonsApi> seasons = api.get();
+    if (seasons.isEmpty()) {
+      return unavailable();
+    }
+    Optional<List<SeasonSummary>> list = await(seasons.get().seasons());
+    if (list.isEmpty()) {
+      return unavailable();
+    }
+    JsonArray out = new JsonArray();
+    for (SeasonSummary s : list.get()) {
+      JsonObject o = new JsonObject();
+      o.addProperty("season", s.season());
+      o.addProperty("current", s.current());
+      s.firstSeen().ifPresent(v -> o.addProperty("firstSeen", v.toString()));
+      s.lastSeen().ifPresent(v -> o.addProperty("lastSeen", v.toString()));
+      o.addProperty("players", s.players());
+      o.addProperty("firsts", s.firsts());
+      o.addProperty("gallery", s.gallery());
+      out.add(o);
+    }
+    JsonObject o = new JsonObject();
+    o.add("seasons", out);
+    return Reply.ok(o);
+  }
+
+  private Reply museum(Viewer viewer) {
+    Optional<Reply> denied = deny("museum", viewer);
+    if (denied.isPresent()) {
+      return denied.get();
+    }
+    Optional<SeasonsApi> seasons = api.get();
+    if (seasons.isEmpty()) {
+      return unavailable();
+    }
+    Optional<MuseumView> museum = await(seasons.get().museum());
+    if (museum.isEmpty()) {
+      return unavailable();
+    }
+    JsonArray trophies = new JsonArray();
+    for (MuseumView.Trophy t : museum.get().trophies()) {
+      JsonObject o = new JsonObject();
+      o.addProperty("anchor", t.anchor());
+      t.label().ifPresent(l -> o.addProperty("label", l));
+      o.addProperty("season", t.season());
+      o.addProperty("credit", t.credit());
+      o.addProperty("at", t.at().toString());
+      t.item().ifPresent(i -> o.add("item", item(i)));
+      trophies.add(o);
+    }
+    JsonArray eggs = new JsonArray();
+    for (MuseumView.Egg e : museum.get().eggs()) {
+      JsonObject o = new JsonObject();
+      o.addProperty("season", e.season());
+      o.add("slayer", player(e.slayer()));
+      o.addProperty("at", e.at().toString());
+      eggs.add(o);
+    }
+    JsonObject o = new JsonObject();
+    o.add("trophies", trophies);
+    o.add("eggs", eggs);
+    return Reply.ok(o);
+  }
+
+  private Reply pending(Viewer viewer) {
+    Optional<Reply> denied = deny("pending-players", viewer);
+    if (denied.isPresent()) {
+      return denied.get();
+    }
+    Optional<SeasonsApi> seasons = api.get();
+    if (seasons.isEmpty()) {
+      return unavailable();
+    }
+    Optional<List<PendingPlayer>> list = await(seasons.get().pending());
+    if (list.isEmpty()) {
+      return unavailable();
+    }
+    JsonArray out = new JsonArray();
+    for (PendingPlayer p : list.get()) {
+      JsonObject o = player(p.player());
+      o.addProperty("season", p.season());
+      out.add(o);
+    }
+    JsonObject o = new JsonObject();
+    o.add("players", out);
+    return Reply.ok(o);
+  }
+
+  private Reply audit(Viewer viewer) {
+    Optional<Reply> denied = deny("audit-log", viewer);
+    if (denied.isPresent()) {
+      return denied.get();
+    }
+    Optional<SeasonsApi> seasons = api.get();
+    if (seasons.isEmpty()) {
+      return unavailable();
+    }
+    Optional<List<AuditEntry>> list = await(seasons.get().audit(AUDIT_ENTRIES));
+    if (list.isEmpty()) {
+      return unavailable();
+    }
+    JsonArray out = new JsonArray();
+    for (AuditEntry e : list.get()) {
+      JsonObject o = new JsonObject();
+      o.addProperty("time", e.time().toString());
+      o.addProperty("actor", e.actor());
+      o.addProperty("action", e.action());
+      o.addProperty("target", e.target());
+      o.addProperty("result", e.result());
+      out.add(o);
+    }
+    JsonObject o = new JsonObject();
+    o.add("entries", out);
     return Reply.ok(o);
   }
 
@@ -622,7 +833,12 @@ final class Routes {
       return denied.get();
     }
     JsonArray list = new JsonArray();
+    Optional<WebSettings.Link> map = config.map();
     for (WebSettings.Link link : config.links()) {
+      // A hidden map is hidden as a link too.
+      if (map.isPresent() && link.equals(map.get()) && !sees("map", viewer)) {
+        continue;
+      }
       JsonObject o = new JsonObject();
       o.addProperty("label", link.label());
       o.addProperty("url", link.url());

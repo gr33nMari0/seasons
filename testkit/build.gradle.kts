@@ -51,6 +51,15 @@ val installBots = tasks.register<Exec>("installBots") {
     outputs.dir(botsDir.dir("node_modules"))
 }
 
+// Chromium and WebKit for the dashboard scenarios (docs/adr/0007). Quick once they are there; CI
+// installs them with their system libraries before Gradle runs.
+val installBrowsers = tasks.register<Exec>("installBrowsers") {
+    description = "Installs the browsers the dashboard scenarios drive."
+    dependsOn(installBots)
+    workingDir(botsDir)
+    commandLine("npx", "playwright", "install", "chromium", "webkit")
+}
+
 // The scenarios, from their files. Header lines: "// @sessions <n>" restarts the server between
 // sessions on the same world; "// @isolated <reason>" gives the scenario a fresh server of its own
 // instead of sharing one (docs/adr/0003); "// @plugins <name>..." gives it a fresh server of its
@@ -210,7 +219,7 @@ val scenarioRuns = minecraftVersions.map { version ->
     tasks.register("scenarioRun_$v") {
         group = "verification"
         description = "Runs the acceptance scenarios on Paper $version, in shards side by side."
-        dependsOn(installBots, scenarioTls)
+        dependsOn(installBots, installBrowsers, scenarioTls)
         // -PscenarioJars=<dir> runs the jars a CI build job made (Seasons, Seasons Web and this
         // test plugin) instead of building them.
         val prebuilt = providers.gradleProperty("scenarioJars").orNull

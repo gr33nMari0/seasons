@@ -1,0 +1,17 @@
+{
+  "name": "seasons-site",
+  "private": true,
+  "description": "The public Seasons site: what Seasons is, and the connect page. Published by GitHub Pages from public/.",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-reporter=spec test/*.test.mjs && node --test --test-concurrency=1 --test-reporter=spec test/*.spec.mjs",
+    "unit": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
+  }
+}

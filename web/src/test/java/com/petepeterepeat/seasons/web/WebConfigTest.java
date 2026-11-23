@@ -24,7 +24,8 @@ class WebConfigTest {
         d.sessions(),
         d.rateLimits(),
         d.stream(),
-        d.cache());
+        d.cache(),
+        d.screens());
   }
 
   private static WebConfig.Result check(String bind, String publicUrl) {
@@ -109,5 +110,55 @@ class WebConfigTest {
         .containsExactly("https://map.example.com:8443", "https://open.spotify.com");
     assertThat(result.warnings()).anyMatch(w -> w.contains("Old map") && w.contains("https"));
     assertThat(result.warnings()).anyMatch(w -> w.contains("Fake"));
+  }
+
+  @Test
+  void screensListWidgetsByTheSpecsNamesAndLeaveOutWhatIsntOne() {
+    List<String> warnings = new java.util.ArrayList<>();
+    Map<String, List<String>> screens =
+        WebConfig.screens(
+            Map.of(
+                "second-screen",
+                new WebSettings.Screen(
+                    "landscape",
+                    List.of("event-feed", "season-clock", "online", "bogus", "leaderboard", "Map")),
+                "tv",
+                new WebSettings.Screen("portrait", List.of("online")),
+                "Bad Name",
+                new WebSettings.Screen("landscape", List.of("online"))),
+            warnings);
+    assertThat(screens)
+        .containsOnlyKeys("second-screen")
+        .containsEntry(
+            "second-screen", List.of("event-feed", "season", "online", "leaderboards", "map"));
+    assertThat(warnings)
+        .contains("screens.second-screen: no widget \"bogus\"; it is left out")
+        .anyMatch(w -> w.startsWith("screens.tv.layout: \"portrait\" isn't landscape"))
+        .anyMatch(w -> w.startsWith("screens.Bad Name: "));
+  }
+
+  @Test
+  void theBundledSecondScreenIsTheSpecsExample() {
+    WebSettings d = SettingsFile.defaults();
+    assertThat(WebConfig.screens(d.screens(), new java.util.ArrayList<>()))
+        .containsEntry(
+            "second-screen",
+            List.of("season", "online", "leaderboards", "event-feed", "map", "links"));
+  }
+
+  @Test
+  void theMapIsTheFirstFramedLink() {
+    WebConfig.Ready ready =
+        (WebConfig.Ready)
+            WebConfig.check(
+                settings(
+                    "127.0.0.1:8019",
+                    "",
+                    List.of(
+                        new WebSettings.Link("Discord", "https://discord.gg/x", null),
+                        new WebSettings.Link("Map", "https://map.example.com", "frame"),
+                        new WebSettings.Link("Other", "https://other.example.com", "frame"))));
+    assertThat(ready.config().map())
+        .hasValueSatisfying(m -> assertThat(m.label()).isEqualTo("Map"));
   }
 }

@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  */
 public interface SeasonsApi {
   /** This API's version, which Seasons Web checks against the range it supports. */
-  String API_VERSION = "1.2.0";
+  String API_VERSION = "1.3.0";
 
   /**
    * The Seasons plugin version.
@@ -35,7 +35,7 @@ public interface SeasonsApi {
    */
   OptionalInt currentSeason();
 
-  /** This API's version, such as {@code 1.2.0}. */
+  /** This API's version, such as {@code 1.3.0}. */
   default String apiVersion() {
     return API_VERSION;
   }
@@ -84,6 +84,35 @@ public interface SeasonsApi {
    * record. The future completes once it is saved; it fails if Seasons has no record of them.
    */
   CompletableFuture<Void> setLeaderboardHidden(UUID player, boolean hidden);
+
+  /**
+   * Every season on record, oldest first, from the players' records and the galleries: who played
+   * each, the time between the first and last of them being seen, and its firsts (since 1.3).
+   */
+  default CompletableFuture<List<SeasonSummary>> seasons() {
+    return CompletableFuture.completedFuture(List.of());
+  }
+
+  /** The museum's trophies and its egg wall (since 1.3). */
+  default CompletableFuture<MuseumView> museum() {
+    return CompletableFuture.completedFuture(new MuseumView(List.of(), List.of()));
+  }
+
+  /**
+   * Players who played a season that has ended and aren't archived into it yet, such as those
+   * offline at the end, whom catch-up archives when they next log in (since 1.3).
+   */
+  default CompletableFuture<List<PendingPlayer>> pending() {
+    return CompletableFuture.completedFuture(List.of());
+  }
+
+  /**
+   * The last {@code count} entries of Seasons' audit log, oldest first, without their details,
+   * which can hold positions (since 1.3).
+   */
+  default CompletableFuture<List<AuditEntry>> audit(int count) {
+    return CompletableFuture.completedFuture(List.of());
+  }
 
   /** A subscription to events. */
   interface Subscription extends AutoCloseable {

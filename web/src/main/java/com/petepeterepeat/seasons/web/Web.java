@@ -40,7 +40,9 @@ final class Web implements AutoCloseable {
   private final Audit audit;
   private final EventHub hub;
 
+  private final Assets assets;
   private volatile @Nullable WebServer server;
+  private volatile @Nullable MapProbe probe;
   private volatile WebConfig config;
   private volatile Messages messages;
   private volatile String name = "Seasons";
@@ -81,6 +83,7 @@ final class Web implements AutoCloseable {
     this.hub = new EventHub(limits(defaults));
     this.config = ((WebConfig.Ready) WebConfig.check(enabledCopy(defaults))).config();
     this.messages = loadMessages();
+    this.assets = Assets.load();
   }
 
   /** Writes the default files and reads the sessions; then {@link #reload}. */
@@ -132,6 +135,10 @@ final class Web implements AutoCloseable {
     hub.limits(limits(next.settings()));
     String configured = next.settings().name().strip();
     name = configured.isEmpty() ? motd.get() : configured;
+    MapProbe looking =
+        next.map()
+            .map(m -> new MapProbe(m.url(), next.publicUrl().map(WebConfig::origin), version, log))
+            .orElse(null);
     Routes routes =
         new Routes(
             next,
@@ -143,11 +150,17 @@ final class Web implements AutoCloseable {
             () -> name,
             this::messages,
             version,
-            clock);
+            clock,
+            assets,
+            () -> looking == null ? Framing.State.UNKNOWN : looking.state());
     try {
       WebServer started = new WebServer(next, routes, sessions, limiter, hub, log);
       started.start();
       server = started;
+      if (looking != null) {
+        looking.start();
+        probe = looking;
+      }
     } catch (BindException e) {
       String reason = "port " + next.bind().getPort() + " is in use on " + next.where();
       log.error("Seasons Web is off: {}", reason);
@@ -165,6 +178,11 @@ final class Web implements AutoCloseable {
   }
 
   private void stopServer() {
+    MapProbe looking = probe;
+    probe = null;
+    if (looking != null) {
+      looking.close();
+    }
     WebServer running = server;
     server = null;
     if (running != null) {
@@ -298,7 +316,8 @@ final class Web implements AutoCloseable {
         d.sessions(),
         d.rateLimits(),
         d.stream(),
-        d.cache());
+        d.cache(),
+        d.screens());
   }
 
   boolean serving() {

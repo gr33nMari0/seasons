@@ -17,6 +17,8 @@ import java.util.Optional;
  * @param launchedAt when the season launched, if Seasons launched it
  * @param homecomingAt when Homecoming came, if it has
  * @param zones the zones in force now, by name, never with their bounds
+ * @param plannedHomecoming when Homecoming comes by itself, if its condition is a date or a time
+ *     after launch and it hasn't come yet (since 1.3)
  */
 public record SeasonView(
     int season,
@@ -26,9 +28,32 @@ public record SeasonView(
     Optional<Instant> countdownEndsAt,
     Optional<Instant> launchedAt,
     Optional<Instant> homecomingAt,
-    List<ZoneView> zones) {
+    List<ZoneView> zones,
+    Optional<Instant> plannedHomecoming) {
   public SeasonView {
     zones = List.copyOf(zones);
+  }
+
+  /** A season view as Seasons API 1.2 made it, with no planned Homecoming. */
+  public SeasonView(
+      int season,
+      String phase,
+      Optional<String> stage,
+      Optional<Instant> plannedEnd,
+      Optional<Instant> countdownEndsAt,
+      Optional<Instant> launchedAt,
+      Optional<Instant> homecomingAt,
+      List<ZoneView> zones) {
+    this(
+        season,
+        phase,
+        stage,
+        plannedEnd,
+        countdownEndsAt,
+        launchedAt,
+        homecomingAt,
+        zones,
+        Optional.empty());
   }
 
   /**

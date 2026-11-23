@@ -41,11 +41,16 @@ final class Visibility {
           "event-feed",
           "map",
           "hall",
+          "museum",
+          "history",
           "leaderboards",
           "profiles",
           "waypoints",
+          "converter",
           "links",
-          "server-health");
+          "server-health",
+          "pending-players",
+          "audit-log");
 
   static {
     Map<String, Level> d = new LinkedHashMap<>();
@@ -58,12 +63,17 @@ final class Visibility {
     d.put("map", Level.PUBLIC);
     d.put("hall", Level.PUBLIC);
     d.put("hall.gear", Level.PLAYERS);
+    d.put("museum", Level.PUBLIC);
+    d.put("history", Level.PUBLIC);
     d.put("waypoints", Level.PUBLIC);
+    d.put("converter", Level.PUBLIC);
     d.put("links", Level.PUBLIC);
     d.put("leaderboards", Level.PLAYERS);
     d.put("profiles.summary", Level.PUBLIC);
     d.put("profiles", Level.PLAYERS);
     d.put("server-health", Level.ADMINS);
+    d.put("pending-players", Level.ADMINS);
+    d.put("audit-log", Level.ADMINS);
     DEFAULTS = java.util.Collections.unmodifiableMap(d);
   }
 

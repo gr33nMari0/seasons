@@ -52,6 +52,7 @@
     "a46-after-archive": 2.5,
     "a46-launch-locks": 2.9,
     "a47-init": 7.4,
+    "a48-public-dashboard": 30.0,
     "a50-import": 4.5,
     "a51-import-owner": 3.8,
     "empty": 1.5,
@@ -106,5 +107,16 @@
     "m4-museum-crash-stored": 19.7,
     "m4-museum-crash-taken": 21.0,
     "m4-slayer-rules": 22.8,
-    "m6-metrics-off": 2.5
+    "m6-metrics-off": 2.5,
+    "m7-connect": 12.0,
+    "m7-dashboard-admin": 22.0,
+    "m7-dashboard-csp": 20.0,
+    "m7-dashboard-live": 45.0,
+    "m7-dashboard-login": 40.0,
+    "m7-dashboard-map": 45.0,
+    "m7-dashboard-profile": 30.0,
+    "m7-dashboard-reference": 30.0,
+    "m7-dashboard-text": 20.0,
+    "m7-dashboard-visibility": 25.0,
+    "m7-second-screen": 70.0
 }

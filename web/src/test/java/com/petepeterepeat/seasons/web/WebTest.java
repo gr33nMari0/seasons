@@ -6,12 +6,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.petepeterepeat.seasons.api.ArchiveView;
+import com.petepeterepeat.seasons.api.AuditEntry;
 import com.petepeterepeat.seasons.api.GalleryView;
 import com.petepeterepeat.seasons.api.LeaderboardEntry;
 import com.petepeterepeat.seasons.api.Leaderboards;
+import com.petepeterepeat.seasons.api.MuseumView;
 import com.petepeterepeat.seasons.api.OnlinePlayer;
+import com.petepeterepeat.seasons.api.PendingPlayer;
 import com.petepeterepeat.seasons.api.PlayerName;
 import com.petepeterepeat.seasons.api.PlayerProfile;
+import com.petepeterepeat.seasons.api.SeasonSummary;
 import com.petepeterepeat.seasons.api.SeasonView;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.api.WaypointView;
@@ -71,7 +75,8 @@ class WebTest {
               Optional.empty(),
               Optional.empty(),
               Optional.empty(),
-              List.of()));
+              List.of(new SeasonView.ZoneView("old base", "block")),
+              Optional.of(Instant.parse("2026-12-24T08:00:00Z"))));
     }
 
     @Override
@@ -116,6 +121,52 @@ class WebTest {
     @Override
     public Subscription subscribe(Consumer<SeasonsEvent> listener) {
       return () -> {};
+    }
+
+    @Override
+    public CompletableFuture<List<SeasonSummary>> seasons() {
+      return CompletableFuture.completedFuture(
+          List.of(
+              new SeasonSummary(
+                  2,
+                  false,
+                  Optional.of(Instant.parse("2026-09-01T10:00:00Z")),
+                  Optional.of(Instant.parse("2026-10-01T10:00:00Z")),
+                  4,
+                  7,
+                  true),
+              new SeasonSummary(3, true, Optional.empty(), Optional.empty(), 1, 0, false)));
+    }
+
+    @Override
+    public CompletableFuture<MuseumView> museum() {
+      return CompletableFuture.completedFuture(
+          new MuseumView(
+              List.of(
+                  new MuseumView.Trophy(
+                      "museum:core",
+                      Optional.of("The first core"),
+                      2,
+                      "Peter",
+                      Instant.parse("2026-09-10T10:00:00Z"),
+                      Optional.empty())),
+              List.of(
+                  new MuseumView.Egg(
+                      2, new PlayerName(alex, "Alex"), Instant.parse("2026-09-20T10:00:00Z")))));
+    }
+
+    @Override
+    public CompletableFuture<List<PendingPlayer>> pending() {
+      return CompletableFuture.completedFuture(
+          List.of(new PendingPlayer(new PlayerName(alex, "Alex"), 2)));
+    }
+
+    @Override
+    public CompletableFuture<List<AuditEntry>> audit(int count) {
+      return CompletableFuture.completedFuture(
+          List.of(
+              new AuditEntry(
+                  Instant.parse("2026-11-23T09:00:00Z"), "Peter", "zone-add", "old-base", "ok")));
     }
 
     @Override
@@ -265,5 +316,112 @@ class WebTest {
     assertThat(get("/api/v1/nothing", "").statusCode()).isEqualTo(404);
     assertThat(post("/api/v1/season").statusCode()).isEqualTo(405);
     assertThat(get("/api/v1/players/not-a-uuid", "").statusCode()).isEqualTo(404);
+  }
+
+  private String login() throws Exception {
+    HttpResponse<String> asked = post("/api/v1/auth/device");
+    String code = JsonParser.parseString(asked.body()).getAsJsonObject().get("code").getAsString();
+    String device = asked.headers().firstValue("Set-Cookie").orElseThrow().split(";", -1)[0];
+    var _ = new WebCommands(web, Optional::empty, clock).link(alex, "Alex", false, code);
+    return get("/api/v1/auth/poll", device).headers().allValues("Set-Cookie").stream()
+        .filter(c -> c.startsWith(Routes.SESSION_COOKIE))
+        .findFirst()
+        .orElseThrow()
+        .split(";", -1)[0];
+  }
+
+  @Test
+  void thePageSettingsSayWhatThisViewerMaySee() throws Exception {
+    HttpResponse<String> anon = get("/api/v1/dashboard", "");
+    assertThat(anon.statusCode()).isEqualTo(200);
+    JsonObject a = JsonParser.parseString(anon.body()).getAsJsonObject();
+    assertThat(a.get("name").getAsString()).isEqualTo("Test server");
+    assertThat(a.getAsJsonObject("viewer").get("kind").getAsString()).isEqualTo("anonymous");
+    List<String> widgets =
+        a.getAsJsonArray("widgets").asList().stream().map(e -> e.getAsString()).toList();
+    assertThat(widgets)
+        .contains(
+            "season", "online", "event-feed", "hall", "museum", "history", "converter", "rules")
+        .doesNotContain("leaderboards", "server-health", "pending-players", "audit-log");
+    assertThat(a.getAsJsonObject("fields").get("hall.gear").getAsBoolean()).isFalse();
+    assertThat(a.get("map").isJsonNull()).as("no framed link, no map").isTrue();
+    assertThat(a.getAsJsonObject("screens").getAsJsonArray("second-screen").size()).isEqualTo(6);
+    assertThat(a.getAsJsonObject("texts").get("feed.join").getAsString())
+        .isEqualTo("<name> joined");
+    assertThat(anon.headers().firstValue("Cache-Control")).contains("public, max-age=5");
+
+    String session = login();
+    HttpResponse<String> logged = get("/api/v1/dashboard", session);
+    JsonObject p = JsonParser.parseString(logged.body()).getAsJsonObject();
+    assertThat(p.getAsJsonObject("viewer").get("name").getAsString()).isEqualTo("Alex");
+    assertThat(p.getAsJsonArray("widgets").toString()).contains("leaderboards");
+    assertThat(p.getAsJsonObject("fields").get("hall.gear").getAsBoolean()).isTrue();
+    assertThat(logged.headers().firstValue("Cache-Control")).contains("private, no-store");
+  }
+
+  @Test
+  void historyAndTheMuseumArePublicAndTheAdminListsAreForAdmins() throws Exception {
+    HttpResponse<String> seasons = get("/api/v1/seasons", "");
+    assertThat(seasons.statusCode()).isEqualTo(200);
+    assertThat(seasons.body()).contains("\"players\":4").contains("\"current\":true");
+    HttpResponse<String> museum = get("/api/v1/museum", "");
+    assertThat(museum.statusCode()).isEqualTo(200);
+    assertThat(museum.body()).contains("The first core").contains("\"slayer\"");
+    assertThat(get("/api/v1/admin/pending", "").statusCode()).isEqualTo(401);
+    assertThat(get("/api/v1/admin/audit", "").statusCode()).isEqualTo(401);
+    String session = login();
+    assertThat(get("/api/v1/admin/pending", session).statusCode()).isEqualTo(403);
+    web.sessions().setAdmin(alex, true);
+    HttpResponse<String> pending = get("/api/v1/admin/pending", session);
+    assertThat(pending.statusCode()).isEqualTo(200);
+    assertThat(pending.body()).contains("\"season\":2").contains("Alex");
+    HttpResponse<String> audit = get("/api/v1/admin/audit", session);
+    assertThat(audit.body()).contains("zone-add").doesNotContain("details");
+  }
+
+  @Test
+  void thePageAndItsFilesAreTheSameForEveryoneAndCachedByEtag() throws Exception {
+    HttpResponse<String> page = get("/hall/2", "");
+    assertThat(page.statusCode()).isEqualTo(200);
+    assertThat(page.headers().firstValue("Content-Type")).contains("text/html; charset=utf-8");
+    assertThat(page.body()).contains("/app/app.mjs");
+    String session = login();
+    HttpResponse<String> app = get("/app/app.mjs", session);
+    assertThat(app.statusCode()).isEqualTo(200);
+    assertThat(app.headers().firstValue("Cache-Control")).contains("no-cache");
+    assertThat(app.headers().firstValue("Content-Security-Policy").orElseThrow())
+        .contains("script-src 'self'");
+    String etag = app.headers().firstValue("ETag").orElseThrow();
+    HttpResponse<String> again =
+        http.send(
+            HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/app/app.mjs"))
+                .header("If-None-Match", etag)
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+    assertThat(again.statusCode()).isEqualTo(304);
+    assertThat(post("/app/app.mjs").statusCode()).isEqualTo(405);
+    assertThat(get("/app/../web.yml", "").statusCode()).isEqualTo(404);
+  }
+
+  @Test
+  void theSeasonSaysWhenHomecomingIsPlannedAndItsZonesByName() throws Exception {
+    assertThat(get("/api/v1/season", "").body())
+        .contains("\"plannedHomecoming\":\"2026-12-24T08:00:00Z\"")
+        .contains("\"name\":\"old base\",\"mode\":\"block\"");
+  }
+
+  @Test
+  void aHiddenMapIsNoLinkEither() throws Exception {
+    Files.writeString(
+        dir.resolve("plugin/web.yml"),
+        "enabled: true\nbind: 127.0.0.1:"
+            + port
+            + "\nlinks:\n  - { label: Map, url: \"https://map.example.com\", embed: frame }\n"
+            + "  - { label: Discord, url: \"https://discord.gg/x\" }\n"
+            + "visibility:\n  map: hidden\n");
+    assertThat(web.reload()).startsWith("listening on");
+    String links = get("/api/v1/links", "").body();
+    assertThat(links).contains("Discord").doesNotContain("map.example.com");
+    assertThat(get("/api/v1/dashboard", "").body()).contains("\"map\":null");
   }
 }
