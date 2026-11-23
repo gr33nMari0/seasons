@@ -1,0 +1,71 @@
+# Seasons Web: a read-only live dashboard for phones, iPads and second screens.
+# Changes take effect at the next restart.
+schema-version: 1
+
+# Off until you turn it on.
+enabled: false
+
+# Where the dashboard listens, as address:port. Keep it on 127.0.0.1 and put a Cloudflare Tunnel or
+# an HTTPS reverse proxy in front: HTTPS comes from there. Any other address needs an https
+# public-url, or the dashboard doesn't start. Change the port if 8019 is taken.
+bind: 127.0.0.1:8019
+
+# The https address players open, such as https://seasons.example.com. Leave empty while you only
+# try it on this machine.
+public-url: ""
+
+# The server's name on the connect page. Empty uses the server's MOTD.
+name: ""
+
+# true: anyone with the address sees the public widgets without logging in.
+# false: everything but the login needs a linked account.
+public: true
+
+# The tunnel or proxy in front. Behind one, every request arrives from it, so per-visitor rate
+# limits read the visitor's address from client-ip-header. That header is believed only from the
+# addresses (or CIDR ranges) in trusted; from anywhere else it is ignored.
+proxy:
+  trusted: []
+  client-ip-header: CF-Connecting-IP
+
+# Links on the dashboard; urls must be https. embed: spotify shows a Spotify playlist inside the
+# dashboard, and embed: frame any page that allows it, such as your BlueMap.
+links: []
+#  - { label: Server playlist, url: "https://open.spotify.com/playlist/[ID]", embed: spotify }
+#  - { label: Discord, url: "https://discord.gg/[INVITE]" }
+#  - { label: Map, url: "https://map.example.com", embed: frame }
+
+# Who sees each widget or field: public, players (logged in), admins (seasons.web.admin) or
+# hidden. Anything not listed keeps its default:
+#   season: public          online: public           online.dimension: public
+#   online.region: public   online.afk: public       event-feed: public
+#   map: public             hall: public             hall.gear: players
+#   waypoints: public       links: public            leaderboards: players
+#   profiles.summary: public                         profiles: players
+#   server-health: admins
+visibility: {}
+
+# How long a login lasts on a device.
+sessions:
+  lifetime: 30d
+
+# Requests allowed per minute, per visitor's address and per logged-in account. Over the limit a
+# request gets 429 and Retry-After.
+rate-limits:
+  requests-per-minute-per-ip: 120
+  requests-per-minute-per-account: 240
+  device-codes-per-minute-per-ip: 5
+  wrong-codes-per-minute-per-account: 5
+
+# The live event stream: how many each visitor, each account and everyone may hold open, and how
+# many events wait for a client that falls behind (the oldest go first).
+stream:
+  max-per-ip: 2
+  max-per-account: 4
+  max-total: 200
+  queue: 64
+
+# How long a proxy such as Cloudflare may cache a public response. Responses for a logged-in player
+# are never cached.
+cache:
+  public-max-age: 5s

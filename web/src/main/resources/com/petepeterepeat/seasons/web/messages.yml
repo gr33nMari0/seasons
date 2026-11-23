@@ -1,0 +1,36 @@
+# Seasons Web: every line players see. MiniMessage format; <name> and the like are filled in as
+# plain text.
+schema-version: 1
+dashboard-off: "<red>The Seasons dashboard is off on this server."
+link:
+  usage: "<gray>Show a code on the dashboard, then type /web link with it."
+  linked: "<green>Linked: this device is now logged in as <player>."
+  invalid: "<red>That code isn't valid or has expired. Show a new code on the dashboard."
+  locked: "<red>Too many wrong codes. Try again in a minute."
+sessions:
+  none: "<gray>You have no logged-in devices."
+  header: "<gold>Your logged-in devices (<count>):"
+  line: "<gray><id> · <device> · last seen <seen>"
+  hint: "<gray>/web logout and an id ends one; /web logout all ends them all."
+  # Plain text placed inside the lines above, with placeholders but no formatting tags.
+  # How long ago a device was last seen, for <seen>:
+  seen:
+    just-now: "just now"
+    minutes: "<count> min ago"
+    hours: "<count> h ago"
+    days: "<count> d ago"
+  # A device's name, for <device>, from its browser and system; kept with the login, so a change
+  # here names devices that log in afterwards.
+  device: "<browser> on <system>"
+  unknown-device: "Unknown device"
+logout:
+  one: "<green>Logged out of <device>."
+  all: "<green>Logged out of <count> <devices>."
+  unknown: "<red>You have no device <id>. /web sessions lists them."
+  choose: "<gray>You have <count> logged-in devices: /web logout and an id from /web sessions, or /web logout all."
+privacy:
+  hidden: "<gold>You're now hidden from the dashboard's leaderboards. /web privacy shows you again."
+  shown: "<green>You're now shown on the dashboard's leaderboards."
+  no-record: "<red>Seasons has no record of you yet. Play a little, then try again."
+  unavailable: "<red>Seasons isn't running, so that can't change now. Try again later."
+  failed: "<red>Couldn't change that. An admin can find why in the server log."

@@ -221,6 +221,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
     command.add("-Dseasons.scenario.shared=" + shared);
     command.add("-Dseasons.scenario.fresh=" + fresh);
     command.add("-Dseasons.scenario.webhookPort=" + p.getWebhookPort().get());
+    command.add("-Dseasons.scenario.webPort=" + p.getWebPort().get());
     command.add(
         "-Dseasons.scenario.steps="
             + String.join(",", segment.stream().map(Step::label).toList()));
@@ -392,6 +393,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
       }
     }
     deleteTree(run.resolve("plugins/Seasons"));
+    deleteTree(run.resolve("plugins/SeasonsWeb"));
     // An optional plugin's files, which the next boot may not have it for.
     deleteTree(run.resolve("plugins/BlueMap"));
     deleteTree(run.resolve("bluemap"));

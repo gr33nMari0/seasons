@@ -34,6 +34,8 @@ import java.util.Set;
  * @param notices messages waiting for their next login, such as a pet that died while they were
  *     away
  * @param lastValid where they last stood outside every blocked zone (questions 177)
+ * @param leaderboardHidden whether they hide themselves from the dashboard's leaderboards ({@code
+ *     /web privacy}); the record's privacy flag
  */
 public record PlayerRecord(
     PlayerId id,
@@ -49,7 +51,8 @@ public record PlayerRecord(
     Optional<HallReturn> hallReturn,
     List<Pet> pets,
     List<Notice> notices,
-    Optional<Position> lastValid) {
+    Optional<Position> lastValid,
+    boolean leaderboardHidden) {
   public PlayerRecord {
     pets = List.copyOf(pets);
     notices = List.copyOf(notices);
@@ -125,7 +128,8 @@ public record PlayerRecord(
         Optional.empty(),
         List.of(),
         List.of(),
-        Optional.empty());
+        Optional.empty(),
+        false);
   }
 
   /**
@@ -147,7 +151,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        next);
+        next,
+        leaderboardHidden);
   }
 
   public boolean played(int season) {
@@ -169,7 +174,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   /** Marks the season played and adds online time to it. */
@@ -195,7 +201,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   /** Archived into a season; a saved Hall return is dropped, since it belongs to that season. */
@@ -216,7 +223,8 @@ public record PlayerRecord(
         Optional.empty(),
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   /**
@@ -245,7 +253,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withDisplaysRendered(int season) {
@@ -265,7 +274,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withDestinationReached() {
@@ -283,7 +293,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   /** Brought into a season, with the statistics it starts from; a saved Hall return is dropped. */
@@ -304,7 +315,8 @@ public record PlayerRecord(
         Optional.empty(),
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public FurthestBlock furthest(int season) {
@@ -328,7 +340,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withHallAdventure(boolean switched) {
@@ -346,7 +359,8 @@ public record PlayerRecord(
         hallReturn,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withHallReturn(Optional<HallReturn> next) {
@@ -364,7 +378,8 @@ public record PlayerRecord(
         next,
         pets,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withPets(List<Pet> next) {
@@ -382,7 +397,8 @@ public record PlayerRecord(
         hallReturn,
         next,
         notices,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
   }
 
   public PlayerRecord withNotices(List<Notice> next) {
@@ -400,7 +416,28 @@ public record PlayerRecord(
         hallReturn,
         pets,
         next,
-        lastValid);
+        lastValid,
+        leaderboardHidden);
+  }
+
+  /** {@code /web privacy}: hidden from the dashboard's leaderboards, or shown again. */
+  public PlayerRecord withLeaderboardHidden(boolean hidden) {
+    return new PlayerRecord(
+        id,
+        lastName,
+        seasons,
+        archivedThrough,
+        seasonEntered,
+        baselines,
+        furthest,
+        pendingDisplays,
+        pendingDestination,
+        hallAdventure,
+        hallReturn,
+        pets,
+        notices,
+        lastValid,
+        hidden);
   }
 
   public Optional<Map<String, Long>> baseline(int season) {

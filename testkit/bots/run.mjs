@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Runs scenario sessions against a running server and writes results.json.
 // Usage: node run.mjs --host 127.0.0.1 --port 25599 --version 26.1 --admin SeasonsAdmin --out <dir>
-//        [--server-dir <dir>] [--tls <webhook.p12>] [--webhook-port <n>] [--shared] [step...]
+//        [--server-dir <dir>] [--tls <webhook.p12>] [--webhook-port <n>] [--web-port <n>]
+//        [--shared] [step...]
 // A step is <scenario> or <scenario>:<session>. With no steps, session 1 of every file in
 // scenarios/ runs. Exit code 0 means every step passed.
 // A scenario either exports run(ctx), or sessions: [fn, fn, ...] with "// @sessions <n>" at the
@@ -33,6 +34,7 @@ const { values, positionals } = parseArgs({
     'server-dir': { type: 'string', default: '.' },
     tls: { type: 'string' },
     'webhook-port': { type: 'string', default: '25601' },
+    'web-port': { type: 'string', default: '25602' },
     shared: { type: 'boolean', default: false }
   }
 })
@@ -98,6 +100,7 @@ for (const { name, session } of steps) {
     serverDir: values['server-dir'],
     tls: values.tls,
     webhookPort: Number(values['webhook-port']),
+    webPort: Number(values['web-port']),
     control: request,
     log
   })

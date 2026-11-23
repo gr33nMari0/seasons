@@ -38,11 +38,14 @@ export class ScenarioContext {
   /**
    * @param webhookPort fixed for a shard, so a webhook URL written in one session still works in
    *   the next
+   * @param webPort the shard's own port for Seasons Web's dashboard (lib/web.mjs)
    */
-  constructor ({ host, port, version, adminName, serverDir = '.', tls, webhookPort = 25601, control = async () => null, log }) {
-    Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, control, log })
+  constructor ({ host, port, version, adminName, serverDir = '.', tls, webhookPort = 25601, webPort = 25602, control = async () => null, log }) {
+    Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, webPort, control, log })
     this.bots = []
     this.servers = []
+    /** Run at close, such as closing a web client's open event streams. */
+    this.closers = []
     /** How far Seasons' clock runs ahead of this machine's, as /scenario clock last said. */
     this.clockOffset = 0
     const latest = join(serverDir, 'logs/latest.log')
@@ -423,6 +426,7 @@ export class ScenarioContext {
 
   /** Disconnects every bot and stops every receiver this scenario started. */
   async close () {
+    for (const close of this.closers.splice(0)) close()
     await Promise.all(this.bots.map((bot) => new Promise((resolve) => {
       if (!bot._client || bot._client.ended) return resolve()
       bot.once('end', resolve)

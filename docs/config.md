@@ -175,6 +175,15 @@ What Seasons writes to the server log.
 | `logging.startupSummary` | `true` | At startup, write a few lines saying what Seasons found: the season, the Hall, the journal, Discord and BlueMap, and whether setup needs attention. |
 | `logging.debug` | `[]` | Extra lines for chasing a problem, per area: hall, archive, zones, discord, maps or commands. Leave empty normally; they can be many. |
 
+### `api`
+
+What Seasons API offers other plugins, such as Seasons Web's dashboard: snapshots of who's online, refreshed on the server thread.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `api.refresh` | `30s` | How often who's online (dimension, area, AFK) is refreshed, besides at every join and leave. |
+| `api.afkAfter` | `5m` | How long a player may be idle before they show as AFK. |
+
 ### `awards`
 
 Awards, worked out when the season ends and announced at the Intermission. Each winner gets a trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon, furthest-builder (from the season spawn), advancements, or any General-tab statistic id such as minecraft:jump; off turns an award off. A new id adds an award, named in messages.yml under awards.names, or after its id.

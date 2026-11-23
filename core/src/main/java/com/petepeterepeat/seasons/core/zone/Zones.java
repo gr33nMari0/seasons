@@ -588,6 +588,13 @@ public final class Zones implements ZoneGuard, Milestones {
     return state().flatMap(s -> seasonSpawn.apply(s.season()));
   }
 
+  private java.util.function.BiConsumer<PlayerId, Zone> onEntered = (player, zone) -> {};
+
+  /** Told of every announced zone entry, for Seasons API's events. */
+  public void onEntered(java.util.function.BiConsumer<PlayerId, Zone> listener) {
+    this.onEntered = listener;
+  }
+
   /** Entering an announce zone: broadcast once per player per zone per day. */
   private void entered(PlayerId player, Zone zone) {
     if (zone.id().equals(announcedIn.put(player, zone.id()))) {
@@ -602,6 +609,7 @@ public final class Zones implements ZoneGuard, Milestones {
     String who = name(player);
     String when = opens(zone);
     announcer.broadcast("zone.announce", "player", who, "name", zone.displayName(), "when", when);
+    onEntered.accept(player, zone);
     if (config.get().config().zones().announceToDiscord()) {
       announcer.discord(
           "zone.announce-discord", "player", who, "name", zone.displayName(), "when", when);

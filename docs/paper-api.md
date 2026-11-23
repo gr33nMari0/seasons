@@ -115,6 +115,8 @@ Compiled against `io.papermc.paper:paper-api` 26.3 (see `gradle/libs.versions.to
 | `PlayerInventory#getStorageContents`, `ItemStack#isSimilar`, `#getMaxStackSize`, `#getAmount` | `PaperInventories` | Whether a vault item fits before a withdrawal is journalled (security review M2) |
 | `PlayerPickupExperienceEvent`, `PlayerItemMendEvent`, `PlayerItemDamageEvent`, `PlayerCommandPreprocessEvent#getMessage`, `PlayerEvent#getPlayer`, `Cancellable#setCancelled` | `PaperEvents` | The archive hold: no orb picked up, nothing mended or worn, and no command (but an admin's) while a player's items are moving (security review M1) |
 | `Inventory#getType`, `InventoryType` (`ANVIL`, `GRINDSTONE`, `ENCHANTING`, `CARTOGRAPHY`, `MERCHANT`, `SMITHING`, `LOOM`, `STONECUTTER`, `BEACON`), `Inventory#getItem(int)`, `#setItem(int, ItemStack)` | `PaperInventories` | Archiving a workstation's or villager's input slots with the cursor, and emptying them before the menu closes (questions 285) |
+| `Player#getLocation`, `Location#getWorld`, `World#getBiome(int, int, int)`, `Biome#key`, `Player#getIdleDuration`, `Server#getOnlinePlayers`, `Player#canSee(Player)`, `Entity#getUniqueId` | `PaperPlayers` | Seasons API's snapshot of who's online: dimension, biome, AFK, and players a vanish plugin hides (questions 298) |
+| `Server#getWorldContainer`, `#getWorlds`, `World#getName` (then the game's own `players/stats/<uuid>.json`, read with Gson) | `SeasonsPlugin`, `PaperStatistics` | Offline players' statistics for Seasons API's leaderboards and profiles |
 | `PluginManager#isPluginEnabled(String)`; bStats `Metrics(JavaPlugin, int)`, `#addCustomChart`, `SimplePie`, `#shutdown` (bStats, not Paper API: it reads `plugins/bStats/config.yml` and asks for charts through `BukkitScheduler#runTask`) | `PaperMetrics` | bStats metrics, and whether Seasons Web is installed for its chart |
 
 ## BlueMap (`integrations`, only when BlueMap is installed)
@@ -131,7 +133,16 @@ Not Paper API, but checked the same way against each BlueMap release: `bluemap-a
 | API | Used in | For |
 | --- | --- | --- |
 | `ServicesManager#getRegistration`, `RegisteredServiceProvider#getProvider` | `SeasonsWebPlugin` | Finding `SeasonsApi` |
-| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons |
+| `ServiceRegisterEvent`, `ServiceUnregisterEvent`, `ServiceEvent#getProvider`, `RegisteredServiceProvider#getService` | `SeasonsWebPlugin` | Following Seasons API when Seasons registers it again (a scenario reset) |
+| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons, or with a Seasons API outside `>=1.2 <2.0` |
+| `JavaPlugin#getDataPath`, `#getPluginMeta().getVersion()`, `#getSLF4JLogger()`, `Server#getWorlds`, `World#getWorldFolder` | `SeasonsWebPlugin` | `plugins/SeasonsWeb`, `<world>/seasons-web`, the version, logging |
+| `Server#motd`, `PlainTextComponentSerializer` | `SeasonsWebPlugin` | The server's name on the connect page when `web.yml` has none |
+| `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `Commands#register`, `Commands.literal`, `Commands.argument`, `CommandSourceStack#getSender`, Brigadier `StringArgumentType.word`, `.greedyString`, `#getString`, `ArgumentBuilder#requires`, `#executes`, `#then`, `Command.SINGLE_SUCCESS` | `PaperWebCommands` | `/web link`, `sessions`, `logout`, `privacy` |
+| `Permissible#hasPermission`, `Player#getUniqueId`, `#getName`, `Server#getOnlinePlayers`, `PlayerJoinEvent`, `PluginManager#registerEvents` | `SeasonsWebPlugin`, `PaperWebCommands` | `seasons.web`, and `seasons.web.admin` checked at link, at join and every 30 s |
+| `Audience#sendMessage`, `MiniMessage#deserialize`, `Placeholder.unparsed`, `TagResolver` | `PaperWebCommands` | Lines from `messages.yml`, player text always plain |
+| `Server#getGlobalRegionScheduler` (`runAtFixedRate`, `execute`), `ScheduledTask#cancel` | `SeasonsWebPlugin`, `PaperWebCommands` | The admin check, health samples, replies after `/web privacy` |
+| `Server#getTPS`, `#getAverageTickTime` | `SeasonsWebPlugin` | Server health for admins, sampled on the server thread every 5 s |
+| `ServicesManager#register(Class, Object, Plugin, ServicePriority)` | `SeasonsWebPlugin` | `WebScenarioHooks`, on scenario servers only (ADR 0003) |
 | bStats `Metrics(JavaPlugin, int)`, `#shutdown` (bStats, not Paper API) | `SeasonsWebPlugin` | bStats metrics |
 
 ## Test plugin (`testkit`, never shipped)

@@ -250,7 +250,9 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
                 "--tls",
                 property("seasons.scenario.tls"),
                 "--webhook-port",
-                property("seasons.scenario.webhookPort")));
+                property("seasons.scenario.webhookPort"),
+                "--web-port",
+                property("seasons.scenario.webPort")));
     if (shared) {
       command.add("--shared");
     }
@@ -347,6 +349,14 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
           new IllegalStateException("Seasons' scenario hooks aren't running"));
     }
     String archived = step;
+    // Seasons Web back to a fresh install too: web.yml, sessions, codes and limits.
+    com.petepeterepeat.seasons.web.WebScenarioHooks web =
+        getServer()
+            .getServicesManager()
+            .load(com.petepeterepeat.seasons.web.WebScenarioHooks.class);
+    if (web != null) {
+      web.reset();
+    }
     return resettable.reset(hooks, () -> copyArchives(archived));
   }
 

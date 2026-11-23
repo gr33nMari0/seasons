@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core;
 
+import com.petepeterepeat.seasons.api.ArchiveView;
+import com.petepeterepeat.seasons.api.GalleryView;
+import com.petepeterepeat.seasons.api.Leaderboards;
+import com.petepeterepeat.seasons.api.OnlinePlayer;
+import com.petepeterepeat.seasons.api.PlayerProfile;
+import com.petepeterepeat.seasons.api.SeasonView;
 import com.petepeterepeat.seasons.api.SeasonsApi;
+import com.petepeterepeat.seasons.api.WaypointView;
+import com.petepeterepeat.seasons.api.event.SeasonsEvent;
 import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.announce.Webhooks;
@@ -80,6 +88,8 @@ import com.petepeterepeat.seasons.core.season.RolloverArchiver;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
 import com.petepeterepeat.seasons.core.season.SeasonStore;
+import com.petepeterepeat.seasons.core.snapshot.ApiEvents;
+import com.petepeterepeat.seasons.core.snapshot.ApiService;
 import com.petepeterepeat.seasons.core.store.Journal;
 import com.petepeterepeat.seasons.core.store.JournalRecovery;
 import com.petepeterepeat.seasons.core.store.Operation;
@@ -155,6 +165,13 @@ public final class Seasons implements SeasonsApi {
   private @Nullable HallRules rules;
   private @Nullable Zones zones;
   private @Nullable MapService map;
+  private @Nullable ApiService api;
+  private final java.util.concurrent.ExecutorService apiWorker =
+      java.util.concurrent.Executors.newThreadPerTaskExecutor(
+          Thread.ofVirtual().name("seasons-api-", 0).factory());
+  private final java.util.concurrent.ExecutorService apiEvents =
+      java.util.concurrent.Executors.newSingleThreadExecutor(
+          Thread.ofVirtual().name("seasons-api-events").factory());
   private @Nullable RolloverArchiver archiverForTests;
   private LongSupplier nanoTime = System::nanoTime;
 
@@ -455,7 +472,24 @@ public final class Seasons implements SeasonsApi {
       }
       museum.seasonEnded(season);
     });
-    archiver.ifPresent(a -> a.onArchived(awarding::archived));
+    ApiService apiService =
+        new ApiService(
+            platform,
+            config,
+            clock,
+            players,
+            archives,
+            seasons::state,
+            zoning::inForce,
+            apiWorker,
+            new ApiEvents(apiEvents));
+    api = apiService;
+    zoning.onEntered(apiService::zoneEntered);
+    archiver.ifPresent(a ->
+        a.onArchived((player, season) -> {
+          awarding.archived(player, season);
+          apiService.archived(player, season);
+        }));
     seasons.onIntermission(awarding::intermission);
     seasons.start();
     fight.start();
@@ -481,6 +515,7 @@ public final class Seasons implements SeasonsApi {
     MapService mapping = new MapService(platform, config, seasons::state, zoning, maps);
     map = mapping;
     mapping.start();
+    apiService.start();
 
     FurthestTracker furthest =
         new FurthestTracker(seasons::state, config, players, hall.bounds(), platform.world());
@@ -796,6 +831,9 @@ public final class Seasons implements SeasonsApi {
       @Override
       public void joined(PlayerRef player, boolean playedBefore) {
         login.ifPresent(l -> l.joined(player, playedBefore));
+        if (api != null) {
+          api.joined(player);
+        }
         // A moment after the join messages, so it isn't lost among them.
         platform
             .scheduler()
@@ -846,6 +884,9 @@ public final class Seasons implements SeasonsApi {
       @Override
       public void left(PlayerId player) {
         login.ifPresent(l -> l.left(player));
+        if (api != null) {
+          api.left(player);
+        }
         if (wand != null) {
           wand.left(player);
         }
@@ -975,6 +1016,11 @@ public final class Seasons implements SeasonsApi {
     if (map != null) {
       map.stop();
     }
+    if (api != null) {
+      api.stop();
+    }
+    apiWorker.shutdown();
+    apiEvents.shutdown();
     if (firsts != null) {
       firsts.stop();
     }
@@ -1018,6 +1064,59 @@ public final class Seasons implements SeasonsApi {
   public OptionalInt currentSeason() {
     Optional<SeasonState> state = service == null ? Optional.empty() : service.state();
     return state.map(s -> OptionalInt.of(s.season())).orElse(OptionalInt.empty());
+  }
+
+  @Override
+  public Optional<SeasonView> season() {
+    return api == null ? Optional.empty() : api.season();
+  }
+
+  @Override
+  public List<OnlinePlayer> online() {
+    return api == null ? List.of() : api.online();
+  }
+
+  @Override
+  public CompletableFuture<Optional<PlayerProfile>> profile(java.util.UUID player) {
+    return api == null ? CompletableFuture.completedFuture(Optional.empty()) : api.profile(player);
+  }
+
+  @Override
+  public CompletableFuture<Optional<GalleryView>> gallery(int season) {
+    return api == null ? CompletableFuture.completedFuture(Optional.empty()) : api.gallery(season);
+  }
+
+  @Override
+  public CompletableFuture<Optional<ArchiveView>> archive(int season, java.util.UUID player) {
+    return api == null
+        ? CompletableFuture.completedFuture(Optional.empty())
+        : api.archive(season, player);
+  }
+
+  @Override
+  public CompletableFuture<Leaderboards> leaderboards(int season) {
+    return api == null
+        ? CompletableFuture.completedFuture(
+            new Leaderboards(season, List.of(), List.of(), List.of()))
+        : api.leaderboards(season);
+  }
+
+  @Override
+  public List<WaypointView> waypoints() {
+    return api == null ? List.of() : api.waypoints();
+  }
+
+  @Override
+  public Subscription subscribe(java.util.function.Consumer<SeasonsEvent> listener) {
+    ApiService running = api;
+    return running == null ? () -> {} : running.subscribe(listener);
+  }
+
+  @Override
+  public CompletableFuture<Void> setLeaderboardHidden(java.util.UUID player, boolean hidden) {
+    return api == null
+        ? CompletableFuture.failedFuture(new IllegalStateException("Seasons isn't running"))
+        : api.setLeaderboardHidden(player, hidden);
   }
 
   /**

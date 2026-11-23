@@ -38,6 +38,9 @@ public record SeasonsConfig(
     @Comment("Admin conveniences.") Admin admin,
     @Comment("What Seasons writes to the server log.") Logging logging,
     @Comment(
+            "What Seasons API offers other plugins, such as Seasons Web's dashboard: snapshots of who's online, refreshed on the server thread.")
+        Api api,
+    @Comment(
             "Awards, worked out when the season ends and announced at the Intermission. Each winner gets a trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon, furthest-builder (from the season spawn), advancements, or any General-tab statistic id such as minecraft:jump; off turns an award off. A new id adds an award, named in messages.yml under awards.names, or after its id.")
         Map<String, Award> awards) {
   public SeasonsConfig {
@@ -319,6 +322,20 @@ public record SeasonsConfig(
       debug = List.copyOf(debug);
     }
   }
+
+  /**
+   * What Seasons API offers other plugins.
+   *
+   * @param refresh how often the server thread refreshes the snapshot of who's online, besides at
+   *     every join and leave
+   * @param afkAfter how long a player may be idle before the snapshot calls them AFK
+   */
+  @ConfigSerializable
+  public record Api(
+      @Comment(
+              "How often who's online (dimension, area, AFK) is refreshed, besides at every join and leave.")
+          Duration refresh,
+      @Comment("How long a player may be idle before they show as AFK.") Duration afkAfter) {}
 
   /**
    * The deaths display.

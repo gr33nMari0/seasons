@@ -124,4 +124,12 @@ public interface Players {
 
   /** Removes every scoreboard objective whose name starts with a prefix. */
   default void removeObjectives(String prefix) {}
+
+  /**
+   * Where an online player is, the biome there, how long they have been idle and whether a vanish
+   * plugin hides them; empty if they're offline. Server thread only.
+   */
+  default java.util.Optional<Presence> presence(PlayerId id) {
+    return java.util.Optional.empty();
+  }
 }
