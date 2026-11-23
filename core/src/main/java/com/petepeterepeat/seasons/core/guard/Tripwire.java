@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.guard;
 
 import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.log.LogThrottle;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -11,6 +12,7 @@ import com.petepeterepeat.seasons.core.port.Players;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
 import com.petepeterepeat.seasons.core.port.Scheduler;
 import com.petepeterepeat.seasons.core.port.TripwireReport;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +36,7 @@ public final class Tripwire implements TripwireReport {
   private final Scheduler scheduler;
   private final AuditLog audit;
   private final AdminAlerts alerts;
+  private final LogThrottle throttle = new LogThrottle(Clock.systemUTC(), Duration.ofMinutes(1));
   private @Nullable ScheduledTask sweep;
 
   public Tripwire(
@@ -79,7 +82,15 @@ public final class Tripwire implements TripwireReport {
             .or(() -> player.map(PlayerId::toString))
             .orElse("-");
     String details = "Deleted " + String.join(", ", items) + " " + where;
-    LOG.warn("Tripwire: {} ({}). Archived items must never exist in the world.", details, name);
+    // At most one line a minute for each player; every hit is still audited (questions 295).
+    throttle
+        .admit(name)
+        .ifPresent(skipped ->
+            LOG.warn(
+                "Tripwire: {} ({}). Archived items must never exist in the world.{}",
+                details,
+                name,
+                LogThrottle.repeats(skipped)));
     audit.record(AuditLog.SEASONS, "tripwire", name, "deleted", details);
     alerts.alert("alerts.tripwire", "details", details, "name", name);
   }

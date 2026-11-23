@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.guard.Immunity;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
@@ -1220,7 +1221,8 @@ public final class HallVisits {
   /** Drops a saved spot of a player outside the Hall, where it could only be a free teleport. */
   private void dropStaleReturn(PlayerId player) {
     if (savedReturn(player).isPresent()) {
-      LOG.info("Dropping {}'s saved Hall return: they are outside the Hall", player);
+      SeasonsLog.debug(
+          DebugArea.HALL, "Dropping {}'s saved Hall return: they are outside the Hall", player);
       var _ = saveReturn(player, Optional.empty());
     }
   }
