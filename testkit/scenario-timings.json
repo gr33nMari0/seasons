@@ -55,6 +55,8 @@
     "a50-import": 4.5,
     "a51-import-owner": 3.8,
     "empty": 1.5,
+    "log-milestones": 8.0,
+    "log-startup": 6.0,
     "m0-reset-leaks": 4.6,
     "m1-archive-commands": 20.5,
     "m1-armour-stand": 20.2,
