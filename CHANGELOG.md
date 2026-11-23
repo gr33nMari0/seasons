@@ -4,6 +4,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-24
+
 ### Added
 
 - Seasons Web serves its API (M7 part 1): turn it on with `enabled: true` in `plugins/SeasonsWeb/web.yml`. It listens on `127.0.0.1:8019` by default (any port you choose), behind a Cloudflare Tunnel or HTTPS proxy, and refuses to listen beyond localhost without an https `public-url`. It offers `/.well-known/seasons.json`, the season, who's online, the Hall, profiles, leaderboards, waypoints, links, server health for `seasons.web.admin`, and a live event stream, each with a visibility setting in `web.yml`.
