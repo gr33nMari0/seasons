@@ -15,7 +15,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
-| M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page) on `m7-dashboard` | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
+| M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page, #37), released as 1.2.0 | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
