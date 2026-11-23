@@ -55,15 +55,15 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
       getServer().getPluginManager().disablePlugin(this);
       return;
     }
-    String apiVersion = found.get().apiVersion();
-    if (!ApiVersions.supported(apiVersion)) {
+    Optional<String> apiVersion = ApiVersions.of(found.get());
+    if (apiVersion.filter(ApiVersions::supported).isEmpty()) {
       getSLF4JLogger()
           .error(
               "Seasons Web {} needs Seasons API {}, but Seasons {} has {}; disabling Seasons Web",
               getPluginMeta().getVersion(),
               ApiVersions.RANGE,
               found.get().version(),
-              apiVersion);
+              apiVersion.orElse("an older one, from before 1.2"));
       getServer().getPluginManager().disablePlugin(this);
       return;
     }

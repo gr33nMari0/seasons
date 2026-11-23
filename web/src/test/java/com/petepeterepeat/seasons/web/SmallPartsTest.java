@@ -3,12 +3,38 @@ package com.petepeterepeat.seasons.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.petepeterepeat.seasons.api.SeasonsApi;
+import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class SmallPartsTest {
+  /** A Seasons whose API, from before 1.2, has no apiVersion(). */
+  private static SeasonsApi seasonsWithApi(Optional<String> apiVersion) {
+    return (SeasonsApi)
+        Proxy.newProxyInstance(
+            SeasonsApi.class.getClassLoader(),
+            new Class<?>[] {SeasonsApi.class},
+            (proxy, method, args) ->
+                switch (method.getName()) {
+                  case "version" -> "1.1.0";
+                  case "apiVersion" ->
+                      apiVersion.orElseThrow(() ->
+                          new NoSuchMethodError(
+                              "'java.lang.String com.petepeterepeat.seasons.api.SeasonsApi.apiVersion()'"));
+                  default -> throw new UnsupportedOperationException(method.getName());
+                });
+  }
+
+  @Test
+  void theApiVersionOfASeasonsFromBeforeItHadOne() {
+    assertThat(ApiVersions.of(seasonsWithApi(Optional.empty()))).isEmpty();
+    assertThat(ApiVersions.of(seasonsWithApi(Optional.of("1.2.0")))).contains("1.2.0");
+  }
+
   @Test
   void apiVersions() {
     assertThat(ApiVersions.supported("1.2.0")).isTrue();
