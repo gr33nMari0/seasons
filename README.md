@@ -93,7 +93,7 @@ At startup Seasons writes a short summary to the console, for example:
 
 ```
 [Seasons] Seasons 1.1.0 on Paper, Java 25
-[Seasons] Season 3: Active, Frontier stage, ends 1 Dec 2026, 18:00, 2 zones in force
+[Seasons] Season 3: Active, Frontier stage, ends 2026-12-01 18:00 AEDT, 2 zones in force
 [Seasons] Hall of Fame: hub set, 3 galleries, 64 cells (12 free)
 [Seasons] Journal clean; 14 player records, 0 waiting to be archived
 [Seasons] Discord: public webhook set, admin webhook not set
