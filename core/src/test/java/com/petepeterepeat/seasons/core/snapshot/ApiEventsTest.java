@@ -40,9 +40,27 @@ class ApiEventsTest {
   }
 
   @Test
-  void nothingAtTheFirstLook() {
+  void nothingWhileNoSeasonIsRecorded() {
+    assertThat(ApiService.changes(Optional.empty(), Optional.empty(), NOW)).isEmpty();
+  }
+
+  /**
+   * A season recorded while Seasons runs is a phase change, even when it has moved on before the
+   * next look: /season init, end --now and launch can all land within one second. (At startup the
+   * first look is the state already there, so nothing is announced then.)
+   */
+  @Test
+  void aSeasonRecordedWhileRunningIsAPhaseChange() {
     assertThat(ApiService.changes(Optional.empty(), Optional.of(SeasonState.init(2)), NOW))
-        .isEmpty();
+        .containsExactly(new SeasonsEvent.PhaseChanged(NOW, 2, "active", Optional.of("open")));
+    SeasonState launched =
+        SeasonState.start(3, Stage.FRONTIER, Optional.of(NOW))
+            .withFirst(new SeasonFirst(3, "nether", "reached the Nether", alex, "Alex", NOW));
+    assertThat(ApiService.changes(Optional.empty(), Optional.of(launched), NOW))
+        .containsExactlyInAnyOrder(
+            new SeasonsEvent.PhaseChanged(NOW, 3, "active", Optional.of("frontier")),
+            new SeasonsEvent.SeasonFirst(
+                NOW, 3, "nether", "reached the Nether", new PlayerName(alex.uuid(), "Alex")));
   }
 
   @Test

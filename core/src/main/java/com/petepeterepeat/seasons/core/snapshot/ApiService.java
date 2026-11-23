@@ -178,28 +178,35 @@ public final class ApiService {
     online = List.copyOf(list);
   }
 
-  /** The events between two looks at the season state. */
+  /**
+   * The events between two looks at the season state. A season recorded since the last look (none
+   * before, one now) counts as everything in it being new: /season init, end and launch can all
+   * land between two looks. At startup the first look is the state already there, so nothing is
+   * announced then.
+   */
   static List<SeasonsEvent> changes(
       Optional<SeasonState> before, Optional<SeasonState> after, Instant at) {
-    if (before.isEmpty() || after.isEmpty()) {
+    if (after.isEmpty()) {
       return List.of();
     }
-    SeasonState was = before.get();
     SeasonState is = after.get();
+    // No season before: a different season from this one, with nothing in it.
+    boolean sameSeason = before.map(was -> was.season() == is.season()).orElse(false);
     List<SeasonsEvent> out = new ArrayList<>();
-    String wasPhase = SeasonViews.phase(was.phase());
+    Optional<String> wasPhase = before.map(was -> SeasonViews.phase(was.phase()));
     String isPhase = SeasonViews.phase(is.phase());
-    Optional<String> wasStage = SeasonViews.stage(was.phase()).map(SeasonViews::text);
+    Optional<String> wasStage =
+        before.flatMap(was -> SeasonViews.stage(was.phase())).map(SeasonViews::text);
     Optional<String> isStage = SeasonViews.stage(is.phase()).map(SeasonViews::text);
-    if (was.season() != is.season() || !wasPhase.equals(isPhase) || !wasStage.equals(isStage)) {
+    if (!sameSeason || !wasPhase.equals(Optional.of(isPhase)) || !wasStage.equals(isStage)) {
       out.add(new SeasonsEvent.PhaseChanged(at, is.season(), isPhase, isStage));
     }
     if (is.homecomingAt().isPresent()
-        && (was.season() != is.season() || was.homecomingAt().isEmpty())) {
+        && (!sameSeason || before.flatMap(SeasonState::homecomingAt).isEmpty())) {
       out.add(new SeasonsEvent.HomecomingStarted(is.homecomingAt().get(), is.season()));
     }
     Set<String> known = new HashSet<>();
-    for (SeasonFirst first : was.firsts()) {
+    for (SeasonFirst first : before.map(SeasonState::firsts).orElse(List.of())) {
       known.add(first.season() + " " + first.key());
     }
     for (SeasonFirst first : is.firsts()) {
@@ -214,7 +221,7 @@ public final class ApiService {
       }
     }
     Optional<DragonState.Kill> kill = is.dragon().kill();
-    if (kill.isPresent() && (was.season() != is.season() || was.dragon().kill().isEmpty())) {
+    if (kill.isPresent() && (!sameSeason || before.flatMap(was -> was.dragon().kill()).isEmpty())) {
       DragonState.Kill k = kill.get();
       out.add(
           new SeasonsEvent.DragonSlain(
