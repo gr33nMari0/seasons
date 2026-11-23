@@ -34,6 +34,16 @@ jobs:
             testkit/build/scenario/*/bundler
           key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
           restore-keys: paper-
+      # Chromium and WebKit for the dashboard scenarios (docs/adr/0007), as in build.yml.
+      - id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/playwright"].version' testkit/bots/package-lock.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - name: Browsers for the dashboard scenarios
+        working-directory: testkit/bots
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium webkit
       - name: Every scenario on a fresh server
         run: |
           ./gradlew build :testkit:scenarioTest -PscenarioIsolation=fresh
