@@ -2,20 +2,25 @@
 // A48. Without logging in, the dashboard shows the season clock, who's online, the event feed, the
 // map and the Hall, but no leaderboards or full profiles; logged-in responses carry
 // Cache-Control: private, no-store.
-// M7 part 1 checks the API the dashboard reads; part 2 adds the page itself to this scenario.
+// First the API the dashboard reads, then the page itself in a browser behind the tunnel.
 import { SECOND, assert } from '../lib/context.mjs'
 import { buildGallery } from '../lib/hall.mjs'
-import { WebClient, assertPrivate, assertPublic, login, uuid, waitForEvent, webConfig } from '../lib/web.mjs'
+import { dashboard, loginOnPage, openPage } from '../lib/browser.mjs'
+import { startMap, tunnelPort } from '../lib/tunnel.mjs'
+import { WebClient, assertPrivate, assertPublic, login, uuid, waitForEvent } from '../lib/web.mjs'
 
-const MAP = 'https://map.example.com'
+/** Text that would be a position: "x: 12", "z=-40" or "12, -60, 40". */
+const COORDINATES = /\b[xyz]\s*[:=]\s*-?\d|-?\d+,\s*-?\d+,\s*-?\d+/i
 
 export default {
   name: 'a48-public-dashboard',
-  timeoutMs: 180 * SECOND,
+  timeoutMs: 240 * SECOND,
   async run (ctx) {
     const admin = await ctx.admin()
     const alex = await ctx.join('Alex')
-    await webConfig(ctx, admin, `links:\n  - { label: Map, url: "${MAP}", embed: frame }\n  - { label: Discord, url: "https://discord.gg/example" }\n`)
+    // A BlueMap that lets the dashboard frame it, as TheRanch's additional-headers does.
+    const MAP = await startMap(ctx, { headers: { 'Content-Security-Policy': `frame-ancestors https://localhost:${tunnelPort(ctx)}` } })
+    const { origin } = await dashboard(ctx, admin, `links:\n  - { label: Map, url: "${MAP}", embed: frame }\n  - { label: Discord, url: "https://discord.gg/example" }\n`)
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
     await buildGallery(ctx, admin, { cells: 2 })
     await ctx.command(admin, '/give Alex minecraft:diamond_sword[custom_name="Edge",enchantments={sharpness:5}]', /^Gave 1 /)
@@ -93,5 +98,45 @@ export default {
     for (const path of ['/api/v1/season', '/api/v1/players/online', '/api/v1/hall/2', '/api/v1/links']) {
       assertPrivate(await phone.get(path), `${path} with a login`)
     }
+
+    // The page, without logging in: the clock, who's online, the feed, the map and the Hall.
+    const page = await openPage(ctx, origin, '/', { frames: [MAP] })
+    await page.waitForWidget('season', /Season 2/)
+    await page.waitForWidget('season', /Intermission/i)
+    const shownOnline = await page.waitForWidget('online', /Alex/)
+    assert(/Overworld/.test(shownOnline), `Alex's dimension on the page: ${shownOnline}`)
+    await page.waitForWidget('hall', /Season 2/)
+    await page.waitForWidget('hall', /Alex/)
+    const frame = page.page.locator('[data-widget="map"] iframe')
+    assert(await frame.count() === 1, 'the map is framed')
+    assert((await frame.getAttribute('src')).startsWith(MAP), `the frame shows the map: ${await frame.getAttribute('src')}`)
+    await page.page.frameLocator('[data-widget="map"] iframe').locator('#bluemap').waitFor({ timeout: 15 * SECOND })
+    assert(await page.widget('leaderboards') === null, 'no leaderboards without a login')
+    await ctx.join('Taylor')
+    await page.waitForWidget('event-feed', /Taylor joined/)
+    assert(!COORDINATES.test(await page.text()), `no coordinates anywhere on the page: ${await page.text()}`)
+
+    // Alex's profile from the Hall: the summary only.
+    await page.page.locator('[data-widget="hall"] a', { hasText: 'Alex' }).first().click()
+    const summary = await page.waitForWidget('profile', /Season 2/)
+    assert(/Alex/.test(summary) && !/Play time/i.test(summary) && !/Edge/.test(summary), `only Alex's summary: ${summary}`)
+    page.check('the public dashboard')
+
+    // Logged in by the code the page shows, typed in Minecraft by Alex.
+    const before = page.responses.length
+    await loginOnPage(ctx, page, alex)
+    const full = await page.waitForWidget('profile', /Play time/i)
+    await page.waitForWidget('profile', /Edge/)
+    const gearShown = await page.widget('profile')
+    assert(/Diamond Sword/.test(gearShown) && /Sharpness V\b/.test(gearShown), `Alex's sword as text: ${full}`)
+    await page.goto('/')
+    await page.waitForWidget('leaderboards', /Deaths/i)
+    await page.waitForWidget('leaderboards', /Play time/i)
+    const afterLogin = page.responses.slice(before).filter((r) => r.url.startsWith(origin + '/api/') && !r.url.includes('/auth/'))
+    assert(afterLogin.length > 0, 'the page asked the API after logging in')
+    for (const r of afterLogin) {
+      assert(r.headers['cache-control'] === 'private, no-store', `${r.url} after logging in is private, no-store: ${r.headers['cache-control']}`)
+    }
+    page.check('the dashboard logged in')
   }
 }

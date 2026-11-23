@@ -8,10 +8,10 @@ import http from 'node:http'
 import https from 'node:https'
 import { extname, join, normalize } from 'node:path'
 
-/** The shard's ports beyond Seasons Web's own: the tunnel, a map, a second map and a site. */
+/** The shard's ports beyond Seasons Web's own: the tunnel, up to five maps and a site. */
 export const tunnelPort = (ctx) => ctx.webPort + 1
 export const mapPort = (ctx, n = 0) => ctx.webPort + 2 + n
-export const sitePort = (ctx) => ctx.webPort + 4
+export const sitePort = (ctx) => ctx.webPort + 7
 
 let visitors = 0
 
@@ -32,9 +32,11 @@ async function listen (ctx, server, port) {
 /**
  * Starts the tunnel in front of the shard's Seasons Web and resolves with { origin, ip }. Every
  * request it passes on says it came from `ip`, a documentation address of its own unless given, so
- * one scenario's browsers don't share another's rate limits.
+ * one scenario's browsers don't share another's rate limits. A scenario has one tunnel: asked again,
+ * this resolves with the one already running.
  */
 export async function startTunnel (ctx, { ip = `198.51.100.${(++visitors % 250) + 1}` } = {}) {
+  if (ctx.tunnel && ctx.servers.includes(ctx.tunnel.server)) return ctx.tunnel
   const port = tunnelPort(ctx)
   const server = https.createServer(tls(ctx), (req, res) => {
     const headers = { ...req.headers, 'cf-connecting-ip': ip }
@@ -52,7 +54,8 @@ export async function startTunnel (ctx, { ip = `198.51.100.${(++visitors % 250) 
     req.pipe(upstream)
   })
   await listen(ctx, server, port)
-  return { origin: `https://localhost:${port}`, ip }
+  ctx.tunnel = { origin: `https://localhost:${port}`, ip, server }
+  return ctx.tunnel
 }
 
 /**
