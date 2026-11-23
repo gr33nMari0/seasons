@@ -159,8 +159,11 @@ export class Page {
     return (await at.first().innerText()).replace(/\s+/g, ' ').trim()
   }
 
-  /** Resolves with a widget's text once it matches `pattern`. */
-  async waitForWidget (name, pattern, timeoutMs = 15 * SECOND, what = `the ${name} widget to match ${pattern}`) {
+  /**
+   * Resolves with a widget's text once it matches `pattern`. By default it waits a little longer
+   * than the page's own refresh, every 30 s, so what changed just before the page opened shows.
+   */
+  async waitForWidget (name, pattern, timeoutMs = 40 * SECOND, what = `the ${name} widget to match ${pattern}`) {
     const deadline = Date.now() + timeoutMs
     let last
     while (Date.now() < deadline) {

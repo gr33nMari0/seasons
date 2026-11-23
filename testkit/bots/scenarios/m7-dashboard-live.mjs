@@ -4,7 +4,7 @@
 // countdown when one starts; who's online with their dimension; the leaderboards with the viewer
 // marked; the event feed with a season first, a phase change and an announce-zone entry; the links
 // with Spotify's embed under its own link.
-import { DAY, HOUR, MINUTE, SECOND, assert } from '../lib/context.mjs'
+import { DAY, HOUR, MINUTE, SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { dashboard, loginOnPage, openPage } from '../lib/browser.mjs'
 import { middle, move, standAt } from '../lib/visits.mjs'
@@ -32,11 +32,16 @@ export default {
     // The end in 2 days 3½ hours, Homecoming on a date 5 days 6½ hours away.
     await ctx.command(admin, `/season schedule end ${ctx.isoIn(2 * DAY + 3 * HOUR + 30 * MINUTE)}`, /^Season 3 now ends at /)
     const homecoming = ctx.isoIn(5 * DAY + 6 * HOUR + 30 * MINUTE).replace(/\.\d+Z$/, 'Z')
-    const file = ctx.readFile(SEASON_FILE).replace(/homecoming:[^\n]*\n( +[^\n]*\n)*/, '') + `homecoming:\n  unlock: { date: "${homecoming}" }\n`
-    ctx.writeFile(SEASON_FILE, file)
-    await ctx.command(admin, '/season reload', /^Reloaded /)
     const api = new WebClient(ctx)
-    await ctx.eventually(async () => assert((await api.get('/api/v1/season')).json.plannedHomecoming, 'Homecoming planned'))
+    // The schedule's own write to the season file can land after the reply, so the edit is made
+    // again until Seasons has it.
+    await ctx.eventually(async () => {
+      const file = ctx.readFile(SEASON_FILE).replace(/homecoming:[^\n]*\n( +[^\n]*\n)*/, '') + `homecoming:\n  unlock: { date: "${homecoming}" }\n`
+      ctx.writeFile(SEASON_FILE, file)
+      await ctx.command(admin, '/season reload', /^Reloaded /)
+      await sleep(1500)
+      assert((await api.get('/api/v1/season')).json.plannedHomecoming, 'Homecoming planned')
+    }, 30 * SECOND)
 
     // This browser's clock is an hour fast; the countdowns follow the server's.
     const page = await openPage(ctx, origin, '/', { offsetMs: HOUR })
