@@ -141,4 +141,13 @@ class DiscordWebhooksTest {
   void escapesControlCharacters() {
     assertThat(DiscordWebhooks.quote("a\u0001b\\")).isEqualTo("\"a\\u0001b\\\\\"");
   }
+
+  @Test
+  void theLogNamesAWebhookWithoutItsToken() {
+    assertThat(
+            DiscordWebhooks.redact(
+                URI.create("https://discord.com/api/webhooks/123456/s3cr3t-t0ken")))
+        .isEqualTo("discord.com/api/webhooks/123456/****")
+        .doesNotContain("s3cr3t");
+  }
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.integrations.bluemap;
 
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.map.MapModel;
 import com.petepeterepeat.seasons.core.map.MapModel.Area;
 import com.petepeterepeat.seasons.core.map.MapModel.Outline;
@@ -34,7 +36,6 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Publishes the Seasons map to BlueMap through its API: Seasons' own marker set ({@code seasons})
@@ -51,7 +52,7 @@ public final class BlueMapPublisher implements MapPublisher {
   /** Seasons' own marker set, and the start of every other one's id. */
   static final String SET = "seasons";
 
-  private static final Logger LOG = LoggerFactory.getLogger(BlueMapPublisher.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final List<Duration> BACKOFF =
       List.of(
           Duration.ofSeconds(1),
@@ -76,6 +77,10 @@ public final class BlueMapPublisher implements MapPublisher {
   private final AtomicBoolean queued = new AtomicBoolean();
   private volatile @Nullable BlueMapAPI api;
   private volatile Status status = new Status.Waiting();
+
+  /** Whether the server log has heard of the markers since BlueMap last enabled. */
+  private volatile boolean hooked;
+
   private int failures;
 
   /**
@@ -141,6 +146,7 @@ public final class BlueMapPublisher implements MapPublisher {
 
   private void enabled(BlueMapAPI started) {
     api = started;
+    hooked = false;
     schedule();
   }
 
@@ -194,6 +200,18 @@ public final class BlueMapPublisher implements MapPublisher {
         map.getMarkerSets().putAll(sets);
       }
       status = new Status.Published(shown.size(), wanted.size());
+      if (!hooked) {
+        hooked = true;
+        LOG.info(
+            "BlueMap hooked: {} {} on {} {}",
+            shown.size(),
+            shown.size() == 1 ? "marker" : "markers",
+            wanted.size(),
+            wanted.size() == 1 ? "map" : "maps");
+      } else {
+        SeasonsLog.debug(
+            DebugArea.MAPS, "Published {} markers on {} maps", shown.size(), wanted.size());
+      }
     } catch (RuntimeException | LinkageError e) {
       // A LinkageError: a BlueMap whose API lacks a call made here.
       if (failures >= BACKOFF.size()) {

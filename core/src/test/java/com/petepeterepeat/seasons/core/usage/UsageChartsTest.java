@@ -76,6 +76,7 @@ class UsageChartsTest {
         config.curate(),
         config.wand(),
         config.admin(),
+        config.logging(),
         config.awards());
   }
 }

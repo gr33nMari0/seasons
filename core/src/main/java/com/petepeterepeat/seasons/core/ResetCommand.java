@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.GalleryFiles;
 import com.petepeterepeat.seasons.core.hall.HallService;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.ChatInput;
@@ -52,7 +53,6 @@ import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * {@code /season reset} (questions 283): wipes Seasons from a test world, for server operators
@@ -60,7 +60,7 @@ import org.slf4j.LoggerFactory;
  * stops.
  */
 final class ResetCommand implements ChatInput {
-  private static final Logger LOG = LoggerFactory.getLogger(ResetCommand.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** How long each step waits for the next. */
   static final Duration WAIT = Duration.ofSeconds(60);

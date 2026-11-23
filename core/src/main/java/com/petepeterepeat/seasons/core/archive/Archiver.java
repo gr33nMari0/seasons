@@ -13,6 +13,8 @@ import com.petepeterepeat.seasons.core.config.SeasonsConfig.Resets;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.FurthestBlock;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -45,6 +47,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -53,7 +56,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Archives one player into one season, exactly once (see Archiving a player in the spec):
@@ -73,7 +75,7 @@ import org.slf4j.LoggerFactory;
  * waits on disk. A crash anywhere is finished by {@link #recovery()} when the player next logs in.
  */
 public final class Archiver implements RolloverArchiver {
-  private static final Logger LOG = LoggerFactory.getLogger(Archiver.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** What one call to {@link #archive} came to. */
   public sealed interface Outcome {
@@ -181,12 +183,30 @@ public final class Archiver implements RolloverArchiver {
 
   /** At season end, for every online player: archive, then send them to their cell. */
   @Override
-  public CompletableFuture<Void> archive(PlayerId player, int season) {
+  public CompletableFuture<OptionalInt> archive(PlayerId player, int season) {
     return archive(player, season, AuditLog.SEASONS)
         .thenCompose(outcome ->
-            outcome instanceof Outcome.Archived
+            outcome instanceof Outcome.Archived(ArchiveRecord archived)
                 ? followUp(player, Destination.CELL)
-                : CompletableFuture.completedFuture(null));
+                    .thenApply(moved -> {
+                      SeasonsLog.debug(
+                          DebugArea.ARCHIVE,
+                          "Archived {} into Season {}: {} item stacks",
+                          archived.name(),
+                          season,
+                          stacks(archived));
+                      return OptionalInt.of(stacks(archived));
+                    })
+                : CompletableFuture.completedFuture(OptionalInt.empty()));
+  }
+
+  /** The item stacks an archive holds: inventory, armour, off hand and overflow. */
+  static int stacks(ArchiveRecord archived) {
+    InventorySnapshot inventory = archived.inventory();
+    int stacks = archived.overflow().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    stacks += inventory.storage().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    stacks += inventory.armour().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    return stacks + (inventory.offHand().isPresent() ? 1 : 0);
   }
 
   /**

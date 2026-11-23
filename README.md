@@ -87,6 +87,22 @@ More nodes:
 
 The [specification](https://github.com/gr33nMari0/seasons/blob/main/docs/spec.md#commands-and-permissions) has the full list.
 
+## Reading the log
+
+At startup Seasons writes a short summary to the console, for example:
+
+```
+[Seasons] Seasons 1.1.0 on Paper, Java 25
+[Seasons] Season 3: Active, Frontier stage, ends 2026-12-01 18:00 AEDT, 2 zones in force
+[Seasons] Hall of Fame: hub set, 3 galleries, 64 cells (12 free)
+[Seasons] Journal clean; 14 player records, 0 waiting to be archived
+[Seasons] Discord: public webhook set, admin webhook not set
+[Seasons] BlueMap: found; markers follow once it has loaded
+[Seasons] Ready in 412 ms. /season info for details.
+```
+
+"Season: none recorded" means Seasons is idle: run `/season init <season>`. If setup needs attention, the last line says which command lists the problems. After that, Seasons writes one line for each milestone (the end, archiving, the launch, Homecoming, reloads), warnings for what needs your attention, and errors for what failed. Repeated warnings are limited so they never flood the console. To chase a problem, list areas under `logging.debug` in `config.yml` (`hall`, `archive`, `zones`, `discord`, `maps`, `commands`) and run `/season reload`; turn them off again afterwards. Webhook URLs are never written in full.
+
 ## Updating
 
 Read the [changelog](https://github.com/gr33nMari0/seasons/blob/main/CHANGELOG.md), back up, then stop the server, replace the jar and start it again. Every Seasons file records its format version, so a newer Seasons can read older files. Archives store items as vanilla item data, which the game upgrades when it loads them, so they survive game updates.

@@ -4,6 +4,19 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- A startup summary in the server log: the version, the season and its planned end, the Hall of Fame, the journal and player records, Discord and BlueMap, and whether setup needs attention. `logging.startupSummary: false` turns it off.
+- One log line for each season milestone: a season recorded, the end and its countdown, everyone archived (one line, not one per player), a player archived at login, the launch, zone unlocks and Homecoming, reloads, curation, the dragon kill, Hall repairs and shutdown. A line when BlueMap is hooked.
+- `logging.debug` in `config.yml` switches on detailed lines for chasing a problem, per area: `hall`, `archive`, `zones`, `discord`, `maps` or `commands`.
+- `/seasons` works as an alias of `/season`, and `/season info` on a server with no season says Seasons is idle until `/season init`.
+
+### Changed
+
+- Every Seasons log line is labelled `[Seasons]`; some were labelled with a Java class name.
+- Repeated warnings are throttled: a tripwire hit at most once a minute per player, and a failing Discord webhook at most once every five minutes, each with a count of those left out. Discord retries, logins and other per-player detail are debug lines only.
+- Notes to admins that need nothing done, such as the spawn loading at launch, no longer go to the server log as warnings.
+
 ## [1.0.0] - 2026-11-22
 
 ### Added

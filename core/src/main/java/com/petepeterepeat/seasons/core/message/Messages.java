@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.message;
 
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -12,7 +13,6 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.spongepowered.configurate.ConfigurateException;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
@@ -24,7 +24,7 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
 public final class Messages {
   static final String FILE_NAME = "messages.yml";
   private static final String BUNDLED = "/com/petepeterepeat/seasons/core/messages.yml";
-  private static final Logger LOG = LoggerFactory.getLogger(Messages.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Pattern TAG = Pattern.compile("</?[a-z_#!:][^<>]*>");
 
   private final Map<String, String> templates;

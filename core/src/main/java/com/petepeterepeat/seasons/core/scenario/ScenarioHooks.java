@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.archive.ArchivePages;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.Menus;
@@ -27,7 +28,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * What the acceptance scenarios need that no Seasons command offers: stopping the server dead at
@@ -40,7 +40,7 @@ public final class ScenarioHooks implements CrashPoints {
   /** The system property that turns the hooks on, read once at startup. */
   public static final String PROPERTY = "seasons.scenario";
 
-  private static final Logger LOG = LoggerFactory.getLogger(ScenarioHooks.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Map<PlayerId, CrashPoint> armed = new ConcurrentHashMap<>();
   private final Map<PlayerId, CrashPoint> saveAt = new ConcurrentHashMap<>();

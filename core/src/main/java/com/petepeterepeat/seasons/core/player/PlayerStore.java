@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.player;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.GameMode;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -30,7 +31,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.gson.GsonConfigurationLoader;
 import org.spongepowered.configurate.serialize.SerializationException;
@@ -46,7 +46,7 @@ public final class PlayerStore {
   /** How often changed records are written when nothing forces a write sooner. */
   public static final Duration COALESCE = Duration.ofSeconds(30);
 
-  private static final Logger LOG = LoggerFactory.getLogger(PlayerStore.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Path directory;
   private final SerialWriter writer;

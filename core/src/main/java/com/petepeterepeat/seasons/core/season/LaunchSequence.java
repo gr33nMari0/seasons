@@ -3,6 +3,8 @@ package com.petepeterepeat.seasons.core.season;
 
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -19,7 +21,6 @@ import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Launch: the world spawn set to the new season's spawn, the dragon flag reset, a new deaths
@@ -28,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * compacted, keeping only operations still open.
  */
 public final class LaunchSequence implements SeasonService.Launcher {
-  private static final Logger LOG = LoggerFactory.getLogger(LaunchSequence.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final Supplier<ConfigSnapshot> config;
@@ -122,7 +123,8 @@ public final class LaunchSequence implements SeasonService.Launcher {
     }
     dragonFlag.run();
     showDeaths(launched);
-    announcer.admins(
+    announcer.adminsNote(
+        DebugArea.COMMANDS,
         SeasonService.ADMIN_PERMISSION,
         "launch.loading",
         "x",
@@ -131,6 +133,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
         Integer.toString(spawn.blockY()),
         "z",
         Integer.toString(spawn.blockZ()));
+    int sent = platform.players().online().size();
     return platform
         .world()
         .loadChunk(spawn)
@@ -144,6 +147,10 @@ public final class LaunchSequence implements SeasonService.Launcher {
             serverThread)
         .thenRunAsync(
             () -> {
+              LOG.info(
+                  "Season {} launched: {} sent to the new spawn",
+                  season,
+                  sent == 1 ? "1 player" : sent + " players");
               announcer.broadcast("launch.done", "season", number);
               announcer.discord("launch.discord", "season", number);
               compactJournal();
@@ -168,7 +175,10 @@ public final class LaunchSequence implements SeasonService.Launcher {
               if (failure != null) {
                 LOG.error("Can't compact the journal after launch", failure);
               } else {
-                LOG.info("Compacted the journal after launch; {} entries still open", kept);
+                SeasonsLog.debug(
+                    DebugArea.ARCHIVE,
+                    "Compacted the journal after launch; {} entries still open",
+                    kept);
               }
             });
   }

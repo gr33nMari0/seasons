@@ -2,6 +2,8 @@
 package com.petepeterepeat.seasons.core.hall;
 
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,9 +47,19 @@ public final class HallAudit {
     }
   }
 
+  private final DebugArea area;
+
   public HallAudit(AuditLog audit, Clock clock) {
+    this(audit, clock, DebugArea.HALL);
+  }
+
+  /**
+   * @param area the debug area each interaction is also logged under, every one, repeats included
+   */
+  public HallAudit(AuditLog audit, Clock clock, DebugArea area) {
     this.audit = audit;
     this.clock = clock;
+    this.area = area;
   }
 
   /**
@@ -57,6 +69,7 @@ public final class HallAudit {
    * @param where such as {@code 21, -60, 24}
    */
   public void record(String actor, String action, String target, String what, String where) {
+    SeasonsLog.debug(area, "{} {} {}: {} at {}", actor, action, target, what, where);
     Instant now = clock.instant();
     flush(now);
     Key key = new Key(actor, action, target, what);

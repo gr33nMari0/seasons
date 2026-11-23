@@ -5,6 +5,8 @@ import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -24,7 +26,6 @@ import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Reconciliation: each cell's displays compared with its record and put right. A missing display is
@@ -37,10 +38,13 @@ public final class Reconciler {
   /** How often every loaded cell is checked. */
   public static final Duration EVERY = Duration.ofMinutes(5);
 
+  /** Repairs in the pass under way, by gallery id, for the log's summary line. */
+  private final java.util.Map<String, Integer> repairedSince = new java.util.TreeMap<>();
+
   /** The work a tick may take, in nanoseconds. */
   static final long BUDGET_NANOS = 1_000_000;
 
-  private static final Logger LOG = LoggerFactory.getLogger(Reconciler.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Duration TICK = Duration.ofMillis(50);
 
   /** How far a display may stand from where it was drawn and still count as that display. */
@@ -109,6 +113,7 @@ public final class Reconciler {
   public void stop() {
     tasks.forEach(ScheduledTask::cancel);
     tasks.clear();
+    logRepairs();
   }
 
   /**
@@ -131,8 +136,24 @@ public final class Reconciler {
     }
   }
 
+  /**
+   * One line in the server log for a pass's repairs, by gallery, rather than one a display
+   * (questions 295); each repair is in the audit log.
+   */
+  private void logRepairs() {
+    if (repairedSince.isEmpty()) {
+      return;
+    }
+    List<String> parts = new ArrayList<>();
+    repairedSince.forEach((gallery, count) ->
+        parts.add((count == 1 ? "1 display" : count + " displays") + " in " + gallery));
+    repairedSince.clear();
+    LOG.info("Hall of Fame repaired {} (the audit log has each one)", String.join(", ", parts));
+  }
+
   /** Queues every cell whose chunks are all loaded. */
   void sweep() {
+    logRepairs();
     for (Gallery gallery : halls.galleries()) {
       for (Cell cell : gallery.cells()) {
         if (cell.bounds().isPresent() && loaded(cell.bounds().get())) {
@@ -168,6 +189,10 @@ public final class Reconciler {
       if (key != null) {
         startReading(key);
       }
+    }
+    // A pass is over once nothing is queued or being read.
+    if (queued.isEmpty()) {
+      logRepairs();
     }
   }
 
@@ -311,7 +336,8 @@ public final class Reconciler {
   }
 
   private void repaired(HallService.CellRef ref, String what) {
-    LOG.info("Reconciled cell {}: {}", ref.key(), what);
+    SeasonsLog.debug(DebugArea.HALL, "Reconciled cell {}: {}", ref.key(), what);
+    repairedSince.merge(ref.gallery().id(), 1, Integer::sum);
     audit.record(AuditLog.SEASONS, "reconcile", ref.key(), "repaired", what);
     alerts.alert("alerts.reconcile", "cell", ref.key(), "what", what);
   }

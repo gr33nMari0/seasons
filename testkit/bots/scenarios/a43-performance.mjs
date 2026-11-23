@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // @isolated it measures ticks, so nothing else may share its server, and the tick meter wraps Seasons' listeners for the rest of the server's life
 // A43. With 20 bots online, 30 zones and a full rollover, the average tick time Seasons adds stays
-// under 1 ms, and rendering displays never adds more than 5 ms to a single tick.
+// under 1 ms, and rendering displays never adds more than 5 ms to a single tick. Seasons' server
+// log stays within a small budget of lines over the whole run.
 //
 // The scenario hooks' tick meter (docs/adr/0003) times, on the server thread and tick by tick,
 // every task Seasons schedules, every one of its event listeners and every display it draws or
@@ -12,6 +13,7 @@
 // saved beside the server's files for a person to read (docs/questions.md 289).
 import { SECOND, assert } from '../lib/context.mjs'
 import { FLOOR, buildGallery } from '../lib/hall.mjs'
+import { seasonsLines } from '../lib/log.mjs'
 import { standAt } from '../lib/visits.mjs'
 import { SPAWN } from '../lib/zones.mjs'
 
@@ -21,6 +23,13 @@ const ZONES = 30
 /** A43's limits, in nanoseconds. */
 const AVERAGE_LIMIT = 1_000_000
 const DISPLAY_LIMIT = 5_000_000
+
+/**
+ * The most lines Seasons may write to the server log over the whole run, with 20 players archived,
+ * 22 cells drawn, 30 zones and the zone sweep: milestones are one line each, never one per player
+ * or per tick (docs/questions.md 295).
+ */
+const LOG_LINE_LIMIT = 20
 
 /**
  * How long the Frontier runs with everyone online and every zone locked, in ticks: a minute. The
@@ -119,5 +128,7 @@ export default {
     assert(perf.displayTicks > 0, `the meter timed displays being drawn: ${perf.line}`)
     assert(perf.average < AVERAGE_LIMIT, `Seasons adds under 1 ms a tick on average: ${perf.line}`)
     assert(perf.displayMax <= DISPLAY_LIMIT, `drawing displays never adds more than 5 ms to a tick: ${perf.line}`)
+    const lines = seasonsLines(ctx)
+    assert(lines.length <= LOG_LINE_LIMIT, `Seasons wrote ${lines.length} log lines, over ${LOG_LINE_LIMIT}:\n${lines.map((l) => `${l.level} ${l.text}`).join('\n')}`)
   }
 }

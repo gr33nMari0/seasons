@@ -2,6 +2,8 @@
 package com.petepeterepeat.seasons.core.announce;
 
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Permissions;
@@ -12,11 +14,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** Says things to everyone, to admins, and on Discord, with text from messages.yml. */
 public final class Announcer {
-  private static final Logger LOG = LoggerFactory.getLogger(Announcer.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Players players;
   private final Permissions permissions;
@@ -66,6 +67,19 @@ public final class Announcer {
   /** To online players holding {@code permission}, and the server log. */
   public void admins(String permission, String key, String... placeholders) {
     LOG.warn("{}", messages().text(key, placeholders));
+    for (PlayerRef player : players.online()) {
+      if (permissions.has(player.id(), permission)) {
+        players.sendMessage(player.id(), messages().get(key, placeholders));
+      }
+    }
+  }
+
+  /**
+   * To online players holding {@code permission}, for their information only: the server log gets
+   * it as a debug line for {@code area}, since nothing needs doing (questions 295).
+   */
+  public void adminsNote(DebugArea area, String permission, String key, String... placeholders) {
+    SeasonsLog.debug(area, "{}", messages().text(key, placeholders));
     for (PlayerRef player : players.online()) {
       if (permissions.has(player.id(), permission)) {
         players.sendMessage(player.id(), messages().get(key, placeholders));

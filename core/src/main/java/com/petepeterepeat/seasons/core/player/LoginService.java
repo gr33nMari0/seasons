@@ -4,6 +4,8 @@ package com.petepeterepeat.seasons.core.player;
 import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
@@ -24,14 +26,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Joins and leaves: finishes anything a crash left open for the player, then follows their {@link
  * LoginPlan} (archive, the new spawn, their cell), and keeps their record's play time.
  */
 public final class LoginService implements Sessions {
-  private static final Logger LOG = LoggerFactory.getLogger(LoginService.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Supplier<Optional<SeasonState>> state;
   private final PlayerStore store;
@@ -196,7 +197,7 @@ public final class LoginService implements Sessions {
     SeasonState current = found.get();
     PlayerId id = player.id();
     LoginPlan.Plan plan = LoginPlan.decide(store.find(id), playedBefore, current);
-    LOG.info("{} logged in: {}", player.name(), plan);
+    SeasonsLog.debug(DebugArea.ARCHIVE, "{} logged in: {}", player.name(), plan);
     PlayerRecord record = store.getOrCreate(id, player.name()).withName(player.name());
     if (isPlaying(current.phase()) && !(plan instanceof LoginPlan.Plan.Archive)) {
       record = record.withPlay(current.season(), clock.instant(), Duration.ZERO);
@@ -204,7 +205,13 @@ public final class LoginService implements Sessions {
     store.put(record);
     return switch (plan) {
       case LoginPlan.Plan.Archive archive ->
-          archiveAndMove(player.id(), archive).thenApply(outcome -> null);
+          archiveAndMove(player.id(), archive)
+              .thenApply(outcome -> {
+                if (outcome instanceof Archiver.Outcome.Archived) {
+                  LOG.info("Archived {} into Season {} at login", player.name(), archive.season());
+                }
+                return null;
+              });
       case LoginPlan.Plan.EnterSeason enter ->
           archiver
               .followUp(id, Archiver.Destination.STAY)

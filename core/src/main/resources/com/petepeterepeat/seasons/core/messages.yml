@@ -67,6 +67,7 @@ info:
   no-cell: "<gray>Your cell: none yet</gray>"
   cell: "<gray>Your cell:</gray> <white><cell></white> <gray>in</gray> <white><gallery></white>"
   no-season: "<gray>No season is recorded yet.</gray>"
+  idle: "<gray>Seasons is idle until an admin runs</gray> <white>/season init <usage></white><gray>.</gray>"
   archived: "<gray>Archived into Season <season>.</gray>"
   archive-waiting: "<gray>Waiting to be archived into Season <season>.</gray>"
 

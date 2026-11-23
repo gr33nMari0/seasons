@@ -25,6 +25,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.Museum;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
@@ -66,7 +67,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** The {@code /season} command tree and what each command does. */
 final class SeasonCommands {
@@ -74,7 +74,7 @@ final class SeasonCommands {
   private static final String NOW = "--now";
   private static final String FORCE = "--force";
   private static final String RESTART = "--restart";
-  private static final Logger LOG = LoggerFactory.getLogger(SeasonCommands.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final String version;
@@ -324,6 +324,7 @@ final class SeasonCommands {
     Optional<SeasonState> state = seasons.state();
     if (state.isEmpty()) {
       source.reply(messages.get("info.no-season"));
+      source.reply(messages.get("info.idle", "usage", "<season>"));
       return;
     }
     SeasonState current = state.get();
@@ -490,6 +491,7 @@ final class SeasonCommands {
     Transition transition = seasons.init(season);
     reply(source, transition, "init.done");
     if (transition instanceof Transition.Changed) {
+      LOG.info("Season {} recorded as the season in progress by {}", season, actor(source));
       help.after(source, "season.init");
       // Everyone online now is playing the season init recorded.
       services.login().ifPresent(login -> login.markPlaying(platform.players().online()));
@@ -706,6 +708,18 @@ final class SeasonCommands {
       return;
     } else if (flags.has(NOW)) {
       source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
+      LOG.info(
+          "Season {} ending now, started by {}: archiving {} online {}",
+          season(),
+          actor(source),
+          online,
+          online == 1 ? "player" : "players");
+    } else {
+      LOG.info(
+          "Season {} end countdown started by {}: it ends in {}",
+          season(),
+          actor(source),
+          HumanTime.duration(messages, config.get().config().schedule().endCountdown()));
     }
     help.after(source, "season.end");
   }
@@ -1020,6 +1034,8 @@ final class SeasonCommands {
   void cancel(CommandSource source, Arguments arguments) {
     if (seasons.cancel() instanceof Transition.Refused refused) {
       refuse(source, refused);
+    } else {
+      LOG.info("Season {}'s end countdown cancelled by {}", season(), actor(source));
     }
   }
 
@@ -1038,6 +1054,8 @@ final class SeasonCommands {
                       ConfigSnapshot snapshot = result.snapshot().get();
                       config.set(snapshot);
                       seasons.reloaded(snapshot);
+                      LOG.info("Config reloaded by {}", actor(source));
+                      result.warnings().forEach(warning -> LOG.warn("{}", warning));
                       source.reply(messages().get("config.reloaded"));
                       for (String warning : result.warnings()) {
                         source.reply(messages().get("config.warning", "warning", warning));
@@ -1424,7 +1442,7 @@ final class SeasonCommands {
     source.reply(messages().get(refused.messageKey(), "season", season(), "next", next));
   }
 
-  private static String phase(Messages messages, Phase phase) {
+  static String phase(Messages messages, Phase phase) {
     String key =
         switch (phase) {
           case Phase.Active active ->

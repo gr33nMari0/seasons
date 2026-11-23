@@ -10,6 +10,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -24,14 +25,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * {@code audit/YYYY-MM.jsonl}: one JSON object per line, appended on the writer thread. Secrets are
  * never written here.
  */
 public final class AuditLog {
-  private static final Logger LOG = LoggerFactory.getLogger(AuditLog.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final DateTimeFormatter MONTH =
       DateTimeFormatter.ofPattern("uuuu-MM").withZone(ZoneOffset.UTC);
 

@@ -8,6 +8,7 @@ import com.petepeterepeat.seasons.core.config.AwardMeasure;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.hall.SeasonCard;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.FurthestBlock;
@@ -31,7 +32,6 @@ import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Awards (see Stats, season cards and awards in the spec): worked out when a season's Intermission
@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * finishes whatever is left (questions 213).
  */
 public final class Awards {
-  private static final Logger LOG = LoggerFactory.getLogger(Awards.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** Firsts the recap names one by one; the rest it counts per player. */
   private static final List<String> NAMED =

@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -34,7 +35,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Registered pets (Pets in the spec): {@code /pet add}, {@code list} and {@code remove}; their last
@@ -49,7 +49,7 @@ public final class Pets implements PetEvents {
   /** How far away a player can register a pet from, in blocks. */
   public static final int REACH = 5;
 
-  private static final Logger LOG = LoggerFactory.getLogger(Pets.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** How one pet's travel came out. */
   enum Travel {

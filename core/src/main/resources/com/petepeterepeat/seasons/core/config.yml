@@ -185,6 +185,15 @@ admin:
   # After a setup step, suggest the commands that usually come next.
   hints: true
 
+# What Seasons writes to the server log.
+logging:
+  # At startup, write a few lines saying what Seasons found: the season, the Hall, the journal,
+  # Discord and BlueMap, and whether setup needs attention.
+  startupSummary: true
+  # Extra lines for chasing a problem, per area: hall, archive, zones, discord, maps or commands.
+  # Leave empty normally; they can be many.
+  debug: []
+
 # Awards, worked out when the season ends and announced at the Intermission. Each winner gets a
 # trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose best
 # is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon,
