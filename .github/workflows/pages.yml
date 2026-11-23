@@ -1,0 +1,31 @@
+# The public site (site/public): what Seasons is and the connect page, published by GitHub Pages
+# from main. Its tests run in build.yml on every pull request. The repository's Pages source must be
+# "GitHub Actions"; a custom address needs site/public/CNAME and its DNS record.
+name: pages
+on:
+  push:
+    branches: [main]
+    paths: ['site/public/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site/public
+      - id: deployment
+        uses: actions/deploy-pages@v4
