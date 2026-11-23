@@ -494,7 +494,7 @@ Built:
 
 Different from the plan: the egg wall is checked by `ApiReferenceTest` rather than a scenario (a dragon kill by a player needs a full End fight), and AFK, shown from part 1's flag, by part 1's scenarios rather than a new one; a CORS refusal isn't a case of its own in `connect.spec.mjs`, since Playwright answers stubbed requests as CORS allows (it fails the fetch as no answer does); the site's tests run with `npm test` in their own CI job rather than a Gradle task.
 
-Needs the owner: switch the repository's Pages source to "GitHub Actions" (until then `pages.yml` fails at its deploy step); for a custom address, add `site/public/CNAME` and its Cloudflare record.
+The public site's address is `seasonsmc.petepeterepeat.com` (`site/public/CNAME`). Needs the owner: switch the repository's Pages source to "GitHub Actions" (until then `pages.yml` fails at its deploy step), set the same custom domain in the Pages settings, and point a DNS-only `CNAME seasonsmc → gr33nMari0.github.io` at it in Cloudflare.
 
 ## On hold
 
