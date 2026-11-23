@@ -27,12 +27,15 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
 import com.petepeterepeat.seasons.core.hall.CellFixes;
 import com.petepeterepeat.seasons.core.hall.CellRows;
+import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
+import com.petepeterepeat.seasons.core.hall.HallCheck;
 import com.petepeterepeat.seasons.core.hall.HallCommands;
 import com.petepeterepeat.seasons.core.hall.HallImporter;
 import com.petepeterepeat.seasons.core.hall.HallLists;
@@ -57,6 +60,7 @@ import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.pet.Pets;
 import com.petepeterepeat.seasons.core.player.FurthestTracker;
 import com.petepeterepeat.seasons.core.player.LoginService;
+import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Milestones;
@@ -69,7 +73,9 @@ import com.petepeterepeat.seasons.core.scenario.CrashPoints;
 import com.petepeterepeat.seasons.core.scenario.ScenarioHooks;
 import com.petepeterepeat.seasons.core.season.Awards;
 import com.petepeterepeat.seasons.core.season.FirstsTracker;
+import com.petepeterepeat.seasons.core.season.HumanTime;
 import com.petepeterepeat.seasons.core.season.LaunchSequence;
+import com.petepeterepeat.seasons.core.season.Phase;
 import com.petepeterepeat.seasons.core.season.RolloverArchiver;
 import com.petepeterepeat.seasons.core.season.SeasonService;
 import com.petepeterepeat.seasons.core.season.SeasonState;
@@ -183,6 +189,7 @@ public final class Seasons implements SeasonsApi {
    * and starts the season lifecycle. Runs on the server thread while the plugin enables.
    */
   public void start() {
+    long began = nanoTime.getAsLong();
     Path world = platform.storage().worldDataDirectory();
     Executor serverThread = platform.scheduler()::runGlobal;
     // A reset a crash cut short is finished first, so a half-deleted folder never loads as real
@@ -220,8 +227,7 @@ public final class Seasons implements SeasonsApi {
     PlayerStore players = new PlayerStore(world.resolve("data/players"), writer);
     store = players;
     try {
-      int loaded = players.loadAll().join();
-      LOG.info("Loaded {} player record(s)", loaded);
+      var _ = players.loadAll().join();
     } catch (RuntimeException e) {
       LOG.error("Can't read the player records", e);
     }
@@ -297,6 +303,7 @@ public final class Seasons implements SeasonsApi {
     Optional<Unarchiver> unarchiver = Optional.empty();
     Optional<JournalRecovery> recovery = Optional.empty();
     Optional<Vault> vault = Optional.empty();
+    int interrupted = 0;
     RolloverArchiver rollover = refusingArchiver();
     if (journal != null) {
       JournalRecovery replay =
@@ -376,6 +383,7 @@ public final class Seasons implements SeasonsApi {
       curation = curating;
       vault = Optional.of(vaulting);
       importer = Optional.of(importing);
+      interrupted = JournalRecovery.openOperations(journal.entries()).size();
       var _ = replay.recoverAll();
       archiver = Optional.of(archiving);
       unarchiver = Optional.of(unarchiving);
@@ -695,6 +703,77 @@ public final class Seasons implements SeasonsApi {
                           .thenApply(card -> card.map(SeasonCard::plainLines).orElse(List.of())),
                   hold));
     }
+    if (config.get().config().logging().startupSummary()) {
+      StartupSummary.lines(
+              new StartupSummary.Facts(
+                  version,
+                  platform.name(),
+                  Runtime.version().feature(),
+                  seasons.state().map(state -> summarySeason(state, zoning)),
+                  summaryHall(halls),
+                  journalError,
+                  interrupted,
+                  players.all().size(),
+                  waitingToArchive(seasons.state(), players),
+                  config.get().secrets().discordWebhook().isPresent(),
+                  config.get().secrets().adminWebhook().isPresent(),
+                  maps.status(),
+                  startupProblems.size(),
+                  HallCheck.run(
+                          halls.layout(),
+                          halls.galleries(),
+                          at -> false,
+                          visiting::seasonSpawn,
+                          config.get().messages())
+                      .findings()
+                      .size(),
+                  (nanoTime.getAsLong() - began) / 1_000_000))
+          .forEach(LOG::info);
+    }
+  }
+
+  private StartupSummary.Season summarySeason(SeasonState state, Zones zoning) {
+    return new StartupSummary.Season(
+        state.season(),
+        SeasonCommands.phase(config.get().messages(), state.phase()),
+        state.plannedEnd().map(end -> HumanTime.time(end, java.time.ZoneId.systemDefault())),
+        zoning.inForce().size());
+  }
+
+  private static StartupSummary.Hall summaryHall(HallService halls) {
+    int cells = 0;
+    int free = 0;
+    for (Gallery gallery : halls.galleries()) {
+      cells += gallery.cells().size();
+      for (Cell cell : gallery.cells()) {
+        if (cell.owner(gallery.season()).isEmpty()) {
+          free++;
+        }
+      }
+    }
+    return new StartupSummary.Hall(
+        halls.layout().hub().isPresent(), halls.galleries().size(), cells, free);
+  }
+
+  /**
+   * Players with a record who played the season that last ended but aren't archived into it yet:
+   * they are archived when they next log in.
+   */
+  static int waitingToArchive(Optional<SeasonState> state, PlayerStore players) {
+    if (state.isEmpty()) {
+      return 0;
+    }
+    int ended =
+        state.get().phase() instanceof Phase.Active
+            ? state.get().season() - 1
+            : state.get().season();
+    int waiting = 0;
+    for (PlayerRecord record : players.all()) {
+      if (record.seasons().containsKey(ended) && record.archivedThrough() < ended) {
+        waiting++;
+      }
+    }
+    return waiting;
   }
 
   /**

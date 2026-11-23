@@ -1424,7 +1424,7 @@ final class SeasonCommands {
     source.reply(messages().get(refused.messageKey(), "season", season(), "next", next));
   }
 
-  private static String phase(Messages messages, Phase phase) {
+  static String phase(Messages messages, Phase phase) {
     String key =
         switch (phase) {
           case Phase.Active active ->

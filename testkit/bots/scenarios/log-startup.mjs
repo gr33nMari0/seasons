@@ -36,7 +36,7 @@ export default {
     has(/^Discord: public webhook not set, admin webhook not set$/, 'the webhooks')
     has(/^BlueMap: /, 'the map')
     // A fresh install has no Hall, so its setup check finds something to do.
-    assert(/^Ready in \d+ ms\. Setup check found \d+ problems?: run \/season validate$/.test(summary.at(-1)), `the last line points at /season validate: ${summary.at(-1)}`)
+    assert(/^Ready in \d+ ms\. Setup check found \d+ problems?: run \/hof hall check$/.test(summary.at(-1)), `the last line points at /hof hall check: ${summary.at(-1)}`)
 
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
     await ctx.eventually(async () => assert(seasonsLines(ctx).some((l) => l.level === 'INFO' && new RegExp(`^Season 2 recorded as the season in progress by ${admin.username}$`).test(l.text)), 'init is logged'))
