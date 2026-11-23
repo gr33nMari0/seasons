@@ -459,62 +459,57 @@ public final class ApiService {
    */
   private CompletableFuture<Map<Key, Map<String, Long>>> statistics(
       Collection<PlayerRecord> records, List<Integer> seasons) {
-    int current = state.map(SeasonState::season).orElse(-1);
-    Set<UUID> onlineNow = new HashSet<>();
-    for (PlayerRef ref : platform.players().online()) {
-      onlineNow.add(ref.id().uuid());
-    }
-    return CompletableFuture.supplyAsync(
-            () -> {
-              Map<Key, Map<String, Long>> out = new HashMap<>();
-              List<PlayerRecord> live = new ArrayList<>();
+    // First on the server thread, which alone knows the season now (the snapshot can be a second
+    // behind) and can read online players' statistics; then the disk on a worker.
+    CompletableFuture<Live> live = new CompletableFuture<>();
+    platform
+        .scheduler()
+        .runGlobal(() -> {
+          try {
+            int current = stateOnServer.get().map(SeasonState::season).orElse(-1);
+            Set<UUID> onlineNow = new HashSet<>();
+            for (PlayerRef ref : platform.players().online()) {
+              onlineNow.add(ref.id().uuid());
+            }
+            Map<PlayerId, Map<String, Long>> general = new HashMap<>();
+            if (seasons.contains(current)) {
               for (PlayerRecord record : records) {
-                for (int s : seasons) {
-                  Optional<ArchiveRecord> archive = read(record.id(), s);
-                  if (archive.isPresent()) {
-                    out.put(new Key(record.id(), s), archive.get().statistics());
-                  } else if (s == current && record.played(s)) {
-                    if (onlineNow.contains(record.id().uuid())) {
-                      live.add(record);
-                    } else {
-                      platform
-                          .statistics()
-                          .stored(record.id())
-                          .ifPresent(stored ->
-                              out.put(new Key(record.id(), s), difference(stored, record, s)));
-                    }
+                if (record.played(current) && onlineNow.contains(record.id().uuid())) {
+                  Map<String, Long> now = platform.statistics().general(record.id());
+                  if (!now.isEmpty()) {
+                    general.put(record.id(), now);
                   }
                 }
               }
-              return new Pending(out, live);
-            },
-            worker)
-        .thenCompose(pending -> {
-          if (pending.live().isEmpty()) {
-            return CompletableFuture.completedFuture(pending.out());
+            }
+            live.complete(new Live(current, general));
+          } catch (RuntimeException e) {
+            live.completeExceptionally(e);
           }
-          CompletableFuture<Map<Key, Map<String, Long>>> done = new CompletableFuture<>();
-          platform
-              .scheduler()
-              .runGlobal(() -> {
-                try {
-                  Map<Key, Map<String, Long>> out = new HashMap<>(pending.out());
-                  for (PlayerRecord record : pending.live()) {
-                    Map<String, Long> general = platform.statistics().general(record.id());
-                    if (!general.isEmpty()) {
-                      out.put(new Key(record.id(), current), difference(general, record, current));
-                    }
-                  }
-                  done.complete(out);
-                } catch (RuntimeException e) {
-                  done.completeExceptionally(e);
-                }
-              });
-          return done;
         });
+    return live.thenApplyAsync(
+        now -> {
+          Map<Key, Map<String, Long>> out = new HashMap<>();
+          for (PlayerRecord record : records) {
+            for (int s : seasons) {
+              Optional<ArchiveRecord> archive = read(record.id(), s);
+              if (archive.isPresent()) {
+                out.put(new Key(record.id(), s), archive.get().statistics());
+              } else if (s == now.season() && record.played(s)) {
+                Optional<Map<String, Long>> stats =
+                    Optional.ofNullable(now.general().get(record.id()))
+                        .or(() -> platform.statistics().stored(record.id()));
+                stats.ifPresent(st -> out.put(new Key(record.id(), s), difference(st, record, s)));
+              }
+            }
+          }
+          return out;
+        },
+        worker);
   }
 
-  private record Pending(Map<Key, Map<String, Long>> out, List<PlayerRecord> live) {}
+  /** The season now and online players' statistics, as the server thread read them. */
+  private record Live(int season, Map<PlayerId, Map<String, Long>> general) {}
 
   private static Map<String, Long> difference(
       Map<String, Long> now, PlayerRecord record, int seasonNumber) {
