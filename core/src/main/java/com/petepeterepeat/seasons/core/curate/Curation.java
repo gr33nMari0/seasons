@@ -818,6 +818,7 @@ public final class Curation implements ChatInput, HallService.CuratorView {
       }
       case DELIVERED -> {
         audit.record(curatorName, "curate " + action.word(), pick.ownerName(), "ok", details);
+        LOG.info("Curation by {}: {} {}'s {}", curatorName, action.word(), pick.ownerName(), item);
         say(
             curator,
             "curate.done." + action.word(),

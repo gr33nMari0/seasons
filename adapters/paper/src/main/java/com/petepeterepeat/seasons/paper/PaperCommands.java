@@ -15,6 +15,8 @@ import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Suggester;
+import com.petepeterepeat.seasons.core.log.DebugArea;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.Commands;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -126,6 +128,11 @@ final class PaperCommands implements Commands {
             permission -> builder.requires(source -> source.getSender().hasPermission(permission)));
     if (node.action().isPresent()) {
       builder.executes(context -> {
+        SeasonsLog.debug(
+            DebugArea.COMMANDS,
+            "{} ran /{}",
+            context.getSource().getSender().getName(),
+            context.getInput());
         current(path)
             .flatMap(CommandNode::action)
             .ifPresent(action ->

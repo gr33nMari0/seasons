@@ -293,6 +293,7 @@ public final class Dragon implements DragonEvents {
         name,
         "slain",
         "Season " + season + (finalBlow.isPresent() ? ", final blow" : ", most damage"));
+    LOG.info("Season {}'s dragon slain by {}", season, name);
     fanfare(name, season);
     if (egg == Egg.WAITING) {
       watch(season, kill);
