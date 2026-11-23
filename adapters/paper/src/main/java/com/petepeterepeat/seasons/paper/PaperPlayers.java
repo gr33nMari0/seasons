@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.Players;
 import com.petepeterepeat.seasons.core.port.Position;
+import com.petepeterepeat.seasons.core.port.Presence;
 import com.petepeterepeat.seasons.core.port.ProgressBar;
 import com.petepeterepeat.seasons.core.port.ResetPlan;
 import com.petepeterepeat.seasons.core.port.Skin;
@@ -442,6 +443,26 @@ final class PaperPlayers implements Players {
 
   private static float clamp(float progress) {
     return Math.clamp(progress, BossBar.MIN_PROGRESS, BossBar.MAX_PROGRESS);
+  }
+
+  /** For Seasons API's snapshot of who's online. Server thread. */
+  @Override
+  public Optional<Presence> presence(PlayerId id) {
+    return player(id)
+        .map(player -> {
+          Location at = Objects.requireNonNull(player.getLocation());
+          World world = Objects.requireNonNull(at.getWorld());
+          String biome =
+              world.getBiome(at.getBlockX(), at.getBlockY(), at.getBlockZ()).key().asString();
+          // A vanish plugin hides a player from other players (Player#hidePlayer): one that
+          // someone online can't see counts as vanished.
+          boolean vanished =
+              server.getOnlinePlayers().stream()
+                  .anyMatch(other ->
+                      !other.getUniqueId().equals(player.getUniqueId()) && !other.canSee(player));
+          return new Presence(
+              PaperPositions.toPosition(at), biome, player.getIdleDuration(), vanished);
+        });
   }
 
   Optional<Player> player(PlayerId id) {

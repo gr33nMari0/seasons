@@ -15,6 +15,14 @@ public interface Statistics {
    */
   Map<String, Long> counts(PlayerId player);
 
+  /**
+   * General-tab statistics of any player, online or not, as last saved to disk by the game; empty
+   * if it has none. Reads a file, so it runs off the server thread.
+   */
+  default java.util.Optional<Map<String, Long>> stored(PlayerId player) {
+    return java.util.Optional.empty();
+  }
+
   /** Diamond ore and deepslate diamond ore mined. */
   String DIAMONDS_MINED = "seasons:diamonds_mined";
 

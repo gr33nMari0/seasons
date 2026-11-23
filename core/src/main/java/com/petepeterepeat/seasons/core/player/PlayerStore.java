@@ -168,6 +168,9 @@ public final class PlayerStore {
       if (record.pendingDestination().isPresent()) {
         node.node("pendingDestination").set(record.pendingDestination().getAsInt());
       }
+      if (record.leaderboardHidden()) {
+        node.node("privacy", "leaderboardHidden").set(true);
+      }
       if (record.hallAdventure()) {
         node.node("hallAdventure").set(true);
       }
@@ -288,7 +291,8 @@ public final class PlayerStore {
         hallReturn(node.node("hallReturn")),
         pets(node.node("pets")),
         notices(node.node("notices")),
-        position(node.node("lastValid")));
+        position(node.node("lastValid")),
+        node.node("privacy", "leaderboardHidden").getBoolean(false));
   }
 
   private static List<PlayerRecord.Pet> pets(ConfigurationNode node) {

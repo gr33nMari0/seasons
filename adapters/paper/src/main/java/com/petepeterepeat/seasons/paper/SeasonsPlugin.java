@@ -102,7 +102,12 @@ public final class SeasonsPlugin extends JavaPlugin {
             events,
             scheduler,
             dragonFight,
-            new PaperStatistics(players),
+            new PaperStatistics(
+                players,
+                server
+                    .getWorldContainer()
+                    .toPath()
+                    .resolve(server.getWorlds().getFirst().getName())),
             storage,
             new PaperImports(this, server, codec),
             new PaperTemplates(this, server, new NamespacedKey(this, "stamp")));

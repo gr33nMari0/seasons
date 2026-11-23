@@ -1,18 +1,64 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.paper;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.Statistics;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.bukkit.Material;
 import org.bukkit.Statistic;
 
 final class PaperStatistics implements Statistics {
   private final PaperPlayers players;
+  private final Path worldFolder;
 
-  PaperStatistics(PaperPlayers players) {
+  /**
+   * @param worldFolder the main world's folder, which holds the game's stats files
+   */
+  PaperStatistics(PaperPlayers players, Path worldFolder) {
     this.players = players;
+    this.worldFolder = worldFolder;
+  }
+
+  /**
+   * The game's own stats file: its General tab ({@code minecraft:custom}) as last saved. Since 26.1
+   * the files sit in {@code players/stats}; before then in {@code stats}.
+   */
+  @Override
+  public Optional<Map<String, Long>> stored(PlayerId id) {
+    for (Path file :
+        List.of(
+            worldFolder.resolve("players/stats/" + id.uuid() + ".json"),
+            worldFolder.resolve("stats/" + id.uuid() + ".json"))) {
+      if (!Files.isRegularFile(file)) {
+        continue;
+      }
+      try {
+        JsonObject custom =
+            JsonParser.parseString(Files.readString(file))
+                .getAsJsonObject()
+                .getAsJsonObject("stats")
+                .getAsJsonObject("minecraft:custom");
+        Map<String, Long> values = new HashMap<>();
+        if (custom != null) {
+          for (Map.Entry<String, JsonElement> entry : custom.entrySet()) {
+            values.put(entry.getKey(), entry.getValue().getAsLong());
+          }
+        }
+        return Optional.of(values);
+      } catch (IOException | RuntimeException e) {
+        return Optional.empty();
+      }
+    }
+    return Optional.empty();
   }
 
   /**

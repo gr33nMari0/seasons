@@ -77,6 +77,7 @@ class UsageChartsTest {
         config.wand(),
         config.admin(),
         config.logging(),
+        config.api(),
         config.awards());
   }
 }

@@ -194,6 +194,14 @@ logging:
   # Leave empty normally; they can be many.
   debug: []
 
+# What Seasons API offers other plugins, such as Seasons Web's dashboard: snapshots of who's online,
+# refreshed on the server thread.
+api:
+  # How often who's online (dimension, area, AFK) is refreshed, besides at every join and leave.
+  refresh: 30s
+  # How long a player may be idle before they show as AFK.
+  afkAfter: 5m
+
 # Awards, worked out when the season ends and announced at the Intermission. Each winner gets a
 # trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose best
 # is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon,
