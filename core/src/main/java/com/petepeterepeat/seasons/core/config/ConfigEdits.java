@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.config;
 
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -16,7 +17,6 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Command edits to the files people also edit by hand: the file is written on the writer thread,
@@ -33,7 +33,7 @@ public final class ConfigEdits {
   /** The value of a key that isn't there, before an add or after a remove. */
   public static final String NONE = "none";
 
-  private static final Logger LOG = LoggerFactory.getLogger(ConfigEdits.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final ConfigHolder config;

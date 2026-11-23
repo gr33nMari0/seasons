@@ -11,6 +11,7 @@ import com.petepeterepeat.seasons.core.archive.ImportedCell;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig.EnderChestPolicy;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.AdvancementSnapshot;
 import com.petepeterepeat.seasons.core.port.Experience;
@@ -51,7 +52,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * {@code /hof import}: turns Season 1's hand-built cells into archive records, cell by cell, and
@@ -68,7 +68,7 @@ import org.slf4j.LoggerFactory;
  * record after the undo read it would be put back in the cell as well (review of #24).
  */
 public final class HallImporter {
-  private static final Logger LOG = LoggerFactory.getLogger(HallImporter.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** How long recovery waits after startup, so the world is ticking before it scans. */
   private static final Duration RECOVERY_DELAY = Duration.ofSeconds(1);

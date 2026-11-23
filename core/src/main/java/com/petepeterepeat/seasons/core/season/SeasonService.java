@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.SeasonFiles;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -35,7 +36,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Runs the season lifecycle on the server thread: applies events through {@link SeasonMachine},
@@ -50,7 +50,7 @@ public final class SeasonService {
   /** Who hears about failures and interrupted countdowns. */
   public static final String ADMIN_PERMISSION = "seasons.admin.season";
 
-  private static final Logger LOG = LoggerFactory.getLogger(SeasonService.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** What launch does to the world and the players, once the new season is saved. */
   public interface Launcher {

@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.guard;
 
 import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.Inventories;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -15,7 +16,6 @@ import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The tripwire: every item shown in an archive view carries the {@code seasons:archived} tag, and
@@ -27,7 +27,7 @@ public final class Tripwire implements TripwireReport {
   /** How often online players are swept. */
   public static final Duration SWEEP = Duration.ofSeconds(30);
 
-  private static final Logger LOG = LoggerFactory.getLogger(Tripwire.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Players players;
   private final Inventories inventories;

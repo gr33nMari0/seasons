@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.archive.VaultFiles;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.DragonEvents;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -38,7 +39,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A dragon egg every season (see Ender vault, museum and dragon egg in the spec): the
@@ -72,7 +72,7 @@ public final class Dragon implements DragonEvents {
   /** How often the damage dealt is saved while a fight goes on. */
   private static final Duration SAVE_EVERY = Duration.ofSeconds(1);
 
-  private static final Logger LOG = LoggerFactory.getLogger(Dragon.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final Supplier<ConfigSnapshot> config;

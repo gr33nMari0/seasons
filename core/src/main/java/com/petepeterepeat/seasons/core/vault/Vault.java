@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.NeutralItem;
@@ -42,7 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The ender vault: {@code /vault} shows a player's sealed ender chests, one page per season with
@@ -60,7 +60,7 @@ public final class Vault {
   /** Permission for {@code /vault}. */
   public static final String PERMISSION = "seasons.vault";
 
-  private static final Logger LOG = LoggerFactory.getLogger(Vault.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** What a player may do with their season pages right now. */
   public enum Access {

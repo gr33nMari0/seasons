@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -26,7 +27,6 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The gates of cells in galleries with access mode {@code gate} (questions 169): a cell's gate
@@ -43,7 +43,7 @@ import org.slf4j.LoggerFactory;
  * config is reloaded, so it can't fill the journal. Server thread only.
  */
 public final class Gates {
-  private static final Logger LOG = LoggerFactory.getLogger(Gates.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Duration PASS = Duration.ofSeconds(1);
   private static final String AIR = "minecraft:air";
 

@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.announce.AdminAlerts;
 import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.Displays;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -24,7 +25,6 @@ import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Reconciliation: each cell's displays compared with its record and put right. A missing display is
@@ -40,7 +40,7 @@ public final class Reconciler {
   /** The work a tick may take, in nanoseconds. */
   static final long BUDGET_NANOS = 1_000_000;
 
-  private static final Logger LOG = LoggerFactory.getLogger(Reconciler.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Duration TICK = Duration.ofMillis(50);
 
   /** How far a display may stand from where it was drawn and still count as that display. */

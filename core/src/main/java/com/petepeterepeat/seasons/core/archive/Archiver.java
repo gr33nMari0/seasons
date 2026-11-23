@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.config.SeasonsConfig.Resets;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.FurthestBlock;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -53,7 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Archives one player into one season, exactly once (see Archiving a player in the spec):
@@ -73,7 +73,7 @@ import org.slf4j.LoggerFactory;
  * waits on disk. A crash anywhere is finished by {@link #recovery()} when the player next logs in.
  */
 public final class Archiver implements RolloverArchiver {
-  private static final Logger LOG = LoggerFactory.getLogger(Archiver.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** What one call to {@link #archive} came to. */
   public sealed interface Outcome {

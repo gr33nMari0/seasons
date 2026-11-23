@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.guard.Immunity;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -42,7 +43,6 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Visiting the Hall of Fame: {@code /hof} and sneak-clicking a bed take a player from a safe spot
@@ -61,7 +61,7 @@ public final class HallVisits {
   /** Never held in the Hall, the Intermission included; ops by default (questions 263). */
   public static final String PERMISSION_ROAM = "seasons.hof.roam";
 
-  private static final Logger LOG = LoggerFactory.getLogger(HallVisits.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Duration SWEEP = Duration.ofMillis(500);
   private static final String OVERWORLD = "minecraft:overworld";
   private static final String ENDER_PEARL = "minecraft:ender_pearl";

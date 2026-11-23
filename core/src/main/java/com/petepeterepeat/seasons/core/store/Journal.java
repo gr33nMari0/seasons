@@ -6,6 +6,7 @@ import static java.nio.file.StandardOpenOption.APPEND;
 import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.WRITE;
 
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,7 +27,6 @@ import java.util.function.Predicate;
 import java.util.zip.CRC32;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The append-only log written before any item moves. Each line is tab-separated: sequence, time,
@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * caller makes the world change it covers in the future's continuation.
  */
 public final class Journal {
-  private static final Logger LOG = LoggerFactory.getLogger(Journal.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final String NO_PLAYER = "-";
 
   private final Path file;

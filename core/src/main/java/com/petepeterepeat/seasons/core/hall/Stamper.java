@@ -5,6 +5,7 @@ import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -41,7 +42,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * {@code /hof stamp <template> <gallery> <count> [--step x y z] [--rotate 0|90|180|270]} (questions
@@ -50,7 +50,7 @@ import org.slf4j.LoggerFactory;
  * is finished at startup from its saved plan. One stamp runs at a time, on the server thread.
  */
 public final class Stamper {
-  private static final Logger LOG = LoggerFactory.getLogger(Stamper.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Pattern WORDS = Pattern.compile("\\s+");
   private static final Duration BETWEEN_COPIES = Duration.ofMillis(50);
   private static final String AIR = "minecraft:air";

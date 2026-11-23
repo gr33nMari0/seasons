@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.command.CommandNode;
 import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.InventorySnapshot;
@@ -48,7 +49,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The museum (see Ender vault, museum and dragon egg in the spec): galleries of kind {@code museum}
@@ -67,7 +67,7 @@ import org.slf4j.LoggerFactory;
  * runs, nothing else moves in or out of that plinth (question 197).
  */
 public final class Museum {
-  private static final Logger LOG = LoggerFactory.getLogger(Museum.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   /** How high above its block a trophy floats, and a plaque without a plaque anchor. */
   private static final double TROPHY_HEIGHT = 0.5;

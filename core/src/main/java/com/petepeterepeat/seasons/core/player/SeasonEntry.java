@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.player;
 
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.guard.Immunity;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -17,7 +18,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Brings one online player into a launched season: to its spawn in survival, with the season title,
@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * for everyone online, and at the first login after it for everyone else.
  */
 public final class SeasonEntry {
-  private static final Logger LOG = LoggerFactory.getLogger(SeasonEntry.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final Supplier<ConfigSnapshot> config;

@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.command.CommandSource;
 import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -26,7 +27,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The {@code /hof} command tree: tagging galleries and cells by command or with the wand, stamping
@@ -63,7 +63,7 @@ public final class HallCommands {
   /** How far away a looked-at block can be to take an anchor. */
   private static final int REACH = 6;
 
-  private static final Logger LOG = LoggerFactory.getLogger(HallCommands.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final ConfigHolder config;

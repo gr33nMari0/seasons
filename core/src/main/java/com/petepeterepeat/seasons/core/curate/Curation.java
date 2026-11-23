@@ -19,6 +19,7 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.Museum;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -62,7 +63,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Curation (see Curation in the spec): curators move items out of an archive only through four
@@ -105,7 +105,7 @@ public final class Curation implements ChatInput, HallService.CuratorView {
   /** How often unanswered questions are looked at. */
   static final Duration EXPIRE = Duration.ofSeconds(1);
 
-  private static final Logger LOG = LoggerFactory.getLogger(Curation.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final String NONE = "-";
   private static final String UNDO = "undo";
 

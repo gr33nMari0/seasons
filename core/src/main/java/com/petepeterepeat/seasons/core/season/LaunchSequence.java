@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.season;
 
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
@@ -19,7 +20,6 @@ import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Launch: the world spawn set to the new season's spawn, the dragon flag reset, a new deaths
@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
  * compacted, keeping only operations still open.
  */
 public final class LaunchSequence implements SeasonService.Launcher {
-  private static final Logger LOG = LoggerFactory.getLogger(LaunchSequence.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final Supplier<ConfigSnapshot> config;

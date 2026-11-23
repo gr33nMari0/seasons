@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core.player;
 import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
 import com.petepeterepeat.seasons.core.port.ScheduledTask;
@@ -24,14 +25,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Joins and leaves: finishes anything a crash left open for the player, then follows their {@link
  * LoginPlan} (archive, the new spawn, their cell), and keeps their record's play time.
  */
 public final class LoginService implements Sessions {
-  private static final Logger LOG = LoggerFactory.getLogger(LoginService.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Supplier<Optional<SeasonState>> state;
   private final PlayerStore store;

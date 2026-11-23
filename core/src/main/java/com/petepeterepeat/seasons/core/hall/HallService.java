@@ -10,6 +10,7 @@ import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -46,7 +47,6 @@ import java.util.function.UnaryOperator;
 import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * The Hall of Fame at run time: galleries and cells as the gallery files define them, who owns
@@ -61,7 +61,7 @@ public final class HallService {
   /** How long a swap request waits for the other player. */
   public static final Duration SWAP_WINDOW = Duration.ofSeconds(60);
 
-  private static final Logger LOG = LoggerFactory.getLogger(HallService.class);
+  private static final Logger LOG = SeasonsLog.get();
   private static final Duration SWEEP = Duration.ofMillis(500);
   private static final Duration TICK = Duration.ofSeconds(1);
 

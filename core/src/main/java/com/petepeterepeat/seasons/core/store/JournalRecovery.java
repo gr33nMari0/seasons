@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.store;
 
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -14,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Replays the journal: finds every operation started but not finished and hands it to the handler
@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
  * <p>Runs on the server thread, because handlers change the world.
  */
 public final class JournalRecovery {
-  private static final Logger LOG = LoggerFactory.getLogger(JournalRecovery.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Journal journal;
   private final Executor serverThread;

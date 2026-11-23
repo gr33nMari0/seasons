@@ -49,6 +49,7 @@ import com.petepeterepeat.seasons.core.hall.SeasonCard;
 import com.petepeterepeat.seasons.core.hall.Stamper;
 import com.petepeterepeat.seasons.core.hall.TemplateLibrary;
 import com.petepeterepeat.seasons.core.hall.Wand;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.map.MapService;
 import com.petepeterepeat.seasons.core.map.MarkerCommands;
@@ -95,7 +96,6 @@ import java.util.function.LongSupplier;
 import java.util.random.RandomGenerator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** The Seasons core. An adapter builds its {@link Platform} and starts one of these. */
 public final class Seasons implements SeasonsApi {
@@ -108,7 +108,7 @@ public final class Seasons implements SeasonsApi {
   /** Permission for {@code /season info}. */
   public static final String PERMISSION_INFO = "seasons.info";
 
-  private static final Logger LOG = LoggerFactory.getLogger(Seasons.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final String version;

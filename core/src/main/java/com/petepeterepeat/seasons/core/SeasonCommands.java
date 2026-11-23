@@ -25,6 +25,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.config.ZonedTimes;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.Museum;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.map.MapPublisher;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
@@ -66,7 +67,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** The {@code /season} command tree and what each command does. */
 final class SeasonCommands {
@@ -74,7 +74,7 @@ final class SeasonCommands {
   private static final String NOW = "--now";
   private static final String FORCE = "--force";
   private static final String RESTART = "--restart";
-  private static final Logger LOG = LoggerFactory.getLogger(SeasonCommands.class);
+  private static final Logger LOG = SeasonsLog.get();
 
   private final Platform platform;
   private final String version;
