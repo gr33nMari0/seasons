@@ -13,6 +13,7 @@ import com.petepeterepeat.seasons.core.config.SeasonsConfig.Resets;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.hall.Hall;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.FurthestBlock;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -187,7 +188,15 @@ public final class Archiver implements RolloverArchiver {
         .thenCompose(outcome ->
             outcome instanceof Outcome.Archived(ArchiveRecord archived)
                 ? followUp(player, Destination.CELL)
-                    .thenApply(moved -> OptionalInt.of(stacks(archived)))
+                    .thenApply(moved -> {
+                      SeasonsLog.debug(
+                          DebugArea.ARCHIVE,
+                          "Archived {} into Season {}: {} item stacks",
+                          archived.name(),
+                          season,
+                          stacks(archived));
+                      return OptionalInt.of(stacks(archived));
+                    })
                 : CompletableFuture.completedFuture(OptionalInt.empty()));
   }
 
