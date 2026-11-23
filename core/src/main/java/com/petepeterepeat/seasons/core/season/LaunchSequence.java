@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.season;
 
 import com.petepeterepeat.seasons.core.announce.Announcer;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.player.SeasonEntry;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -122,7 +123,8 @@ public final class LaunchSequence implements SeasonService.Launcher {
     }
     dragonFlag.run();
     showDeaths(launched);
-    announcer.admins(
+    announcer.adminsNote(
+        DebugArea.COMMANDS,
         SeasonService.ADMIN_PERMISSION,
         "launch.loading",
         "x",
@@ -131,6 +133,7 @@ public final class LaunchSequence implements SeasonService.Launcher {
         Integer.toString(spawn.blockY()),
         "z",
         Integer.toString(spawn.blockZ()));
+    int sent = platform.players().online().size();
     return platform
         .world()
         .loadChunk(spawn)
@@ -144,6 +147,10 @@ public final class LaunchSequence implements SeasonService.Launcher {
             serverThread)
         .thenRunAsync(
             () -> {
+              LOG.info(
+                  "Season {} launched: {} sent to the new spawn",
+                  season,
+                  sent == 1 ? "1 player" : sent + " players");
               announcer.broadcast("launch.done", "season", number);
               announcer.discord("launch.discord", "season", number);
               compactJournal();
@@ -168,7 +175,10 @@ public final class LaunchSequence implements SeasonService.Launcher {
               if (failure != null) {
                 LOG.error("Can't compact the journal after launch", failure);
               } else {
-                LOG.info("Compacted the journal after launch; {} entries still open", kept);
+                SeasonsLog.debug(
+                    DebugArea.ARCHIVE,
+                    "Compacted the journal after launch; {} entries still open",
+                    kept);
               }
             });
   }

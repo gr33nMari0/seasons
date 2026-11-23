@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -181,12 +182,22 @@ public final class Archiver implements RolloverArchiver {
 
   /** At season end, for every online player: archive, then send them to their cell. */
   @Override
-  public CompletableFuture<Void> archive(PlayerId player, int season) {
+  public CompletableFuture<OptionalInt> archive(PlayerId player, int season) {
     return archive(player, season, AuditLog.SEASONS)
         .thenCompose(outcome ->
-            outcome instanceof Outcome.Archived
+            outcome instanceof Outcome.Archived(ArchiveRecord archived)
                 ? followUp(player, Destination.CELL)
-                : CompletableFuture.completedFuture(null));
+                    .thenApply(moved -> OptionalInt.of(stacks(archived)))
+                : CompletableFuture.completedFuture(OptionalInt.empty()));
+  }
+
+  /** The item stacks an archive holds: inventory, armour, off hand and overflow. */
+  static int stacks(ArchiveRecord archived) {
+    InventorySnapshot inventory = archived.inventory();
+    int stacks = archived.overflow().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    stacks += inventory.storage().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    stacks += inventory.armour().stream().mapToInt(slot -> slot.isPresent() ? 1 : 0).sum();
+    return stacks + (inventory.offHand().isPresent() ? 1 : 0);
   }
 
   /**

@@ -19,8 +19,8 @@ export default {
 
     const expect = [
       [new RegExp(`^Season 2 ending now, started by ${admin.username}: archiving 4 online players$`), 'the end'],
-      [/^Archived 4 players into Season 2 in [\d.]+ s: \d+ items?; nobody is waiting to be archived$/, 'the archive summary'],
-      [new RegExp(`^Season 3 launched by ${admin.username}: 4 players sent to the new spawn$`), 'the launch'],
+      [/^Archived 4 players into Season 2 in [\d.]+ s: \d+ item stacks?; nobody is waiting to be archived$/, 'the archive summary'],
+      [/^Season 3 launched: 4 players sent to the new spawn$/, 'the launch'],
       [new RegExp(`^Homecoming, by ${admin.username}: every zone is now in its after-unlock mode$`), 'Homecoming']
     ]
     for (const [pattern, what] of expect) {

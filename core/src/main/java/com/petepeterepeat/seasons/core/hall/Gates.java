@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.config.SeasonsConfig;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.BlockInfo;
 import com.petepeterepeat.seasons.core.port.Platform;
@@ -165,7 +166,8 @@ public final class Gates {
         if (!open && !settings.cells().moveOut() && occupied(ref, plane.get())) {
           // Nobody is shut in or out by a gate: it waits for the cell to be empty.
           if (waiting.add(key)) {
-            announcer.admins(HallCommands.PERMISSION_ADMIN, "hof.gate.waiting", "cell", key);
+            announcer.adminsNote(
+                DebugArea.HALL, HallCommands.PERMISSION_ADMIN, "hof.gate.waiting", "cell", key);
           }
           continue;
         }

@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
+import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.player.PlayerStore;
@@ -43,6 +44,7 @@ import java.util.Set;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
 
 /**
  * The zones over the old world while a season is played: what each stops now, players kept out of
@@ -52,6 +54,8 @@ import org.jspecify.annotations.Nullable;
  * in its after-unlock mode unless locked again. Server thread only.
  */
 public final class Zones implements ZoneGuard, Milestones {
+  private static final Logger LOG = SeasonsLog.get();
+
   /** Exempt from every zone: entering, building, and anything across an edge. */
   public static final String BYPASS = "seasons.zone.bypass";
 
@@ -625,6 +629,7 @@ public final class Zones implements ZoneGuard, Milestones {
       if (!s.zones().unlocked().containsKey(zone.id()) && zone.lockedUntil().met(facts)) {
         setUnlocked(zone, true);
         log.record(AuditLog.SEASONS, "zone-unlock", zone.id(), "ok", "its condition came true");
+        LOG.info("Zone {} unlocked: its condition came true", zone.id());
         announceOpened(zone);
       }
     }
@@ -648,6 +653,9 @@ public final class Zones implements ZoneGuard, Milestones {
     SeasonService service = Objects.requireNonNull(seasons, "not bound");
     Transition transition = service.homecoming();
     if (transition instanceof Transition.Changed) {
+      LOG.info(
+          "Homecoming, {}: every zone is now in its after-unlock mode",
+          actor.equals(AuditLog.SEASONS) ? "as its condition came true" : "by " + actor);
       log.record(
           actor,
           "homecoming",
@@ -689,6 +697,7 @@ public final class Zones implements ZoneGuard, Milestones {
     }
     setUnlocked(live.get().zone(), open);
     log.record(actor, open ? "zone-unlock" : "zone-lock", id, "ok", "by command");
+    LOG.info("Zone {} {} by {}", id, open ? "unlocked" : "locked again", actor);
     if (open) {
       announceOpened(live.get().zone());
     }

@@ -491,6 +491,7 @@ final class SeasonCommands {
     Transition transition = seasons.init(season);
     reply(source, transition, "init.done");
     if (transition instanceof Transition.Changed) {
+      LOG.info("Season {} recorded as the season in progress by {}", season, actor(source));
       help.after(source, "season.init");
       // Everyone online now is playing the season init recorded.
       services.login().ifPresent(login -> login.markPlaying(platform.players().online()));
@@ -707,6 +708,18 @@ final class SeasonCommands {
       return;
     } else if (flags.has(NOW)) {
       source.reply(messages.get("end.now", "season", season(), "count", Integer.toString(online)));
+      LOG.info(
+          "Season {} ending now, started by {}: archiving {} online {}",
+          season(),
+          actor(source),
+          online,
+          online == 1 ? "player" : "players");
+    } else {
+      LOG.info(
+          "Season {} end countdown started by {}: it ends in {}",
+          season(),
+          actor(source),
+          HumanTime.duration(messages, config.get().config().schedule().endCountdown()));
     }
     help.after(source, "season.end");
   }
@@ -1021,6 +1034,8 @@ final class SeasonCommands {
   void cancel(CommandSource source, Arguments arguments) {
     if (seasons.cancel() instanceof Transition.Refused refused) {
       refuse(source, refused);
+    } else {
+      LOG.info("Season {}'s end countdown cancelled by {}", season(), actor(source));
     }
   }
 
@@ -1039,6 +1054,8 @@ final class SeasonCommands {
                       ConfigSnapshot snapshot = result.snapshot().get();
                       config.set(snapshot);
                       seasons.reloaded(snapshot);
+                      LOG.info("Config reloaded by {}", actor(source));
+                      result.warnings().forEach(warning -> LOG.warn("{}", warning));
                       source.reply(messages().get("config.reloaded"));
                       for (String warning : result.warnings()) {
                         source.reply(messages().get("config.warning", "warning", warning));

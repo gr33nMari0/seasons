@@ -63,9 +63,9 @@ class SeasonsTest {
         }
 
         @Override
-        public CompletableFuture<Void> archive(PlayerId player, int season) {
+        public CompletableFuture<java.util.OptionalInt> archive(PlayerId player, int season) {
           archived.add(player);
-          return CompletableFuture.completedFuture(null);
+          return CompletableFuture.completedFuture(java.util.OptionalInt.of(0));
         }
       };
 
@@ -343,7 +343,7 @@ class SeasonsTest {
           }
 
           @Override
-          public CompletableFuture<Void> archive(PlayerId player, int season) {
+          public CompletableFuture<java.util.OptionalInt> archive(PlayerId player, int season) {
             return new CompletableFuture<>();
           }
         });

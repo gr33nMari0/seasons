@@ -429,6 +429,7 @@ public final class Seasons implements SeasonsApi {
             world.resolve("seasons"),
             world.resolve("backups"));
     service = seasons;
+    seasons.bindWaiting(season -> waitingFor(season, players));
     Zones zoning =
         new Zones(
             platform,
@@ -767,9 +768,14 @@ public final class Seasons implements SeasonsApi {
         state.get().phase() instanceof Phase.Active
             ? state.get().season() - 1
             : state.get().season();
+    return waitingFor(ended, players);
+  }
+
+  /** Players with a record who played {@code season} but aren't archived into it. */
+  private static int waitingFor(int season, PlayerStore players) {
     int waiting = 0;
     for (PlayerRecord record : players.all()) {
-      if (record.seasons().containsKey(ended) && record.archivedThrough() < ended) {
+      if (record.seasons().containsKey(season) && record.archivedThrough() < season) {
         waiting++;
       }
     }
@@ -988,6 +994,9 @@ public final class Seasons implements SeasonsApi {
       logFailure(store.flush());
     }
     writer.close();
+    if (store != null) {
+      LOG.info("Stopped; {} saved", StartupSummary.count(store.all().size(), "player record"));
+    }
     if (alerts != null) {
       alerts.flush();
     }
@@ -1045,7 +1054,7 @@ public final class Seasons implements SeasonsApi {
       }
 
       @Override
-      public CompletableFuture<Void> archive(PlayerId player, int season) {
+      public CompletableFuture<java.util.OptionalInt> archive(PlayerId player, int season) {
         return CompletableFuture.failedFuture(
             new IllegalStateException("the journal is unavailable, so nobody can be archived"));
       }

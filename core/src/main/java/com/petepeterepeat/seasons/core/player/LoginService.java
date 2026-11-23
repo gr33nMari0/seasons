@@ -4,6 +4,7 @@ package com.petepeterepeat.seasons.core.player;
 import com.petepeterepeat.seasons.core.archive.Archiver;
 import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
@@ -196,7 +197,7 @@ public final class LoginService implements Sessions {
     SeasonState current = found.get();
     PlayerId id = player.id();
     LoginPlan.Plan plan = LoginPlan.decide(store.find(id), playedBefore, current);
-    LOG.info("{} logged in: {}", player.name(), plan);
+    SeasonsLog.debug(DebugArea.ARCHIVE, "{} logged in: {}", player.name(), plan);
     PlayerRecord record = store.getOrCreate(id, player.name()).withName(player.name());
     if (isPlaying(current.phase()) && !(plan instanceof LoginPlan.Plan.Archive)) {
       record = record.withPlay(current.season(), clock.instant(), Duration.ZERO);
@@ -204,7 +205,13 @@ public final class LoginService implements Sessions {
     store.put(record);
     return switch (plan) {
       case LoginPlan.Plan.Archive archive ->
-          archiveAndMove(player.id(), archive).thenApply(outcome -> null);
+          archiveAndMove(player.id(), archive)
+              .thenApply(outcome -> {
+                if (outcome instanceof Archiver.Outcome.Archived) {
+                  LOG.info("Archived {} into Season {} at login", player.name(), archive.season());
+                }
+                return null;
+              });
       case LoginPlan.Plan.EnterSeason enter ->
           archiver
               .followUp(id, Archiver.Destination.STAY)

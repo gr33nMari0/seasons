@@ -29,8 +29,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
@@ -98,6 +100,7 @@ public final class SeasonService {
   private @Nullable ProgressBar bar;
   private @Nullable ScheduledTask ticker;
   private boolean autoEndHeld;
+  private java.util.function.IntUnaryOperator waiting = season -> 0;
 
   /**
    * @param seasonsDirectory {@code <world>/seasons/seasons}, where season files live
@@ -369,18 +372,22 @@ public final class SeasonService {
     int season = state.get().season();
     endingListeners.forEach(listener -> listener.accept(season));
     List<PlayerId> online = players.online().stream().map(PlayerRef::id).toList();
+    long began = System.nanoTime();
+    List<CompletableFuture<OptionalInt>> archiving = new ArrayList<>();
     var _ =
         archiver
             .lockGalleries(season)
             .thenComposeAsync(
-                locked ->
-                    CompletableFuture.allOf(
-                        online.stream()
-                            .map(player -> archiver.archive(player, season))
-                            .toArray(CompletableFuture[]::new)),
+                locked -> {
+                  online.forEach(player -> archiving.add(archiver.archive(player, season)));
+                  return CompletableFuture.allOf(archiving.toArray(CompletableFuture[]::new));
+                },
                 serverThread)
             .whenCompleteAsync(
                 (done, failure) -> {
+                  if (failure == null) {
+                    logArchived(season, archiving, System.nanoTime() - began);
+                  }
                   if (failure != null) {
                     LOG.error("The end sequence stopped", failure);
                     announcer.admins(
@@ -399,6 +406,39 @@ public final class SeasonService {
                   }
                 },
                 serverThread);
+  }
+
+  /**
+   * Tells the server log how archiving at the end went, in one line for everyone (questions 295).
+   */
+  private void logArchived(int season, List<CompletableFuture<OptionalInt>> archiving, long nanos) {
+    int archived = 0;
+    int stacks = 0;
+    for (CompletableFuture<OptionalInt> one : archiving) {
+      OptionalInt result = one.join();
+      if (result.isPresent()) {
+        archived++;
+        stacks += result.getAsInt();
+      }
+    }
+    int left = waiting.applyAsInt(season);
+    LOG.info(
+        "Archived {} into Season {} in {} s: {}; {}",
+        archived == 1 ? "1 player" : archived + " players",
+        season,
+        String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e9),
+        stacks == 1 ? "1 item stack" : stacks + " item stacks",
+        left == 0
+            ? "nobody is waiting to be archived"
+            : left + " more will be archived when they next log in");
+  }
+
+  /**
+   * How many players who played {@code season} aren't archived into it yet, for the log's summary
+   * at the end. Seasons sets it at startup.
+   */
+  public void bindWaiting(java.util.function.IntUnaryOperator waiting) {
+    this.waiting = waiting;
   }
 
   /** Brings the state's planned end in line with the season file, the source of truth. */
