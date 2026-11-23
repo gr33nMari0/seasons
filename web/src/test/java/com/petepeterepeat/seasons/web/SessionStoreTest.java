@@ -7,7 +7,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.LoggerFactory;
@@ -48,6 +51,93 @@ class SessionStoreTest {
     clock.advance(Duration.ofDays(1));
     assertThat(sessions.find(token)).isEmpty();
     assertThat(sessions.of(alex)).isEmpty();
+    writer.close();
+  }
+
+  /**
+   * A logout holds while the device is in use: a dashboard request looking its session up at the
+   * moment the player types /web logout never brings it back, in memory or in the file, and an
+   * admin check that takes the node away isn't undone by one either.
+   */
+  @Test
+  void aLogoutHoldsWhileTheDeviceIsInUse() throws Exception {
+    FileWriter writer = new FileWriter(LoggerFactory.getLogger("test"));
+    SessionStore sessions = store(writer);
+    UUID sam = UUID.randomUUID();
+    for (int round = 0; round < 100; round++) {
+      SessionStore.Created ipad =
+          sessions.create(alex, "Alex", "Safari on iPad", true, Duration.ofDays(1));
+      AtomicBoolean stop = new AtomicBoolean();
+      List<Thread> busy = new ArrayList<>();
+      for (int t = 0; t < 3; t++) {
+        busy.add(
+            Thread.ofPlatform()
+                .start(() -> {
+                  while (!stop.get()) {
+                    var _ = sessions.find(ipad.token());
+                  }
+                }));
+      }
+      // Another player logging in and out, so the file is saved from another thread meanwhile.
+      busy.add(
+          Thread.ofPlatform()
+              .start(() -> {
+                // A few saves a round: each is a whole file written and synced, and the writer
+                // must catch up before the file is read.
+                for (int i = 0; i < 10 && !stop.get(); i++) {
+                  var _ = sessions.create(sam, "Sam", "x", false, Duration.ofDays(1));
+                  var _ = sessions.revokeAll(sam);
+                }
+              }));
+      Thread.sleep(1);
+      sessions.setAdmin(alex, false);
+      assertThat(sessions.revokeAll(alex)).isEqualTo(1);
+      Thread.sleep(1);
+      stop.set(true);
+      for (Thread t : busy) {
+        t.join();
+      }
+      assertThat(sessions.find(ipad.token())).as("round %d: logged out", round).isEmpty();
+      assertThat(sessions.of(alex)).as("round %d: no sessions", round).isEmpty();
+      writer.flush();
+      assertThat(Files.readString(dir.resolve("sessions.json")))
+          .as("round %d: not in the file", round)
+          .doesNotContain(ipad.session().hash());
+    }
+    writer.close();
+  }
+
+  @Test
+  void aSessionSeenWhileAdminIsTakenAwayLosesIt() throws Exception {
+    FileWriter writer = new FileWriter(LoggerFactory.getLogger("test"));
+    SessionStore sessions = store(writer);
+    for (int round = 0; round < 100; round++) {
+      SessionStore.Created ipad =
+          sessions.create(alex, "Alex", "Safari on iPad", true, Duration.ofDays(1));
+      AtomicBoolean stop = new AtomicBoolean();
+      List<Thread> busy = new ArrayList<>();
+      for (int t = 0; t < 3; t++) {
+        busy.add(
+            Thread.ofPlatform()
+                .start(() -> {
+                  while (!stop.get()) {
+                    var _ = sessions.find(ipad.token());
+                  }
+                }));
+      }
+      Thread.sleep(1);
+      sessions.setAdmin(alex, false);
+      Thread.sleep(1);
+      stop.set(true);
+      for (Thread t : busy) {
+        t.join();
+      }
+      assertThat(sessions.find(ipad.token()))
+          .as("round %d: no longer admin", round)
+          .map(SessionStore.Session::admin)
+          .contains(false);
+      var _ = sessions.revokeAll(alex);
+    }
     writer.close();
   }
 

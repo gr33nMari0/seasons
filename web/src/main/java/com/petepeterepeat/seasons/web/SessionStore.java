@@ -25,6 +25,12 @@ import org.slf4j.Logger;
  * Dashboard sessions, kept in {@code <world>/seasons-web/sessions.json} with each token stored only
  * as its SHA-256. A session lasts {@code sessions.lifetime} from its login; last-seen times are
  * saved at most every five minutes.
+ *
+ * <p>Requests look sessions up on their own threads while {@code /web logout} and the admin check
+ * change them on the server thread, so every change to one session is a single atomic map
+ * operation: a lookup never puts back a session that was ended, or an admin flag that was taken
+ * away. Saves take their snapshot and queue it under one lock, so the file is written in the order
+ * the snapshots were taken and the last write always holds every change before it.
  */
 final class SessionStore {
   static final int FORMAT_VERSION = 1;
@@ -69,7 +75,8 @@ final class SessionStore {
   /** By hash. */
   private final Map<String, Session> sessions = new ConcurrentHashMap<>();
 
-  private Instant lastSaved = Instant.MIN;
+  private final Object saving = new Object();
+  private volatile Instant lastSaved = Instant.MIN;
 
   SessionStore(Path file, FileWriter writer, Clock clock, Logger log) {
     this.file = file;
@@ -138,18 +145,26 @@ final class SessionStore {
       return Optional.empty();
     }
     String hash = Tokens.hash(token);
-    Session s = sessions.get(hash);
-    if (s == null) {
-      return Optional.empty();
-    }
     Instant now = clock.instant();
-    if (!now.isBefore(s.expires())) {
-      sessions.remove(hash);
+    boolean[] expired = {false};
+    // One atomic step: if the session was ended meanwhile it stays ended.
+    Session seen =
+        sessions.computeIfPresent(
+            hash,
+            (k, s) -> {
+              if (!now.isBefore(s.expires())) {
+                expired[0] = true;
+                return null;
+              }
+              return s.seen(now);
+            });
+    if (expired[0]) {
       save();
       return Optional.empty();
     }
-    Session seen = s.seen(now);
-    sessions.put(hash, seen);
+    if (seen == null) {
+      return Optional.empty();
+    }
     if (now.isAfter(lastSaved.plus(SAVE_LAST_SEEN))) {
       save();
     }
@@ -188,14 +203,22 @@ final class SessionStore {
 
   /** Records whether a player holds seasons.web.admin, on every session of theirs. */
   void setAdmin(UUID player, boolean admin) {
-    boolean changed = false;
+    boolean[] changed = {false};
     for (Session s : List.copyOf(sessions.values())) {
-      if (s.player().equals(player) && s.admin() != admin) {
-        sessions.put(s.hash(), s.withAdmin(admin));
-        changed = true;
+      if (s.player().equals(player)) {
+        // Atomic with lookups, which could otherwise put back the flag as it was.
+        sessions.computeIfPresent(
+            s.hash(),
+            (k, now) -> {
+              if (now.admin() == admin) {
+                return now;
+              }
+              changed[0] = true;
+              return now.withAdmin(admin);
+            });
       }
     }
-    if (changed) {
+    if (changed[0]) {
       save();
     }
   }
@@ -207,6 +230,14 @@ final class SessionStore {
   }
 
   void save() {
+    // The snapshot and its place in the writer's queue are taken together, so a snapshot taken
+    // before a logout is never written after the one taken after it.
+    synchronized (saving) {
+      writeSnapshot();
+    }
+  }
+
+  private void writeSnapshot() {
     Instant now = clock.instant();
     lastSaved = now;
     sessions.values().removeIf(s -> !now.isBefore(s.expires()));
