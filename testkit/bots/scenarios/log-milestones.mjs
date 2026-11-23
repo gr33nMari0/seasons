@@ -4,7 +4,8 @@
 // and the whole turn stays within a small budget of lines, with no warnings or errors.
 import { assert } from '../lib/context.mjs'
 import { seasonsLines } from '../lib/log.mjs'
-import { launchFrontier } from '../lib/zones.mjs'
+import { buildGallery } from '../lib/hall.mjs'
+import { endSeason2 } from '../lib/zones.mjs'
 
 const NAMES = ['Lou', 'Mo', 'Ned']
 
@@ -14,7 +15,11 @@ export default {
     const admin = await ctx.admin()
     const players = []
     for (const name of NAMES) players.push(await ctx.join(name))
-    await launchFrontier(ctx, admin)
+    await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
+    // A cell for everyone, so nobody is left without one.
+    await buildGallery(ctx, admin, { cells: NAMES.length + 2 })
+    await endSeason2(ctx, admin)
+    await ctx.command(admin, '/season launch', /^Season 3 has begun!$/, 30_000)
     await ctx.command(admin, '/season unlock homecoming', /^Homecoming! Every zone is now in its after-unlock mode\.$/)
 
     const expect = [
