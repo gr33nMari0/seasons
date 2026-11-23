@@ -1,7 +1,7 @@
 # Seasons Web: every line players see. MiniMessage format; <name> and the like are filled in as
 # plain text.
 schema-version: 1
-off: "<red>The Seasons dashboard is off on this server."
+dashboard-off: "<red>The Seasons dashboard is off on this server."
 link:
   usage: "<gray>Show a code on the dashboard, then type /web link with it."
   linked: "<green>Linked: this device is now logged in as <player>."

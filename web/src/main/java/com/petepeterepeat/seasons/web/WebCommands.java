@@ -29,7 +29,7 @@ final class WebCommands {
   }
 
   private static List<Line> off() {
-    return List.of(Line.of("off"));
+    return List.of(Line.of("dashboard-off"));
   }
 
   /** {@code /web link <code>}: the dashboard that showed the code logs in as this player. */

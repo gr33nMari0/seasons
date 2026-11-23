@@ -70,9 +70,10 @@ export default {
     // A code works once.
     await ctx.command(sam, `/web link ${asked.json.code}`, INVALID)
 
-    // Wrong codes: five a minute per account, then refused whatever is typed.
+    // Wrong codes: five a minute per account (the used code above was the first), then refused
+    // whatever is typed.
     const fresh = await deviceCode(new WebClient(ctx))
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4; i++) {
       await ctx.command(sam, '/web link ZZZZ-ZZZZ', INVALID)
     }
     await ctx.command(sam, `/web link ${fresh.json.code}`, /^Too many wrong codes\. Try again in a minute\.$/)

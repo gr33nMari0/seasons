@@ -521,7 +521,15 @@ final class Routes {
     if (asked.isEmpty()) {
       OptionalInt current = seasons.get().currentSeason();
       if (current.isEmpty()) {
-        return Reply.error(404, "not-found");
+        // No season yet: nothing to rank.
+        JsonObject empty = new JsonObject();
+        empty.add("season", JsonNull.INSTANCE);
+        JsonObject boards = new JsonObject();
+        for (String board : List.of("deaths", "play-time", "distance")) {
+          boards.add(board, new JsonArray());
+        }
+        empty.add("boards", boards);
+        return Reply.ok(empty);
       }
       number = current.getAsInt();
     } else {

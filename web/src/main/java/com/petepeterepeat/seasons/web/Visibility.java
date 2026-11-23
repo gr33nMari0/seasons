@@ -100,7 +100,8 @@ final class Visibility {
   Level level(String key) {
     Level own = levels.getOrDefault(key, Level.HIDDEN);
     int dot = key.indexOf('.');
-    if (dot > 0) {
+    // A profile's summary is the public part of a profile, not a field of the full one.
+    if (dot > 0 && !key.equals("profiles.summary")) {
       Level widget = levels.getOrDefault(key.substring(0, dot), Level.PUBLIC);
       if (widget.compareTo(own) > 0) {
         own = widget;

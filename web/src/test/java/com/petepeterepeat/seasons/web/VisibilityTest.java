@@ -27,6 +27,7 @@ class VisibilityTest {
     assertThat(v.allows("hall.gear", visitor)).isFalse();
     assertThat(v.allows("server-health", player)).isFalse();
     assertThat(v.allows("server-health", admin)).isTrue();
+    assertThat(v.allows("profiles.summary", visitor)).as("the public part of a profile").isTrue();
   }
 
   @Test

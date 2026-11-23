@@ -26,9 +26,13 @@ export default {
     const visitor = new WebClient(ctx)
 
     // The season clock.
-    const season = await visitor.get('/api/v1/season')
-    assert(season.status === 200, `the season is public: ${season.status}`)
-    assert(season.json.season === 2 && season.json.phase === 'intermission', `Season 2's Intermission: ${season.text}`)
+    // The season is looked at every second.
+    const season = await ctx.eventually(async () => {
+      const res = await visitor.get('/api/v1/season')
+      assert(res.status === 200, `the season is public: ${res.status}`)
+      assert(res.json.season === 2 && res.json.phase === 'intermission', `Season 2's Intermission: ${res.text}`)
+      return res
+    })
     assertPublic(season, 'the season without a login')
 
     // Who's online, with the area they're in and never coordinates.
