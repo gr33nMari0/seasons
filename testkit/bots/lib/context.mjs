@@ -44,7 +44,7 @@ export class ScenarioContext {
     Object.assign(this, { host, port, version, adminName, serverDir, tls, webhookPort, webPort, control, log })
     this.bots = []
     this.servers = []
-    /** Run at close, such as closing a web client's open event streams. */
+    /** Run at close and awaited, such as closing a web client's open event streams or a browser. */
     this.closers = []
     /** How far Seasons' clock runs ahead of this machine's, as /scenario clock last said. */
     this.clockOffset = 0
@@ -426,7 +426,8 @@ export class ScenarioContext {
 
   /** Disconnects every bot and stops every receiver this scenario started. */
   async close () {
-    for (const close of this.closers.splice(0)) close()
+    // A browser closes before the tunnel it was talking through.
+    await Promise.all(this.closers.splice(0).map(async (close) => { try { await close() } catch {} }))
     await Promise.all(this.bots.map((bot) => new Promise((resolve) => {
       if (!bot._client || bot._client.ended) return resolve()
       bot.once('end', resolve)

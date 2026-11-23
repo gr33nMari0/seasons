@@ -40,6 +40,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      # The dashboard's JavaScript unit tests run with the build (docs/adr/0007).
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
@@ -144,6 +148,17 @@ jobs:
             testkit/build/scenario/*/bundler
           key: paper-${{ steps.month.outputs.month }}-${{ hashFiles('gradle.properties', 'gradle/libs.versions.toml') }}
           restore-keys: paper-
+      # Chromium and WebKit for the dashboard scenarios (docs/adr/0007), with their system
+      # libraries; the browsers are cached by the Playwright version in the lockfile.
+      - id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/playwright"].version' testkit/bots/package-lock.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - name: Browsers for the dashboard scenarios
+        working-directory: testkit/bots
+        run: npm ci --no-audit --no-fund && npx playwright install --with-deps chromium webkit
       - name: Scenario shard ${{ matrix.shard }} of ${{ strategy.job-total }}
         run: ./gradlew :testkit:scenarioTest -PscenarioShards=${{ strategy.job-total }} -PscenarioShard=${{ matrix.shard }} -PscenarioJars=scenario-jars
       - if: always()
@@ -153,13 +168,36 @@ jobs:
           retention-days: 7
           path: testkit/build/scenario-results
 
+  # The public site (site/): its unit tests, and the connect page in Chromium and WebKit
+  # (docs/adr/0007). GitHub Pages publishes it from main (.github/workflows/pages.yml).
+  site:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/playwright"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm test
+
   # The check branch protection requires. It runs whatever happened before it, and passes only if
-  # the jars built, the code compiled against the newest Paper API, and every shard passed or every
+  # the jars built, the code compiled against the newest Paper API, the public site's tests passed,
+  # and every shard passed or every
   # shard was skipped for a docs-only change: a job skipped because something it needs failed would
   # otherwise count as passing. After passing shards, every session of every scenario file must
   # have a passing result in their results.
   build:
-    needs: [changes, jars, newest-api, shard]
+    needs: [changes, jars, newest-api, site, shard]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -169,12 +207,14 @@ jobs:
           DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
           JARS: ${{ needs.jars.result }}
           NEWEST_API: ${{ needs.newest-api.result }}
+          SITE: ${{ needs.site.result }}
           SHARDS: ${{ needs.shard.result }}
         run: |
-          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, newest API: $NEWEST_API, shards: $SHARDS"
+          echo "changes: $CHANGES (docs only: $DOCS_ONLY), jars: $JARS, newest API: $NEWEST_API, site: $SITE, shards: $SHARDS"
           [ "$CHANGES" = success ] || { echo "The docs-only check didn't run"; exit 1; }
           [ "$JARS" = success ] || { echo "The jars didn't build"; exit 1; }
           [ "$NEWEST_API" = success ] || { echo "The code doesn't compile against the newest Paper API"; exit 1; }
+          [ "$SITE" = success ] || { echo "The public site's tests didn't pass"; exit 1; }
           if [ "$DOCS_ONLY" = true ] && [ "$SHARDS" = skipped ]; then
             echo "Docs-only change: the scenario shards were skipped" >> "$GITHUB_STEP_SUMMARY"
             exit 0

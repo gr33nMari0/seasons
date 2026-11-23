@@ -11,6 +11,7 @@
     "scenarios": "node run.mjs"
   },
   "dependencies": {
-    "mineflayer": "4.39.0"
+    "mineflayer": "4.39.0",
+    "playwright": "1.65.0"
   }
 }
