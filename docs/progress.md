@@ -439,11 +439,13 @@ Passing end to end on Paper 26.3:
 | A48, API half: without a login the season, who's online (area, never coordinates), the event feed, the map link and the Hall answer, leaderboards are refused and a profile is its summary; with one, every response is `private, no-store` and profiles, leaderboards and archived gear as text answer | `a48-public-dashboard.mjs`; unit: `VisibilityTest`, `WebTest`, `ItemTextTest` |
 | A49: behind a trusted proxy each `CF-Connecting-IP` has its own 5 device codes a minute; from an untrusted address the header is ignored | `a49-proxy-client-ip.mjs`; unit: `ClientIpTest`, `RateLimiterTest` |
 | Off by default: `web.yml` written with `enabled: false` and `127.0.0.1:8019`, nothing listening, `/web` says so | `m7-web-off.mjs`; unit: `WebConfigTest` |
+| Every line players read is in Seasons Web's `messages.yml`, device names and "seen" times included; `/web privacy` failures point to the log rather than repeating an exception | `m7-sessions.mjs`, `m7-privacy.mjs`; unit: `SmallPartsTest`, `WebTest` |
 | Bind rules: beyond localhost only with an https `public-url`; an http one refused; the port is the owner's; a port in use reported | `m7-web-bind.mjs`; unit: `WebConfigTest` |
 | `/.well-known/seasons.json`: name, versions, API version, features, login methods, CORS `*`, no cookie | `m7-well-known.mjs` |
 | Device-code login: 8 characters with no look-alikes, only the asking browser collects, `__Host-` HttpOnly Secure SameSite=Strict cookies, no token in bodies, only hashes stored, single use, wrong codes limited and audited | `m7-device-login.mjs`; unit: `DeviceCodesTest`, `SessionStoreTest`, `WebTest` |
 | Codes expire after 5 minutes | `m7-device-expiry.mjs`; unit: `DeviceCodesTest` |
-| `/web sessions` and `/web logout [id\|all]`, audited; sessions end after 30 days | `m7-sessions.mjs`; unit: `SessionStoreTest` |
+| `/web sessions` and `/web logout [id\|all]`, audited; sessions end after 30 days; a logout, or an admin node taken away, holds while the device is making requests, in memory and in `sessions.json` | `m7-sessions.mjs`; unit: `SessionStoreTest` |
+| Seasons API outside `>=1.2 <2.0`, including a Seasons from before 1.2 that has no `apiVersion()`: Seasons Web disables itself and says which version it needs | unit: `SmallPartsTest` |
 | Every endpoint at each access level; `seasons.web.admin` for health, never from op alone | `m7-access-levels.mjs`; unit: `WebTest` |
 | Per-field visibility from `web.yml`, and `public: false` | `m7-visibility.mjs`; unit: `VisibilityTest` |
 | `/web privacy` hides and shows a player on leaderboards; it and sessions survive a restart | `m7-privacy.mjs` (2 sessions); unit: `PrivacyTest`, `BoardsTest` |

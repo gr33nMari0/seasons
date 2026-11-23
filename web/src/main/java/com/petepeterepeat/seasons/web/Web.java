@@ -133,7 +133,17 @@ final class Web implements AutoCloseable {
     String configured = next.settings().name().strip();
     name = configured.isEmpty() ? motd.get() : configured;
     Routes routes =
-        new Routes(next, api, sessions, codes, limiter, health, () -> name, version, clock);
+        new Routes(
+            next,
+            api,
+            sessions,
+            codes,
+            limiter,
+            health,
+            () -> name,
+            this::messages,
+            version,
+            clock);
     try {
       WebServer started = new WebServer(next, routes, sessions, limiter, hub, log);
       started.start();
@@ -301,6 +311,10 @@ final class Web implements AutoCloseable {
 
   Messages messages() {
     return messages;
+  }
+
+  Logger log() {
+    return log;
   }
 
   SessionStore sessions() {

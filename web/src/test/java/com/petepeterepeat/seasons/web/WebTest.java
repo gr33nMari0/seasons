@@ -44,8 +44,12 @@ class WebTest {
   private final HttpClient http = HttpClient.newHttpClient();
   private Web web;
   private int port;
+  private final FakeApi api = new FakeApi();
 
   private final class FakeApi implements SeasonsApi {
+    Optional<PlayerProfile> profile = Optional.empty();
+    boolean savingFails;
+
     @Override
     public String version() {
       return "1.2.0";
@@ -84,7 +88,7 @@ class WebTest {
 
     @Override
     public CompletableFuture<Optional<PlayerProfile>> profile(UUID player) {
-      return CompletableFuture.completedFuture(Optional.empty());
+      return CompletableFuture.completedFuture(profile);
     }
 
     @Override
@@ -116,7 +120,9 @@ class WebTest {
 
     @Override
     public CompletableFuture<Void> setLeaderboardHidden(UUID player, boolean hidden) {
-      return CompletableFuture.completedFuture(null);
+      return savingFails
+          ? CompletableFuture.failedFuture(new IllegalStateException("disk full"))
+          : CompletableFuture.completedFuture(null);
     }
   }
 
@@ -132,7 +138,6 @@ class WebTest {
         "enabled: true\nbind: 127.0.0.1:"
             + port
             + "\nrate-limits:\n  requests-per-minute-per-ip: 30\n");
-    FakeApi api = new FakeApi();
     web =
         new Web(
             folder,
@@ -210,6 +215,23 @@ class WebTest {
         .extracting(Line::key)
         .containsExactly("logout.all");
     assertThat(get("/api/v1/leaderboards", session).statusCode()).isEqualTo(401);
+  }
+
+  /** /web privacy's answers are lines from messages.yml, never an exception's own words. */
+  @Test
+  void privacyAnswersFromMessagesYml() throws Exception {
+    WebCommands commands = new WebCommands(web, () -> Optional.of(api), clock);
+    assertThat(commands.privacy(alex).get())
+        .as("no record of Alex yet")
+        .containsExactly(Line.of("privacy.no-record"));
+    api.profile = Optional.of(new PlayerProfile(alex, "Alex", Optional.empty(), List.of(), false));
+    assertThat(commands.privacy(alex).get()).containsExactly(Line.of("privacy.hidden"));
+    api.savingFails = true;
+    assertThat(commands.privacy(alex).get())
+        .as("a failure says where to look, not what the exception said")
+        .containsExactly(Line.of("privacy.failed"));
+    assertThat(new WebCommands(web, Optional::empty, clock).privacy(alex).get())
+        .containsExactly(Line.of("privacy.unavailable"));
   }
 
   @Test

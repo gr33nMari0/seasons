@@ -34,6 +34,21 @@ final class Messages {
     }
   }
 
+  /**
+   * A plain-text piece placed inside another line, such as a device's name or "10 min ago": the
+   * key's text with each {@code <name>} replaced by its value. Never parsed as formatting, so these
+   * pieces carry no tags.
+   *
+   * @param pairs placeholder names and values, alternating
+   */
+  String text(String key, String... pairs) {
+    String out = get(key);
+    for (int i = 0; i + 1 < pairs.length; i += 2) {
+      out = out.replace("<" + pairs[i] + ">", pairs[i + 1]);
+    }
+    return out;
+  }
+
   /** The line for a key, or the key itself if messages.yml lost it. */
   String get(String key) {
     return lines.getOrDefault(key, key);

@@ -72,6 +72,7 @@ final class Routes {
   private final RateLimiter limiter;
   private final Supplier<Optional<Health>> health;
   private final Supplier<String> serverName;
+  private final Supplier<Messages> messages;
   private final String version;
   private final Clock clock;
 
@@ -83,6 +84,7 @@ final class Routes {
       RateLimiter limiter,
       Supplier<Optional<Health>> health,
       Supplier<String> serverName,
+      Supplier<Messages> messages,
       String version,
       Clock clock) {
     this.config = config;
@@ -92,6 +94,7 @@ final class Routes {
     this.limiter = limiter;
     this.health = health;
     this.serverName = serverName;
+    this.messages = messages;
     this.version = version;
     this.clock = clock;
   }
@@ -257,7 +260,7 @@ final class Routes {
             sessions.create(
                 c.linked().player(),
                 c.linked().name(),
-                Devices.label(r.userAgent()),
+                Devices.label(messages.get(), r.userAgent()),
                 c.linked().admin(),
                 config.sessionLifetime());
         JsonObject o = new JsonObject();

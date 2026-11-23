@@ -12,6 +12,17 @@ sessions:
   header: "<gold>Your logged-in devices (<count>):"
   line: "<gray><id> · <device> · last seen <seen>"
   hint: "<gray>/web logout and an id ends one; /web logout all ends them all."
+  # Plain text placed inside the lines above, with placeholders but no formatting tags.
+  # How long ago a device was last seen, for <seen>:
+  seen:
+    just-now: "just now"
+    minutes: "<count> min ago"
+    hours: "<count> h ago"
+    days: "<count> d ago"
+  # A device's name, for <device>, from its browser and system; kept with the login, so a change
+  # here names devices that log in afterwards.
+  device: "<browser> on <system>"
+  unknown-device: "Unknown device"
 logout:
   one: "<green>Logged out of <device>."
   all: "<green>Logged out of <count> <devices>."
@@ -20,4 +31,6 @@ logout:
 privacy:
   hidden: "<gold>You're now hidden from the dashboard's leaderboards. /web privacy shows you again."
   shown: "<green>You're now shown on the dashboard's leaderboards."
-  failed: "<red>Couldn't change that: <reason>"
+  no-record: "<red>Seasons has no record of you yet. Play a little, then try again."
+  unavailable: "<red>Seasons isn't running, so that can't change now. Try again later."
+  failed: "<red>Couldn't change that. An admin can find why in the server log."

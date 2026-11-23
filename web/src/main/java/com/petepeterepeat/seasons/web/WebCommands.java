@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.web;
 
-import com.petepeterepeat.seasons.api.PlayerProfile;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import java.time.Clock;
 import java.time.Duration;
@@ -68,10 +67,17 @@ final class WebCommands {
     List<Line> lines = new ArrayList<>();
     lines.add(Line.of("sessions.header", "count", Integer.toString(mine.size())));
     Instant now = clock.instant();
+    Messages messages = web.messages();
     for (SessionStore.Session s : mine) {
       lines.add(
           Line.of(
-              "sessions.line", "id", s.id(), "device", s.device(), "seen", ago(now, s.lastSeen())));
+              "sessions.line",
+              "id",
+              s.id(),
+              "device",
+              s.device(),
+              "seen",
+              ago(messages, now, s.lastSeen())));
     }
     lines.add(Line.of("sessions.hint"));
     return lines;
@@ -123,36 +129,37 @@ final class WebCommands {
     }
     Optional<SeasonsApi> seasons = api.get();
     if (seasons.isEmpty()) {
-      return CompletableFuture.completedFuture(
-          List.of(Line.of("privacy.failed", "reason", "Seasons isn't running")));
+      return CompletableFuture.completedFuture(List.of(Line.of("privacy.unavailable")));
     }
     SeasonsApi s = seasons.get();
     return s.profile(player)
         .thenCompose(profile -> {
-          boolean hide = !profile.map(PlayerProfile::leaderboardHidden).orElse(false);
+          if (profile.isEmpty()) {
+            return CompletableFuture.completedFuture(List.of(Line.of("privacy.no-record")));
+          }
+          boolean hide = !profile.get().leaderboardHidden();
           return s.setLeaderboardHidden(player, hide)
               .thenApply(done -> List.of(Line.of(hide ? "privacy.hidden" : "privacy.shown")));
         })
-        .exceptionally(e ->
-            List.of(
-                Line.of(
-                    "privacy.failed",
-                    "reason",
-                    String.valueOf(
-                        e.getCause() == null ? e.getMessage() : e.getCause().getMessage()))));
+        .exceptionally(e -> {
+          // The player is told where to look; why goes to the log, never into chat.
+          web.log().warn("/web privacy failed for {}", player, e);
+          return List.of(Line.of("privacy.failed"));
+        });
   }
 
-  static String ago(Instant now, Instant then) {
+  /** How long ago, in messages.yml's words, such as "10 min ago". */
+  static String ago(Messages messages, Instant now, Instant then) {
     Duration d = Duration.between(then, now);
     if (d.compareTo(Duration.ofMinutes(1)) < 0) {
-      return "just now";
+      return messages.text("sessions.seen.just-now");
     }
     if (d.compareTo(Duration.ofHours(1)) < 0) {
-      return d.toMinutes() + " min ago";
+      return messages.text("sessions.seen.minutes", "count", Long.toString(d.toMinutes()));
     }
     if (d.compareTo(Duration.ofDays(1)) < 0) {
-      return d.toHours() + " h ago";
+      return messages.text("sessions.seen.hours", "count", Long.toString(d.toHours()));
     }
-    return d.toDays() + " d ago";
+    return messages.text("sessions.seen.days", "count", Long.toString(d.toDays()));
   }
 }
