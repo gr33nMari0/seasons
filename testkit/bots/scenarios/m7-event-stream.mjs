@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // The event stream: joins, season firsts and entries into announce-mode zones reach every open
 // stream; a keep-alive comment comes every 30 s so a proxy's idle timeout never cuts it; and each
-// visitor may hold only a few streams open.
+// visitor may hold only a few streams open (a closed stream frees its place at its next write, which
+// EventHubTest covers).
 import { MINUTE, SECOND, assert, sleep } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { middle, move, standAt } from '../lib/visits.mjs'
@@ -59,10 +60,6 @@ export default {
     const two = await busy.stream()
     const three = await busy.stream()
     assert(one.status === 200 && two.status === 200 && three.status === 429, `a third stream is refused: ${[one.status, two.status, three.status]}`)
-    one.close()
-    await ctx.eventually(async () => {
-      const again = await busy.stream()
-      assert(again.status === 200, `a closed stream frees its place: ${again.status}`)
-    })
+    assert(three.headers.get('retry-after'), 'with Retry-After')
   }
 }
