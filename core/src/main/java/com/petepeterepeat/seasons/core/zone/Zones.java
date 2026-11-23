@@ -9,6 +9,7 @@ import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
 import com.petepeterepeat.seasons.core.hall.HallAudit;
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.message.Message;
 import com.petepeterepeat.seasons.core.message.Messages;
@@ -132,7 +133,7 @@ public final class Zones implements ZoneGuard, Milestones {
     this.platform = platform;
     this.config = config;
     this.announcer = announcer;
-    this.audit = new HallAudit(log, clock);
+    this.audit = new HallAudit(log, clock, DebugArea.ZONES);
     this.log = log;
     this.clock = clock;
     this.exempt = exempt;
