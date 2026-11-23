@@ -43,3 +43,19 @@ tasks.shadowJar {
 }
 
 tasks.assemble { dependsOn(tasks.shadowJar) }
+
+// The dashboard's own modules, with Node's built-in test runner (docs/adr/0007).
+val jsTest = tasks.register<Exec>("jsTest") {
+    group = "verification"
+    description = "Runs the dashboard's JavaScript unit tests with node --test."
+    val tests = layout.projectDirectory.dir("src/test/js")
+    inputs.dir(tests)
+    inputs.dir(layout.projectDirectory.dir("src/main/resources/com/petepeterepeat/seasons/web/dashboard"))
+    val stamp = layout.buildDirectory.file("js-test/passed")
+    outputs.file(stamp)
+    workingDir(tests)
+    commandLine(providers.environmentVariable("NODE").getOrElse("node"), "--test", "--test-reporter=dot", "*.test.mjs")
+    doLast { stamp.get().asFile.apply { parentFile.mkdirs() }.writeText("passed\n") }
+}
+
+tasks.check { dependsOn(jsTest) }
