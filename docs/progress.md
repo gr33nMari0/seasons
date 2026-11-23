@@ -15,7 +15,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
-| M7 Seasons Web | Not started | See On hold, below |
+| M7 Seasons Web | Part 1 (web server and API) built on `m7-web-api`; part 2 (dashboard, connect page) not started | A49; A48's API half; `m7-*`; see M7 part 1, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -428,6 +428,37 @@ Built:
 - **Quiet.** `Reconciler` logs a pass's repairs in one line; `Tripwire` and `DiscordWebhooks` throttle; `Announcer#adminsNote` tells admins without a log line; logins, archives, zone refusals, Hall interactions, Discord posts, map publishes and command runs are debug lines.
 - **Commands.** `/seasons` alias; `info.idle` in `messages.yml`.
 
+## M7 part 1: web server and API
+
+**Seasons Web's server, login and API** (branch `m7-web-api`; readings in `docs/questions.md` 296 to 302, ADR 0003's M7 amendment). Each scenario and unit test was written first and failed before its code.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A48, API half: without a login the season, who's online (area, never coordinates), the event feed, the map link and the Hall answer, leaderboards are refused and a profile is its summary; with one, every response is `private, no-store` and profiles, leaderboards and archived gear as text answer | `a48-public-dashboard.mjs`; unit: `VisibilityTest`, `WebTest`, `ItemTextTest` |
+| A49: behind a trusted proxy each `CF-Connecting-IP` has its own 5 device codes a minute; from an untrusted address the header is ignored | `a49-proxy-client-ip.mjs`; unit: `ClientIpTest`, `RateLimiterTest` |
+| Off by default: `web.yml` written with `enabled: false` and `127.0.0.1:8019`, nothing listening, `/web` says so | `m7-web-off.mjs`; unit: `WebConfigTest` |
+| Bind rules: beyond localhost only with an https `public-url`; an http one refused; the port is the owner's; a port in use reported | `m7-web-bind.mjs`; unit: `WebConfigTest` |
+| `/.well-known/seasons.json`: name, versions, API version, features, login methods, CORS `*`, no cookie | `m7-well-known.mjs` |
+| Device-code login: 8 characters with no look-alikes, only the asking browser collects, `__Host-` HttpOnly Secure SameSite=Strict cookies, no token in bodies, only hashes stored, single use, wrong codes limited and audited | `m7-device-login.mjs`; unit: `DeviceCodesTest`, `SessionStoreTest`, `WebTest` |
+| Codes expire after 5 minutes | `m7-device-expiry.mjs`; unit: `DeviceCodesTest` |
+| `/web sessions` and `/web logout [id\|all]`, audited; sessions end after 30 days | `m7-sessions.mjs`; unit: `SessionStoreTest` |
+| Every endpoint at each access level; `seasons.web.admin` for health, never from op alone | `m7-access-levels.mjs`; unit: `WebTest` |
+| Per-field visibility from `web.yml`, and `public: false` | `m7-visibility.mjs`; unit: `VisibilityTest` |
+| `/web privacy` hides and shows a player on leaderboards; it and sessions survive a restart | `m7-privacy.mjs` (2 sessions); unit: `PrivacyTest`, `BoardsTest` |
+| The event stream: joins, firsts, phase changes and announce-zone entries; keep-alives every 30 s; streams capped per visitor | `m7-event-stream.mjs`; unit: `EventHubTest`, `ApiEventsTest` |
+| CSP (frames only from the map's address and Spotify, never framed), nosniff, no referrer, HSTS; http links left out; labels plain | `m7-security-headers.mjs`; unit: `WebConfigTest`, `SmallPartsTest` |
+| Per-visitor and per-account rate limits with 429 and Retry-After, free again after a minute | `m7-rate-limits.mjs`; unit: `RateLimiterTest`, `WebTest` |
+
+Built:
+
+- **Seasons API 1.2.** The season, who's online, profiles, galleries, archives as text, leaderboards, waypoints, an event feed (`api.event.SeasonsEvent`) and the leaderboard privacy flag. In Seasons, `core/snapshot` (`ApiService`, `ApiEvents`, `ItemText`, `Regions`, `SeasonViews`, `Boards`, `SkinUrl`): the season looked at every second, who's online every `api.refresh` and at joins and leaves, views read on a worker. `Players#presence` and `Statistics#stored` in the ports, with their Paper side; `privacy.leaderboardHidden` in the player record; `api.refresh` and `api.afkAfter` in `config.yml`.
+- **Seasons Web.** `WebSettings` and `SettingsFile` (Configurate, shaded and relocated), `WebConfig` (bind and public-url rules, links, frame origins), `Visibility`, `ClientIp`, `RateLimiter`, `DeviceCodes`, `SessionStore`, `Audit`, `FileWriter`, `EventHub`, `Routes`, `WebServer` (JDK `HttpServer` on virtual threads), `WebCommands` and `PaperWebCommands`, `Web` and `SeasonsWebPlugin` (API version check, admin check, health sampler).
+- **Tests.** `WebScenarioHooks` and `OffsetClock`; `/scenario web reload`; a web port per shard; `lib/web.mjs`.
+
+Left for part 2: the dashboard page, second-screen mode, the connect page, the museum browser and season history, Seasons Web on Hangar and Modrinth.
+
 ## On hold
 
 Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, above). These wait for later milestones, each placed there by the spec's milestone list or by `docs/questions.md`:
@@ -437,5 +468,5 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | The `DragonSlain` API event (seasons-api has no events yet) | M4 | Milestone list; questions 194 |
 | Recovering `--force` displaced items in the curator view | Later | Questions 23 and 221: no command of the spec's opens a displaced file |
 | Seasons Web on Hangar and Modrinth | M7 | Questions 292 |
-| Seasons Web: the web server and API, `/web link\|sessions\|logout\|privacy`, `seasons.web` and `seasons.web.admin`, privacy flags in the player record, firsts copied into archives | M7 | Milestone list; question 56; A48, A49 |
+| Seasons Web part 2: the dashboard page with the embedded BlueMap, profiles and second-screen mode, the connect page on the public site, the museum browser and season history, and A48's page half | M7 | Milestone list; questions 302 |
 | Fabric and NeoForge adapters; Bedrock players through Geyser | Later | Milestone list ("Later: Seasons Adapters") |

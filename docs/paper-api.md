@@ -133,7 +133,16 @@ Not Paper API, but checked the same way against each BlueMap release: `bluemap-a
 | API | Used in | For |
 | --- | --- | --- |
 | `ServicesManager#getRegistration`, `RegisteredServiceProvider#getProvider` | `SeasonsWebPlugin` | Finding `SeasonsApi` |
-| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons |
+| `ServiceRegisterEvent`, `ServiceUnregisterEvent`, `ServiceEvent#getProvider`, `RegisteredServiceProvider#getService` | `SeasonsWebPlugin` | Following Seasons API when Seasons registers it again (a scenario reset) |
+| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons, or with a Seasons API outside `>=1.2 <2.0` |
+| `JavaPlugin#getDataPath`, `#getPluginMeta().getVersion()`, `#getSLF4JLogger()`, `Server#getWorlds`, `World#getWorldFolder` | `SeasonsWebPlugin` | `plugins/SeasonsWeb`, `<world>/seasons-web`, the version, logging |
+| `Server#motd`, `PlainTextComponentSerializer` | `SeasonsWebPlugin` | The server's name on the connect page when `web.yml` has none |
+| `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `Commands#register`, `Commands.literal`, `Commands.argument`, `CommandSourceStack#getSender`, Brigadier `StringArgumentType.word`, `.greedyString`, `#getString`, `ArgumentBuilder#requires`, `#executes`, `#then`, `Command.SINGLE_SUCCESS` | `PaperWebCommands` | `/web link`, `sessions`, `logout`, `privacy` |
+| `Permissible#hasPermission`, `Player#getUniqueId`, `#getName`, `Server#getOnlinePlayers`, `PlayerJoinEvent`, `PluginManager#registerEvents` | `SeasonsWebPlugin`, `PaperWebCommands` | `seasons.web`, and `seasons.web.admin` checked at link, at join and every 30 s |
+| `Audience#sendMessage`, `MiniMessage#deserialize`, `Placeholder.unparsed`, `TagResolver` | `PaperWebCommands` | Lines from `messages.yml`, player text always plain |
+| `Server#getGlobalRegionScheduler` (`runAtFixedRate`, `execute`), `ScheduledTask#cancel` | `SeasonsWebPlugin`, `PaperWebCommands` | The admin check, health samples, replies after `/web privacy` |
+| `Server#getTPS`, `#getAverageTickTime` | `SeasonsWebPlugin` | Server health for admins, sampled on the server thread every 5 s |
+| `ServicesManager#register(Class, Object, Plugin, ServicePriority)` | `SeasonsWebPlugin` | `WebScenarioHooks`, on scenario servers only (ADR 0003) |
 | bStats `Metrics(JavaPlugin, int)`, `#shutdown` (bStats, not Paper API) | `SeasonsWebPlugin` | bStats metrics |
 
 ## Test plugin (`testkit`, never shipped)
