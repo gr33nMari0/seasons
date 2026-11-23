@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 package com.petepeterepeat.seasons.core.config;
 
+import com.petepeterepeat.seasons.core.log.DebugArea;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +36,7 @@ public record SeasonsConfig(
         Curate curate,
     @Comment("The Hall admins' wand (/hof wand).") Wand wand,
     @Comment("Admin conveniences.") Admin admin,
+    @Comment("What Seasons writes to the server log.") Logging logging,
     @Comment(
             "Awards, worked out when the season ends and announced at the Intermission. Each winner gets a trophy (item) on a free trophy anchor in their cell; ties share the award, and an award whose best is 0 goes to nobody. measure is one of deaths, travelled, play-time, diamonds, dragon, furthest-builder (from the season spawn), advancements, or any General-tab statistic id such as minecraft:jump; off turns an award off. A new id adds an award, named in messages.yml under awards.names, or after its id.")
         Map<String, Award> awards) {
@@ -298,6 +300,25 @@ public record SeasonsConfig(
   @ConfigSerializable
   public record Admin(
       @Comment("After a setup step, suggest the commands that usually come next.") boolean hints) {}
+
+  /**
+   * What Seasons writes to the server log (questions 295).
+   *
+   * @param startupSummary whether startup writes a short summary of the season, Hall and hooks
+   * @param debug the areas whose debug lines are written, for chasing a problem
+   */
+  @ConfigSerializable
+  public record Logging(
+      @Comment(
+              "At startup, write a few lines saying what Seasons found: the season, the Hall, the journal, Discord and BlueMap, and whether setup needs attention.")
+          boolean startupSummary,
+      @Comment(
+              "Extra lines for chasing a problem, per area: hall, archive, zones, discord, maps or commands. Leave empty normally; they can be many.")
+          List<DebugArea> debug) {
+    public Logging {
+      debug = List.copyOf(debug);
+    }
+  }
 
   /**
    * The deaths display.
