@@ -49,6 +49,17 @@ final class Messages {
     return out;
   }
 
+  /** Every line under a key, by the rest of its key, such as {@code feed.join} under dashboard. */
+  Map<String, String> section(String prefix) {
+    Map<String, String> out = new java.util.TreeMap<>();
+    lines.forEach((k, v) -> {
+      if (k.startsWith(prefix + ".")) {
+        out.put(k.substring(prefix.length() + 1), v);
+      }
+    });
+    return out;
+  }
+
   /** The line for a key, or the key itself if messages.yml lost it. */
   String get(String key) {
     return lines.getOrDefault(key, key);

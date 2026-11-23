@@ -40,10 +40,22 @@ links: []
 #   season: public          online: public           online.dimension: public
 #   online.region: public   online.afk: public       event-feed: public
 #   map: public             hall: public             hall.gear: players
-#   waypoints: public       links: public            leaderboards: players
+#   museum: public          history: public          waypoints: public
+#   converter: public       links: public            leaderboards: players
 #   profiles.summary: public                         profiles: players
-#   server-health: admins
+#   server-health: admins   pending-players: admins  audit-log: admins
+# The map is the first link with embed: frame.
 visibility: {}
+
+# Second-screen mode for an iPad on a stand or a spare monitor: /screen shows second-screen, and
+# /screen/<name> any other you add. Large type, a dark theme, kept up to date and awake. Widgets, in
+# order: season-clock, online, leaderboard, event-feed, map, links, hall, museum, history, rules,
+# waypoints, converter, server-health, pending-players, audit-log. Those a screen's viewer may not
+# see are left out.
+screens:
+  second-screen:
+    layout: landscape
+    widgets: [season-clock, online, leaderboard, event-feed, map, links]
 
 # How long a login lasts on a device.
 sessions:

@@ -166,7 +166,8 @@ final class WebServer implements AutoCloseable {
                 ip,
                 cookies,
                 Optional.ofNullable(in.getFirst("User-Agent")).orElse(""),
-                bodyLength));
+                bodyLength,
+                Optional.ofNullable(in.getFirst("If-None-Match")).orElse("")));
     send(exchange, reply);
   }
 

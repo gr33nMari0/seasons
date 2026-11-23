@@ -7,9 +7,13 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -23,12 +27,51 @@ record WebConfig(
     ClientIp clientIp,
     List<WebSettings.Link> links,
     List<String> frameOrigins,
-    Visibility visibility) {
+    Visibility visibility,
+    Map<String, List<String>> screens) {
   static final String SPOTIFY = "https://open.spotify.com";
+
+  /**
+   * The names a screen may list, each with the widget it shows: the spec's example names ({@code
+   * season-clock}, {@code leaderboard}) and every widget's own.
+   */
+  static final Map<String, String> SCREEN_WIDGETS;
+
+  static {
+    Map<String, String> m = new LinkedHashMap<>();
+    m.put("season-clock", "season");
+    m.put("season", "season");
+    m.put("online", "online");
+    m.put("leaderboard", "leaderboards");
+    m.put("leaderboards", "leaderboards");
+    m.put("event-feed", "event-feed");
+    m.put("map", "map");
+    m.put("links", "links");
+    m.put("hall", "hall");
+    m.put("museum", "museum");
+    m.put("history", "history");
+    m.put("rules", "rules");
+    m.put("waypoints", "waypoints");
+    m.put("converter", "converter");
+    m.put("server-health", "server-health");
+    m.put("pending-players", "pending-players");
+    m.put("audit-log", "audit-log");
+    SCREEN_WIDGETS = Collections.unmodifiableMap(m);
+  }
 
   WebConfig {
     links = List.copyOf(links);
     frameOrigins = List.copyOf(frameOrigins);
+    Map<String, List<String>> copy = new LinkedHashMap<>();
+    screens.forEach((k, v) -> copy.put(k, List.copyOf(v)));
+    screens = Collections.unmodifiableMap(copy);
+  }
+
+  /** The map: the first link shown in a frame (spec, Widgets), if any. */
+  Optional<WebSettings.Link> map() {
+    return links.stream()
+        .filter(l -> l.embed() != null && l.embed().strip().equalsIgnoreCase("frame"))
+        .findFirst();
   }
 
   Duration sessionLifetime() {
@@ -93,12 +136,47 @@ record WebConfig(
       }
     }
     Visibility visibility = new Visibility(settings.visibility(), settings.open(), warnings);
+    Map<String, List<String>> screens = screens(settings.screens(), warnings);
     if (settings.sessions().lifetime().compareTo(Duration.ofMinutes(1)) < 0) {
       return new Off("sessions.lifetime must be at least a minute", warnings);
     }
     return new Ready(
-        new WebConfig(settings, bind, publicUrl, clientIp, links, List.copyOf(frames), visibility),
+        new WebConfig(
+            settings, bind, publicUrl, clientIp, links, List.copyOf(frames), visibility, screens),
         warnings);
+  }
+
+  /**
+   * Each screen's widgets as their widget keys, in order: a screen with another layout than
+   * landscape, and a name that is no widget, are left out with a warning.
+   */
+  static Map<String, List<String>> screens(
+      Map<String, WebSettings.Screen> configured, List<String> warnings) {
+    Map<String, List<String>> out = new TreeMap<>();
+    configured.forEach((name, screen) -> {
+      String key = "screens." + name;
+      if (!name.matches("[a-z0-9][a-z0-9-]{0,31}")) {
+        warnings.add(
+            key + ": a screen's name is lower-case letters, digits and dashes; it is left out");
+        return;
+      }
+      String layout = screen.layout() == null ? "landscape" : screen.layout().strip();
+      if (!layout.equalsIgnoreCase("landscape")) {
+        warnings.add(key + ".layout: \"" + layout + "\" isn't landscape; the screen is left out");
+        return;
+      }
+      List<String> widgets = new ArrayList<>();
+      for (String w : screen.widgets()) {
+        String widget = SCREEN_WIDGETS.get(w.strip().toLowerCase(Locale.ROOT));
+        if (widget == null) {
+          warnings.add(key + ": no widget \"" + w + "\"; it is left out");
+        } else if (!widgets.contains(widget)) {
+          widgets.add(widget);
+        }
+      }
+      out.put(name, widgets);
+    });
+    return out;
   }
 
   /** {@code host:port}, the host an IP address or {@code localhost}, never a name to look up. */
