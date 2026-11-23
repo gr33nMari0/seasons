@@ -87,6 +87,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-provider: basic
+      # Gradle's downloads, as the shards start with them: fetching every plugin dependency from
+      # Maven Central alongside the other jobs gets refused, and Gradle reports each refused one as
+      # "Could not find".
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-deps-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml', 'gradle/verification-metadata.xml', 'gradle/wrapper/gradle-wrapper.properties') }}
       - name: Compile against the newest Paper API
         run: ./gradlew compileJava -PpaperApi="$(grep '^paperApiNewest=' gradle.properties | cut -d= -f2)"
 
