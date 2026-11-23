@@ -134,7 +134,7 @@ Not Paper API, but checked the same way against each BlueMap release: `bluemap-a
 | --- | --- | --- |
 | `ServicesManager#getRegistration`, `RegisteredServiceProvider#getProvider` | `SeasonsWebPlugin` | Finding `SeasonsApi` |
 | `ServiceRegisterEvent`, `ServiceUnregisterEvent`, `ServiceEvent#getProvider`, `RegisteredServiceProvider#getService` | `SeasonsWebPlugin` | Following Seasons API when Seasons registers it again (a scenario reset) |
-| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons, or with a Seasons API outside `>=1.2 <2.0` |
+| `PluginManager#disablePlugin` | `SeasonsWebPlugin` | Disabling itself without Seasons, or with a Seasons API outside `>=1.3 <2.0` |
 | `JavaPlugin#getDataPath`, `#getPluginMeta().getVersion()`, `#getSLF4JLogger()`, `Server#getWorlds`, `World#getWorldFolder` | `SeasonsWebPlugin` | `plugins/SeasonsWeb`, `<world>/seasons-web`, the version, logging |
 | `Server#motd`, `PlainTextComponentSerializer` | `SeasonsWebPlugin` | The server's name on the connect page when `web.yml` has none |
 | `LifecycleEventManager#registerEventHandler(LifecycleEvents.COMMANDS)`, `Commands#register`, `Commands.literal`, `Commands.argument`, `CommandSourceStack#getSender`, Brigadier `StringArgumentType.word`, `.greedyString`, `#getString`, `ArgumentBuilder#requires`, `#executes`, `#then`, `Command.SINGLE_SUCCESS` | `PaperWebCommands` | `/web link`, `sessions`, `logout`, `privacy` |

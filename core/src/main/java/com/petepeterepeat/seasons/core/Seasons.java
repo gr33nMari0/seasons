@@ -292,12 +292,14 @@ public final class Seasons implements SeasonsApi {
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
+    MuseumFiles museumFiles =
+        new MuseumFiles(world.resolve("museum.yml"), world.resolve("data/museum"));
     Museum museum =
         new Museum(
             platform,
             config,
             halls,
-            new MuseumFiles(world.resolve("museum.yml"), world.resolve("data/museum")),
+            museumFiles,
             writer,
             Optional.ofNullable(journal),
             hold,
@@ -482,7 +484,10 @@ public final class Seasons implements SeasonsApi {
             seasons::state,
             zoning::inForce,
             apiWorker,
-            new ApiEvents(apiEvents));
+            new ApiEvents(apiEvents),
+            museumFiles,
+            audit,
+            writer);
     api = apiService;
     zoning.onEntered(apiService::zoneEntered);
     archiver.ifPresent(a ->
@@ -1099,6 +1104,33 @@ public final class Seasons implements SeasonsApi {
         ? CompletableFuture.completedFuture(
             new Leaderboards(season, List.of(), List.of(), List.of()))
         : api.leaderboards(season);
+  }
+
+  @Override
+  public CompletableFuture<List<com.petepeterepeat.seasons.api.SeasonSummary>> seasons() {
+    ApiService running = api;
+    return running == null ? CompletableFuture.completedFuture(List.of()) : running.seasons();
+  }
+
+  @Override
+  public CompletableFuture<com.petepeterepeat.seasons.api.MuseumView> museum() {
+    ApiService running = api;
+    return running == null
+        ? CompletableFuture.completedFuture(
+            new com.petepeterepeat.seasons.api.MuseumView(List.of(), List.of()))
+        : running.museum();
+  }
+
+  @Override
+  public CompletableFuture<List<com.petepeterepeat.seasons.api.PendingPlayer>> pending() {
+    ApiService running = api;
+    return running == null ? CompletableFuture.completedFuture(List.of()) : running.pending();
+  }
+
+  @Override
+  public CompletableFuture<List<com.petepeterepeat.seasons.api.AuditEntry>> audit(int count) {
+    ApiService running = api;
+    return running == null ? CompletableFuture.completedFuture(List.of()) : running.audit(count);
   }
 
   @Override

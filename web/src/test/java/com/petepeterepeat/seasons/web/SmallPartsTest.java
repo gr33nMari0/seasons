@@ -45,8 +45,9 @@ class SmallPartsTest {
 
   @Test
   void apiVersions() {
-    assertThat(ApiVersions.supported("1.2.0")).isTrue();
+    assertThat(ApiVersions.supported("1.3.0")).isTrue();
     assertThat(ApiVersions.supported("1.9.3")).isTrue();
+    assertThat(ApiVersions.supported("1.2.0")).as("no museum, history or admin lists").isFalse();
     assertThat(ApiVersions.supported("1.1.0")).isFalse();
     assertThat(ApiVersions.supported("2.0.0")).isFalse();
     assertThat(ApiVersions.supported("garbage")).isFalse();

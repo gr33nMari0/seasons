@@ -2,11 +2,15 @@
 package com.petepeterepeat.seasons.core.snapshot;
 
 import com.petepeterepeat.seasons.api.ArchiveView;
+import com.petepeterepeat.seasons.api.AuditEntry;
 import com.petepeterepeat.seasons.api.GalleryView;
 import com.petepeterepeat.seasons.api.Leaderboards;
+import com.petepeterepeat.seasons.api.MuseumView;
 import com.petepeterepeat.seasons.api.OnlinePlayer;
+import com.petepeterepeat.seasons.api.PendingPlayer;
 import com.petepeterepeat.seasons.api.PlayerName;
 import com.petepeterepeat.seasons.api.PlayerProfile;
+import com.petepeterepeat.seasons.api.SeasonSummary;
 import com.petepeterepeat.seasons.api.SeasonView;
 import com.petepeterepeat.seasons.api.SeasonsApi;
 import com.petepeterepeat.seasons.api.WaypointView;
@@ -15,9 +19,12 @@ import com.petepeterepeat.seasons.core.archive.ArchiveFiles;
 import com.petepeterepeat.seasons.core.archive.ArchivePages;
 import com.petepeterepeat.seasons.core.archive.ArchiveRecord;
 import com.petepeterepeat.seasons.core.archive.ArchiveSlot;
+import com.petepeterepeat.seasons.core.audit.AuditLog;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
+import com.petepeterepeat.seasons.core.config.SeasonFile;
 import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.Gallery;
+import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.map.Waypoint;
 import com.petepeterepeat.seasons.core.player.PlayerRecord;
@@ -31,6 +38,7 @@ import com.petepeterepeat.seasons.core.season.DragonState;
 import com.petepeterepeat.seasons.core.season.SeasonAwards;
 import com.petepeterepeat.seasons.core.season.SeasonFirst;
 import com.petepeterepeat.seasons.core.season.SeasonState;
+import com.petepeterepeat.seasons.core.store.SerialWriter;
 import com.petepeterepeat.seasons.core.zone.Zone;
 import com.petepeterepeat.seasons.core.zone.Zones;
 import java.io.IOException;
@@ -81,6 +89,9 @@ public final class ApiService {
   private final Supplier<List<Zones.InForce>> zonesOnServer;
   private final Executor worker;
   private final ApiEvents events;
+  private final MuseumFiles museum;
+  private final AuditLog audit;
+  private final SerialWriter writer;
 
   // Written on the server thread, read anywhere.
   private volatile Optional<SeasonState> state = Optional.empty();
@@ -101,6 +112,8 @@ public final class ApiService {
    * @param stateOnServer the season state, read on the server thread
    * @param zonesOnServer the zones in force, read on the server thread
    * @param worker reads records and archives
+   * @param museum the museum's trophies, read on the writer thread as the museum writes them
+   * @param audit the audit log, read on the writer thread after what it has appended
    */
   public ApiService(
       Platform platform,
@@ -111,7 +124,10 @@ public final class ApiService {
       Supplier<Optional<SeasonState>> stateOnServer,
       Supplier<List<Zones.InForce>> zonesOnServer,
       Executor worker,
-      ApiEvents events) {
+      ApiEvents events,
+      MuseumFiles museum,
+      AuditLog audit,
+      SerialWriter writer) {
     this.platform = platform;
     this.config = config;
     this.clock = clock;
@@ -121,6 +137,9 @@ public final class ApiService {
     this.zonesOnServer = zonesOnServer;
     this.worker = worker;
     this.events = events;
+    this.museum = museum;
+    this.audit = audit;
+    this.writer = writer;
   }
 
   /** Takes the first snapshots and starts refreshing them. Server thread. */
@@ -142,7 +161,12 @@ public final class ApiService {
   void tick() {
     Optional<SeasonState> now = stateOnServer.get();
     state = now;
-    season = now.map(s -> SeasonViews.of(s, zonesOnServer.get()));
+    season =
+        now.map(s ->
+            SeasonViews.of(
+                s,
+                zonesOnServer.get(),
+                config.get().season(s.season()).map(SeasonFile::homecoming)));
     changes(seen, now, clock.instant()).forEach(events::publish);
     seen = now;
     Instant at = clock.instant();
@@ -453,6 +477,39 @@ public final class ApiService {
                   });
         });
     return done;
+  }
+
+  // Reference (Seasons API 1.3)
+
+  public CompletableFuture<List<SeasonSummary>> seasons() {
+    Optional<SeasonState> now = state;
+    List<Gallery> galleries = List.copyOf(config.get().allGalleries());
+    return CompletableFuture.supplyAsync(
+        () -> ApiReference.seasons(players.all(), now, galleries), worker);
+  }
+
+  public CompletableFuture<MuseumView> museum() {
+    Optional<SeasonState> now = state;
+    return writer.submit(() -> {
+      Map<String, MuseumFiles.Trophy> trophies = museum.trophies();
+      Map<String, Optional<com.petepeterepeat.seasons.core.port.NeutralItem>> items =
+          new HashMap<>();
+      for (String anchor : trophies.keySet()) {
+        items.put(anchor, museum.item(anchor));
+      }
+      return ApiReference.museum(trophies, a -> items.getOrDefault(a, Optional.empty()), now);
+    });
+  }
+
+  public CompletableFuture<List<PendingPlayer>> pending() {
+    Optional<SeasonState> now = state;
+    return CompletableFuture.supplyAsync(() -> ApiReference.pending(players.all(), now), worker);
+  }
+
+  public CompletableFuture<List<AuditEntry>> audit(int count) {
+    return audit
+        .recent(Optional.empty(), Math.max(0, Math.min(count, 500)))
+        .thenApply(entries -> entries.stream().map(ApiReference::audit).toList());
   }
 
   // Statistics

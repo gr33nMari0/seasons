@@ -5,13 +5,13 @@ import com.petepeterepeat.seasons.api.SeasonsApi;
 import java.util.Optional;
 
 /**
- * The Seasons API versions this Seasons Web works with: {@code >=1.2 <2.0}. A new major version of
+ * The Seasons API versions this Seasons Web works with: {@code >=1.3 <2.0}. A new major version of
  * the API may break it, so Seasons Web then disables itself and says which it needs.
  */
 final class ApiVersions {
   static final int MAJOR = 1;
-  static final int MIN_MINOR = 2;
-  static final String RANGE = ">=1.2 <2.0";
+  static final int MIN_MINOR = 3;
+  static final String RANGE = ">=1.3 <2.0";
 
   private ApiVersions() {}
 
