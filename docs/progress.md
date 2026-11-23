@@ -14,7 +14,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Post-M5 Setting up the Hall | Done (#27) | A60 to A76; A26, A41, A53, A54, A55 and A58 widened; `m2-access-gate` changed |
 | Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
-| Post-M6 Server log | On `server-logging` | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
+| Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
 | M7 Seasons Web | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).

@@ -4,6 +4,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-23
+
 ### Added
 
 - A startup summary in the server log: the version, the season and its planned end, the Hall of Fame, the journal and player records, Discord and BlueMap, and whether setup needs attention. `logging.startupSummary: false` turns it off.
