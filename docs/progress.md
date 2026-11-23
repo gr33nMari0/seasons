@@ -13,7 +13,8 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Post-M5 Hub, links and decoration | Done (#26) | A52 to A59; A4, A6, A20, A23 and A41 widened |
 | Post-M5 Setting up the Hall | Done (#27) | A60 to A76; A26, A41, A53, A54, A55 and A58 widened; `m2-access-gate` changed |
 | Security fixes | Done (#28) | `sec-*` (H1 to H3, M1 to M3 of `docs/security-review.md`); A7, A36 and the vault crash scenarios pass as before |
-| M6 Public release | On `m6-release` | A43, `m6-metrics-off`; the full suite; see M6, below |
+| M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
+| Post-M6 Server log | On `server-logging` | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
 | M7 Seasons Web | Not started | See On hold, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
@@ -405,6 +406,27 @@ Built:
 - **Docs.** A README for server owners; building, layout and releasing in CONTRIBUTING.
 
 Release targets: Hangar `gr33nMari0/SeasonsMC` (Release and Beta channels) and Modrinth `seasonsmc`, with both secrets set on the repository (questions 292). Nothing has been published yet: the first tag will be the first upload.
+
+## Post-M6: server log
+
+**Rich, quiet server logs** (branch `server-logging`; reading in `docs/questions.md` 295). Each scenario and unit test was written first and failed before its code.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| Every Seasons line is labelled `[Seasons]`; a fresh start writes a summary of at most 10 lines ending "Ready in", with setup problems pointing at `/hof hall check`; `/season info` says Seasons is idle; `/seasons` is an alias; init and reload each log a line | `log-startup.mjs`; unit: `StartupSummaryTest` |
+| A season's turn (init, end with four players, launch, Homecoming) logs one line per milestone, one archive summary and no line naming a player, with no warnings and at most 15 lines | `log-milestones.mjs` |
+| A43's whole run (20 players, 22 cells, 30 zones) writes at most 20 Seasons lines | `a43-performance.mjs` |
+| Repeated warnings are throttled with a count of those left out; debug areas switch on and off; webhooks are named without their token | unit: `LogThrottleTest`, `DiscordWebhooksTest` |
+
+Built:
+
+- **One logger.** `core/log/SeasonsLog` (named `Seasons`, debug areas), `DebugArea` and `LogThrottle`; every core and integrations class logs through it. `logging.startupSummary` and `logging.debug` in `SeasonsConfig`, regenerated into `config.yml` and `docs/config.md`; the live config sets the debug areas.
+- **Startup summary.** `StartupSummary`, filled at the end of `Seasons.start()`.
+- **Milestones.** Lines in `SeasonCommands` (init, end, cancel, reload), `SeasonService` (one archive summary: `RolloverArchiver#archive` now returns the stacks archived), `LaunchSequence`, `Zones`, `LoginService`, `Curation`, `Dragon` and `Seasons.stop()`; `BlueMapPublisher` says when BlueMap is hooked.
+- **Quiet.** `Reconciler` logs a pass's repairs in one line; `Tripwire` and `DiscordWebhooks` throttle; `Announcer#adminsNote` tells admins without a log line; logins, archives, zone refusals, Hall interactions, Discord posts, map publishes and command runs are debug lines.
+- **Commands.** `/seasons` alias; `info.idle` in `messages.yml`.
 
 ## On hold
 
