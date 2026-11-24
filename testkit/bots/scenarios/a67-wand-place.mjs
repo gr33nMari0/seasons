@@ -34,7 +34,7 @@ export default {
 
     // The action bar says which cell the next selection sets.
     await ctx.command(admin, '/hof cell new season-2 c3', /^Created cell c3 in gallery season-2\.$/)
-    await ctx.waitForMessages(admin, /^Wand \(block mode\): next selection sets season-2:c3's bounds$/)
+    await ctx.waitForMessages(admin, /^Wand \(block mode\): next selection sets season-2:c3's bounds( · figure .*)?$/)
 
     // Corners by command, typed or relative; the selection then sets c3's bounds.
     await standAt(ctx, admin, me, { x: 32, y: FLOOR, z: 22 })

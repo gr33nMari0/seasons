@@ -4,6 +4,29 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- Hall links, reworked (M8): a link leads to the Hall, any season's spawn, a named point (`/hof point`), another link (`--two-way` makes a pair), a gallery's entry or back where you came from, and can have any number of triggers: blocks, areas and floating text. `/hof link add <id> from <source> to <destination>`, with `from`, `trigger`, `landing`, `pair`, `rename`, `name`, `access`, `when`, `go` and `send`.
+- The wand makes links anywhere, in any world: right-click a block for the link menu, or put it aside for the next `/hof link add`. In the Hall it also sets the Hall spawn, exits and a gallery's entry from a block or the selection.
+- The link editor: sneak-right-click a trigger as a link admin (or click it with the wand) for a form to change where it leads, its name and who may take it, test it or remove it.
+- Link signs (`/hof link item`), styled sign lines (`/hof link sign … line|glow`) and floating text links (`/hof link text`), in MiniMessage colours and decorations; click and hover tags are stripped.
+- Who may take a link: everyone, ops, or holders of a permission node (`seasons.link.use.<id>`, a wildcard or any LuckPerms group's), and when: after Homecoming, in a stage, or by players of a season.
+- `/hof link send <selector> <link>` for command blocks: `@p`, `@a[distance=..5]` and the like, players only.
+- `/season spawn record <season>` records a past season's spawn, for links to it.
+- The wand shows every anchor in its colour with a label, says what the wand cell has and lacks, picks an anchor up from its menu (Move) to turn and put down elsewhere in its cell, and edits any box's faces: left-click a box, sneak-scroll its face, `/hof sel apply`. `/hof sel edit|face|expand|contract|shift|step|apply|cancel`, `/hof cell anchors`, `anchor move` and `unanchor … #n`.
+- `links:` in config.yml, and `wand.nudge` and `wand.anchors`.
+
+### Changed
+
+- A block link fires only when clicked, unless it is a pressure plate or tripwire or set to fire underfoot (`step` or `both`): standing on a button or sign no longer takes it.
+- Links live in `<world>/seasons/links.yml`. On the first start, the links in `hall.yml` are copied there once: buttons, signs, doors and levers become click-only, everything else fires as before (`links.upgrade.keepStepping: all` keeps every one as it was), and everyone may still take them. `hall.yml` is left as it was, so going back to 1.2 is swapping the jar. `/hof link upgrade report` lists what changed, and admins are reminded until one runs `/hof link upgrade done`.
+- `/hof <season>` visits a legacy gallery when its season has no other with an entry, and says when a season's gallery has no entry yet.
+- A gallery's bounds can't be set over the hub.
+
+### Upgrading from 1.2
+
+Back up the world folder, swap the jar, read the startup line and `/hof link upgrade report`, click each link once and stand on each plate, put `both` back (`/hof link trigger kind <id> 1 both`) on any link meant to be walked onto, then `/hof link upgrade done`. To go back, stop, put the 1.2 jar back and start: it reads `hall.yml`'s links as they were at the upgrade.
+
 ## [1.2.0] - 2026-11-24
 
 ### Added

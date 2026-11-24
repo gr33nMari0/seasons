@@ -113,9 +113,30 @@ public final class HallOutlines {
         messages.text(wand.placeMode(player) ? "hof.wand.mode-place" : "hof.wand.mode-block");
     String what =
         wand.wandCell(player)
-            .map(ref -> messages.text("hof.wand.bar-cell", "cell", ref.key()))
+            .map(ref -> messages.text("hof.wand.bar-cell", "cell", ref.key()) + has(ref, messages))
             .orElseGet(() -> messages.text("hof.wand.bar-selection"));
     return messages.get("hof.wand.bar", "mode", mode, "what", what);
+  }
+
+  /** What a cell has and lacks, for the action bar (M8, Seeing anchors). */
+  private static String has(HallService.CellRef ref, Messages messages) {
+    Cell cell = ref.cell();
+    java.util.function.Function<AnchorType, String> one =
+        type -> cell.anchor(type).isPresent() ? "✓" : "✗";
+    java.util.function.Function<AnchorType, String> many =
+        type -> Long.toString(cell.anchors().stream().filter(a -> a.type() == type).count());
+    return messages.text(
+        "hof.wand.bar-anchors",
+        "figure",
+        one.apply(AnchorType.FIGURE),
+        "plaque",
+        one.apply(AnchorType.PLAQUE),
+        "archive",
+        many.apply(AnchorType.ARCHIVE),
+        "trophy",
+        many.apply(AnchorType.TROPHY),
+        "entry",
+        one.apply(AnchorType.ENTRY));
   }
 
   /** What an admin sees: every part of the Hall in range, nearest first, at most so many. */
@@ -128,9 +149,31 @@ public final class HallOutlines {
       layout.spawn().ifPresent(spawn -> all.add(block(spawn, "entry", Optional.empty())));
       layout.exits().forEach(exit -> all.add(block(exit, "exit", Optional.empty())));
     }
+    // Every link's triggers, landing and the named points (M8).
     for (HallLayout.Link link : layout.links().values()) {
-      if (link.block().dimension().equals(at.dimension())) {
-        all.add(block(link.block(), "link", Optional.of(link.id())));
+      for (HallLayout.Trigger trigger : link.triggers()) {
+        if (!trigger.at().dimension().equals(at.dimension())) {
+          continue;
+        }
+        switch (trigger) {
+          case HallLayout.Trigger.Area(Bounds b) -> all.add(box(b, "link", Optional.of(link.id())));
+          case HallLayout.Trigger.OnBlock on ->
+              all.add(block(on.at(), "link", Optional.of(link.id() + " · " + on.kind().word())));
+          case HallLayout.Trigger.Text text ->
+              all.add(block(text.at(), "link", Optional.of(link.id() + " · text")));
+        }
+      }
+      link.landing()
+          .filter(l -> l.dimension().equals(at.dimension()))
+          .ifPresent(l -> all.add(block(l, "landing", Optional.of(link.id() + " lands"))));
+    }
+    for (HallLayout.Point point : layout.points().values()) {
+      if (point.at().dimension().equals(at.dimension())) {
+        all.add(
+            point
+                .area()
+                .map(b -> box(b, "point", Optional.of(point.name())))
+                .orElseGet(() -> block(point.at(), "point", Optional.of(point.name()))));
       }
     }
     Optional<String> focus = wand.wandCell(player).map(HallService.CellRef::key);
@@ -144,10 +187,20 @@ public final class HallOutlines {
       for (Cell cell : gallery.cells()) {
         String key = gallery.id() + ":" + cell.id();
         String kind = focus.filter(key::equals).isPresent() ? "focus" : "cell";
-        cell.bounds().ifPresent(b -> all.add(box(b, kind, Optional.of(key))));
+        boolean noFigure =
+            gallery.kind() == Gallery.Kind.SEASON && cell.anchor(AnchorType.FIGURE).isEmpty();
+        cell.bounds()
+            .ifPresent(b ->
+                all.add(
+                    box(
+                        b,
+                        kind,
+                        Optional.of(
+                            noFigure
+                                ? key + config.get().messages().text("hof.wand.no-figure")
+                                : key))));
         cell.gate().ifPresent(g -> all.add(box(g, "gate", Optional.empty())));
-        cell.anchor(AnchorType.ENTRY)
-            .ifPresent(entry -> all.add(block(entry.at(), "entry", Optional.empty())));
+        anchors(cell, at, all);
       }
     }
     Optional<Selection> selection = wand.rawSelection(player);
@@ -181,6 +234,69 @@ public final class HallOutlines {
         .sorted(Comparator.comparingDouble(o -> distance(o, at)))
         .limit(settings.max())
         .toList();
+  }
+
+  /**
+   * Every anchor of a cell as a marker in its type's colour (M8, Seeing anchors), labelled within
+   * wand.anchors.labelRange: a figure as the 1 × 2 box it stands in.
+   */
+  private void anchors(Cell cell, Position at, List<Outline> all) {
+    var settings = config.get().config().wand().anchors();
+    if (!settings.markers()) {
+      cell.anchor(AnchorType.ENTRY)
+          .ifPresent(entry -> all.add(block(entry.at(), "entry", Optional.empty())));
+      return;
+    }
+    java.util.Map<AnchorType, Integer> counts = new java.util.EnumMap<>(AnchorType.class);
+    for (Anchor anchor : cell.anchors()) {
+      if (anchor.type() == AnchorType.GATE) {
+        continue;
+      }
+      int n = counts.merge(anchor.type(), 1, Integer::sum);
+      Position p = anchor.at();
+      boolean near =
+          Math.hypot(Math.hypot(p.x() + 0.5 - at.x(), p.y() - at.y()), p.z() + 0.5 - at.z())
+              <= settings.labelRange();
+      String kind =
+          anchor.egg().isPresent()
+              ? "egg"
+              : switch (anchor.type()) {
+                case FIGURE -> "figure";
+                case ARCHIVE -> "archive";
+                case PLAQUE -> "plaque";
+                case TROPHY -> "trophy";
+                default -> "entry";
+              };
+      Optional<String> label = near ? Optional.of(label(anchor, n)) : Optional.empty();
+      if (anchor.area().isPresent()) {
+        all.add(box(anchor.area().get(), kind, label));
+      } else if (anchor.type() == AnchorType.FIGURE) {
+        Position foot = Position.of(p.dimension(), p.blockX(), p.blockY(), p.blockZ());
+        all.add(
+            new Outline(
+                foot,
+                Position.of(p.dimension(), p.blockX(), p.blockY() + 1, p.blockZ()),
+                kind,
+                label));
+      } else {
+        all.add(block(p, kind, label));
+      }
+    }
+  }
+
+  /** An anchor's label: its type, and its page, number or size where it has one. */
+  private static String label(Anchor anchor, int n) {
+    String type = anchor.type().id();
+    if (anchor.egg().isPresent()) {
+      return "egg S" + anchor.egg().getAsInt();
+    }
+    return switch (anchor.type()) {
+      case ARCHIVE ->
+          anchor.page().isPresent() ? "archive p" + (anchor.page().getAsInt() + 1) : type + " " + n;
+      case PLAQUE -> anchor.scale().isPresent() ? "plaque ×" + anchor.scale().getAsDouble() : type;
+      case TROPHY -> "trophy " + n;
+      default -> type;
+    };
   }
 
   private static Outline box(Bounds b, String kind, Optional<String> label) {

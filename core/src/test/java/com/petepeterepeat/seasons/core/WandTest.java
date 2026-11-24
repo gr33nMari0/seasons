@@ -338,10 +338,36 @@ class WandTest {
   }
 
   @Test
-  void aWandClickOutsideTheHallIsRefusedAndTakenOver() {
+  void outsideTheHallTheMenuOffersLinks() {
+    // M8: the wand makes links anywhere, with a real destination from the start.
     assertThat(click(60, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
-    assertThat(said()).containsExactly("That block isn't in any cell.");
-    assertThat(fake.choices).isEmpty();
+    assertThat(fake.choices.getLast().icons())
+        .contains("minecraft:lodestone", "minecraft:ender_eye", "minecraft:paper")
+        .doesNotContain("minecraft:iron_bars", "minecraft:oak_door");
+    fake.choices.getLast().click("minecraft:lodestone");
+    assertThat(said())
+        .contains("Link l1 leads to the Hall spawn, from the block at 60, 63, 15, clicked.");
+  }
+
+  @Test
+  void aPendingTriggerIsTakenByLinkAdd() {
+    click(61, 63, 15, "up", false, false);
+    fake.choices.getLast().click("minecraft:paper");
+    assertThat(hof("/hof link add later to hall").text())
+        .contains("Link later leads to the Hall spawn, from the block at 61, 63, 15, clicked.");
+  }
+
+  @Test
+  void aTriggerOpensItsEditor() {
+    click(60, 63, 15, "up", false, false);
+    fake.choices.getLast().click("minecraft:lodestone");
+    click(60, 63, 15, "up", false, false);
+    // No second link: the editor, as a choice menu where the game shows no forms.
+    assertThat(fake.choices.getLast().icons())
+        .containsExactly("minecraft:compass", "minecraft:ender_pearl", "minecraft:barrier");
+    assertThat(said()).contains("Link l1:");
+    fake.choices.getLast().click("minecraft:barrier");
+    assertThat(said()).contains("Removed link l1.");
   }
 
   @Test
@@ -349,18 +375,16 @@ class WandTest {
     hof("/hof cell new season-2 c1");
     hof("/hof cell bounds season-2:c1 2 64 2 8 69 8");
     assertThat(click(30, 63, 15, "up", false, false)).isInstanceOf(Decision.Deny.class);
-    assertThat(fake.choices.getLast().icons()).containsExactly("minecraft:lodestone");
+    assertThat(fake.choices.getLast().icons()).contains("minecraft:lodestone");
     fake.choices.getLast().click("minecraft:lodestone");
     assertThat(said())
-        .contains(
-            "Link l1 at 30, 63, 15 leads nowhere yet: stand where it should lead and run /hof link"
-                + " to l1.");
-    assertThat(Files.readString(dir.resolve("world/seasons/hall.yml"))).contains("l1");
+        .contains("Link l1 leads to the Hall spawn, from the block at 30, 63, 15, clicked.");
+    assertThat(Files.readString(dir.resolve("world/seasons/links.yml"))).contains("l1");
 
     // The floor of the doorway beside c1's east side: a gate corner in front of it.
     click(9, 63, 4, "up", false, false);
     assertThat(fake.choices.getLast().icons())
-        .containsExactly("minecraft:lodestone", "minecraft:iron_bars");
+        .contains("minecraft:lodestone", "minecraft:iron_bars");
     fake.choices.getLast().click("minecraft:iron_bars");
     assertThat(said()).contains("Added a gate anchor to season-2:c1 at 9, 64, 4.");
   }

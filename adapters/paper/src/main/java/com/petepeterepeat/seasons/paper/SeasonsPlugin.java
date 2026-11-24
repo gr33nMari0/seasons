@@ -58,6 +58,7 @@ public final class SeasonsPlugin extends JavaPlugin {
     NamespacedKey archived = new NamespacedKey(this, "archived");
     PaperInventories inventories =
         new PaperInventories(players, codec, archived, new NamespacedKey(this, "wand"), text);
+    inventories.linkKey(new NamespacedKey(this, "link"));
     PaperDisplays displays =
         new PaperDisplays(server, text, codec, new NamespacedKey(this, "display"), archived);
     displays.bindOutlines(new PaperOutlines(this));
@@ -93,7 +94,7 @@ public final class SeasonsPlugin extends JavaPlugin {
             players,
             inventories,
             advancements,
-            new PaperWorld(),
+            new PaperWorld(text),
             entities,
             shown,
             menus,

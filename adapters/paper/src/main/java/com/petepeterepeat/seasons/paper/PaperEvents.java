@@ -312,6 +312,19 @@ final class PaperEvents implements Events, Listener {
       report(Optional.of(id(player)), "placed as a block", List.of(found));
       return;
     }
+    Optional<String> linkSign = inventories.linkOf(event.getItemInHand());
+    if (linkSign.isPresent()) {
+      // A link sign (M8): Seasons' to place, with its text, or not at all.
+      apply(
+          event,
+          player,
+          new Intent.PlaceLinkItem(
+              id(player),
+              PaperPositions.toPosition(event.getBlockPlaced().getLocation()),
+              event.getBlockPlaced().getType().getKey().asString(),
+              linkSign.get()));
+      return;
+    }
     apply(
         event,
         player,
@@ -342,6 +355,12 @@ final class PaperEvents implements Events, Listener {
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onDrop(PlayerDropItemEvent event) {
+    if (inventories.isWand(event.getItemDrop().getItemStack())
+        && handler.decide(new Intent.WandDrop(id(event.getPlayer()))) instanceof Decision.Deny) {
+      // Drop (Q) with the wand cycles the nudging step (M8); the wand stays in hand.
+      event.setCancelled(true);
+      return;
+    }
     apply(event, event.getPlayer(), new Intent.DropItem(id(event.getPlayer())));
   }
 
@@ -536,6 +555,28 @@ final class PaperEvents implements Events, Listener {
               id(player),
               PaperPositions.toPosition(entity.getLocation()),
               entity.getType().getKey().asString()));
+    }
+  }
+
+  /** Hitting one of Seasons' displays, such as a link text's hitbox (M8): Seasons' own. */
+  @EventHandler(priority = EventPriority.LOW)
+  void onAttackDisplay(io.papermc.paper.event.player.PrePlayerAttackEntityEvent event) {
+    Optional<String> tag = displays.tagOf(event.getAttacked());
+    if (tag.isPresent()) {
+      event.setCancelled(true);
+      handler.decide(new Intent.HitDisplay(id(event.getPlayer()), tag.get()));
+    }
+  }
+
+  /** The sign editor opening: refused on a link's sign, styled with /hof link sign (M8). */
+  @EventHandler(priority = EventPriority.LOW)
+  void onOpenSign(io.papermc.paper.event.player.PlayerOpenSignEvent event) {
+    if (handler.decide(
+            new Intent.EditSign(
+                id(event.getPlayer()),
+                PaperPositions.toPosition(event.getSign().getBlock().getLocation())))
+        instanceof Decision.Deny) {
+      event.setCancelled(true);
     }
   }
 
@@ -895,7 +936,7 @@ final class PaperEvents implements Events, Listener {
    * Whether right-clicking a block does something, as a door, a lever or a chest does. Paper's own
    * {@code isInteractable} is deprecated as unreliable, so this reads the block's kind instead.
    */
-  private static boolean isInteractable(Block block) {
+  static boolean isInteractable(Block block) {
     BlockData data = block.getBlockData();
     return block.getState(false) instanceof TileState
         || data instanceof Openable

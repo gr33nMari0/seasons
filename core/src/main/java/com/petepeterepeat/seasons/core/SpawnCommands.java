@@ -178,7 +178,20 @@ final class SpawnCommands {
                 .then(
                     CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
                         .executes(this::show)))
-        .then(CommandNode.literal("clear").executes(this::clear))
+        .then(
+            CommandNode.literal("clear")
+                .executes(this::clear)
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::clear)))
+        .then(
+            CommandNode.literal("record")
+                .then(
+                    CommandNode.argument("season", ArgumentType.integer(1, Integer.MAX_VALUE))
+                        .executes(this::record)
+                        .then(
+                            CommandNode.argument("at", ArgumentType.greedy())
+                                .executes(this::record))))
         .then(
             CommandNode.literal("candidate")
                 .then(
@@ -422,7 +435,60 @@ final class SpawnCommands {
             Long.toString(SeasonFile.distanceFromOrigin(spawn.get()))));
   }
 
-  /** {@code spawn clear}: the next season has no spawn again, so launch waits for one. */
+  /**
+   * {@code spawn record <season> [position] [yaw]} (M8): a past season's spawn, for links to it.
+   * Refused for the season in progress and later ones (those are {@code spawn set}'s) and inside
+   * the Hall; inside an old-world zone is where past spawns are, so it is allowed.
+   */
+  void record(CommandSource source, Arguments arguments) {
+    Messages messages = messages();
+    OptionalInt next = nextSeason();
+    if (next.isEmpty()) {
+      source.reply(messages.get("season.none"));
+      return;
+    }
+    int season = arguments.integer("season");
+    if (season >= next.getAsInt() - 1) {
+      source.reply(messages.get("spawn.record-not-past", "season", Integer.toString(season)));
+      return;
+    }
+    Optional<String> typed = arguments.optionalString("at");
+    if (typed.isEmpty() && source.player().isEmpty()) {
+      source.reply(messages.get("spawn.player-only"));
+      return;
+    }
+    Position at;
+    if (typed.isPresent()) {
+      Optional<Position> read = typed(source, typed.get());
+      if (read.isEmpty()) {
+        return;
+      }
+      at = read.get();
+    } else {
+      at = platform.players().position(source.player().get());
+    }
+    if (config.get().inHall(at)) {
+      source.reply(messages.get("spawn.in-hall", "season", Integer.toString(season)));
+      return;
+    }
+    Optional<SeasonFile> file = config.get().season(season);
+    Position spot = at;
+    edits.edit(
+        source,
+        new ConfigEdits.Change(
+            "seasons/" + season + ".yml spawn",
+            file.flatMap(SeasonFile::spawn).map(ConfigEdits::describe).orElse(ConfigEdits.NONE),
+            ConfigEdits.describe(spot)),
+        loader.seasonFile(season),
+        () -> SeasonFiles.writeSpawn(loader.seasonFile(season), backups, season, spot),
+        "spawn.failed",
+        () -> source.reply(place("spawn.recorded", season, spot)));
+  }
+
+  /**
+   * {@code spawn clear [season]}: the next season has no spawn again, so launch waits for one; or a
+   * past season's recorded spawn is forgotten (M8).
+   */
   void clear(CommandSource source, Arguments arguments) {
     Messages messages = messages();
     OptionalInt next = nextSeason();
@@ -430,7 +496,12 @@ final class SpawnCommands {
       source.reply(messages.get("season.none"));
       return;
     }
-    int season = next.getAsInt();
+    int season =
+        arguments.values().containsKey("season") ? arguments.integer("season") : next.getAsInt();
+    if (season != next.getAsInt() && season >= next.getAsInt() - 1) {
+      source.reply(messages.get("spawn.record-not-past", "season", Integer.toString(season)));
+      return;
+    }
     Optional<Position> spawn = config.get().season(season).flatMap(SeasonFile::spawn);
     if (spawn.isEmpty()) {
       source.reply(messages.get("spawn.show-none", "season", Integer.toString(season)));

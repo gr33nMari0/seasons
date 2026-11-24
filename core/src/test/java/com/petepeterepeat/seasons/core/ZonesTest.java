@@ -875,4 +875,48 @@ class ZonesTest {
         .extracting(e -> field(e, "actor") + " " + field(e, "target"))
         .containsExactly("The console season 3");
   }
+
+  // Link signs and link blocks (M8, questions 334): placed and broken under the zones' rules.
+
+  private List<com.petepeterepeat.seasons.core.hall.HallLayout.Trigger> triggers(String link) {
+    return seasons.hall().orElseThrow().layout().link(link).orElseThrow().triggers();
+  }
+
+  private void linkInsideTheBase() {
+    TestSource made = TestSource.console();
+    TestCommands.run(fake.commands.get(1), made, "/hof link add guard from 510 64 502 to hall");
+    assertThat(seasons.hall().orElseThrow().layout().link("guard"))
+        .as(String.join(" / ", made.text()))
+        .isPresent();
+    assertThat(triggers("guard")).as(String.join(" / ", made.text())).hasSize(1);
+  }
+
+  @Test
+  void aLinkSignIsNotPlacedInLockedLand() {
+    linkInsideTheBase();
+    Position block = Position.of(OVERWORLD, 510, 64, 500);
+    assertThat(decide(new Intent.PlaceLinkItem(pat.id(), block, "minecraft:oak_sign", "guard")))
+        .isInstanceOf(Decision.Deny.class);
+    assertThat(triggers("guard")).hasSize(1);
+    // Outside the base it is placed, and becomes a trigger.
+    Position outside = Position.of(OVERWORLD, 540, 64, 500);
+    assertThat(decide(new Intent.PlaceLinkItem(pat.id(), outside, "minecraft:oak_sign", "guard")))
+        .isEqualTo(Decision.allow());
+    assertThat(triggers("guard")).hasSize(2);
+  }
+
+  @Test
+  void aBuilderWithoutTheZoneBypassDoesntBreakALinkInLockedLand() {
+    linkInsideTheBase();
+    Position block = Position.of(OVERWORLD, 510, 64, 502);
+    fake.bypassing.add(pat.id());
+    fake.denied.put(pat.id(), java.util.Set.of("seasons.zone.bypass"));
+    assertThat(decide(new Intent.BreakBlock(pat.id(), block))).isInstanceOf(Decision.Deny.class);
+    assertThat(triggers("guard")).hasSize(1);
+    // A creative player is no builder in locked land either.
+    fake.bypassing.remove(pat.id());
+    fake.player(pat).gameMode = com.petepeterepeat.seasons.core.port.GameMode.CREATIVE;
+    assertThat(decide(new Intent.BreakBlock(pat.id(), block))).isInstanceOf(Decision.Deny.class);
+    assertThat(triggers("guard")).hasSize(1);
+  }
 }

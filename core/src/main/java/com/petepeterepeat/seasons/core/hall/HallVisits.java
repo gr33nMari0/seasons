@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -87,6 +88,15 @@ public final class HallVisits {
 
   /** The link each player last stood on, so standing on one takes it once. */
   private final Map<PlayerId, String> standingOnLink = new HashMap<>();
+
+  /**
+   * How many more sweeps each player who just arrived by one of Seasons' moves is held off step and
+   * area triggers, for links.arrivalGrace (M8). Counted in sweeps, real time, not Seasons' clock,
+   * which a test can hold still.
+   */
+  private final Map<PlayerId, Integer> arrivalGrace = new HashMap<>();
+
+  private @Nullable LinkService links;
 
   /** How far from where they last stood a player may appear in the Hall and still have walked. */
   private static final double STEP = 4;
@@ -146,6 +156,15 @@ public final class HallVisits {
    */
   public void bindHold(Predicate<PlayerId> held) {
     this.held = held;
+  }
+
+  /** Connects the link rules (M8). */
+  public void bindLinks(LinkService links) {
+    this.links = links;
+  }
+
+  private LinkService links() {
+    return Objects.requireNonNull(links, "links are bound at startup");
   }
 
   /** Connects the zones, which say where a link may not go. */
@@ -352,15 +371,21 @@ public final class HallVisits {
     String text = target.get();
     if (text.chars().allMatch(Character::isDigit) && !text.isEmpty() && text.length() < 9) {
       int season = Integer.parseInt(text);
-      Optional<Position> entry =
-          halls.seasonGalleries(season).stream()
-              .filter(g -> g.entry().isPresent())
-              .findFirst()
-              .flatMap(halls::galleryEntry);
-      if (entry.isEmpty()) {
-        tell(player, "hof.visit.no-season", "season", text);
+      List<Gallery> visitable = halls.visitableGalleries(season);
+      Optional<Gallery> withEntry =
+          visitable.stream().filter(g -> g.entry().isPresent()).findFirst();
+      if (withEntry.isPresent()) {
+        return halls.galleryEntry(withEntry.get());
       }
-      return entry;
+      if (visitable.isEmpty()) {
+        tell(player, "hof.visit.no-season", "season", text);
+      } else {
+        tell(player, "hof.visit.no-entry", "season", text);
+        if (platform.permissions().has(player, HallCommands.PERMISSION_ADMIN)) {
+          tell(player, "hof.visit.no-entry-next", "gallery", visitable.getFirst().id());
+        }
+      }
+      return Optional.empty();
     }
     Optional<PlayerId> owner =
         platform
@@ -413,7 +438,9 @@ public final class HallVisits {
 
   /**
    * A player clicked or stepped on a link (questions 248 and 249): to the Hall, as {@code /hof}
-   * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked.
+   * without the bed; elsewhere, out of the Hall if they are in it, unless the land is locked. A
+   * destination inside the Hall (a gallery, a point or a link there) is a way in, as the Hall spawn
+   * is (M8).
    */
   public void takeLink(PlayerId player, HallLayout.Link link) {
     takeLink(player, link, false);
@@ -428,12 +455,51 @@ public final class HallVisits {
     if (held.test(player) || moving.contains(player) || !attempt(player)) {
       return;
     }
+    follow(player, link, throughArea, LinkChecks.ENTRY);
+  }
+
+  /**
+   * Which checks a link applies (M8, {@code /hof link send --checks}): {@code NONE} keeps only
+   * locked land and the Intermission; {@code ENTRY} adds the link's access and /hof's checks but
+   * the bed on the way into the Hall; {@code FULL} adds the bed.
+   */
+  public enum LinkChecks {
+    NONE,
+    ENTRY,
+    FULL
+  }
+
+  /**
+   * Takes a link once its rate limit is counted: its access, then where it leads.
+   *
+   * @param checks which checks apply ({@code /hof link send --checks})
+   */
+  public void follow(
+      PlayerId player, HallLayout.Link link, boolean throughArea, LinkChecks checks) {
+    if (moving.contains(player) || held.test(player)) {
+      return;
+    }
+    Optional<String> refused =
+        checks == LinkChecks.NONE ? Optional.empty() : links().refused(player, link);
+    if (refused.isPresent()) {
+      tell(player, refused.get());
+      return;
+    }
     if (link.to().isEmpty()) {
       tell(player, "hof.link.nowhere");
       return;
     }
-    switch (link.to().get()) {
-      case HallLayout.Target.Hall() -> {
+    switch (links().resolve(link.to().get())) {
+      case LinkService.Resolved.Nowhere(String key, List<String> placeholders) ->
+          tell(player, key, placeholders.toArray(String[]::new));
+      case LinkService.Resolved.Back() -> {
+        if (halls.inHall(platform.players().position(player))) {
+          leave(player);
+        } else {
+          tell(player, "hof.link.no-return");
+        }
+      }
+      case LinkService.Resolved.Hall() -> {
         if (state.get().isEmpty()) {
           tell(player, "hof.visit.not-yet");
           return;
@@ -443,21 +509,34 @@ public final class HallVisits {
           tell(player, "hof.visit.no-spawn");
           return;
         }
-        if (throughArea) {
-          enterFlying(player, spawn.get());
+        into(player, spawn.get(), throughArea, checks);
+      }
+      case LinkService.Resolved.There(Position to) -> {
+        if (halls.inHall(to)) {
+          if (state.get().isEmpty()) {
+            tell(player, "hof.visit.not-yet");
+            return;
+          }
+          into(player, to, throughArea, checks);
         } else {
-          enter(player, spawn.get(), false, config.get().config().hof().links().returnToLink());
+          away(player, to);
         }
       }
-      case HallLayout.Target.SeasonSpawn(int season) -> {
-        Optional<Position> spawn = seasonSpawn.apply(season);
-        if (spawn.isEmpty()) {
-          tell(player, "hof.link.no-spawn", "season", Integer.toString(season));
-          return;
-        }
-        away(player, spawn.get());
-      }
-      case HallLayout.Target.At(Position at) -> away(player, HallService.standOn(at));
+    }
+  }
+
+  /** Into the Hall by a link, as {@code /hof} without the bed (questions 249). */
+  private void into(PlayerId player, Position to, boolean throughArea, LinkChecks checks) {
+    if (checks == LinkChecks.NONE) {
+      adminGo(player, to);
+    } else if (throughArea) {
+      enterFlying(player, to);
+    } else {
+      enter(
+          player,
+          to,
+          checks == LinkChecks.FULL,
+          config.get().config().hof().links().returnToLink());
     }
   }
 
@@ -496,29 +575,28 @@ public final class HallVisits {
     halls.forgetSwitched(player);
   }
 
-  /** Right-clicking a link takes it; Seasons takes over the click either way. */
+  /**
+   * Right-clicking a link's block takes it, unless the block only fires underfoot ({@code step},
+   * M8); Seasons takes over the click either way, so a button gives no signal.
+   */
   private Optional<Decision> linkClick(Intent.UseBlock use) {
-    Optional<HallLayout.Link> link = halls.layout().linkAt(use.block());
-    if (link.isEmpty()) {
+    Optional<LinkService.Indexed> found = links().blockAt(use.block());
+    if (found.isEmpty()) {
+      return none();
+    }
+    if (found.get().trigger() instanceof HallLayout.Trigger.OnBlock on && !on.kind().clicked()) {
+      // A plate clicked: nothing to take, and nothing of the plate's own to stop.
       return none();
     }
     if (use.mainHand()) {
-      takeLink(use.player(), link.get());
+      takeLink(use.player(), found.get().link());
     }
     return Optional.of(new Decision.Deny(Optional.empty()));
   }
 
-  /** The link a player stands on, or on the block above, as exits count. */
+  /** The link whose trigger a player standing at {@code at} is in, as standing counts. */
   private Optional<HallLayout.Link> linkUnder(Position at) {
-    HallLayout layout = halls.layout();
-    return layout
-        .linkAt(at)
-        .or(() ->
-            layout.linkAt(Position.of(at.dimension(), at.blockX(), at.blockY() - 1, at.blockZ())))
-        .or(() ->
-            layout.links().values().stream()
-                .filter(l -> l.area().map(a -> a.contains(at)).orElse(false))
-                .findFirst());
+    return links().standingIn(at).map(LinkService.Indexed::link);
   }
 
   /** Every exit that is an area: the hub's and the galleries' (questions 279). */
@@ -548,11 +626,15 @@ public final class HallVisits {
         }
       }
     }
-    for (HallLayout.Link link : halls.layout().links().values()) {
-      if (link.area().isPresent()
-          && !link.area().get().contains(from)
-          && crosses(link.area().get(), from, to)
+    for (LinkService.Indexed found : links().areas()) {
+      HallLayout.Link link = found.link();
+      Bounds box = ((HallLayout.Trigger.Area) found.trigger()).box();
+      if (!box.contains(from)
+          && crosses(box, from, to)
           && !link.id().equals(standingOnLink.get(player))) {
+        if (inGrace(player)) {
+          return;
+        }
         standingOnLink.put(player, link.id());
         later(() -> takeLink(player, link, true));
         return;
@@ -1070,6 +1152,9 @@ public final class HallVisits {
       steppedOnLink(player, at);
     }
     standingOnLink.keySet().retainAll(online);
+    arrivalGrace.keySet().retainAll(online);
+    arrivalGrace.replaceAll((p, left) -> left - 1);
+    arrivalGrace.values().removeIf(left -> left <= 0);
     inside.retainAll(online);
     known.retainAll(online);
     lastOutside.keySet().retainAll(online);
@@ -1111,6 +1196,11 @@ public final class HallVisits {
    * {@code /hof leave} back to the pressure plate they came by doesn't send them in again.
    */
   private void arrived(PlayerId player) {
+    long sweeps =
+        Math.ceilDiv(config.get().config().links().arrivalGrace().toMillis(), SWEEP.toMillis());
+    if (sweeps > 0) {
+      arrivalGrace.put(player, (int) sweeps);
+    }
     linkUnder(platform.players().position(player))
         .ifPresentOrElse(
             link -> standingOnLink.put(player, link.id()), () -> standingOnLink.remove(player));
@@ -1123,9 +1213,18 @@ public final class HallVisits {
       standingOnLink.remove(player);
       return;
     }
+    if (inGrace(player)) {
+      // Not marked as stood on either: once the grace is over, the link fires if they stay.
+      return;
+    }
     if (!link.get().id().equals(standingOnLink.put(player, link.get().id()))) {
       takeLink(player, link.get());
     }
+  }
+
+  /** Whether a player arrived too recently for step and area triggers to fire (M8). */
+  private boolean inGrace(PlayerId player) {
+    return arrivalGrace.containsKey(player);
   }
 
   private static boolean near(Position from, Position at) {

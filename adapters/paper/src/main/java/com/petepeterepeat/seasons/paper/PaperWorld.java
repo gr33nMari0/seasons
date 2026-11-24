@@ -15,6 +15,50 @@ import org.bukkit.block.TileState;
 import org.bukkit.inventory.ItemStack;
 
 final class PaperWorld implements World {
+  private final @org.jspecify.annotations.Nullable PaperText text;
+
+  PaperWorld() {
+    this(null);
+  }
+
+  PaperWorld(@org.jspecify.annotations.Nullable PaperText text) {
+    this.text = text;
+  }
+
+  @Override
+  public boolean writeSignLine(
+      Position at, int line, com.petepeterepeat.seasons.core.message.Message message) {
+    Optional<org.bukkit.block.Sign> sign = sign(at);
+    if (sign.isEmpty() || text == null || line < 0 || line > 3) {
+      return false;
+    }
+    sign.get().getSide(org.bukkit.block.sign.Side.FRONT).line(line, text.render(message).compact());
+    sign.get().update(true, false);
+    return true;
+  }
+
+  @Override
+  public boolean glowSign(Position at, boolean glowing) {
+    Optional<org.bukkit.block.Sign> sign = sign(at);
+    if (sign.isEmpty()) {
+      return false;
+    }
+    sign.get().getSide(org.bukkit.block.sign.Side.FRONT).setGlowingText(glowing);
+    sign.get().update(true, false);
+    return true;
+  }
+
+  private static Optional<org.bukkit.block.Sign> sign(Position at) {
+    Optional<org.bukkit.World> world = PaperPositions.world(at.dimension());
+    if (world.isEmpty() || !world.get().isChunkLoaded(at.blockX() >> 4, at.blockZ() >> 4)) {
+      return Optional.empty();
+    }
+    return world.get().getBlockAt(at.blockX(), at.blockY(), at.blockZ()).getState(false)
+            instanceof org.bukkit.block.Sign sign
+        ? Optional.of(sign)
+        : Optional.empty();
+  }
+
   @Override
   public boolean dimensionExists(String dimension) {
     return PaperPositions.world(dimension).isPresent();
@@ -40,7 +84,11 @@ final class PaperWorld implements World {
     Block block = world.get().getBlockAt(position.blockX(), position.blockY(), position.blockZ());
     Material type = block.getType();
     return new BlockInfo(
-        type.getKey().asString(), block.isSolid(), block.isPassable(), isBed(type));
+        type.getKey().asString(),
+        block.isSolid(),
+        block.isPassable(),
+        isBed(type),
+        PaperEvents.isInteractable(block));
   }
 
   /** Every kind of bed, straw beds included. */

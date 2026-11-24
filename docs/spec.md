@@ -244,7 +244,7 @@ TheRanch's Hall is a hub around 0, 256, 0, the world spawn, with one wing per se
 ### Galleries
 
 - Fields: id, kind (`season`, `museum` or `legacy`), season number, dimension, bounds, entry (a block or a small box), exits, assignment strategy, access mode, decorating window, renderer choice, plaque size.
-- **Legacy galleries** keep hand-built cells exactly as they are, such as Season 1's barrier-sealed rooms with real chests and armour stands, without importing them. Seasons protects them as Hall (their chests open as view-only copies for everyone but bypass holders, and nobody but bypass holders breaks a container with something in it or touches a stand's gear), but never draws displays there, never assigns, locks or gates their cells, never counts them in a shortfall, and doesn't ask them for figures. `/hof import` can still convert one later, which makes it a `season` gallery.
+- **Legacy galleries** keep hand-built cells exactly as they are, such as Season 1's barrier-sealed rooms with real chests and armour stands, without importing them. Seasons protects them as Hall (their chests open as view-only copies for everyone but bypass holders, and nobody but bypass holders breaks a container with something in it or touches a stand's gear), but never draws displays there, never assigns, locks or gates their cells, never counts them in a shortfall, and doesn't ask them for figures. Visitors still visit them: `/hof <season>` lands at a legacy gallery's entry when the season has no `season` gallery with one (M8). `/hof import` can still convert one later, which makes it a `season` gallery.
 - A gallery can be any shape: a wing off the hub (a hallway with cells on either side), a room, a building, a row of plinths. Galleries may not overlap each other or the hub. A gallery that doesn't touch the hub, such as a museum built elsewhere, is allowed, and `/hof hall check` warns about it.
 
 ### Anchors
@@ -271,7 +271,7 @@ All four ways write the same gallery file.
 3. **Template and stamp.** Build one cell in creative. Place structure blocks in DATA mode with metadata `seasons:figure`, `seasons:archive`, `seasons:plaque`, `seasons:trophy`, `seasons:entry` or `seasons:gate` (two markers for the gate's corners). Save the cell with a structure block into `templates/`. `/hof stamp` pastes copies, registers each marker as an anchor and replaces the marker with air. Two default templates ship in the jar: `alcove` and `plinth`.
 4. **Edit the file.** Change `galleries/<id>.yml` by hand, then run `/season reload`.
 
-**Seeing and fixing what's set.** While an admin holds the wand (or after `/hof show on`), the hub, galleries, cells, gates, entries, exits and links nearby are drawn as glowing outlines with their ids, seen only by that admin, Litematica-style. The cell the next selection will set is highlighted and named on the action bar. The wand selects either the block clicked or, in `place` mode, the block a placed block would fill (swap-hands toggles it). Mistakes are fixed in place: `/hof cell swap`, `move`, `rename`, `redefine` and `remove`, and `/hof undo` puts back an admin's last Hall edit.
+**Seeing and fixing what's set.** While an admin holds the wand (or after `/hof show on`), the hub, galleries, cells, gates, entries, exits and links nearby are drawn as glowing outlines with their ids, seen only by that admin, Litematica-style. The cell the next selection will set is highlighted and named on the action bar. The wand selects either the block clicked or, in `place` mode, the block a placed block would fill (swap-hands toggles it). Mistakes are fixed in place: `/hof cell swap`, `move`, `rename`, `redefine` and `remove`, and `/hof undo` puts back an admin's last Hall edit. Every anchor is drawn in its type's colour with a label nearby, and the wand cell's line says what it has and lacks (M8); the wand's Move picks an anchor up, sneak-scrolling turns it, and a right-click puts it down inside its cell. A left-click with the wand takes a box (a cell, a gallery, the hub, a link's area, a point's box) to edit with the face clicked picked: sneak-scrolling moves that face by a step (drop cycles 1 and 10), and `/hof sel apply` writes it through its own command.
 
 ### Assignment
 
@@ -387,13 +387,15 @@ A failed check tells the player which one failed, such as "Monsters are nearby".
 
 **Links**
 
-- A link is any block an admin marks with `/hof link add <id>`: a button, a sign, a pressure plate. Clicking it, or stepping on it if it is a plate, takes the player to its destination. Seasons takes over the click, so a button sends no redstone and no command blocks are needed.
-- Destinations: `hall` (the Hall spawn), `season <n>` (that season's recorded spawn), or a spot an admin stands at (`/hof link to <id>`), for seasons whose spawn Seasons never recorded.
+- A link is one destination with any number of triggers (M8): blocks, areas and floating text, made with `/hof link add`, by placing a link sign from `/hof link item`, or from the wand's menu anywhere. A block is clicked (`use`, the default), stepped on (`step`, the default for pressure plates and tripwire) or either (`both`): standing on a button or a sign never takes it. Seasons takes over the click, so a button sends no redstone and no command blocks are needed; command blocks can still send players along a link with `/hof link send <selector> <link>`.
+- Destinations: `hall` (the Hall spawn), `season <n>` (that season's spawn; a past season's is recorded with `/season spawn record`), a spot (`/hof link to`), a named point (`/hof point add`), another link's landing (so two links make a two-way pair, `--two-way`), a gallery's entry, or `return` (as `/hof leave`).
+- Who may take a link, and when: everyone (links to the Hall and to season spawns, by default), ops (others, by default), or holders of a permission node such as a LuckPerms group's; and always, after Homecoming, in a stage, or by players of a season (`/hof link access`, `when`).
+- An admin sneak-clicking a trigger, or clicking one with the wand, gets the link's editor (Paper's dialog, or a choice menu where it can't show): where it leads, its name, who may take it, test it, remove it. Sign lines and floating text are styled with MiniMessage colours and decorations, a sign glowing without ink; click and hover tags are stripped.
 - A link to the Hall skips the bed check; the other entry checks apply. With `hof.links.returnToLink: true` (default), `/hof leave` brings the player back to the link they came from.
 - A link into land locked for that player now is refused with the reason ("Season 1's spawn opens at Homecoming"), and works once Homecoming or `/season unlock` opens it. Links out of the Hall are refused during the Intermission, except for holders of `seasons.hof.roam`.
 - A link can also be an area of up to 32 blocks a side, such as a doorway or a frame in the sky: walking or flying through it, an elytra flight included, takes the player along it. Exits can be areas too.
 - Arriving runs the return-safety checks and gives the usual immunity. Leaving the Hall by a link restores the game mode and drops the saved position.
-- TheRanch: a link per season in the hub, to each season's spawn, and a link back to the Hall at each season's spawn. Link blocks outside the Hall can't be broken or changed except by builders.
+- TheRanch: a link per season in the hub, to each season's spawn, and a link back to the Hall at each season's spawn. Link blocks outside the Hall can't be broken or changed except by builders. Links live in `<world>/seasons/links.yml`; the links 1.1 and 1.2 kept in `hall.yml` are copied there once, buttons, signs and doors becoming click-only and everything else firing as before, and `hall.yml` is left as it was so the previous Seasons still runs (`/hof link upgrade report|done|import|forget-old`).
 
 **Arriving at season end.** Archiving sends everyone to their own cell (`archive.arrival: cell`, default), where they wake at the live event; `hub` sends them to the Hall spawn instead.
 
@@ -769,7 +771,8 @@ Admin dashboard widgets need `seasons.web.admin`, which is never granted by defa
 | `/season decorate open\|close` | Open or close the decorating window early; opening assigns cells |
 | `/season launch [--dry-run]` | Launch the next season |
 | `/season spawn candidate add <name> [position]` / `move <name> [position]` / `remove <name>` / `list` | Mark spawn candidates at the op's position or a typed one; they appear on BlueMap |
-| `/season spawn set [candidate \| at <position> [yaw]]` / `show [season]` / `clear` | Set the next season's spawn to the op's position, a typed position or a candidate; show or clear it |
+| `/season spawn set [candidate \| at <position> [yaw]]` / `show [season]` / `clear [season]` | Set the next season's spawn to the op's position, a typed position or a candidate; show or clear it |
+| `/season spawn record <season> [position] [yaw]` | Record a past season's spawn, for links to it (M8); refused for the season in progress, later ones and the Hall |
 | `/season list` | Every season on record: its phase, spawn, galleries and archived players |
 | `/season players [season] [online\|archived\|pending]` | Players' records: last name, seasons played, archive status, cell |
 | `/season schedule show` / `clear` | Show or clear the planned end |
@@ -822,6 +825,13 @@ Admin dashboard widgets need `seasons.web.admin`, which is never granted by defa
 | `/hof link add <id> [hall\|season <n>] [position \| area <box>]` | Make a block a link (the one looked at, or a typed one), or an area that takes whoever passes through it |
 | `/hof link info <id>` / `move <id> [position \| area <box>]` | Show a link, or move its block or area |
 | `/hof link to <id> [x y z [yaw]]` / `remove <id>` / `list` | Set where a link leads to a spot (where the admin stands), remove one, or list them |
+| `/hof link add <id> [from <source>] to <destination> [--trigger use\|step\|both\|area] [--two-way] [--name <text>]` | M8's grammar: a link from x y z, here, sel, looked or a point, to hall, return, a season, a point, a link, a gallery or a spot |
+| `/hof link from` / `trigger add\|kind\|remove\|list` / `landing` / `pair` / `unpair` / `rename` / `name` / `access` / `when` | A link's triggers, landing, pair, id, name and who may take it, when |
+| `/hof link item <id> [count] [player]` / `sign <id> line <n> <text>\|glow on\|off` / `text add\|edit\|scale\|line` | Link signs, styled sign lines, floating text links |
+| `/hof link go <id>` / `send <targets> <link\|destination> [--checks none\|entry\|full]` / `edit` / `upgrade report\|done\|import\|forget-old` | Take a link; send players a selector picks (command blocks); the editor; the upgrade from 1.2 |
+| `/hof point add\|move\|rename\|remove\|list\|info\|tp` | Named spots and boxes, for links to start or end at |
+| `/hof sel edit\|face\|expand\|contract\|shift\|step\|apply\|cancel` | Edit a box's faces, as the wand does |
+| `/hof cell anchors <cell>` / `anchor move <cell> <type> [#n] <position>` / `unanchor <cell> <type> [#n]` | A cell's anchors numbered; move or remove one of several |
 | `/hof cell assign <cell> <player>` / `unassign` | Manual assignment, overriding the random draw |
 | `/hof wand` | Give the anchor and zone wand |
 | `/hof stamp <template> <gallery> <count> [--step x y z] [--rotate 0\|90\|180\|270]` | Paste cell templates and register their anchors |
@@ -839,6 +849,8 @@ Admin dashboard widgets need `seasons.web.admin`, which is never granted by defa
 
 **Bypass nodes** (never granted by default, ops included): `seasons.zone.bypass`, `seasons.hof.bypass`. Players in creative mode build in the Hall as bypass holders do (`hof.creativeBuilds`).
 
+**Links** (M8): `seasons.admin.links` (ops; a child of `seasons.admin.hof`) makes and changes links anywhere; `seasons.link.place` places link signs; `seasons.link.text.style` styles link text; `seasons.link.op` takes links open to ops; `seasons.link.use.<id>` or `seasons.link.use.*` takes a link open by permission.
+
 **Admin conveniences** (ops by default, grantable to a group): `seasons.hof.anywhere` skips the `/hof` entry checks but the rate limit; `seasons.hof.roam` lets the holder leave the Hall during the Intermission. They move only the holder, so unlike the bypass nodes they protect nothing.
 
 ## Configuration and data files
@@ -855,7 +867,8 @@ plugins/Seasons/
 <world>/seasons/
   seasons/3.yml           # spawn, zones, unlocks, schedule (command-editable)
   galleries/season-3.yml  # gallery, cells, anchors (command-editable)
-  hall.yml                # the hub, the Hall spawn, the Hall's exits and links (command-editable)
+  hall.yml                # the hub, the Hall spawn, the Hall's exits (command-editable)
+  links.yml               # links and named points (command-editable, M8)
   museum.yml
   templates/*.nbt         # cell templates
   data/players/<uuid>.json
@@ -1687,6 +1700,28 @@ These are the behaviours the finished product must show. Each is an end-to-end t
 - A75. An owner decorating their cell, and a builder, place an armour stand there; a visitor can't, and a dispenser can't place one in the Hall.
 - A76. `/season reset` is refused for a non-op holding every Seasons node and while a season is ending; for an op it warns with what would go, asks for `/season reset confirm` and then for DELETE typed in chat, and anything else or a minute's wait cancels; once confirmed it writes a backup, removes Seasons' displays and its deaths objectives, gives back the game modes it changed, deletes its world data (keeping the hub, galleries and cells with `--keep-hall`) and stops Seasons; after a restart `/season init 1` works as on a fresh server.
 
+**Reliable links (M8)**
+
+- A77. A sign, a button, a door and a lever made links are taken only by a click, never by standing on them; a plate fires underfoot once until stepped off; a one-block area fires on walking in; a `both` tile fires both ways.
+- A78. Far from the Hall and in the Nether the wand's menu makes a block a working link at once; a block put aside is taken by `/hof link add`; a trigger clicked with the wand makes no second link.
+- A79. Links from a typed block, a relative one, where the admin stands, the selection and a point to a spot, here, a point, a link's landing, a season's spawn, the Hall, a gallery and back each land where they should.
+- A80. Several triggers lead to one place; `--two-way` makes a pair each landing at the other's landing, never fired on arrival; a pair is removed together or unpaired.
+- A81. Past seasons' spawns are recorded (inside old land too, never for the season in progress or inside the Hall); a two-way link to Season 1's spawn is refused before Homecoming and works after it.
+- A82. Link signs from `/hof link item` become glowing, written triggers where placed; a builder breaking one gets it back; without `seasons.link.place` none is placed.
+- A83. Points and links are listed, shown, renamed (links leading to them follow), removed (refused while used unless `--force`) and undone; every change is audited by id.
+- A84. An admin's sneak-click opens the editor, anyone else's takes the link; the editor's buttons change where it leads, its name and access, and are refused once the admin loses the node.
+- A85. Sign lines are styled gold, bold, mixed colours and glowing without ink; click tags are stripped; styling needs `seasons.link.text.style`.
+- A86. A floating text is clicked to take its link, walked into or left-clicked only when set, resized and restyled, and after a restart and reconciliation there is exactly one text and one hitbox.
+- A87. A command block's `/hof link send @p`, `@a[distance=..5]` and `@e` send the players they pick and no pig; `--checks none` skips /hof's checks; only link admins run it.
+- A88. Links to the Hall and a season's spawn are open to all, others to ops; permission links take their own node, the wildcard or a group's; `when played` refuses players of other seasons.
+- A89. A left-click takes a gallery's box with the face clicked; sneak-scrolling and the step move it; apply writes it once and undo puts it back; growing into the hub is refused; a link's area and a point's box are edited the same way.
+- A90. The Hall spawn, a Hall exit and a gallery's entry and exit are set from the wand's menu on a block or the selection.
+- A91. Links in a 1.2 `hall.yml` are copied once into `links.yml`, buttons and signs click-only and the rest as before, `hall.yml` unchanged; the upgrade is reported and reviewed.
+- A92. `/hof 1` lands at a legacy Season 1 gallery's entry, says plainly when it has none, and the legacy gallery stays out of the draw.
+- A93. `hall.yml`'s copied links survive Hall edits for the previous Seasons; a change made to them there is reported and can be imported, undone or forgotten; the 1.2 commands reply as before; `seasons.admin.hof` alone runs link commands.
+- A94. Every anchor nearby, a link's trigger and landing and a point have outlines and labels for an admin holding the wand, none for a visitor; the action bar says what the wand cell has and lacks.
+- A95. An anchor is picked up from the wand's menu, turned and put down inside its cell, as one undoable edit; another cell or outside is refused; anchors are listed, moved and removed one of several by number.
+
 **Performance**
 
 - A43. With 20 bots online, 30 zones and a full rollover, the average tick time Seasons adds stays under 1 ms (measured with spark), and rendering displays never adds more than 5 ms to a single tick.
@@ -1758,6 +1793,7 @@ World preparation comes first. Upgrade the game, pick spawn candidates in unexpl
 - [ ] Press the launch button. Everyone, with their pets, arrives at the new spawn.
 - [ ] Show the new area on BlueMap, check `/season status` for pending players and pets, post on Discord.
 - [ ] Put a link back to the Hall at the new spawn (`/hof link add <id> hall`), and a link to the new spawn in the hub (`/hof link add <id> season 3`).
+- [ ] After upgrading to the release with M8: read the startup line and `/hof link upgrade report`, click each link in the hub and at each spawn once, put `both` back (`/hof link trigger kind <id> 1 both`) on any meant to be walked onto, then `/hof link upgrade done`. Record Seasons 1 and 2's spawns with `/season spawn record` and make two-way links to them (`/hof link add hof-s1 from looked to season 1 --two-way`).
 
 **Homecoming (when the group votes)**
 
@@ -1781,7 +1817,8 @@ Season 3 needs M0 to M3. The rest can follow during the season. Each milestone i
 8. **Post-M5: setting up the Hall.** The bed rule as a setting and the admin conveniences, roaming during the Intermission, positions typed or relative everywhere, tab completion, help and next steps, list, show, change and remove for everything, admin teleports, wand modes and outlines, fixing and undoing cell edits, rows of cells, plaque size, areas for entries, exits and links, gates over decoration, legacy galleries, armour stands in cells, `/season reset`. Scenarios A60 to A76; A26, A41, A53, A54, A55, A58 widened.
 9. **M6 Public release.** Full suite, CI across supported versions, performance scenario A43, generated config docs, Hangar and Modrinth listings.
 10. **M7 Seasons Web.** The web server and API, device-code login, the connect page on the public site, the dashboard with the embedded BlueMap, profiles and second-screen mode. Scenarios A48, A49.
-11. **Later: Seasons Adapters.** Fabric, then NeoForge, when a real server asks, each passing the same scenario suite. Bedrock players through Geyser if TheRanch wants them, after checking how mannequins and the archive view look to them.
+11. **M8 Reliable links.** Links from any source to any destination, click-only by default, two-way pairs, named points, past seasons' spawns, access by permission and condition, command blocks, link signs, floating text, the link editor, styled text, the wand anywhere, nudging boxes, anchor markers and dragging, `/hof <season>` for legacy galleries, and the upgrade of 1.2's links. Scenarios A77 to A95; A54, A58, A63, A64, A68 widened.
+12. **Later: Seasons Adapters.** Fabric, then NeoForge, when a real server asks, each passing the same scenario suite. Bedrock players through Geyser if TheRanch wants them, after checking how mannequins and the archive view look to them.
 
 **Open decisions**
 
@@ -1841,6 +1878,9 @@ Player feedback so far. Q numbers refer to the questionnaire.
 | Ops, or a granted group, can leave the Hall during the Intermission, to show spawn candidates on a livestream or add new ones | Peter |
 | Setting up the Hall should be easy: help that explains each argument, tab completion everywhere, typed, relative or wand positions, next-step hints, list, show, change and remove for everything, visible outlines, rows of cells at once, and ways to fix a cell tagged in the wrong place | Peter |
 | Entries, exits and links can be areas, horizontal or vertical, so doorways and elytra entrances work | Peter |
+| Links fire only when clicked unless they are plates or set to fire underfoot; one link can have many triggers and two links can be a pair; links can be made anywhere with the wand, styled, gated by permission and sent from command blocks; existing links upgrade without breaking, and going back to the previous jar still works (M8) | Peter |
+| Anchors are shown and dragged with the wand, and any box's faces nudged (M8) | Peter |
+| `/hof <season>` visits legacy galleries too (M8) | Peter |
 | Gates may take in an archway's decoration and only ever fill or clear their own blocks | Peter |
 | Hand-built cells can stay as they are, beside the automated galleries | Peter |
 | A server operator can wipe Seasons from a test world, behind two confirmations and typing DELETE | Peter |

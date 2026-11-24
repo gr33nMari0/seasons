@@ -42,6 +42,23 @@ permissions:
   seasons.admin.hof:
     description: Hall of Fame admin commands
     default: op
+    children:
+      seasons.admin.links: true
+  seasons.admin.links:
+    description: Make, change and remove Hall links and points anywhere, the link editor and /hof link send
+    default: op
+  seasons.link.op:
+    description: Take Hall links whose access is op
+    default: op
+  seasons.link.place:
+    description: Place link signs from /hof link item
+    default: op
+  seasons.link.text.style:
+    description: Style sign and floating text through Seasons
+    default: op
+  seasons.link.use.*:
+    description: Take every Hall link whose access is permission with no node of its own
+    default: false
   seasons.curate.view:
     description: Open the curator view with /hof curate, or by sneak-clicking an archive
     default: op

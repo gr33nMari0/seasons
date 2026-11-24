@@ -39,17 +39,28 @@ final class PaperOutlines implements Listener {
   private static final float THICKNESS = 0.04f;
 
   private static final Map<String, Color> COLOURS =
-      Map.of(
-          "hub", Color.WHITE,
-          "gallery", Color.AQUA,
-          "cell", Color.YELLOW,
-          "focus", Color.LIME,
-          "gate", Color.RED,
-          "entry", Color.PURPLE,
-          "exit", Color.ORANGE,
-          "link", Color.ORANGE,
-          "selection", Color.FUCHSIA,
-          "preview", Color.SILVER);
+      Map.ofEntries(
+          Map.entry("hub", Color.WHITE),
+          Map.entry("gallery", Color.AQUA),
+          Map.entry("cell", Color.YELLOW),
+          Map.entry("focus", Color.LIME),
+          Map.entry("gate", Color.RED),
+          Map.entry("entry", Color.PURPLE),
+          Map.entry("exit", Color.ORANGE),
+          Map.entry("link", Color.ORANGE),
+          Map.entry("selection", Color.FUCHSIA),
+          Map.entry("preview", Color.SILVER),
+          // M8: links' landings and points, every anchor, a face being moved, a held anchor.
+          Map.entry("landing", Color.TEAL),
+          Map.entry("point", Color.fromRGB(255, 105, 180)),
+          Map.entry("figure", Color.GREEN),
+          Map.entry("archive", Color.fromRGB(255, 170, 0)),
+          Map.entry("plaque", Color.fromRGB(85, 170, 255)),
+          Map.entry("trophy", Color.fromRGB(255, 120, 200)),
+          Map.entry("egg", Color.fromRGB(255, 255, 85)),
+          Map.entry("face", Color.LIME),
+          Map.entry("ghost", Color.WHITE),
+          Map.entry("bad", Color.RED));
 
   private final Plugin plugin;
   private final NamespacedKey key;

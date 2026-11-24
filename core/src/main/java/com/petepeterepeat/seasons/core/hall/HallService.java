@@ -69,6 +69,7 @@ public final class HallService {
   private final ConfigHolder config;
   private final Function<String, Path> galleryFile;
   private Path hallFile;
+  private Path linksFile;
   private final Path backups;
   private final SerialWriter writer;
   private final Clock clock;
@@ -132,6 +133,8 @@ public final class HallService {
     this.galleryFile = galleryFile;
     this.hallFile =
         backups.resolveSibling(com.petepeterepeat.seasons.core.config.ConfigLoader.HALL);
+    this.linksFile =
+        backups.resolveSibling(com.petepeterepeat.seasons.core.config.ConfigLoader.LINKS);
     this.backups = backups;
     this.writer = writer;
     this.clock = clock;
@@ -195,6 +198,20 @@ public final class HallService {
     return config.get().gallery(id);
   }
 
+  /**
+   * A season's galleries a visitor can go to with {@code /hof <season>}: its {@code season}
+   * galleries, then its legacy ones, each kind by id. Legacy galleries take no part in assignment,
+   * locking or shortfalls (questions 281), but they are still somewhere to visit.
+   */
+  public List<Gallery> visitableGalleries(int season) {
+    return galleries().stream()
+        .filter(g -> g.kind() != Gallery.Kind.MUSEUM && g.season() == season)
+        .sorted(
+            java.util.Comparator.comparing((Gallery g) -> g.kind() != Gallery.Kind.SEASON)
+                .thenComparing(Gallery::id))
+        .toList();
+  }
+
   /** The galleries of one season, in id order. */
   public List<Gallery> seasonGalleries(int season) {
     return galleries().stream()
@@ -223,6 +240,12 @@ public final class HallService {
   /** Where hall.yml lives; beside the backups folder unless told otherwise. */
   public void hallFile(Path file) {
     this.hallFile = file;
+    this.linksFile = file.resolveSibling(com.petepeterepeat.seasons.core.config.ConfigLoader.LINKS);
+  }
+
+  /** Whether {@code links.yml} exists yet (M8): until it does, the upgrade hasn't run. */
+  public boolean linksFileExists() {
+    return java.nio.file.Files.exists(linksFile);
   }
 
   /** The Hall's own parts: the hub, the Hall spawn, the Hall's exits and links. */
@@ -313,18 +336,29 @@ public final class HallService {
     HallLayout before = layout();
     config.set(config.get().withHall(hall));
     Path file = hallFile;
+    Path links = linksFile;
     Path backupDir = backups.resolve("hall");
+    Path linksBackupDir = backups.resolve("links");
+    // hall.yml and links.yml are written only when their own parts change (M8), so an edit of
+    // links never rewrites hall.yml and its frozen 1.1 links stay as they were.
+    boolean hallChanged = !before.hallPartsEqual(hall);
+    boolean linksChanged = linksChanged(before, hall);
     return pending(
         new Undo.OfHall(before, hall),
         writer
             .submit(() -> {
-              HallFiles.write(file, backupDir, hall);
+              if (hallChanged) {
+                HallFiles.write(file, backupDir, hall);
+              }
+              if (linksChanged) {
+                LinksFiles.write(links, linksBackupDir, hall);
+              }
               return Boolean.TRUE;
             })
             .thenApply(done -> (Void) null)
             .whenComplete((done, failure) -> {
               if (failure != null) {
-                LOG.error("Can't write {}", file, failure);
+                LOG.error("Can't write {}", hallChanged ? file : links, failure);
               }
             }));
   }
@@ -450,15 +484,23 @@ public final class HallService {
         yield new UndoResult.Undone("galleries/" + id + ".yml", saved, before);
       }
       case Undo.OfHall(HallLayout before, HallLayout after) -> {
+        String name = linksChanged(before, after) ? "links.yml" : "hall.yml";
         if (!layout().equals(after)) {
-          yield new UndoResult.Changed("hall.yml");
+          yield new UndoResult.Changed(name);
         }
         undos.remove(undoKey(source));
         CompletableFuture<Void> saved = saveHall(before);
         unclaimed.removeLast();
-        yield new UndoResult.Undone("hall.yml", saved, Optional.empty());
+        yield new UndoResult.Undone(name, saved, Optional.empty());
       }
     };
+  }
+
+  /** Whether links.yml's parts differ between two layouts: links, points or the upgrade note. */
+  private static boolean linksChanged(HallLayout before, HallLayout after) {
+    return !before.links().equals(after.links())
+        || !before.points().equals(after.points())
+        || !before.upgrade().equals(after.upgrade());
   }
 
   /** Records a Hall edit in the audit log. */

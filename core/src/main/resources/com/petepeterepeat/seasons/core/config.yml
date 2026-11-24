@@ -136,6 +136,67 @@ hof:
   # Players in creative mode build anywhere in the Hall, as holders of seasons.hof.bypass do.
   creativeBuilds: true
 
+# Hall links (/hof link): blocks, areas and floating text that take players to the Hall, a season's
+# spawn, a named point or another link. The links themselves live in links.yml.
+links:
+  # After arriving by a link or /hof, step and area triggers wait this long. The trigger a player
+  # lands in never fires until they leave it, so 0s (off) is usually enough.
+  arrivalGrace: 0s
+  # Who may take a new link, by where it leads: everyone, op, or permission (seasons.link.use.<id>).
+  # /hof link access changes one link.
+  access:
+    # Links to the Hall spawn.
+    hall: everyone
+    # Links to a season's spawn.
+    seasonSpawn: everyone
+    # Every other link.
+    other: op
+  # Copying 1.1's links from hall.yml into links.yml, once, at the first start.
+  upgrade:
+    # Which copied block links keep firing when stood on: non-interactive (plates and plain blocks;
+    # buttons, signs and doors become click-only), plates-only, or all.
+    keepStepping: non-interactive
+  # The link editor: sneak-right-click a trigger as a link admin.
+  editor:
+    # Sneak-right-clicking a trigger opens the editor for link admins.
+    sneakClick: true
+    # dialog, or menu for a chest menu with typed answers.
+    ui: dialog
+  # The sign /hof link item gives.
+  item:
+    # The item given: a sign of any wood.
+    material: oak_sign
+    # Its name, MiniMessage.
+    name: "<gold>Hall of Fame sign</gold>"
+    # The four lines written on it when placed, MiniMessage.
+    lines: ["", "<gold><bold>Hall of Fame</bold></gold>", "<gray>right-click</gray>", ""]
+    # Whether the lines glow.
+    glowing: true
+  # Floating text triggers' defaults.
+  text:
+    # Text size, 0.25 to 4.
+    scale: 1.0
+    # center turns to face each viewer, vertical turns about the up axis, fixed doesn't.
+    billboard: center
+    # Background colour, #AARRGGBB.
+    background: "#40000000"
+    # A shadow under the letters.
+    shadow: true
+    # Lit at full brightness, so it shows at night.
+    fullBright: true
+  # /hof link send <targets> <link> from command blocks.
+  commandBlocks:
+    # Command blocks may run /hof link send.
+    enabled: true
+    # Which checks /hof link send applies by default: none (only locked land and the Intermission),
+    # entry (the link's access and /hof's checks but the bed), or full.
+    checks: entry
+    # Only players are moved; other entities a selector picks are left.
+    playersOnly: true
+  # The MiniMessage tags sign and floating text may use; every other tag, click and hover included,
+  # is stripped.
+  styleTags: [color, gradient, rainbow, decorations, reset, shadow_color]
+
 # Zones over the old world. The zones themselves live in each season's file and are drawn with
 # /season zone.
 zones:
@@ -179,6 +240,19 @@ wand:
     range: 48
     # How many boxes at most, nearest first.
     max: 64
+  # Moving a face of a box with the wand: left-click a box to take it with the face clicked; sneak
+  # and scroll moves that face by a step; drop (Q) cycles the steps.
+  nudge:
+    # The steps drop (Q) cycles through, in blocks.
+    steps: [1, 10]
+    # Swap-hands (F) applies an edited box, as /hof sel apply does.
+    swapHandsApplies: true
+  # Anchors drawn with the wand.
+  anchors:
+    # Every anchor gets a coloured marker and a label while the wand is held.
+    markers: true
+    # How near, in blocks, an anchor's label is shown.
+    labelRange: 12
 
 # Admin conveniences.
 admin:

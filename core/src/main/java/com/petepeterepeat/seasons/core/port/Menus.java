@@ -34,6 +34,53 @@ public interface Menus {
    */
   void openChoice(PlayerId viewer, Message title, List<Choice> choices, Chosen chosen);
 
+  /**
+   * Shows a form (M8): text, a choice and toggles to fill in, and buttons, as the game's dialog
+   * screen. A button's click tells {@code answered} which button and what was filled in, on the
+   * server thread. False if this platform or client can't show forms, when the caller falls back to
+   * a choice menu.
+   */
+  default boolean openForm(PlayerId viewer, Form form, Answered answered) {
+    return false;
+  }
+
+  /** A form: its title, lines of text, fields and buttons. */
+  record Form(Message title, List<Message> body, List<Field> fields, List<Button> buttons) {
+    public Form {
+      body = List.copyOf(body);
+      fields = List.copyOf(fields);
+      buttons = List.copyOf(buttons);
+    }
+  }
+
+  /** Something to fill in on a form. */
+  sealed interface Field {
+    String key();
+
+    record Text(String key, Message label, String initial, int maxLength) implements Field {}
+
+    record Choice(
+        String key, Message label, List<String> options, List<Message> labels, String initial)
+        implements Field {
+      public Choice {
+        options = List.copyOf(options);
+        labels = List.copyOf(labels);
+      }
+    }
+
+    record Toggle(String key, Message label, boolean initial) implements Field {}
+  }
+
+  /** A button on a form. */
+  record Button(String key, Message label) {}
+
+  /** A form's button clicked. */
+  @FunctionalInterface
+  interface Answered {
+    /** Which button, and each field's value by key: text, a choice's id, or true or false. */
+    void answered(String button, java.util.Map<String, String> values);
+  }
+
   /** Closes whatever menu a player has open, so they can type in chat. */
   void close(PlayerId viewer);
 

@@ -82,6 +82,7 @@ class AreasTest {
                     Position.of(OVERWORLD, 150, 70, 100),
                     Optional.of(new HallLayout.Target.Hall()),
                     Optional.of(Bounds.between(OVERWORLD, 150, 70, 100, 150, 74, 104))));
+    hall = hall.withFrozen(hall.links());
     Path file = dir.resolve("hall.yml");
     HallFiles.write(file, dir.resolve("backups"), hall);
 

@@ -8,7 +8,7 @@
 // leave back onto a pressure plate link doesn't take it again.
 import { assert } from '../lib/context.mjs'
 import { FLOOR, breakBlock, buildGallery, gameMode, use } from '../lib/hall.mjs'
-import { HALL_SPAWN, HUB, addLink, hallFile, inBox, markHub } from '../lib/hub.mjs'
+import { HALL_SPAWN, HUB, addLink, inBox, linksFile, markHub } from '../lib/hub.mjs'
 import { hof, middle, standAt, waitNear } from '../lib/visits.mjs'
 import { click } from '../lib/wand.mjs'
 import { BASE, INSIDE, SPAWN, drawBase, forceload, inBase } from '../lib/zones.mjs'
@@ -40,7 +40,7 @@ export default {
     await ctx.command(admin, `/hof link to s1 ${INSIDE.x} ${INSIDE.y} ${INSIDE.z}`, new RegExp(`^Link s1 now leads to ${INSIDE.x}, ${INSIDE.y}, ${INSIDE.z}\\.$`))
     await addLink(ctx, admin, 'plate', PLATE, 'season 3')
     await ctx.command(admin, '/hof link list', [/^Link s1 at 10, -60, 24: to 510, -60, 500$/, /^Link s3 at 10, -60, 22: to Season 3's spawn$/, /^Link plate at 10, -60, 28: to Season 3's spawn$/])
-    assert(hallFile(ctx).links?.s3?.to?.season === 3, `hall.yml has the links: ${JSON.stringify(hallFile(ctx))}`)
+    assert(linksFile(ctx).links?.s3?.to?.season === 3, `links.yml has the links: ${JSON.stringify(linksFile(ctx))}`)
 
     // Season 3 launches at SPAWN, with the base locked until Homecoming.
     // Season 3's spawn before the end: in the Intermission everyone stays in the Hall.

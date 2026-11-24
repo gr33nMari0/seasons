@@ -53,6 +53,15 @@ public interface Inventories {
    */
   boolean giveWand(PlayerId player, String item, Message name, Message lore);
 
+  /**
+   * Gives an online player link signs (M8): {@code count} of {@code item}, named and marked with
+   * the link's id, which the adapter raises {@code PlaceLinkItem} for when one is placed. Whatever
+   * doesn't fit is dropped at their feet.
+   */
+  default boolean giveLinkItem(PlayerId player, String item, Message name, String link, int count) {
+    return false;
+  }
+
   /** Whether an online player holds the Seasons wand in their main hand. */
   default boolean holdsWand(PlayerId player) {
     return false;

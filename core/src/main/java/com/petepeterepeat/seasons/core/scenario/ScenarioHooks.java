@@ -295,6 +295,34 @@ public final class ScenarioHooks implements CrashPoints {
             w.serverThread());
   }
 
+  private java.util.function.Function<PlayerId, java.util.Optional<String>> dialogOpen =
+      player -> java.util.Optional.empty();
+  private DialogAnswer dialogAnswer = (player, button, values) -> false;
+
+  /** Answers the form a player has open, as their click would (M8, the link editor). */
+  @FunctionalInterface
+  public interface DialogAnswer {
+    boolean answer(PlayerId player, String button, java.util.Map<String, String> values);
+  }
+
+  /** Connects the link editor's forms, for /scenario dialog. */
+  public void bindDialogs(
+      java.util.function.Function<PlayerId, java.util.Optional<String>> open, DialogAnswer answer) {
+    this.dialogOpen = open;
+    this.dialogAnswer = answer;
+  }
+
+  /** What the form a player has open is for, if they have one. */
+  public java.util.Optional<String> dialogOpen(PlayerId player) {
+    return dialogOpen.apply(player);
+  }
+
+  /** Clicks a button of the form a player has open; false if none is open. */
+  public boolean answerDialog(
+      PlayerId player, String button, java.util.Map<String, String> values) {
+    return dialogAnswer.answer(player, button, values);
+  }
+
   private Wiring wired() {
     Wiring w = wiring;
     if (w == null) {

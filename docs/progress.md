@@ -16,6 +16,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
 | M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page, #37), released as 1.2.0 | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
+| M8 Reliable links | Built on `m8-reliable-links` | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -495,6 +496,48 @@ Built:
 Different from the plan: the egg wall is checked by `ApiReferenceTest` rather than a scenario (a dragon kill by a player needs a full End fight), and AFK, shown from part 1's flag, by part 1's scenarios rather than a new one; a CORS refusal isn't a case of its own in `connect.spec.mjs`, since Playwright answers stubbed requests as CORS allows (it fails the fetch as no answer does); the site's tests run with `npm test` in their own CI job rather than a Gradle task.
 
 The public site's address is `seasonsmc.petepeterepeat.com` (`site/public/CNAME`). Needs the owner: switch the repository's Pages source to "GitHub Actions" (until then `pages.yml` fails at its deploy step), set the same custom domain in the Pages settings, and point a DNS-only `CNAME seasonsmc → gr33nMari0.github.io` at it in Cloudflare.
+
+## M8: reliable links
+
+**Links from anywhere to anywhere, the wand anywhere, anchors and boxes edited in place** (branch `m8-reliable-links`; plan in `docs/plans/m8-reliable-links.md`; readings in `docs/questions.md` 317 to 333; ADR 0003's M8 amendment). Each scenario was written before its code and failed first.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A77 A sign, a button, a door and a lever made links are taken only by a click, never by standing in, on or walking into them; the click is taken over; a plate fires underfoot; a one-block area fires on walking in; a `both` tile fires both ways | `a77-click-only-triggers.mjs` |
+| A78 Far from the Hall and in the Nether, the wand's menu makes a button a link to the Hall at once; a block put aside is taken by `/hof link add`; a trigger clicked with the wand makes no second link; `seasons.admin.hof` alone gets the menu | `a78-wand-anywhere.mjs`; unit: `WandTest#outsideTheHallTheMenuOffersLinks`, `#aPendingTriggerIsTakenByLinkAdd`, `#aTriggerOpensItsEditor` |
+| A79 Links from x y z, `~`, `here`, `sel` and a point to a spot, `here`, a point, a link's landing (beside its trigger), Season 3's spawn, the Hall, a gallery and `return`, each by `/hof link go`, and by their triggers | `a79-link-combinations.mjs` |
+| A80 A sign, a button and a doorway on one link; `--two-way` and the partner's trigger; arriving beside the other button, not on it; remove refused while paired, `unpair`, `pair`, `remove --both` | `a80-link-shapes.mjs` |
+| A81 Seasons 1 and 2's spawns recorded (Season 1's inside the locked base), Season 3 and 5 and the Hall refused; a two-way link to Season 1's spawn refused before Homecoming, taken after it, and back to the hub with no bed | `a81-past-season-spawns.mjs` |
+| A82 Link signs given, placed glowing with their lines as a trigger, clicked to the Hall; unbreakable for a visitor; a builder gets the sign back and the trigger goes; refused without `seasons.link.place` | `a82-link-items.mjs` |
+| A83 Points added, moved, listed, renamed, gone to and removed; rename rewrites links leading to it; removals refused while used, `--force`; `info` with name, triggers and access; lists by destination and nearness; undo; audited by id | `a83-links-crud.mjs` |
+| A84 The admin's sneak-click opens the editor and takes nothing; a visitor's takes the link; save changes destination, name and access (in links.yml and audited); lead here; a button after the node is gone refused | `a84-link-editor.mjs` (through `/scenario dialog`); unit: `WandTest#aTriggerOpensItsEditor` |
+| A85 Sign lines gold and bold, mixed colours, glowing without ink and dull again; a click tag stripped; a hand-written sign untouched; refused without `seasons.link.text.style` | `a85-link-text-style.mjs`; unit: `SelectionFacesTest#onlyStyleTagsSurvive` |
+| A86 A floating text clicked to its link; walking through and left clicks only once set; scale and a styled line; one text and one hitbox after a restart and `/hof reconcile` | `a86-floating-text-links.mjs` (two sessions); unit: `LinksMigrationTest#linkTextsAreDrawnOnce` |
+| A87 A command block's `@p`, `@a[distance=..5.5]` and `@e[type=pig]`; a hurt player refused into the Hall by default, sent with `--checks none`; a player without the node can't send | `a87-command-block-links.mjs` |
+| A88 The Hall and a season's spawn open to a plain player, a point link op-only; the link's own node, the wildcard and a group's node; `when played` | `a88-link-permissions.mjs` |
+| A89 A left-click takes the gallery's box with its east face; sneak-scrolls and a step of 10; apply once, undo; into the hub refused, cancel; expand, contract, shift; a link's area and a point's box | `a89-nudge-faces.mjs`; unit: `SelectionFacesTest` |
+| A90 The Hall spawn, a Hall exit, a gallery's entry and exit from the wand's menu on a block, and three of them from the selection; a visitor lands at the new spawn and leaves by the new exit | `a90-entries-exits-wand.mjs` |
+| A91 A 1.2 `hall.yml` with seven links copied once into `links.yml`, `hall.yml` byte for byte as it was, the startup line, buttons and signs click-only, plates, tiles and areas as before; the report, `trigger kind` and `done`; a visitor in the Hall across the restart goes home | `a91-links-upgrade.mjs` (two sessions); unit: `LinksMigrationTest` |
+| A92 `/hof 1` at a legacy gallery, "no entry yet" with the next step for an op, Season 7 has none, `/hof tp gallery`, still out of the draw | `a92-visit-legacy-gallery.mjs`; unit: `HubTest#aSeasonsLegacyGalleryIsVisitable`, `#aGalleryWithoutAnEntrySaysSo`, `#legacyGalleriesStayOutOfTheDraw` |
+| A93 A link edit leaves `hall.yml` alone, a hub edit keeps its frozen link; a frozen link changed as the previous jar would is reported by the check, imported, undone and forgotten; the 1.2 forms word for word, a stone tile firing underfoot; `seasons.admin.hof` alone runs link commands | `a93-links-downgrade.mjs` (two sessions); unit: `LinksMigrationTest#writesCarryTheFrozenLinksThroughWithNoSchemaVersionChange`, `#theCheckReportsLinksLeadingNowhereAndChangedOldLinks` |
+| A94 Labels for a cell's figure, archive, plaque, trophy and entry, a link's trigger and landing and a point; none for a visitor; the wand cell's line lists what it has; gone with the wand | `a94-anchor-markers.mjs` |
+| A95 A figure picked up, turned and put down, undone; the second of two archives moved, the first staying; outside and another cell refused; a left click puts one back; `cell anchors`, `anchor move` and `unanchor #1` | `a95-anchor-drag.mjs` |
+| A54, A61, A72 widened: their 1.1-form links work as before; A54 reads links.yml | `a54-links.mjs`, `a61-intermission-roam.mjs`, `a72-areas.mjs` |
+| A67, A68, m5-wand widened: the wand cell's line lists its anchors; the menu in a cell offers a link, and outside cells and the Hall a link to the Hall at once | `a67-wand-place.mjs`, `a68-outlines.mjs`, `m5-wand.mjs` |
+
+Built: `hall/HallLayout` (links with triggers, access, conditions, landings and pairs; points; `hall.yml`'s frozen links and the upgrade note), `LinksFiles` (`links.yml`), `LinkService` (destinations, landings, access, the trigger index by chunk, the upgrade), `LinkCommands` (the new grammar, triggers, pairs, points, signs, floating text, send, the upgrade commands), `LinkWorld` (link signs, a builder breaking a link block, floating texts drawn from `links.yml`, the editor on a sneak-click), `LinkEditor` (the form and its buttons), `LinkText` (style tags only), `BoxEdits` (nudging faces), `AnchorDrag` (moving anchors); `HallVisits` takes links by their triggers and check levels; `HallService` writes `hall.yml` and `links.yml` each only when their own parts change; the wand's link menu anywhere, Move and box picking; outlines for every anchor, trigger, landing, point, edited face and held anchor; `/season spawn record` and `clear [season]`; `/hof <season>` for legacy galleries; ports: `BlockInfo#interactable`, `World#writeSignLine`, `#glowSign`, `Displays#spawnLinkText`, `#spawnHitbox`, `Inventories#giveLinkItem`, `Menus#openForm`, `CommandSource#select`; intents `PlaceLinkItem`, `EditSign`, `HitDisplay`, `WandDrop`. On Paper: dialogs, interaction hitboxes, sign text, link signs, `Bukkit#selectEntities`, new permissions in `paper-plugin.yml`. Test plugin: `/scenario dialog`, `/scenario unpermit`; scenario servers allow command blocks.
+
+Different from the plan:
+
+- `hof.links.returnToLink` stays where it is rather than moving to `links.returnToLink` (questions 320); the arrival grace is off by default and links use `/hof`'s rate limit (321).
+- Copied plates and tripwire are `both`, not `step`: they fired on a click in 1.1 too (319).
+- A93 doesn't start the previous release's jar: it checks what that jar reads (`hall.yml` left as it was, its links carried through Hall edits, no schema bump) and simulates its edit; a two-jar scenario needs the released jar on the scenario servers, which they don't fetch.
+- Exits don't take trigger kinds, since a kind in `hall.yml` is a key the previous Seasons can't read (326); a link to `return` is a clickable exit.
+- The wand's Move waits for a click rather than timing out, and doesn't carry the block under an anchor or drag gate corners; sneak-scrolling a floating text's size, nudging zone boxes and the anchors' facing arrows were left for later (330 to 332). The unused settings for them aren't in config.yml.
+- Per-link permission nodes aren't registered one by one with the server; the static ones are declared in `paper-plugin.yml` (322). A88 checks access through Bukkit attachments, as LuckPerms reaches plugins, not with LuckPerms installed.
+- A43's widening (200 links and 600 triggers) wasn't added: triggers are looked up by chunk (`LinkService#blockAt`), areas and texts scanned as before.
 
 ## On hold
 

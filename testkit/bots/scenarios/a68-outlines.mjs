@@ -43,7 +43,7 @@ export default {
 
       // The wand's cell, named on the action bar; a half selection with its corner.
       await ctx.command(admin, '/hof cell new season-2 c3', /^Created cell c3 in gallery season-2\.$/)
-      await ctx.waitForMessages(admin, /^Wand \(block mode\): next selection sets season-2:c3's bounds$/)
+      await ctx.waitForMessages(admin, /^Wand \(block mode\): next selection sets season-2:c3's bounds( · figure .*)?$/)
       const half = outlines(admin).edges
       await click(ctx, admin, me, { x: 32, y: FLOOR - 1, z: 22 }, { left: true, sneak: true })
       await ctx.eventually(async () => assert(outlines(admin).edges >= half + 12, `a box for the half selection: ${JSON.stringify(outlines(admin))}`))

@@ -31,10 +31,13 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.curate.CurateFiles;
 import com.petepeterepeat.seasons.core.curate.Curation;
 import com.petepeterepeat.seasons.core.dragon.Dragon;
+import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.AnchorDrag;
+import com.petepeterepeat.seasons.core.hall.BoxEdits;
 import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
 import com.petepeterepeat.seasons.core.hall.CellFixes;
@@ -52,6 +55,10 @@ import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.LinkCommands;
+import com.petepeterepeat.seasons.core.hall.LinkEditor;
+import com.petepeterepeat.seasons.core.hall.LinkService;
+import com.petepeterepeat.seasons.core.hall.LinkWorld;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.PlaqueScale;
@@ -158,6 +165,8 @@ public final class Seasons implements SeasonsApi {
 
   private @Nullable ScheduledTask flusher;
   private @Nullable HallService hallService;
+  private @Nullable LinkService linkService;
+  private @Nullable LinkWorld linkWorld;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
   private @Nullable HallRenderer hallRenderer;
@@ -289,6 +298,11 @@ public final class Seasons implements SeasonsApi {
     HallVisits visiting =
         new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
     visits = visiting;
+    LinkService linking = new LinkService(platform, config, halls, players, entry::spawn, clock);
+    linkService = linking;
+    visiting.bindLinks(linking);
+    LinkWorld linkWorld = new LinkWorld(platform, config, halls, visiting);
+    this.linkWorld = linkWorld;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
@@ -509,6 +523,19 @@ public final class Seasons implements SeasonsApi {
       gates.start();
     }
     visiting.bind(seasons::state);
+    linking.bind(seasons::state);
+    // 1.1's links copied into links.yml, once (M8, Upgrading existing setups).
+    var _ =
+        linking
+            .upgrade()
+            .thenAccept(copied ->
+                copied.ifPresent(counts ->
+                    LOG.info(
+                        "Links upgraded: {} copied to links.yml; {} are now click-only (buttons,"
+                            + " signs and doors); hall.yml kept as it was. /hof link upgrade report"
+                            + " lists them.",
+                        counts[0],
+                        counts[1])));
     visiting.bindZones(zoning::lockedFor);
     visiting.bindHold(hold::isHeld);
     visiting.start();
@@ -604,6 +631,21 @@ public final class Seasons implements SeasonsApi {
               }
             },
             Arguments.NONE));
+    // Link signs and link blocks (M8) are placed and broken under the Hall's and the zones' rules:
+    // the zones are asked even when the Hall lets a builder through, as locked land is theirs.
+    linkWorld.bindRules(intent -> {
+      Optional<Decision> ruled =
+          visiting.decide(intent).or(() -> halls.decide(intent)).or(() -> hallRules.decide(intent));
+      if (ruled.isPresent()
+          && (ruled.get() instanceof Decision.Deny || ruled.get() instanceof Decision.Redirect)) {
+        return ruled;
+      }
+      Optional<Decision> zoned = zoning.decide(intent);
+      return zoned.isPresent()
+              && (zoned.get() instanceof Decision.Deny || zoned.get() instanceof Decision.Redirect)
+          ? zoned
+          : ruled.or(() -> zoned);
+    });
     platform
         .events()
         .handle(
@@ -616,6 +658,7 @@ public final class Seasons implements SeasonsApi {
                         .decide(intent)
                         .or(() ->
                             plaqueScale == null ? Optional.empty() : plaqueScale.decide(intent))
+                        .or(() -> linkWorld.decide(intent))
                         .or(() -> visiting.decide(intent))
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
@@ -692,7 +735,6 @@ public final class Seasons implements SeasonsApi {
             wanding,
             stamper,
             help);
-    wanding.bindLinks(hallCommands::addLink);
     CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
     PlaqueScale plaques = new PlaqueScale(platform, config, halls, cellEdits);
     plaqueScale = plaques;
@@ -701,10 +743,36 @@ public final class Seasons implements SeasonsApi {
     outlines = outlining;
     hallCommands.bindOutlines(outlining);
     outlining.start();
+    LinkCommands linkCommands =
+        new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
+    hallCommands.bindLinks(linkCommands);
+    wanding.bindLinks(linkCommands, hallCommands);
+    BoxEdits boxEdits = new BoxEdits(platform, config, halls, wanding);
+    boxEdits.bindCommands(hallCommands);
+    AnchorDrag anchorDrag = new AnchorDrag(platform, config, halls, cellEdits);
+    wanding.bindEdits(boxEdits, anchorDrag);
+    outlining.bindPreviews(player -> {
+      List<com.petepeterepeat.seasons.core.port.Displays.Outline> all =
+          new ArrayList<>(rows.previews(player));
+      all.addAll(boxEdits.outlines(player));
+      all.addAll(anchorDrag.outlines(player));
+      return all;
+    });
+    LinkEditor linkEditor = new LinkEditor(platform, config, halls, linkCommands, visiting);
+    linkCommands.bindEditor(linkEditor::open);
+    linkWorld.bindEditor(linkEditor::open);
+    hooks.ifPresent(h -> h.bindDialogs(linkEditor::openFor, linkEditor::answerFor));
+    linkWorld.start();
     CommandNode hof =
         hallCommands
             .root()
-            .merge(new HallLists(platform, config, halls, players, cellEdits).root())
+            .merge(
+                new HallLists(platform, config, halls, players, cellEdits)
+                    .bindLinks(linkCommands)
+                    .root())
+            .merge(linkCommands.root())
+            .merge(boxEdits.root())
+            .merge(anchorDrag.root())
             .merge(
                 new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
                     .root())
@@ -855,6 +923,14 @@ public final class Seasons implements SeasonsApi {
           SeasonCommands.recordsAhead(snapshot.messages(), service.state().get(), store)
               .forEach(line -> platform.players().sendMessage(player.id(), line));
         }
+        // Links copied from hall.yml and not yet reviewed (M8, Upgrading existing setups).
+        if (platform.players().find(player.id()).isPresent()
+            && snapshot.hall().upgrade().filter(u -> !u.done() && !u.before().isEmpty()).isPresent()
+            && platform.permissions().has(player.id(), LinkService.PERMISSION_ADMIN)) {
+          platform
+              .players()
+              .sendMessage(player.id(), snapshot.messages().get("hof.link.upgrade.reminder"));
+        }
         if (platform.players().find(player.id()).isPresent()
             && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {
@@ -989,6 +1065,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (hallService != null) {
       hallService.stop();
+      if (linkWorld != null) {
+        linkWorld.stop();
+      }
     }
     if (visits != null) {
       visits.stop();
@@ -1168,6 +1247,16 @@ public final class Seasons implements SeasonsApi {
   /** Help and hints over every registered command, for tests. */
   Optional<CommandHelp> commandHelp() {
     return Optional.ofNullable(commandHelp);
+  }
+
+  /** The link rules, once started, for tests. */
+  Optional<LinkService> links() {
+    return Optional.ofNullable(linkService);
+  }
+
+  /** The Hall, once started, for tests. */
+  Optional<HallService> hall() {
+    return Optional.ofNullable(hallService);
   }
 
   /** Player records, once started. */
