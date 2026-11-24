@@ -40,7 +40,11 @@ final class PaperWorld implements World {
     Block block = world.get().getBlockAt(position.blockX(), position.blockY(), position.blockZ());
     Material type = block.getType();
     return new BlockInfo(
-        type.getKey().asString(), block.isSolid(), block.isPassable(), isBed(type));
+        type.getKey().asString(),
+        block.isSolid(),
+        block.isPassable(),
+        isBed(type),
+        PaperEvents.isInteractable(block));
   }
 
   /** Every kind of bed, straw beds included. */

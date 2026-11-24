@@ -78,8 +78,18 @@ public final class HallFiles {
       links.put(
           id, new HallLayout.Link(id, block, target(link.node("to"), at, path + ".to"), area));
     }
+    // hall.yml's links are 1.1's: they become links.yml's at the upgrade, and stay here as they
+    // were, frozen, so the previous Seasons still reads them (M8).
     return new HallLayout(
-        dimension, hub, spawn, exits, links, new Gallery.Areas(spawnArea, exitAreas));
+        dimension,
+        hub,
+        spawn,
+        exits,
+        links,
+        new Gallery.Areas(spawnArea, exitAreas),
+        Map.of(),
+        links,
+        Optional.empty());
   }
 
   private static Optional<HallLayout.Target> target(
@@ -126,7 +136,8 @@ public final class HallFiles {
       GalleryFiles.setPoint(node.node("spawn"), hall.spawn().get(), hall.areas().entry());
     }
     GalleryFiles.writeExits(node.node("exits"), hall.exits(), hall.areas().exits());
-    for (HallLayout.Link link : hall.links().values()) {
+    // Only the frozen 1.1 links, exactly as they were read: links.yml holds the live ones (M8).
+    for (HallLayout.Link link : hall.frozen().values()) {
       ConfigurationNode at = node.node("links", link.id());
       if (!link.block().dimension().equals(hall.dimension())) {
         at.node("dimension").set(link.block().dimension());
@@ -160,6 +171,8 @@ public final class HallFiles {
         }
         GalleryFiles.setPoint(node, at);
       }
+      // Frozen links only ever hold 1.1's destinations; the rest are never written here.
+      default -> node.set(null);
     }
   }
 }

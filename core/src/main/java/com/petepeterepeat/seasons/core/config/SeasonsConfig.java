@@ -27,6 +27,9 @@ public record SeasonsConfig(
     @Comment("Season firsts: the first player each season to do or find something.") Firsts firsts,
     @Comment("Visiting the Hall of Fame with /hof.") Hof hof,
     @Comment(
+            "Hall links (/hof link): blocks, areas and floating text that take players to the Hall, a season's spawn, a named point or another link. The links themselves live in links.yml.")
+        HallLinks links,
+    @Comment(
             "Zones over the old world. The zones themselves live in each season's file and are drawn with /season zone.")
         Zones zones,
     @Comment("The ender dragon and its egg.") Dragon dragon,
@@ -282,7 +285,46 @@ public record SeasonsConfig(
           String item,
       @Comment(
               "The Hall's parts outlined for an admin alone while they hold the wand, or after /hof show on.")
-          Outlines outlines) {
+          Outlines outlines,
+      @Comment(
+              "Moving a face of a box with the wand: sneak and scroll moves the face looked at by a step; drop (Q) cycles the steps.")
+          Nudge nudge,
+      @Comment("Anchors drawn and moved with the wand.") Anchors anchors) {
+    /**
+     * Nudging a box's faces.
+     *
+     * @param steps the steps drop (Q) cycles through
+     * @param swapHandsApplies whether swap-hands (F) applies an edited box
+     */
+    @ConfigSerializable
+    public record Nudge(
+        @Comment("The steps drop (Q) cycles through, in blocks.") List<Integer> steps,
+        @Comment("Swap-hands (F) applies an edited box, as /hof sel apply does.")
+            boolean swapHandsApplies) {
+      public Nudge {
+        steps = List.copyOf(steps);
+      }
+    }
+
+    /**
+     * Anchor markers and dragging.
+     *
+     * @param markers whether every anchor gets a marker and label
+     * @param labelRange how near a marker's label is shown
+     * @param holdTimeout how long a picked-up anchor waits for a move before going back
+     * @param carryBlocks whether swap-hands while holding can carry an empty block with its anchor
+     */
+    @ConfigSerializable
+    public record Anchors(
+        @Comment("Every anchor gets a coloured marker and a label while the wand is held.")
+            boolean markers,
+        @Comment("How near, in blocks, an anchor's label is shown.") int labelRange,
+        @Comment("How long a picked-up anchor waits without a move before it goes back.")
+            Duration holdTimeout,
+        @Comment(
+                "Swap-hands while holding an archive or plaque anchor carries its block too, when the block is empty.")
+            boolean carryBlocks) {}
+
     /**
      * The outlines.
      *
@@ -293,6 +335,94 @@ public record SeasonsConfig(
     public record Outlines(
         @Comment("How far away a box is still drawn, in blocks.") int range,
         @Comment("How many boxes at most, nearest first.") int max) {}
+  }
+
+  /**
+   * Hall links (M8).
+   *
+   * @param arrivalGrace how long after arriving step and area triggers stay off
+   * @param access who may take a new link, by where it leads
+   * @param upgrade how 1.1's links are copied into links.yml
+   * @param editor the link editor
+   * @param item the sign {@code /hof link item} gives
+   * @param text floating text triggers' defaults
+   * @param commandBlocks {@code /hof link send} from command blocks
+   * @param styleTags the MiniMessage tags link text may use
+   */
+  @ConfigSerializable
+  public record HallLinks(
+      @Comment(
+              "After arriving by a link or /hof, step and area triggers wait this long. The trigger a player lands in never fires until they leave it, so 0s (off) is usually enough.")
+          Duration arrivalGrace,
+      @Comment(
+              "Who may take a new link, by where it leads: everyone, op, or permission (seasons.link.use.<id>). /hof link access changes one link.")
+          Access access,
+      @Comment("Copying 1.1's links from hall.yml into links.yml, once, at the first start.")
+          Upgrade upgrade,
+      @Comment("The link editor: sneak-right-click a trigger as a link admin.") Editor editor,
+      @Comment("The sign /hof link item gives.") Item item,
+      @Comment("Floating text triggers' defaults.") Text text,
+      @Comment("/hof link send <targets> <link> from command blocks.") CommandBlocks commandBlocks,
+      @Comment(
+              "The MiniMessage tags sign and floating text may use; every other tag, click and hover included, is stripped.")
+          List<String> styleTags) {
+    public HallLinks {
+      styleTags = List.copyOf(styleTags);
+    }
+
+    /** Who may take a new link, by where it leads. */
+    @ConfigSerializable
+    public record Access(
+        @Comment("Links to the Hall spawn.") String hall,
+        @Comment("Links to a season's spawn.") String seasonSpawn,
+        @Comment("Every other link.") String other) {}
+
+    /** The upgrade from 1.1. */
+    @ConfigSerializable
+    public record Upgrade(
+        @Comment(
+                "Which copied block links keep firing when stood on: non-interactive (plates and plain blocks; buttons, signs and doors become click-only), plates-only, or all.")
+            String keepStepping) {}
+
+    /** The editor. */
+    @ConfigSerializable
+    public record Editor(
+        @Comment("Sneak-right-clicking a trigger opens the editor for link admins.")
+            boolean sneakClick,
+        @Comment("dialog, or menu for a chest menu with typed answers.") String ui) {}
+
+    /** The link sign. */
+    @ConfigSerializable
+    public record Item(
+        @Comment("The item given: a sign of any wood.") String material,
+        @Comment("Its name, MiniMessage.") String name,
+        @Comment("The four lines written on it when placed, MiniMessage.") List<String> lines,
+        @Comment("Whether the lines glow.") boolean glowing) {
+      public Item {
+        lines = List.copyOf(lines);
+      }
+    }
+
+    /** Floating text. */
+    @ConfigSerializable
+    public record Text(
+        @Comment("Text size, 0.25 to 4.") double scale,
+        @Comment(
+                "center turns to face each viewer, vertical turns about the up axis, fixed doesn't.")
+            String billboard,
+        @Comment("Background colour, #AARRGGBB.") String background,
+        @Comment("A shadow under the letters.") boolean shadow,
+        @Comment("Lit at full brightness, so it shows at night.") boolean fullBright) {}
+
+    /** Command blocks. */
+    @ConfigSerializable
+    public record CommandBlocks(
+        @Comment("Command blocks may run /hof link send.") boolean enabled,
+        @Comment(
+                "Which checks /hof link send applies by default: none (only locked land and the Intermission), entry (the link's access and /hof's checks but the bed), or full.")
+            String checks,
+        @Comment("Only players are moved; other entities a selector picks are left.")
+            boolean playersOnly) {}
   }
 
   /**

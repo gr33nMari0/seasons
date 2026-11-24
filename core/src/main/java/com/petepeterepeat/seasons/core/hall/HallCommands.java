@@ -1080,7 +1080,14 @@ public final class HallCommands {
         return;
       }
     }
-    HallLayout.Link link = new HallLayout.Link(id, block, to);
+    // The 1.1 form gives the trigger the upgrade would (M8): a button or sign is clicked, a plate
+    // pressed, and any other block both, as 1.1's links fired.
+    HallLayout.BlockKind kind =
+        LinkService.upgradedKind(
+            platform.world().block(block), config.get().config().links().upgrade().keepStepping());
+    HallLayout.Link link =
+        new HallLayout.Link(id, block, to)
+            .withTriggers(List.of(new HallLayout.Trigger.OnBlock(block, kind)));
     saved(source, hall.saveHall(layout.withLink(link)), added(link));
   }
 
@@ -1094,12 +1101,7 @@ public final class HallCommands {
 
   /** Where a link leads, as admins read it. */
   private String describe(HallLayout.Target to) {
-    return switch (to) {
-      case HallLayout.Target.Hall() -> messages().text("hof.link.to-hall");
-      case HallLayout.Target.SeasonSpawn(int season) ->
-          messages().text("hof.link.to-season", "season", Integer.toString(season));
-      case HallLayout.Target.At(Position at) -> CellEdits.corner(at);
-    };
+    return LinkService.describe(messages(), to);
   }
 
   void linkTo(CommandSource source, Arguments arguments) {

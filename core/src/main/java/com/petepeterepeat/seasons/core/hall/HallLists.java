@@ -364,13 +364,7 @@ public final class HallLists {
     if (link.to().isEmpty()) {
       return messages().get("hof.link.line-nowhere", where);
     }
-    String to =
-        switch (link.to().get()) {
-          case HallLayout.Target.Hall() -> messages().text("hof.link.to-hall");
-          case HallLayout.Target.SeasonSpawn(int season) ->
-              messages().text("hof.link.to-season", "season", Integer.toString(season));
-          case HallLayout.Target.At(Position spot) -> CellEdits.corner(spot);
-        };
+    String to = LinkService.describe(messages(), link.to().get());
     String[] all = java.util.Arrays.copyOf(where, where.length + 2);
     all[where.length] = "to";
     all[where.length + 1] = to;

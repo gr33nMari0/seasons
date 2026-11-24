@@ -52,6 +52,7 @@ import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.LinkService;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.PlaqueScale;
@@ -158,6 +159,7 @@ public final class Seasons implements SeasonsApi {
 
   private @Nullable ScheduledTask flusher;
   private @Nullable HallService hallService;
+  private @Nullable LinkService linkService;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
   private @Nullable HallRenderer hallRenderer;
@@ -289,6 +291,9 @@ public final class Seasons implements SeasonsApi {
     HallVisits visiting =
         new HallVisits(platform, config, halls, hallAudit, players, immunity, clock, entry::spawn);
     visits = visiting;
+    LinkService linking = new LinkService(platform, config, halls, players, entry::spawn, clock);
+    linkService = linking;
+    visiting.bindLinks(linking);
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
@@ -509,6 +514,19 @@ public final class Seasons implements SeasonsApi {
       gates.start();
     }
     visiting.bind(seasons::state);
+    linking.bind(seasons::state);
+    // 1.1's links copied into links.yml, once (M8, Upgrading existing setups).
+    var _ =
+        linking
+            .upgrade()
+            .thenAccept(copied ->
+                copied.ifPresent(counts ->
+                    LOG.info(
+                        "Links upgraded: {} copied to links.yml; {} are now click-only (buttons,"
+                            + " signs and doors); hall.yml kept as it was. /hof link upgrade report"
+                            + " lists them.",
+                        counts[0],
+                        counts[1])));
     visiting.bindZones(zoning::lockedFor);
     visiting.bindHold(hold::isHeld);
     visiting.start();
@@ -1168,6 +1186,11 @@ public final class Seasons implements SeasonsApi {
   /** Help and hints over every registered command, for tests. */
   Optional<CommandHelp> commandHelp() {
     return Optional.ofNullable(commandHelp);
+  }
+
+  /** The link rules, once started, for tests. */
+  Optional<LinkService> links() {
+    return Optional.ofNullable(linkService);
   }
 
   /** The Hall, once started, for tests. */

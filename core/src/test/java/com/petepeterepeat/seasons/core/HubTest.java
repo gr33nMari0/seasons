@@ -223,6 +223,8 @@ class HubTest {
                         new HallLayout.Target.At(new Position(OVERWORLD, 120, 70, -300, 90f, 0f)))))
             .withLink(
                 new HallLayout.Link("none", Position.of(OVERWORLD, 3, 256, 6), Optional.empty()));
+    // hall.yml keeps 1.1's links, frozen; they read back as the links too until links.yml exists.
+    hall = hall.withFrozen(hall.links());
     Path file = dir.resolve("hall-copy.yml");
     HallFiles.write(file, dir.resolve("backups"), hall);
 
@@ -336,7 +338,7 @@ class HubTest {
         .containsExactly("The block at -5, 64, 5 is already link s3.");
     assertThat(hof("/hof link to spot 300 64 300 90"))
         .containsExactly("Link spot now leads to 300, 64, 300.");
-    assertThat(Files.readString(dir.resolve("world/seasons/hall.yml"))).contains("s3", "home");
+    assertThat(Files.readString(dir.resolve("world/seasons/links.yml"))).contains("s3", "home");
 
     // The link to the Hall: no bed, and /hof leave goes back to it.
     fake.player(alex).position = Position.of(OVERWORLD, 201.5, 64, 200.5);

@@ -30,6 +30,13 @@ export function hallFile (ctx) {
   return readYaml(ctx.readFile(HALL_FILE))
 }
 
+export const LINKS_FILE = `${WORLD}/links.yml`
+
+/** What links.yml says, as plain objects (M8: the links and named points). */
+export function linksFile (ctx) {
+  return readYaml(ctx.readFile(LINKS_FILE))
+}
+
 /** Whether a position is inside a box, as Seasons counts blocks. */
 export function inBox (box, at) {
   const x = Math.floor(at.x)

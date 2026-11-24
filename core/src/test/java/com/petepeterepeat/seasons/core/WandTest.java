@@ -355,7 +355,7 @@ class WandTest {
         .contains(
             "Link l1 at 30, 63, 15 leads nowhere yet: stand where it should lead and run /hof link"
                 + " to l1.");
-    assertThat(Files.readString(dir.resolve("world/seasons/hall.yml"))).contains("l1");
+    assertThat(Files.readString(dir.resolve("world/seasons/links.yml"))).contains("l1");
 
     // The floor of the doorway beside c1's east side: a gate corner in front of it.
     click(9, 63, 4, "up", false, false);

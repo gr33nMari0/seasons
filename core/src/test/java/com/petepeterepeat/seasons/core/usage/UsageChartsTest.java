@@ -70,6 +70,7 @@ class UsageChartsTest {
         config.pets(),
         config.firsts(),
         config.hof(),
+        config.links(),
         config.zones(),
         config.dragon(),
         config.deaths(),

@@ -6,6 +6,7 @@ import com.petepeterepeat.seasons.core.hall.GalleryFiles;
 import com.petepeterepeat.seasons.core.hall.GalleryRules;
 import com.petepeterepeat.seasons.core.hall.HallFiles;
 import com.petepeterepeat.seasons.core.hall.HallLayout;
+import com.petepeterepeat.seasons.core.hall.LinksFiles;
 import com.petepeterepeat.seasons.core.map.Waypoints;
 import com.petepeterepeat.seasons.core.message.Messages;
 import com.petepeterepeat.seasons.core.port.Position;
@@ -56,6 +57,7 @@ public final class ConfigLoader {
   public static final String SECRETS = "secrets.yml";
   public static final String MARKERS = "markers.yml";
   public static final String HALL = "hall.yml";
+  public static final String LINKS = "links.yml";
   private static final String SECRETS_TEMPLATE = "secrets.template.yml";
   public static final String DISCORD_WEBHOOK_ENV = "SEASONS_DISCORD_WEBHOOK";
   public static final String ADMIN_WEBHOOK_ENV = "SEASONS_ADMIN_WEBHOOK";
@@ -75,6 +77,7 @@ public final class ConfigLoader {
   private final Path galleriesDirectory;
   private final Path markersFile;
   private final Path hallFile;
+  private final Path linksFile;
   private final Map<String, String> environment;
   private final Predicate<String> dimensionExists;
   private final Predicate<String> isItem;
@@ -124,6 +127,7 @@ public final class ConfigLoader {
     this.galleriesDirectory = worldDataDirectory.resolve("galleries");
     this.markersFile = worldDataDirectory.resolve(MARKERS);
     this.hallFile = worldDataDirectory.resolve(HALL);
+    this.linksFile = worldDataDirectory.resolve(LINKS);
     this.environment = Map.copyOf(environment);
     this.dimensionExists = dimensionExists;
   }
@@ -170,6 +174,11 @@ public final class ConfigLoader {
   /** {@code <world>/seasons/hall.yml}, the hub, the Hall spawn, exits and links. */
   public Path hallFile() {
     return hallFile;
+  }
+
+  /** {@code <world>/seasons/links.yml}, the links and named points (M8). */
+  public Path linksFile() {
+    return linksFile;
   }
 
   /** {@code plugins/Seasons/config.yml}. */
@@ -259,15 +268,32 @@ public final class ConfigLoader {
    * with the galleries, gives none and its problems go in {@code problems} (questions 243).
    */
   private HallLayout loadHall(Collection<Gallery> galleries, List<ConfigProblem> problems) {
-    if (Files.notExists(hallFile)) {
+    if (Files.notExists(hallFile) && Files.notExists(linksFile)) {
       return HallLayout.NONE;
     }
+    String file = HALL;
     try {
-      ConfigurationNode node = yaml(hallFile).load();
-      if (!checkSchema(HALL, node, problems)) {
-        return HallLayout.NONE;
+      HallLayout hall = HallLayout.NONE;
+      if (Files.exists(hallFile)) {
+        ConfigurationNode node = yaml(hallFile).load();
+        if (!checkSchema(HALL, node, problems)) {
+          return HallLayout.NONE;
+        }
+        hall = HallFiles.read(node);
       }
-      HallLayout hall = HallFiles.read(node);
+      // links.yml, once there is one, holds the links; until then hall.yml's 1.1 links are used
+      // as they were until the upgrade copies them (M8).
+      if (Files.exists(linksFile)) {
+        file = LINKS;
+        ConfigurationNode node = yaml(linksFile).load();
+        if (!checkSchema(LINKS, node, problems)) {
+          return HallLayout.NONE;
+        }
+        LinksFiles.Contents links = LinksFiles.read(node, hall.dimension());
+        hall =
+            hall.withLinks(links.links()).withPoints(links.points()).withUpgrade(links.upgrade());
+      }
+      file = HALL;
       List<GalleryRules.Problem> broken = GalleryRules.check(hall, galleries);
       if (broken.isEmpty()) {
         return hall;
@@ -276,11 +302,11 @@ public final class ConfigLoader {
         problems.add(ConfigProblem.atPath(HALL, problem.path(), problem.message()));
       }
     } catch (GalleryFiles.Invalid e) {
-      problems.add(ConfigProblem.atPath(HALL, e.path(), Objects.requireNonNull(e.getMessage())));
+      problems.add(ConfigProblem.atPath(file, e.path(), Objects.requireNonNull(e.getMessage())));
     } catch (ParsingException e) {
-      problems.add(syntax(HALL, e));
+      problems.add(syntax(file, e));
     } catch (IOException e) {
-      problems.add(ConfigProblem.inFile(HALL, String.valueOf(e.getMessage())));
+      problems.add(ConfigProblem.inFile(file, String.valueOf(e.getMessage())));
     }
     return HallLayout.NONE;
   }

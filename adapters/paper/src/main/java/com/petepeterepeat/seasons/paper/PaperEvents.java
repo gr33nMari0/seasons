@@ -895,7 +895,7 @@ final class PaperEvents implements Events, Listener {
    * Whether right-clicking a block does something, as a door, a lever or a chest does. Paper's own
    * {@code isInteractable} is deprecated as unreliable, so this reads the block's kind instead.
    */
-  private static boolean isInteractable(Block block) {
+  static boolean isInteractable(Block block) {
     BlockData data = block.getBlockData();
     return block.getState(false) instanceof TileState
         || data instanceof Openable

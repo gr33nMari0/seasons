@@ -113,6 +113,39 @@ Visiting the Hall of Fame with /hof.
 | `hof.links.returnToLink` | `true` | /hof leave after a link to the Hall goes back to that link. |
 | `hof.creativeBuilds` | `true` | Players in creative mode build anywhere in the Hall, as holders of seasons.hof.bypass do. |
 
+### `links`
+
+Hall links (/hof link): blocks, areas and floating text that take players to the Hall, a season's spawn, a named point or another link. The links themselves live in links.yml.
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `links.arrivalGrace` | `0s` | After arriving by a link or /hof, step and area triggers wait this long. The trigger a player lands in never fires until they leave it, so 0s (off) is usually enough. |
+| `links.access` | | Who may take a new link, by where it leads: everyone, op, or permission (seasons.link.use.<id>). /hof link access changes one link. |
+| `links.access.hall` | `everyone` | Links to the Hall spawn. |
+| `links.access.seasonSpawn` | `everyone` | Links to a season's spawn. |
+| `links.access.other` | `op` | Every other link. |
+| `links.upgrade` | | Copying 1.1's links from hall.yml into links.yml, once, at the first start. |
+| `links.upgrade.keepStepping` | `non-interactive` | Which copied block links keep firing when stood on: non-interactive (plates and plain blocks; buttons, signs and doors become click-only), plates-only, or all. |
+| `links.editor` | | The link editor: sneak-right-click a trigger as a link admin. |
+| `links.editor.sneakClick` | `true` | Sneak-right-clicking a trigger opens the editor for link admins. |
+| `links.editor.ui` | `dialog` | dialog, or menu for a chest menu with typed answers. |
+| `links.item` | | The sign /hof link item gives. |
+| `links.item.material` | `oak_sign` | The item given: a sign of any wood. |
+| `links.item.name` | `"<gold>Hall of Fame sign</gold>"` | Its name, MiniMessage. |
+| `links.item.lines` | `["", "<gold><bold>Hall of Fame</bold></gold>", "<gray>right-click</gray>", ""]` | The four lines written on it when placed, MiniMessage. |
+| `links.item.glowing` | `true` | Whether the lines glow. |
+| `links.text` | | Floating text triggers' defaults. |
+| `links.text.scale` | `1.0` | Text size, 0.25 to 4. |
+| `links.text.billboard` | `center` | center turns to face each viewer, vertical turns about the up axis, fixed doesn't. |
+| `links.text.background` | `"#40000000"` | Background colour, #AARRGGBB. |
+| `links.text.shadow` | `true` | A shadow under the letters. |
+| `links.text.fullBright` | `true` | Lit at full brightness, so it shows at night. |
+| `links.commandBlocks` | | /hof link send <targets> <link> from command blocks. |
+| `links.commandBlocks.enabled` | `true` | Command blocks may run /hof link send. |
+| `links.commandBlocks.checks` | `entry` | Which checks /hof link send applies by default: none (only locked land and the Intermission), entry (the link's access and /hof's checks but the bed), or full. |
+| `links.commandBlocks.playersOnly` | `true` | Only players are moved; other entities a selector picks are left. |
+| `links.styleTags` | `[color, gradient, rainbow, decorations, reset, shadow_color]` | The MiniMessage tags sign and floating text may use; every other tag, click and hover included, is stripped. |
+
 ### `zones`
 
 Zones over the old world. The zones themselves live in each season's file and are drawn with /season zone.
@@ -157,6 +190,14 @@ The Hall admins' wand (/hof wand).
 | `wand.outlines` | | The Hall's parts outlined for an admin alone while they hold the wand, or after /hof show on. |
 | `wand.outlines.range` | `48` | How far away a box is still drawn, in blocks. |
 | `wand.outlines.max` | `64` | How many boxes at most, nearest first. |
+| `wand.nudge` | | Moving a face of a box with the wand: sneak and scroll moves the face looked at by a step; drop (Q) cycles the steps. |
+| `wand.nudge.steps` | `[1, 10]` | The steps drop (Q) cycles through, in blocks. |
+| `wand.nudge.swapHandsApplies` | `true` | Swap-hands (F) applies an edited box, as /hof sel apply does. |
+| `wand.anchors` | | Anchors drawn and moved with the wand. |
+| `wand.anchors.markers` | `true` | Every anchor gets a coloured marker and a label while the wand is held. |
+| `wand.anchors.labelRange` | `12` | How near, in blocks, an anchor's label is shown. |
+| `wand.anchors.holdTimeout` | `60s` | How long a picked-up anchor waits without a move before it goes back. |
+| `wand.anchors.carryBlocks` | `true` | Swap-hands while holding an archive or plaque anchor carries its block too, when the block is empty. |
 
 ### `admin`
 
