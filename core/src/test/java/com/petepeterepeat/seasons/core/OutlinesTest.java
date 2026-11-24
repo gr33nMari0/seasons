@@ -100,7 +100,9 @@ class OutlinesTest {
     fake.tick();
     assertThat(fake.player(admin).actionBars)
         .extracting(TestSource::plain)
-        .contains("Wand (block mode): next selection sets season-2:c2's bounds");
+        .contains(
+            "Wand (block mode): next selection sets season-2:c2's bounds · figure ✗ plaque ✗"
+                + " archive 0 trophy 0 entry ✗");
 
     // Put away, and nothing is shown; /hof show on shows it without the wand.
     fake.wandAway.add(admin.id());

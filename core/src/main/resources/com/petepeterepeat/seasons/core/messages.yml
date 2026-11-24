@@ -382,6 +382,8 @@ hof:
     bar: "<gold>Wand</gold> <gray>(<mode> mode):</gray> <white><what></white>"
     bar-cell: "next selection sets <cell>'s bounds"
     bar-selection: "a selection only"
+    bar-anchors: " · figure <figure> plaque <plaque> archive <archive> trophy <trophy> entry <entry>"
+    no-figure: " · no figure"
     no-cell: "<red>That block isn't in any cell.</red>"
     menu: "Anchor in <cell>"
     menu-hall: "In the Hall"

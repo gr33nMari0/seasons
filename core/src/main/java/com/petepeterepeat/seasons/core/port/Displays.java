@@ -98,7 +98,17 @@ public interface Displays {
             "exit",
             "link",
             "selection",
-            "preview");
+            "preview",
+            "landing",
+            "point",
+            "figure",
+            "archive",
+            "plaque",
+            "trophy",
+            "egg",
+            "face",
+            "ghost",
+            "bad");
   }
 
   /**
