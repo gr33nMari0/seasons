@@ -21,6 +21,8 @@ export function link (ctx, admin, words, expect) {
 export async function go (ctx, bot, id, expect) {
   const reply = await ctx.command(bot, `/hof link go ${id}`, expect)
   await ctx.advance(ctx.adminBot, RATE_LIMIT)
+  // A second, so a run of commands isn't kicked as chat spam.
+  await ctx.sync(ctx.adminBot, [bot], 20)
   return reply
 }
 

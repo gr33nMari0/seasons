@@ -171,6 +171,12 @@ public final class LinkCommands {
                                         .executes(this::upgradeImport)))
                         .then(CommandNode.literal("forget-old").executes(this::upgradeForget)))
                 .then(
+                    CommandNode.literal("send")
+                        .permission(admin)
+                        .then(
+                            CommandNode.argument("rest", ArgumentType.greedy())
+                                .executes(this::send)))
+                .then(
                     CommandNode.literal("go")
                         .then(
                             CommandNode.argument("link", ArgumentType.word()).executes(this::go))))
@@ -718,6 +724,85 @@ public final class LinkCommands {
       return;
     }
     visits.takeLink(source.player().get(), link.get());
+  }
+
+  /**
+   * {@code /hof link send <targets> <link|destination> [--checks none|entry|full]}: players a
+   * selector or name picks, from a command block, the console or an admin, along a link. Only
+   * players are moved; other entities picked are counted and left (links.commandBlocks).
+   */
+  void send(CommandSource source, Arguments arguments) {
+    var settings = config.get().config().links().commandBlocks();
+    if (source.commandBlock() && !settings.enabled()) {
+      source.reply(messages().get("hof.link.send-off"));
+      return;
+    }
+    List<String> words = new ArrayList<>(Words.of(arguments.string("rest")));
+    String checksWord = settings.checks();
+    int flag = words.indexOf("--checks");
+    if (flag >= 0) {
+      if (flag + 1 >= words.size()) {
+        source.reply(messages().get("hof.link.send-usage"));
+        return;
+      }
+      checksWord = words.get(flag + 1);
+      words.subList(flag, flag + 2).clear();
+    }
+    HallVisits.LinkChecks checks;
+    switch (checksWord) {
+      case "none" -> checks = HallVisits.LinkChecks.NONE;
+      case "full" -> checks = HallVisits.LinkChecks.FULL;
+      case "entry" -> checks = HallVisits.LinkChecks.ENTRY;
+      default -> {
+        source.reply(messages().get("hof.link.send-usage"));
+        return;
+      }
+    }
+    if (words.size() < 2) {
+      source.reply(messages().get("hof.link.send-usage"));
+      return;
+    }
+    String targets = words.getFirst();
+    List<String> rest = words.subList(1, words.size());
+    HallLayout.Link link;
+    Optional<HallLayout.Link> named =
+        rest.size() == 1 ? hall.layout().link(rest.getFirst()) : Optional.empty();
+    if (named.isPresent()) {
+      link = named.get();
+    } else {
+      Optional<HallLayout.Target> target = destination(source, "", rest);
+      if (target.isEmpty()) {
+        return;
+      }
+      link = HallLayout.Link.of("send", target, List.of(), HallLayout.Access.EVERYONE);
+    }
+    Optional<CommandSource.Selected> picked = source.select(targets);
+    if (picked.isEmpty()) {
+      // A source that can't read selectors: a name.
+      picked =
+          platform
+              .players()
+              .findByName(targets)
+              .map(p -> new CommandSource.Selected(List.of(p.id()), 0));
+    }
+    if (picked.isEmpty()) {
+      source.reply(messages().get("hof.link.send-nobody", "targets", targets));
+      return;
+    }
+    int others = settings.playersOnly() ? picked.get().others() : 0;
+    for (PlayerId player : picked.get().players()) {
+      visits.follow(player, link, false, checks);
+    }
+    source.reply(
+        messages()
+            .get(
+                others > 0 ? "hof.link.sent-others" : "hof.link.sent",
+                "count",
+                Integer.toString(picked.get().players().size()),
+                "link",
+                link.id(),
+                "others",
+                Integer.toString(others)));
   }
 
   /** {@code /hof link remove <id> [--both] [--force]}: refused while used or paired. */

@@ -202,6 +202,31 @@ final class PaperCommands implements Commands {
       public void reply(Message message) {
         sender.sendMessage(text.render(message));
       }
+
+      @Override
+      public Optional<Selected> select(String selector) {
+        try {
+          java.util.List<org.bukkit.entity.Entity> picked =
+              org.bukkit.Bukkit.selectEntities(sender, selector);
+          java.util.List<PlayerId> players = new java.util.ArrayList<>();
+          int others = 0;
+          for (org.bukkit.entity.Entity entity : picked) {
+            if (entity instanceof Player player) {
+              players.add(new PlayerId(player.getUniqueId()));
+            } else {
+              others++;
+            }
+          }
+          return Optional.of(new Selected(players, others));
+        } catch (IllegalArgumentException e) {
+          return Optional.empty();
+        }
+      }
+
+      @Override
+      public boolean commandBlock() {
+        return sender instanceof org.bukkit.command.BlockCommandSender;
+      }
     };
   }
 

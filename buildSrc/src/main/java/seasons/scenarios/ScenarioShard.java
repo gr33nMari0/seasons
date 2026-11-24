@@ -299,6 +299,7 @@ public abstract class ScenarioShard implements WorkAction<ShardParameters> {
         max-players=40
         view-distance=4
         simulation-distance=4
+        enable-command-block=true
         """
             .formatted(port);
     try {

@@ -1184,6 +1184,15 @@ public final class HallCommands {
 
   /** One link as {@code /hof link list} shows it. */
   private Message linkLine(HallLayout.Link link) {
+    if (!link.placed()) {
+      return messages()
+          .get(
+              link.to().isEmpty() ? "hof.link.line-unplaced-nowhere" : "hof.link.line-unplaced",
+              "link",
+              link.id(),
+              "to",
+              link.to().map(this::describe).orElse(""));
+    }
     String[] where = place("link", link.id(), link.block());
     return link.to().isEmpty()
         ? messages().get("hof.link.line-nowhere", where)

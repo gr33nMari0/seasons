@@ -455,18 +455,32 @@ public final class HallVisits {
     if (held.test(player) || moving.contains(player) || !attempt(player)) {
       return;
     }
-    follow(player, link, throughArea, true);
+    follow(player, link, throughArea, LinkChecks.ENTRY);
+  }
+
+  /**
+   * Which checks a link applies (M8, {@code /hof link send --checks}): {@code NONE} keeps only
+   * locked land and the Intermission; {@code ENTRY} adds the link's access and /hof's checks but
+   * the bed on the way into the Hall; {@code FULL} adds the bed.
+   */
+  public enum LinkChecks {
+    NONE,
+    ENTRY,
+    FULL
   }
 
   /**
    * Takes a link once its rate limit is counted: its access, then where it leads.
    *
-   * @param entryChecks whether /hof's entry checks apply on the way into the Hall ({@code /hof link
-   *     send --checks none} skips them)
+   * @param checks which checks apply ({@code /hof link send --checks})
    */
   public void follow(
-      PlayerId player, HallLayout.Link link, boolean throughArea, boolean entryChecks) {
-    Optional<String> refused = links().refused(player, link);
+      PlayerId player, HallLayout.Link link, boolean throughArea, LinkChecks checks) {
+    if (moving.contains(player) || held.test(player)) {
+      return;
+    }
+    Optional<String> refused =
+        checks == LinkChecks.NONE ? Optional.empty() : links().refused(player, link);
     if (refused.isPresent()) {
       tell(player, refused.get());
       return;
@@ -495,7 +509,7 @@ public final class HallVisits {
           tell(player, "hof.visit.no-spawn");
           return;
         }
-        into(player, spawn.get(), throughArea, entryChecks);
+        into(player, spawn.get(), throughArea, checks);
       }
       case LinkService.Resolved.There(Position to) -> {
         if (halls.inHall(to)) {
@@ -503,7 +517,7 @@ public final class HallVisits {
             tell(player, "hof.visit.not-yet");
             return;
           }
-          into(player, to, throughArea, entryChecks);
+          into(player, to, throughArea, checks);
         } else {
           away(player, to);
         }
@@ -512,13 +526,17 @@ public final class HallVisits {
   }
 
   /** Into the Hall by a link, as {@code /hof} without the bed (questions 249). */
-  private void into(PlayerId player, Position to, boolean throughArea, boolean entryChecks) {
-    if (!entryChecks) {
+  private void into(PlayerId player, Position to, boolean throughArea, LinkChecks checks) {
+    if (checks == LinkChecks.NONE) {
       adminGo(player, to);
     } else if (throughArea) {
       enterFlying(player, to);
     } else {
-      enter(player, to, false, config.get().config().hof().links().returnToLink());
+      enter(
+          player,
+          to,
+          checks == LinkChecks.FULL,
+          config.get().config().hof().links().returnToLink());
     }
   }
 

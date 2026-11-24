@@ -381,6 +381,15 @@ public final class HallLists {
   }
 
   private Message linkLine(HallLayout.Link link) {
+    if (!link.placed()) {
+      return messages()
+          .get(
+              link.to().isEmpty() ? "hof.link.line-unplaced-nowhere" : "hof.link.line-unplaced",
+              "link",
+              link.id(),
+              "to",
+              link.to().map(t -> LinkService.describe(messages(), t)).orElse(""));
+    }
     Position at = link.block();
     String[] where = {"link", link.id(), "x", x(at), "y", y(at), "z", z(at)};
     if (link.to().isEmpty()) {
