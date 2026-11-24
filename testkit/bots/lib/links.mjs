@@ -42,3 +42,40 @@ export function sameBlock (a, b) {
   const q = blockOf(b)
   return p.x === q.x && p.y === q.y && p.z === q.z
 }
+
+/** Opens the menu a wand click on a block opens, and resolves with it once its choices show. */
+export async function wandMenu (ctx, admin, bot, at, face = 'up') {
+  const opened = new Promise((resolve) => bot.once('windowOpen', resolve))
+  await ctx.command(admin, `/scenario use ${bot.username} ${at.x} ${at.y} ${at.z} face=${face}`, /^Used /)
+  const menu = await opened
+  await ctx.eventually(async () => {
+    if (!bot.currentWindow || icons(bot.currentWindow).length === 0) throw new Error('the menu shows its choices')
+  })
+  return menu
+}
+
+/** The icons a choice menu shows, by item name. */
+export function icons (menu) {
+  return menu.slots.slice(0, menu.inventoryStart ?? 54).filter(Boolean).map((item) => item.name)
+}
+
+/** Picks the choice with an icon in the open menu, and resolves with the reply. */
+export async function pick (ctx, bot, icon, expect) {
+  const menu = bot.currentWindow
+  const slot = menu.slots.slice(0, menu.inventoryStart ?? 54).findIndex((item) => item?.name === icon)
+  if (slot < 0) throw new Error(`the menu offers ${icon}: ${icons(menu)}`)
+  const reply = expect ? ctx.waitForMessages(bot, expect) : Promise.resolve()
+  await bot.clickWindow(slot, 0, 0)
+  return reply
+}
+
+/** Picks a choice that opens another menu, and resolves with that menu. */
+export async function pickMenu (ctx, bot, icon) {
+  const opened = new Promise((resolve) => bot.once('windowOpen', resolve))
+  await pick(ctx, bot, icon)
+  const menu = await opened
+  await ctx.eventually(async () => {
+    if (!bot.currentWindow || icons(bot.currentWindow).length === 0) throw new Error('the menu shows its choices')
+  })
+  return menu
+}

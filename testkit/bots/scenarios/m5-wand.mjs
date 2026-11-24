@@ -17,7 +17,7 @@ import { forceload } from '../lib/zones.mjs'
 
 const GROUND = FLOOR - 1
 const TAKEN = /\(the click was taken over\)$/
-const SEASONS_LINES = /^(Selected |Corner \d|That block isn't in any cell|Gave you the Seasons wand)/
+const SEASONS_LINES = /^(Selected |Corner \d|That block isn't in any cell|Gave you the Seasons wand|Link l1 )/
 
 export default {
   name: 'm5-wand',
@@ -92,7 +92,7 @@ export default {
     await ctx.command(admin, `/setblock 25 ${FLOOR} 22 minecraft:stone`, /^Changed the block/)
     const menu = await anchorMenu(ctx, admin, admin, { x: 23, y: FLOOR, z: 29 })
     assert(/Anchor in season-2:c1/.test(JSON.stringify(menu.title)), `the menu is titled: ${JSON.stringify(menu.title)}`)
-    assert(JSON.stringify(choices(menu)) === JSON.stringify(['figure', 'archive', 'plaque', 'trophy', 'entry', 'gate']), `the menu offers every anchor type: ${choices(menu)}`)
+    assert(JSON.stringify(choices(menu)) === JSON.stringify(['figure', 'archive', 'plaque', 'trophy', 'entry', 'gate', 'link']), `the menu offers every anchor type, and a link (M8): ${choices(menu)}`)
     await pickAnchor(ctx, admin, 'archive', /^Added an archive anchor to season-2:c1 at 23, -60, 29\.$/)
     await anchorMenu(ctx, admin, admin, { x: 24, y: GROUND, z: 28 })
     await pickAnchor(ctx, admin, 'figure', /^Added a figure anchor to season-2:c1 at 24, -60, 28\.$/)
@@ -133,17 +133,16 @@ export default {
     await pickAnchor(ctx, admin, 'remove', /^Removed the archive anchor at 23, -60, 29 from season-2:c1\.$/)
     assert(!cellInFile(ctx, 'c1').anchors.some((a) => a.type === 'archive'), 'the archive anchor is gone')
 
-    // In the gallery but in no cell, the menu offers a link (questions 253).
+    // In the gallery but in no cell, the menu offers a link (questions 253), to the Hall at once (M8).
     const between = await anchorMenu(ctx, admin, admin, { x: 40, y: GROUND, z: 35 })
-    assert(JSON.stringify(choices(between)) === JSON.stringify(['link']), `only a link is offered outside the cells: ${choices(between)}`)
-    await pickAnchor(ctx, admin, 'link', /^Link l1 at 40, -61, 35 leads nowhere yet: stand where it should lead and run \/hof link to l1\.$/)
+    assert(choices(between).includes('link') && !choices(between).includes('figure'), `a link but no anchor is offered outside the cells: ${choices(between)}`)
+    await pickAnchor(ctx, admin, 'link', /^Link l1 leads to the Hall spawn, from the block at 40, -61, 35, clicked\.$/)
     await ctx.command(admin, '/hof link remove l1', /^Removed link l1\.$/)
 
-    // Outside the Hall.
-    await Promise.all([
-      ctx.waitForMessages(admin, /^That block isn't in any cell\.$/),
-      click(ctx, admin, 'SeasonsAdmin', { x: 65, y: GROUND, z: 35 })
-    ])
+    // Outside the Hall the wand makes links too (M8).
+    const outside = await anchorMenu(ctx, admin, admin, { x: 65, y: GROUND, z: 35 })
+    assert(choices(outside).includes('link'), `a link is offered outside the Hall: ${choices(outside)}`)
+    admin.closeWindow(outside)
 
     // A museum offers an egg plinth for a season that has none (Seasons 2 and 3 have theirs).
     await writeMuseum(ctx, admin)

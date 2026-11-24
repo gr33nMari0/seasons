@@ -27,7 +27,7 @@ import java.util.Set;
  * points. The 1.1 forms stay in {@link HallCommands} and {@link HallLists}, which hand the new
  * grammar here. Runs on the server thread.
  */
-public final class LinkCommands {
+public final class LinkCommands implements Wand.LinkActions {
   private static final int REACH = 6;
   private static final int NEAR = 32;
   private static final String OVERWORLD = "minecraft:overworld";
@@ -333,6 +333,62 @@ public final class LinkCommands {
     String details =
         made.to().map(links::describe).orElse("") + "; " + triggers.size() + " trigger(s)";
     save(source, next, replies, "link-add", id, details);
+  }
+
+  /** The wand's link menu (M8): the block as a new link with the next free id. */
+  @Override
+  public void make(CommandSource source, Position block, HallLayout.Target to, boolean twoWay) {
+    if (left(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    String id = layout.nextLinkId();
+    HallLayout.Trigger trigger = onBlock(blockOf(block), Optional.empty());
+    if (taken(source, layout, trigger, id)) {
+      return;
+    }
+    HallLayout.Access access = links.defaultAccess(Optional.of(to));
+    HallLayout.Link made = HallLayout.Link.of(id, Optional.of(to), List.of(trigger), access);
+    HallLayout next = layout.withLink(made);
+    List<Message> replies = new ArrayList<>();
+    replies.add(
+        messages()
+            .get("hof.link.made", "link", id, "to", links.describe(to), "from", describe(trigger)));
+    if (twoWay) {
+      String other = id + "-back";
+      if (layout.link(other).isPresent()) {
+        source.reply(messages().get("hof.link.exists", "link", other));
+        return;
+      }
+      next =
+          next.withLink(made.withPair(Optional.of(other)))
+              .withLink(
+                  HallLayout.Link.of(
+                          other, Optional.of(new HallLayout.Target.ToLink(id)), List.of(), access)
+                      .withPair(Optional.of(id)));
+      replies.add(messages().get("hof.link.made-pair", "link", id, "other", other));
+    }
+    save(source, next, replies, "link-add", id, links.describe(to) + "; by the wand");
+  }
+
+  /** A link's editor for an admin; until the dialog opens, its details in chat. */
+  @Override
+  public void edit(PlayerId player, HallLayout.Link link) {
+    if (editor != null) {
+      editor.accept(player, link);
+      return;
+    }
+    platform.players().sendMessage(player, messages().get("hof.link.editing", "link", link.id()));
+    details(link).forEach(line -> platform.players().sendMessage(player, line));
+  }
+
+  private java.util.function.@org.jspecify.annotations.Nullable BiConsumer<
+          PlayerId, HallLayout.Link>
+      editor;
+
+  /** Connects the editor dialog, once it exists. */
+  public void bindEditor(java.util.function.BiConsumer<PlayerId, HallLayout.Link> next) {
+    this.editor = next;
   }
 
   /** {@code /hof link to <id> <destination>} with one of M8's destinations. */

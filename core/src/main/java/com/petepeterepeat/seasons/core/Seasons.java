@@ -711,7 +711,6 @@ public final class Seasons implements SeasonsApi {
             wanding,
             stamper,
             help);
-    wanding.bindLinks(hallCommands::addLink);
     CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
     PlaqueScale plaques = new PlaqueScale(platform, config, halls, cellEdits);
     plaqueScale = plaques;
@@ -723,6 +722,7 @@ public final class Seasons implements SeasonsApi {
     LinkCommands linkCommands =
         new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
     hallCommands.bindLinks(linkCommands);
+    wanding.bindLinks(linkCommands, hallCommands);
     CommandNode hof =
         hallCommands
             .root()

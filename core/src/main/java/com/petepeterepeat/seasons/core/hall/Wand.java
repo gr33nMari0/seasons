@@ -3,6 +3,7 @@ package com.petepeterepeat.seasons.core.hall;
 
 import com.petepeterepeat.seasons.core.command.Arguments;
 import com.petepeterepeat.seasons.core.command.CommandSource;
+import com.petepeterepeat.seasons.core.command.Positions;
 import com.petepeterepeat.seasons.core.config.ConfigHolder;
 import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.event.Intent;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Supplier;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The Hall admins' wand (questions 226 to 229 and 236): two corners make a selection, which a named
@@ -242,6 +244,8 @@ public final class Wand {
     }
     PlayerId player = use.player();
     boolean hallAdmin = platform.permissions().has(player, HallCommands.PERMISSION_ADMIN);
+    boolean linkAdmin =
+        hallAdmin || platform.permissions().has(player, LinkService.PERMISSION_ADMIN);
     boolean zoneAdmin = hallAdmin || platform.permissions().has(player, PERMISSION_ZONES);
     if (use.sneaking() && zoneAdmin) {
       Position clicked = block(use.block());
@@ -252,11 +256,20 @@ public final class Wand {
           false);
       return Optional.of(new Decision.Deny(Optional.empty()));
     }
-    if (!hallAdmin) {
+    if (!linkAdmin) {
       return Optional.of(Decision.allow());
     }
     if (!use.left()) {
-      menu(player, block(use.block()), use.face());
+      Position clicked = block(use.block());
+      Optional<HallLayout.Link> trigger = hall.layout().linkAt(clicked);
+      if (trigger.isPresent() && linkActions != null) {
+        // A block that is a trigger already: its link's editor, not a second link (M8).
+        linkActions.edit(player, trigger.get());
+      } else if (hallAdmin) {
+        menu(player, clicked, use.face());
+      } else {
+        linkMenu(player, clicked, offset(clicked, use.face()), false);
+      }
     }
     return Optional.of(new Decision.Deny(Optional.empty()));
   }
@@ -386,6 +399,9 @@ public final class Wand {
                             OptionalInt.of(egg)))));
       }
     }
+    // A link on the block, from anywhere (M8).
+    choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link")));
+    actions.add(() -> later(() -> linkMenu(player, block, front, false)));
     boolean onBlock = ref.cell().anchors().stream().anyMatch(a -> a.isAt(block));
     boolean inFront = ref.cell().anchors().stream().anyMatch(a -> a.isAt(front));
     if (onBlock || inFront) {
@@ -408,37 +424,71 @@ public final class Wand {
   }
 
   /**
-   * A click in the Hall but in no cell (questions 253): a link on the block, and a gate corner in
-   * front of it when that is beside exactly one cell. Outside the Hall, refused.
+   * A click in the Hall but in no cell (questions 253), or anywhere at all for a link admin (M8):
+   * the link menu, and in the Hall a gate corner in front of the block when that is beside exactly
+   * one cell.
    */
   private void hallMenu(PlayerId player, Position block, Position front) {
-    if (!hall.inHall(block) && !hall.inHall(front)) {
-      platform.players().sendMessage(player, messages().get("hof.wand.no-cell"));
-      return;
-    }
+    linkMenu(player, block, front, true);
+  }
+
+  /**
+   * The link menu (M8): the block as a link to the Hall, a season's spawn, a point or another link,
+   * one way or two, or put aside for {@code /hof link add}; and for a Hall admin in the Hall, a
+   * gate corner, the Hall spawn, a gallery's entry or an exit there.
+   */
+  private void linkMenu(PlayerId player, Position block, Position front, boolean hallAdmin) {
+    CommandSource source = source(player);
     List<Menus.Choice> choices = new ArrayList<>();
     List<Runnable> actions = new ArrayList<>();
-    choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link")));
-    actions.add(
-        () -> links.add(source(player), hall.layout().nextLinkId(), block, Optional.empty()));
-    List<HallService.CellRef> beside = besideCells(front);
-    if (beside.size() == 1) {
-      HallService.CellRef ref = beside.getFirst();
+    choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link-hall")));
+    actions.add(() -> make(source, block, new HallLayout.Target.Hall(), false));
+    List<Integer> seasons = seasonsWithSpawn();
+    if (!seasons.isEmpty()) {
       choices.add(
-          new Menus.Choice(
-              "minecraft:iron_bars", messages().get("hof.wand.gate-for", "cell", ref.key())));
-      float yaw = facing(platform.players().position(player).yaw() + 180f);
-      actions.add(() ->
-          current(ref)
-              .ifPresent(now ->
-                  edits.anchor(
-                      source(player), now, Anchor.of(AnchorType.GATE, withYaw(front, yaw)))));
+          new Menus.Choice("minecraft:grass_block", messages().get("hof.wand.link-season")));
+      actions.add(() -> later(() -> seasonMenu(player, block, false)));
+    }
+    if (!hall.layout().points().isEmpty()) {
+      choices.add(new Menus.Choice("minecraft:compass", messages().get("hof.wand.link-point")));
+      actions.add(() -> later(() -> pointMenu(player, block)));
+    }
+    if (!hall.layout().links().isEmpty()) {
+      choices.add(new Menus.Choice("minecraft:lead", messages().get("hof.wand.link-link")));
+      actions.add(() -> later(() -> linkToLinkMenu(player, block)));
+    }
+    choices.add(new Menus.Choice("minecraft:ender_eye", messages().get("hof.wand.link-two-way")));
+    actions.add(() -> later(() -> seasonMenu(player, block, true)));
+    choices.add(new Menus.Choice("minecraft:paper", messages().get("hof.wand.put-aside")));
+    actions.add(() -> {
+      putAside(player, block);
+      platform
+          .players()
+          .sendMessage(
+              player, messages().get("hof.wand.put-aside-done", CellEdits.place("n", "", block)));
+    });
+    boolean inHall = hall.inHall(block) || hall.inHall(front);
+    if (hallAdmin && inHall) {
+      List<HallService.CellRef> beside = besideCells(front);
+      if (beside.size() == 1) {
+        HallService.CellRef ref = beside.getFirst();
+        choices.add(
+            new Menus.Choice(
+                "minecraft:iron_bars", messages().get("hof.wand.gate-for", "cell", ref.key())));
+        float yaw = facing(platform.players().position(player).yaw() + 180f);
+        actions.add(() ->
+            current(ref)
+                .ifPresent(now ->
+                    edits.anchor(
+                        source(player), now, Anchor.of(AnchorType.GATE, withYaw(front, yaw)))));
+      }
+      setAsChoices(player, front, choices, actions);
     }
     platform
         .menus()
         .openChoice(
             player,
-            messages().get("hof.wand.menu-hall"),
+            messages().get(inHall ? "hof.wand.menu-hall" : "hof.wand.menu-link"),
             choices,
             index -> {
               platform.menus().close(player);
@@ -446,6 +496,148 @@ public final class Wand {
                 actions.get(index).run();
               }
             });
+  }
+
+  /**
+   * The Hall's own spots set from the wand (M8): the Hall spawn in the hub, a gallery's entry, an
+   * exit; each from the block in front of the face clicked, or from the selection when there is
+   * one.
+   */
+  private void setAsChoices(
+      PlayerId player, Position front, List<Menus.Choice> choices, List<Runnable> actions) {
+    if (hallCommands == null) {
+      return;
+    }
+    HallCommands commands = hallCommands;
+    CommandSource source = source(player);
+    float yaw = facing(platform.players().position(player).yaw() + 180f);
+    String spot = front.blockX() + " " + front.blockY() + " " + front.blockZ();
+    boolean selection = selection(player).isPresent();
+    if (hall.layout().inHub(front)) {
+      choices.add(
+          new Menus.Choice("minecraft:respawn_anchor", messages().get("hof.wand.set-spawn")));
+      actions.add(() ->
+          commands.hallSpawn(source, new Arguments(Map.of("at", spot + " " + Math.round(yaw)))));
+      choices.add(new Menus.Choice("minecraft:iron_door", messages().get("hof.wand.set-exit")));
+      actions.add(() -> commands.hallExit(source, new Arguments(Map.of("at", spot))));
+      if (selection) {
+        choices.add(
+            new Menus.Choice(
+                "minecraft:crying_obsidian", messages().get("hof.wand.set-spawn-sel")));
+        actions.add(
+            () -> commands.hallSpawn(source, new Arguments(Map.of("at", Positions.SELECTION))));
+        choices.add(
+            new Menus.Choice("minecraft:iron_trapdoor", messages().get("hof.wand.set-exit-sel")));
+        actions.add(
+            () -> commands.hallExit(source, new Arguments(Map.of("at", Positions.SELECTION))));
+      }
+    }
+    for (Gallery gallery : hall.galleries()) {
+      if (!gallery.contains(front)) {
+        continue;
+      }
+      String id = gallery.id();
+      choices.add(
+          new Menus.Choice(
+              "minecraft:oak_door", messages().get("hof.wand.set-entry", "gallery", id)));
+      actions.add(() ->
+          commands.galleryEntry(
+              source, new Arguments(Map.of("gallery", id, "at", spot + " " + Math.round(yaw)))));
+      choices.add(
+          new Menus.Choice(
+              "minecraft:birch_door", messages().get("hof.wand.set-gallery-exit", "gallery", id)));
+      actions.add(
+          () -> commands.galleryExit(source, new Arguments(Map.of("gallery", id, "at", spot))));
+      if (selection) {
+        choices.add(
+            new Menus.Choice(
+                "minecraft:spruce_door", messages().get("hof.wand.set-entry-sel", "gallery", id)));
+        actions.add(() ->
+            commands.galleryEntry(
+                source, new Arguments(Map.of("gallery", id, "at", Positions.SELECTION))));
+      }
+    }
+  }
+
+  /** The seasons whose spawn is recorded, for links to them. */
+  private List<Integer> seasonsWithSpawn() {
+    return config.get().seasons().values().stream()
+        .filter(f -> f.spawn().isPresent())
+        .map(com.petepeterepeat.seasons.core.config.SeasonFile::season)
+        .sorted()
+        .toList();
+  }
+
+  /** Each season with a spawn, and the Hall for a two-way link, as choices. */
+  private void seasonMenu(PlayerId player, Position block, boolean twoWay) {
+    CommandSource source = source(player);
+    List<Menus.Choice> choices = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    if (twoWay) {
+      choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link-hall")));
+      actions.add(() -> make(source, block, new HallLayout.Target.Hall(), true));
+    }
+    for (int season : seasonsWithSpawn()) {
+      choices.add(
+          new Menus.Choice(
+              "minecraft:grass_block",
+              messages().get("hof.wand.season", "season", Integer.toString(season))));
+      actions.add(() -> make(source, block, new HallLayout.Target.SeasonSpawn(season), twoWay));
+    }
+    choose(
+        player,
+        messages().get(twoWay ? "hof.wand.menu-two-way" : "hof.wand.menu-season"),
+        choices,
+        actions);
+  }
+
+  private void pointMenu(PlayerId player, Position block) {
+    CommandSource source = source(player);
+    List<Menus.Choice> choices = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    for (String name : hall.layout().points().keySet()) {
+      choices.add(
+          new Menus.Choice("minecraft:compass", messages().get("hof.wand.named", "name", name)));
+      actions.add(() -> make(source, block, new HallLayout.Target.AtPoint(name), false));
+    }
+    choose(player, messages().get("hof.wand.menu-point"), choices, actions);
+  }
+
+  private void linkToLinkMenu(PlayerId player, Position block) {
+    CommandSource source = source(player);
+    List<Menus.Choice> choices = new ArrayList<>();
+    List<Runnable> actions = new ArrayList<>();
+    for (String id : hall.layout().links().keySet()) {
+      choices.add(new Menus.Choice("minecraft:lead", messages().get("hof.wand.named", "name", id)));
+      actions.add(() -> make(source, block, new HallLayout.Target.ToLink(id), false));
+    }
+    choose(player, messages().get("hof.wand.menu-link-link"), choices, actions);
+  }
+
+  private void choose(
+      PlayerId player, Message title, List<Menus.Choice> choices, List<Runnable> actions) {
+    platform
+        .menus()
+        .openChoice(
+            player,
+            title,
+            choices,
+            index -> {
+              platform.menus().close(player);
+              if (index >= 0 && index < actions.size()) {
+                actions.get(index).run();
+              }
+            });
+  }
+
+  private void make(CommandSource source, Position block, HallLayout.Target to, boolean twoWay) {
+    if (linkActions != null) {
+      linkActions.make(source, block, to, twoWay);
+    }
+  }
+
+  private void later(Runnable task) {
+    platform.scheduler().runGlobal(task);
   }
 
   /** The cells a block is right beside, in their doorway (questions 250). */
@@ -463,16 +655,22 @@ public final class Wand {
     return found;
   }
 
-  /** Makes a block a link, as {@code /hof link add} does. */
-  public interface Links {
-    void add(CommandSource source, String id, Position block, Optional<HallLayout.Target> to);
+  /** What the wand's link menu does with a block (M8), from the link commands. */
+  public interface LinkActions {
+    /** Makes the block a link with the next free id, one way or two. */
+    void make(CommandSource source, Position block, HallLayout.Target to, boolean twoWay);
+
+    /** Opens a link's editor for an admin. */
+    void edit(PlayerId player, HallLayout.Link link);
   }
 
-  private Links links = (source, id, block, to) -> {};
+  private @Nullable LinkActions linkActions;
+  private @Nullable HallCommands hallCommands;
 
-  /** Connects the link command, once it exists. */
-  public void bindLinks(Links links) {
-    this.links = links;
+  /** Connects the link commands, once they exist. */
+  public void bindLinks(LinkActions actions, HallCommands commands) {
+    this.linkActions = actions;
+    this.hallCommands = commands;
   }
 
   /** The cell as it is now, which the menu's choice acts on. */
