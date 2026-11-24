@@ -1229,7 +1229,7 @@ help:
     filter: "near, world or to <destination>"
     source: "x y z, two corners, here, sel, looked or point <name>, [--trigger use|step|both|area]"
     hof.link.trigger.kind.rest: "<n> use|step|both"
-    which: "trigger number, or looked"
+    hof.link.trigger.remove.which: "trigger number, or looked"
     new: "new name"
     text: "text, MiniMessage colours and decorations"
     who: "everyone, op or permission [node]"
