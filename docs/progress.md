@@ -17,6 +17,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
 | M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page, #37), released as 1.2.0 | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
 | M8 Reliable links | Done (#40), released as 1.3.0 | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
+| M9 Dashboard and docs design overhaul | In progress (plan in `docs/plans/m9-design-overhaul.md`), for 1.4.0 | Site and docs checks in `site/test`; `m9-*`; see M9, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 

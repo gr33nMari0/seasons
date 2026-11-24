@@ -1,0 +1,165 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/* Seasons' design tokens: one source for the public site, the docs and the Seasons Web dashboard
+   (docs/plans/m9-design-overhaul.md). The palette comes from the Seasons art (the hourglass, the
+   Hall's arches and carpet, the grass and dirt strips) and never changes with the theme; the
+   semantic tokens below it do.
+
+   Themes: dark is the default. theme.js sets data-theme="dark" or "light" on <html> before the
+   page paints, following the system and the toggle. Without JavaScript the media query below
+   still follows the system. Every text pair is checked to WCAG AA by site/test/design.test.mjs. */
+
+:root {
+  /* The palette */
+  --night: #1d2333;
+  --deep: #141823;
+  --panel: #20273a;
+  --line: #3a4358;
+  --line-soft: #333c52;
+  --shadow: #0e121c;
+  --ink: #f6f3ec;
+  --ink-2: #c9ced8;
+  --ink-3: #a9b0bf;
+  --gold: #e6b422;
+  --gold-hi: #f5cf5a;
+  --gold-lo: #b88a10;
+  --grass: #5aa63a;
+  --grass-lo: #3d7a26;
+  --dirt: #7a5230;
+  --dirt-lo: #5c3d22;
+  --diamond: #3fc6c6;
+  --diamond-lo: #23979b;
+  --sky: #2f5f8f;
+  --redstone: #c8423b;
+  --carpet: #8f2e2a;
+  --parchment: #ebe5d6;
+  --parchment-2: #ddd5c3;
+  --sand: #d8c48a;
+  --amethyst: #3b2350;
+  --ember: #f08a24;
+
+  /* Type */
+  --font-pixel: 'Pixelify Sans', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Shape: square corners, hard pixel shadows */
+  --radius: 0;
+  --border-width: 2px;
+  --shadow-card: 8px 8px 0 var(--shadow-color);
+  --shadow-chip: 4px 4px 0 var(--shadow-color);
+  --shadow-press: 2px 2px 0 var(--shadow-color);
+  --step: 4px;
+  --gutter: 16px;
+  --touch: 44px;
+  --speed: 120ms;
+
+  /* Semantic tokens, dark (the default) */
+  color-scheme: dark;
+  --bg: var(--night);
+  --surface: var(--panel);
+  --surface-2: var(--deep);
+  --border: var(--line);
+  --border-soft: var(--line-soft);
+  --shadow-color: var(--shadow);
+  --text: var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --accent: var(--gold);
+  --accent-hover: var(--gold-hi);
+  --accent-pressed: var(--gold-lo);
+  --accent-text: var(--gold);
+  --on-accent: var(--night);
+  --link: var(--gold);
+  --link-hover: var(--gold-hi);
+  --success: #6fbf4c;
+  --info: var(--diamond);
+  --warning: var(--ember);
+  --danger: #e46a62;
+  --travel: #7fb0e0;
+  --focus: var(--gold-hi);
+  --code-bg: var(--deep);
+  --selection: rgb(230 180 34 / 35%);
+}
+
+/* Light: parchment. Applied when the page says so, or by the system before theme.js runs. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: var(--parchment);
+  --surface: #f6f1e4;
+  --surface-2: var(--parchment-2);
+  --border: #b3a88f;
+  --border-soft: #cbc1aa;
+  --shadow-color: #a89c82;
+  --text: var(--night);
+  --text-2: var(--line);
+  --text-3: #4d5466;
+  --accent: var(--gold);
+  --accent-hover: var(--gold-hi);
+  --accent-pressed: var(--gold-lo);
+  --accent-text: #6b4e02;
+  --on-accent: var(--night);
+  --link: #6b4e02;
+  --link-hover: #4f3901;
+  --success: #2a6019;
+  --info: #0f6063;
+  --warning: #8a4505;
+  --danger: #9e2f29;
+  --travel: #2a5580;
+  --focus: #6b4e02;
+  --code-bg: var(--parchment-2);
+  --selection: rgb(184 138 16 / 30%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: var(--parchment);
+    --surface: #f6f1e4;
+    --surface-2: var(--parchment-2);
+    --border: #b3a88f;
+    --border-soft: #cbc1aa;
+    --shadow-color: #a89c82;
+    --text: var(--night);
+    --text-2: var(--line);
+    --text-3: #4d5466;
+    --accent-text: #6b4e02;
+    --link: #6b4e02;
+    --link-hover: #4f3901;
+    --success: #2a6019;
+    --info: #0f6063;
+    --warning: #8a4505;
+    --danger: #9e2f29;
+    --travel: #2a5580;
+    --focus: #6b4e02;
+    --code-bg: var(--parchment-2);
+    --selection: rgb(184 138 16 / 30%);
+  }
+}
+
+/* A dark-only surface inside any theme, such as the second screen and the site's dark bands. */
+.theme-dark {
+  color-scheme: dark;
+  --bg: var(--night);
+  --surface: var(--panel);
+  --surface-2: var(--deep);
+  --border: var(--line);
+  --border-soft: var(--line-soft);
+  --shadow-color: var(--shadow);
+  --text: var(--ink);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --accent-text: var(--gold);
+  --link: var(--gold);
+  --link-hover: var(--gold-hi);
+  --success: #6fbf4c;
+  --info: var(--diamond);
+  --warning: var(--ember);
+  --danger: #e46a62;
+  --travel: #7fb0e0;
+  --focus: var(--gold-hi);
+  --code-bg: var(--deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --speed: 0ms; }
+}
