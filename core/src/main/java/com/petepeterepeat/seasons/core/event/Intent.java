@@ -182,8 +182,12 @@ public sealed interface Intent {
    */
   record HitDisplay(PlayerId player, String tag) implements Intent {}
 
-  /** Placing a link sign from {@code /hof link item} (M8): the block it became. */
-  record PlaceLinkItem(PlayerId player, Position block, String link) implements Intent {}
+  /**
+   * Placing a link sign from {@code /hof link item} (M8): the block it became, and its type, so the
+   * Hall's and the zones' rules for placing a block apply to it too.
+   */
+  record PlaceLinkItem(PlayerId player, Position block, String blockType, String link)
+      implements Intent {}
 
   /** The sign editor opening for a player, on placing a sign or clicking one (M8). */
   record EditSign(PlayerId player, Position block) implements Intent {}

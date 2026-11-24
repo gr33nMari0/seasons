@@ -31,6 +31,7 @@ import com.petepeterepeat.seasons.core.config.ConfigSnapshot;
 import com.petepeterepeat.seasons.core.curate.CurateFiles;
 import com.petepeterepeat.seasons.core.curate.Curation;
 import com.petepeterepeat.seasons.core.dragon.Dragon;
+import com.petepeterepeat.seasons.core.event.Decision;
 import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
@@ -630,6 +631,21 @@ public final class Seasons implements SeasonsApi {
               }
             },
             Arguments.NONE));
+    // Link signs and link blocks (M8) are placed and broken under the Hall's and the zones' rules:
+    // the zones are asked even when the Hall lets a builder through, as locked land is theirs.
+    linkWorld.bindRules(intent -> {
+      Optional<Decision> ruled =
+          visiting.decide(intent).or(() -> halls.decide(intent)).or(() -> hallRules.decide(intent));
+      if (ruled.isPresent()
+          && (ruled.get() instanceof Decision.Deny || ruled.get() instanceof Decision.Redirect)) {
+        return ruled;
+      }
+      Optional<Decision> zoned = zoning.decide(intent);
+      return zoned.isPresent()
+              && (zoned.get() instanceof Decision.Deny || zoned.get() instanceof Decision.Redirect)
+          ? zoned
+          : ruled.or(() -> zoned);
+    });
     platform
         .events()
         .handle(

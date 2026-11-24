@@ -321,6 +321,7 @@ final class PaperEvents implements Events, Listener {
           new Intent.PlaceLinkItem(
               id(player),
               PaperPositions.toPosition(event.getBlockPlaced().getLocation()),
+              event.getBlockPlaced().getType().getKey().asString(),
               linkSign.get()));
       return;
     }

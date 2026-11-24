@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -41,6 +42,12 @@ public final class LinkWorld {
   private final HallVisits visits;
   private BiConsumer<PlayerId, HallLayout.Link> editor = (p, l) -> {};
 
+  /**
+   * The Hall's and the zones' say on placing or breaking a block, asked before a link sign is
+   * placed or a link block's trigger comes off, so neither gets past locked land or someone's cell.
+   */
+  private Function<Intent, Optional<Decision>> rules = intent -> Optional.empty();
+
   /** What is drawn now: tag to the text's and the hitbox's entity ids. */
   private final Map<String, Drawn> drawn = new HashMap<>();
 
@@ -51,6 +58,16 @@ public final class LinkWorld {
     this.config = config;
     this.hall = hall;
     this.visits = visits;
+  }
+
+  /** Connects the Hall's and the zones' rules for placing and breaking blocks. */
+  public void bindRules(Function<Intent, Optional<Decision>> next) {
+    this.rules = next;
+  }
+
+  /** Whether a decision stops what was asked. */
+  private static boolean stops(Decision decision) {
+    return decision instanceof Decision.Deny || decision instanceof Decision.Redirect;
   }
 
   /** Connects the link editor. */
@@ -104,6 +121,12 @@ public final class LinkWorld {
       return new Decision.Deny(Optional.empty());
     }
     Position block = blockOf(place.block());
+    // Placed as any block is: locked land and other players' cells refuse it.
+    Optional<Decision> ruled =
+        rules.apply(new Intent.PlaceBlock(player, place.block(), place.blockType()));
+    if (ruled.isPresent() && stops(ruled.get())) {
+      return ruled.get();
+    }
     var _ =
         hall.saveHall(
             hall.layout()
@@ -136,6 +159,11 @@ public final class LinkWorld {
     PlayerId player = broken.player();
     if (link.isEmpty() || !builder(player) || hall.hallLeftOut()) {
       return Optional.empty();
+    }
+    // Broken as any block is: a builder still can't break into locked land.
+    Optional<Decision> ruled = rules.apply(broken);
+    if (ruled.isPresent() && stops(ruled.get())) {
+      return ruled;
     }
     List<HallLayout.Trigger> triggers = new ArrayList<>(link.get().triggers());
     triggers.removeIf(t ->
