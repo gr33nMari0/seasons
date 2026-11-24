@@ -190,14 +190,12 @@ The Hall admins' wand (/hof wand).
 | `wand.outlines` | | The Hall's parts outlined for an admin alone while they hold the wand, or after /hof show on. |
 | `wand.outlines.range` | `48` | How far away a box is still drawn, in blocks. |
 | `wand.outlines.max` | `64` | How many boxes at most, nearest first. |
-| `wand.nudge` | | Moving a face of a box with the wand: sneak and scroll moves the face looked at by a step; drop (Q) cycles the steps. |
+| `wand.nudge` | | Moving a face of a box with the wand: left-click a box to take it with the face clicked; sneak and scroll moves that face by a step; drop (Q) cycles the steps. |
 | `wand.nudge.steps` | `[1, 10]` | The steps drop (Q) cycles through, in blocks. |
 | `wand.nudge.swapHandsApplies` | `true` | Swap-hands (F) applies an edited box, as /hof sel apply does. |
-| `wand.anchors` | | Anchors drawn and moved with the wand. |
+| `wand.anchors` | | Anchors drawn with the wand. |
 | `wand.anchors.markers` | `true` | Every anchor gets a coloured marker and a label while the wand is held. |
 | `wand.anchors.labelRange` | `12` | How near, in blocks, an anchor's label is shown. |
-| `wand.anchors.holdTimeout` | `60s` | How long a picked-up anchor waits without a move before it goes back. |
-| `wand.anchors.carryBlocks` | `true` | Swap-hands while holding an archive or plaque anchor carries its block too, when the block is empty. |
 
 ### `admin`
 

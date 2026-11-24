@@ -287,9 +287,9 @@ public record SeasonsConfig(
               "The Hall's parts outlined for an admin alone while they hold the wand, or after /hof show on.")
           Outlines outlines,
       @Comment(
-              "Moving a face of a box with the wand: sneak and scroll moves the face looked at by a step; drop (Q) cycles the steps.")
+              "Moving a face of a box with the wand: left-click a box to take it with the face clicked; sneak and scroll moves that face by a step; drop (Q) cycles the steps.")
           Nudge nudge,
-      @Comment("Anchors drawn and moved with the wand.") Anchors anchors) {
+      @Comment("Anchors drawn with the wand.") Anchors anchors) {
     /**
      * Nudging a box's faces.
      *
@@ -307,23 +307,16 @@ public record SeasonsConfig(
     }
 
     /**
-     * Anchor markers and dragging.
+     * Anchor markers.
      *
      * @param markers whether every anchor gets a marker and label
      * @param labelRange how near a marker's label is shown
-     * @param holdTimeout how long a picked-up anchor waits for a move before going back
-     * @param carryBlocks whether swap-hands while holding can carry an empty block with its anchor
      */
     @ConfigSerializable
     public record Anchors(
         @Comment("Every anchor gets a coloured marker and a label while the wand is held.")
             boolean markers,
-        @Comment("How near, in blocks, an anchor's label is shown.") int labelRange,
-        @Comment("How long a picked-up anchor waits without a move before it goes back.")
-            Duration holdTimeout,
-        @Comment(
-                "Swap-hands while holding an archive or plaque anchor carries its block too, when the block is empty.")
-            boolean carryBlocks) {}
+        @Comment("How near, in blocks, an anchor's label is shown.") int labelRange) {}
 
     /**
      * The outlines.

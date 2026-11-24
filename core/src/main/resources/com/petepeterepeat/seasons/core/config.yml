@@ -240,24 +240,19 @@ wand:
     range: 48
     # How many boxes at most, nearest first.
     max: 64
-  # Moving a face of a box with the wand: sneak and scroll moves the face looked at by a step; drop
-  # (Q) cycles the steps.
+  # Moving a face of a box with the wand: left-click a box to take it with the face clicked; sneak
+  # and scroll moves that face by a step; drop (Q) cycles the steps.
   nudge:
     # The steps drop (Q) cycles through, in blocks.
     steps: [1, 10]
     # Swap-hands (F) applies an edited box, as /hof sel apply does.
     swapHandsApplies: true
-  # Anchors drawn and moved with the wand.
+  # Anchors drawn with the wand.
   anchors:
     # Every anchor gets a coloured marker and a label while the wand is held.
     markers: true
     # How near, in blocks, an anchor's label is shown.
     labelRange: 12
-    # How long a picked-up anchor waits without a move before it goes back.
-    holdTimeout: 60s
-    # Swap-hands while holding an archive or plaque anchor carries its block too, when the block is
-    # empty.
-    carryBlocks: true
 
 # Admin conveniences.
 admin:

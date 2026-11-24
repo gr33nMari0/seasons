@@ -10,6 +10,7 @@ It is a server-side Paper plugin: players install nothing.
 
 - **Hall of Fame.** Galleries of cells, one per player per season, assigned at random (or claimed, ordered or assigned by hand). Owners decorate their cell before the season ends; after that it's locked and view-only, and so is every archived item. Visitors use `/hof` from a bed, and `/hof leave` takes them back.
 - **Rollover.** Reminders count down to a planned end you set. At a live event, `/season end` starts a ten-minute countdown, archives everyone online and resets them. Anyone offline is archived when they next log in. `/season launch` takes everyone to the new spawn with a fanfare.
+- **Links.** Buttons, signs, plates, doorways and floating text that take players to the Hall, any season's spawn, a named point or another link, one way or both, made with the wand anywhere or by command, styled in colour, open to everyone or a permission group, and runnable from command blocks.
 - **Old world.** Zones you draw lock the old world (block, no-build or announce) until `/season unlock homecoming`. Ender chests go into a vault that opens at Homecoming.
 - **Extras.** A dragon egg for each season's slayer, season firsts, awards with trophies, a season card for every player, registered pets that travel to the new spawn, a museum, curation of archived items, BlueMap areas and waypoints, and Discord posts.
 
@@ -65,6 +66,7 @@ Players get these by default:
 | `/hof swap <player>` | Swap cells during the decorating window; both players run it |
 | `/hof claim [cell]` | Claim a cell, when the gallery uses `claim` assignment |
 | `/hof gate open\|shut` | Open or shut your own cell's gate |
+| `/hof link go <link>` | Take a link you may use |
 | `/vault` | Look at your ender vault, and take from it after Homecoming |
 | `/pet add` / `remove <name>` / `list` | Register tamed pets (up to 5) to travel with you to the next spawn |
 | `/season info` | The season, its phase, the planned end, your cell and archive |
@@ -82,6 +84,7 @@ More nodes:
 
 - `seasons.hof.anywhere` skips the `/hof` entry checks; ops have it by default.
 - `seasons.hof.roam` lets the holder leave the Hall during the Intermission; ops have it by default.
+- `seasons.admin.links` (part of `seasons.admin.hof`) makes and changes links and points anywhere; `seasons.link.use.<id>` (or `seasons.link.use.*`) takes a link open only by permission, so a LuckPerms group can be given a set of links.
 - `seasons.zone.bypass` and `seasons.hof.bypass` ignore zones and the Hall's protection. Nobody has them by default, not even ops.
 - `/season reset` wipes Seasons from a test world. Only server operators can run it, never through a permission, and only after two confirmations and typing DELETE.
 
