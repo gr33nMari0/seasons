@@ -187,7 +187,7 @@ final class WebServer implements AutoCloseable {
     for (String cookie : reply.cookies()) {
       out.add("Set-Cookie", cookie);
     }
-    byte[] body = reply.body().getBytes(StandardCharsets.UTF_8);
+    byte[] body = reply.wire();
     exchange.sendResponseHeaders(reply.status(), body.length == 0 ? -1 : body.length);
     if (body.length > 0) {
       try (OutputStream o = exchange.getResponseBody()) {

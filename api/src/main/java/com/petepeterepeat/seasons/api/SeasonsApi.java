@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  */
 public interface SeasonsApi {
   /** This API's version, which Seasons Web checks against the range it supports. */
-  String API_VERSION = "1.3.0";
+  String API_VERSION = "1.4.0";
 
   /**
    * The Seasons plugin version.
@@ -112,6 +112,14 @@ public interface SeasonsApi {
    */
   default CompletableFuture<List<AuditEntry>> audit(int count) {
     return CompletableFuture.completedFuture(List.of());
+  }
+
+  /**
+   * The player last seen with a name, ignoring case, such as for a short link to their profile
+   * (since 1.4).
+   */
+  default CompletableFuture<Optional<UUID>> playerId(String name) {
+    return CompletableFuture.completedFuture(Optional.empty());
   }
 
   /** A subscription to events. */

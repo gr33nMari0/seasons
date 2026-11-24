@@ -28,7 +28,10 @@ record WebConfig(
     List<WebSettings.Link> links,
     List<String> frameOrigins,
     Visibility visibility,
-    Map<String, List<String>> screens) {
+    Map<String, List<String>> screens,
+    List<String> gameAddresses,
+    List<WebSettings.Link> helpLinks,
+    Optional<String> rulesFile) {
   static final String SPOTIFY = "https://open.spotify.com";
 
   /**
@@ -140,9 +143,52 @@ record WebConfig(
     if (settings.sessions().lifetime().compareTo(Duration.ofMinutes(1)) < 0) {
       return new Off("sessions.lifetime must be at least a minute", warnings);
     }
+    List<String> gameAddresses = new ArrayList<>();
+    for (String typed : settings.gameAddresses()) {
+      Optional<String> address = Discovery.normalise(typed);
+      if (address.isEmpty()) {
+        warnings.add(
+            "game-addresses: \""
+                + typed
+                + "\" is left out: a game address is a host name, with a port if not 25565");
+      } else if (!gameAddresses.contains(address.get())) {
+        gameAddresses.add(address.get());
+      }
+    }
+    List<WebSettings.Link> helpLinks = new ArrayList<>();
+    for (WebSettings.Link link : settings.help().links()) {
+      Optional<String> problem = linkProblem(link);
+      if (problem.isPresent()) {
+        warnings.add("help.links: \"" + link.label() + "\" is left out: " + problem.get());
+      } else {
+        helpLinks.add(new WebSettings.Link(link.label(), link.url(), null));
+      }
+    }
+    String rules = settings.help().rules().strip();
+    Optional<String> rulesFile = Optional.empty();
+    if (!rules.isEmpty()) {
+      if (rules.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.md")) {
+        rulesFile = Optional.of(rules);
+      } else {
+        warnings.add(
+            "help.rules: \""
+                + rules
+                + "\" is left out: a Markdown file name in plugins/SeasonsWeb/");
+      }
+    }
     return new Ready(
         new WebConfig(
-            settings, bind, publicUrl, clientIp, links, List.copyOf(frames), visibility, screens),
+            settings,
+            bind,
+            publicUrl,
+            clientIp,
+            links,
+            List.copyOf(frames),
+            visibility,
+            screens,
+            List.copyOf(gameAddresses),
+            List.copyOf(helpLinks),
+            rulesFile),
         warnings);
   }
 

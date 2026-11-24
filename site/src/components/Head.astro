@@ -1,0 +1,28 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// Starlight's head tags, plus Seasons' own: the content security policy (filled in by
+// scripts/csp.mjs after the build), the preview image and card details for rich link previews
+// (scripts/og.mjs draws the image from the seasons:* tags), theme colour and icons.
+import Default from '@astrojs/starlight/components/Head.astro'
+import { ogImagePath, sectionOf } from '../lib/og'
+const route = Astro.locals.starlightRoute
+const data = route.entry.data as { title: string; description?: string; art?: string }
+const image = new URL(ogImagePath(Astro.url.pathname), Astro.site).href
+const alt = `${data.title} · Seasons`
+---
+<meta http-equiv="Content-Security-Policy" content="__CSP__" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<Default />
+<meta property="og:image" content={image} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content={alt} />
+<meta name="twitter:image" content={image} />
+<meta name="twitter:image:alt" content={alt} />
+<meta name="theme-color" content="#1d2333" />
+<meta name="seasons:section" content={sectionOf(Astro.url.pathname)} />
+<meta name="seasons:art" content={data.art ?? 'logo'} />
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="stylesheet" href="/design/fonts.css" />
+<link rel="stylesheet" href="/design/tokens.css" />

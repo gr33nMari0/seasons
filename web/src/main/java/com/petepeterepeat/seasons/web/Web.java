@@ -152,7 +152,17 @@ final class Web implements AutoCloseable {
             version,
             clock,
             assets,
-            () -> looking == null ? Framing.State.UNKNOWN : looking.state());
+            () -> looking == null ? Framing.State.UNKNOWN : looking.state(),
+            next.rulesFile().flatMap(this::rules),
+            new Previews(
+                next,
+                api,
+                () -> name,
+                this::messages,
+                key -> next.visibility().allows(key, Viewer.ANONYMOUS),
+                clock,
+                cards(),
+                previewHttp));
     try {
       WebServer started = new WebServer(next, routes, sessions, limiter, hub, log);
       started.start();
@@ -175,6 +185,37 @@ final class Web implements AutoCloseable {
         next.where(),
         next.publicUrl().map(u -> " for " + u).orElse(""));
     return "listening on " + next.where();
+  }
+
+  private @org.jspecify.annotations.Nullable PreviewCards cards;
+  private final java.net.http.HttpClient previewHttp =
+      java.net.http.HttpClient.newBuilder()
+          .connectTimeout(java.time.Duration.ofSeconds(3))
+          .followRedirects(java.net.http.HttpClient.Redirect.NEVER)
+          .build();
+
+  /** The preview drawer, its fonts read once. */
+  private synchronized PreviewCards cards() {
+    if (cards == null) {
+      cards = new PreviewCards();
+    }
+    return cards;
+  }
+
+  /** The Help page's rules, from a Markdown file in plugins/SeasonsWeb/, up to 64 KiB. */
+  private Optional<String> rules(String file) {
+    java.nio.file.Path path = folder.resolve(file);
+    try {
+      if (java.nio.file.Files.size(path) > 64 * 1024) {
+        log.warn("web.yml help.rules: {} is over 64 KiB, so it is left out", file);
+        return Optional.empty();
+      }
+      return Optional.of(java.nio.file.Files.readString(path));
+    } catch (IOException e) {
+      log.warn(
+          "web.yml help.rules: {} can't be read ({}), so it is left out", file, e.getMessage());
+      return Optional.empty();
+    }
   }
 
   private void stopServer() {
@@ -309,6 +350,7 @@ final class Web implements AutoCloseable {
         d.bind(),
         d.publicUrl(),
         d.name(),
+        d.gameAddresses(),
         d.open(),
         d.proxy(),
         d.links(),
@@ -317,7 +359,9 @@ final class Web implements AutoCloseable {
         d.rateLimits(),
         d.stream(),
         d.cache(),
-        d.screens());
+        d.screens(),
+        d.help(),
+        d.previews());
   }
 
   boolean serving() {

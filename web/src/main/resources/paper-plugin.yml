@@ -14,6 +14,9 @@ permissions:
   seasons.web:
     description: /web link, sessions, logout and privacy
     default: true
+  seasons.web.discovery:
+    description: /web discovery, the DNS records that let players find the dashboard from the game address
+    default: op
   seasons.web.admin:
     description: Admin dashboard widgets. Never granted by default
     default: false

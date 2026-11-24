@@ -1,0 +1,20 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// "Start here": three cards, one per kind of reader, each with the pages they need first.
+import Art from './Art.astro'
+const ROLES = [
+  { art: 'trophy', title: 'I run a server', text: 'Install Seasons, set up the Hall and the old world, and run your first rollover.', links: [['Install', '/docs/start/install/'], ['Your first season', '/docs/start/first-season/'], ['Rollover day', '/docs/owners/rollover-day/'], ['Seasons Web', '/docs/owners/seasons-web/']] },
+  { art: 'shield', title: 'I\'m an admin', text: 'Build galleries and cells, draw zones, make links and look after the archives.', links: [['The Hall', '/docs/owners/the-hall/'], ['Anchors', '/docs/owners/anchors/'], ['Links', '/docs/owners/links/'], ['Commands', '/docs/reference/commands/']] },
+  { art: 'figure-diamond', title: 'I\'m a player', text: 'Visit the Hall, find your cell, get your ender chest back and use the dashboard.', links: [['Visiting the Hall', '/docs/players/visiting-the-hall/'], ['Your vault', '/docs/players/your-vault/'], ['The dashboard', '/docs/players/dashboard/'], ['Concepts', '/docs/start/concepts/']] }
+]
+---
+<div class="roles not-content">
+  {ROLES.map((r) => (
+    <article class="role">
+      <Art name={r.art} size={56} />
+      <h2>{r.title}</h2>
+      <p>{r.text}</p>
+      <ul>{r.links.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
+    </article>
+  ))}
+</div>

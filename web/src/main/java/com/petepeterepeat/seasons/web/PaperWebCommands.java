@@ -13,6 +13,7 @@ import java.util.function.Supplier;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
@@ -20,22 +21,40 @@ import org.bukkit.plugin.Plugin;
 final class PaperWebCommands {
   static final String PERMISSION = "seasons.web";
   static final String ADMIN_PERMISSION = "seasons.web.admin";
+  static final String DISCOVERY_PERMISSION = "seasons.web.discovery";
 
   private final Plugin plugin;
   private final Supplier<Web> web;
   private final Supplier<WebCommands> commands;
+  private final Supplier<DiscoveryLookups> lookups;
 
-  PaperWebCommands(Plugin plugin, Supplier<Web> web, Supplier<WebCommands> commands) {
+  PaperWebCommands(
+      Plugin plugin,
+      Supplier<Web> web,
+      Supplier<WebCommands> commands,
+      Supplier<DiscoveryLookups> lookups) {
     this.plugin = plugin;
     this.web = web;
     this.commands = commands;
+    this.lookups = lookups;
+  }
+
+  /** A player who holds {@code seasons.web}: the player commands. */
+  private static boolean playerWithWeb(CommandSourceStack s) {
+    return s.getSender() instanceof Player && s.getSender().hasPermission(PERMISSION);
+  }
+
+  /** The console, or a holder of {@code seasons.web.discovery}: the discovery commands. */
+  private static boolean mayDiscover(CommandSourceStack s) {
+    return !(s.getSender() instanceof Player) || s.getSender().hasPermission(DISCOVERY_PERMISSION);
   }
 
   LiteralCommandNode<CommandSourceStack> node() {
     return Commands.literal("web")
-        .requires(s -> s.getSender() instanceof Player && s.getSender().hasPermission(PERMISSION))
+        .requires(s -> playerWithWeb(s) || mayDiscover(s))
         .then(
             Commands.literal("link")
+                .requires(PaperWebCommands::playerWithWeb)
                 .executes(c -> tell(c, commands.get().linkUsage()))
                 .then(
                     Commands.argument("code", StringArgumentType.greedyString())
@@ -53,9 +72,11 @@ final class PaperWebCommands {
                         })))
         .then(
             Commands.literal("sessions")
+                .requires(PaperWebCommands::playerWithWeb)
                 .executes(c -> tell(c, commands.get().sessions(player(c).getUniqueId()))))
         .then(
             Commands.literal("logout")
+                .requires(PaperWebCommands::playerWithWeb)
                 .executes(c -> {
                   Player p = player(c);
                   return tell(
@@ -76,6 +97,7 @@ final class PaperWebCommands {
                         })))
         .then(
             Commands.literal("privacy")
+                .requires(PaperWebCommands::playerWithWeb)
                 .executes(c -> {
                   Player p = player(c);
                   var _ =
@@ -89,6 +111,27 @@ final class PaperWebCommands {
                                   .execute(plugin, () -> send(p, lines)));
                   return Command.SINGLE_SUCCESS;
                 }))
+        .then(
+            Commands.literal("discovery")
+                .requires(PaperWebCommands::mayDiscover)
+                .executes(c -> tell(c, commands.get().discovery()))
+                .then(
+                    Commands.literal("check")
+                        .executes(c -> {
+                          CommandSender sender = c.getSource().getSender();
+                          send(sender, List.of(Line.of("discovery.checking")));
+                          DiscoveryLookups look = lookups.get();
+                          var _ =
+                              commands
+                                  .get()
+                                  .discoveryCheck(look, look)
+                                  .thenAccept(lines ->
+                                      plugin
+                                          .getServer()
+                                          .getGlobalRegionScheduler()
+                                          .execute(plugin, () -> send(sender, lines)));
+                          return Command.SINGLE_SUCCESS;
+                        })))
         .build();
   }
 
@@ -97,11 +140,11 @@ final class PaperWebCommands {
   }
 
   private int tell(CommandContext<CommandSourceStack> c, List<Line> lines) {
-    send(player(c), lines);
+    send(c.getSource().getSender(), lines);
     return Command.SINGLE_SUCCESS;
   }
 
-  private void send(Player player, List<Line> lines) {
+  private void send(CommandSender player, List<Line> lines) {
     Messages messages = web.get().messages();
     for (Line line : lines) {
       TagResolver.Builder resolver = TagResolver.builder();

@@ -1,0 +1,20 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The site-wide footer: a grass strip, the links and the licence.
+const REPO = 'https://github.com/gr33nMari0/seasons'
+---
+<div class="site-footer not-content theme-dark">
+  <div class="ground" aria-hidden="true"></div>
+  <div class="site-footer-inner">
+    <div class="site-footer-brand">
+      <img src="/design/art/logo.svg" alt="" width="32" height="29" />
+      <p><strong>Seasons</strong><br />One world. A fresh start every season.</p>
+    </div>
+    <nav aria-label="Footer" class="site-footer-links">
+      <div><h2>Product</h2><a href="/#features">Features</a><a href="/download/">Download</a><a href="/changelog/">Changelog</a><a href="/connect/">Find a dashboard</a></div>
+      <div><h2>Docs</h2><a href="/docs/start/install/">Install</a><a href="/docs/start/first-season/">Your first season</a><a href="/docs/reference/commands/">Commands</a><a href="/docs/faq/">FAQ</a></div>
+      <div><h2>Project</h2><a href={REPO}>GitHub</a><a href="https://modrinth.com/project/seasonsmc">Modrinth</a><a href="https://hangar.papermc.io/gr33nMari0/SeasonsMC">Hangar</a><a href={`${REPO}/issues`}>Report a problem</a></div>
+    </nav>
+  </div>
+  <p class="site-footer-legal">Seasons, Seasons Web and seasons-api are source-available under the <a href={`${REPO}/blob/main/LICENSE`}>PolyForm Noncommercial License 1.0.0</a>. Not an official Minecraft product; not approved by or associated with Mojang or Microsoft.</p>
+</div>

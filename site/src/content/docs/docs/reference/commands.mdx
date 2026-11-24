@@ -1,0 +1,56 @@
+---
+title: Commands
+description: Every Seasons and Seasons Web command, its arguments, who may run it and the permission node that guards it.
+art: trophy
+audience: everyone
+sidebar:
+  order: 1
+tableOfContents:
+  maxHeadingLevel: 2
+---
+import CommandFilter from '../../../../components/CommandFilter.astro'
+import CommandReference from '../../../../components/CommandReference.astro'
+
+This list is generated from the plugins' own command trees, so it always matches the release it was built for. In game, `/season help`, `/hof help` and tab completion show the same commands, and only the ones you may run.
+
+- **Usage** lines show each argument as `<name: what it takes>`. Words in `[brackets]` are optional. Click a line to copy the command.
+- **Everyone** commands work for every player. **Ops** commands need op, or the permission node shown, which you can give a group in LuckPerms or any permissions plugin. See [Permissions](/docs/reference/permissions/).
+- Positions can be typed absolute (`120 64 -30`), relative (`~ ~1 ~`) or as `here`. Boxes take two positions, or `sel` for your wand selection.
+
+<CommandFilter />
+
+## /season
+
+Running the season: its state, the end, the launch, spawns, zones, waypoints, settings and players.
+
+<CommandReference root="season" />
+
+## /hof
+
+The Hall of Fame: visiting, links and points, the wand, the hub, galleries, cells and anchors, and curation.
+
+<CommandReference root="hof" />
+
+## /museum
+
+Putting items on museum plinths and taking them off.
+
+<CommandReference root="museum" />
+
+## /vault
+
+Your ender vault.
+
+<CommandReference root="vault" />
+
+## /pet
+
+Registering pets to travel with you to the next season's spawn.
+
+<CommandReference root="pet" />
+
+## /web
+
+Seasons Web: logging in to your server's dashboard, and your privacy there. Needs the Seasons Web plugin.
+
+<CommandReference root="web" />

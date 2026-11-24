@@ -168,10 +168,13 @@ jobs:
           retention-days: 7
           path: testkit/build/scenario-results
 
-  # The public site (site/): its unit tests, and the connect page in Chromium and WebKit
-  # (docs/adr/0007). GitHub Pages publishes it from main (.github/workflows/pages.yml).
+  # The public site and its docs (site/, ADR 0008): built as Pages builds it, then its unit tests,
+  # the browser tests in Chromium and WebKit (ADR 0007), links, previews and accessibility (ADR
+  # 0010). GitHub Pages publishes it from main (.github/workflows/pages.yml).
   site:
     runs-on: ubuntu-latest
+    env:
+      ASTRO_TELEMETRY_DISABLED: '1'
     defaults:
       run:
         working-directory: site
@@ -188,6 +191,7 @@ jobs:
           key: playwright-${{ steps.playwright.outputs.version }}
       - run: npm ci --no-audit --no-fund
       - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build
       - run: npm test
 
   # The check branch protection requires. It runs whatever happened before it, and passes only if

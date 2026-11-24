@@ -4,10 +4,11 @@ import { test } from 'node:test'
 import { checkInstance } from '../public/connect/check.mjs'
 
 const ORIGIN = 'https://seasons.example.com'
-const WELL_KNOWN = { service: 'seasons', name: 'The Ranch', version: '1.2.0', api: 'v1', apiVersion: '1.3.0', dashboard: ORIGIN, features: ['season', 'online'], login: ['device-code'] }
+const WELL_KNOWN = { service: 'seasons', name: 'Example SMP', version: '1.2.0', api: 'v1', apiVersion: '1.3.0', dashboard: ORIGIN, features: ['season', 'online'], login: ['device-code'] }
 
-test('a Seasons instance: its name, version, features and dashboard', () => {
-  assert.deepEqual(checkInstance(WELL_KNOWN, ORIGIN), { ok: true, name: 'The Ranch', version: '1.2.0', features: ['season', 'online'], dashboard: `${ORIGIN}/` })
+test('a Seasons instance: its name, version, features, game addresses and dashboard', () => {
+  assert.deepEqual(checkInstance(WELL_KNOWN, ORIGIN), { ok: true, name: 'Example SMP', version: '1.2.0', features: ['season', 'online'], gameAddresses: null, dashboard: `${ORIGIN}/` })
+  assert.deepEqual(checkInstance({ ...WELL_KNOWN, gameAddresses: ['Play.Example.com', 3] }, ORIGIN).gameAddresses, ['play.example.com'])
 })
 
 test('anything else is not a Seasons instance', () => {

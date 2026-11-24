@@ -1,0 +1,7 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// A picture from design/art, drawn crisp at a whole-number scale.
+interface Props { name: string; alt?: string; size?: number; class?: string }
+const { name, alt = '', size = 48, class: cls } = Astro.props
+---
+<img class:list={['px-art', cls]} src={`/design/art/${name}.svg`} alt={alt} width={size} height={size} loading="lazy" decoding="async" />

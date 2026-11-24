@@ -1,0 +1,8 @@
+# Built by scripts/prepare.mjs from ../design and ../docs/images; never edit the copies.
+public/design/
+public/favicon.svg
+public/icon-512.png
+public/apple-touch-icon.png
+# Astro's output and caches
+dist/
+.astro/
