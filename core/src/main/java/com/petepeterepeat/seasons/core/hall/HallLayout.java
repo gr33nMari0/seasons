@@ -365,16 +365,22 @@ public record HallLayout(
 
   /**
    * How {@code links.yml} was copied from {@code hall.yml} (M8): when, whether an admin has
-   * finished reviewing it with {@code /hof link upgrade done}, and each copied link's trigger as it
-   * was ({@code both} or {@code area}) by id, for the report.
+   * finished reviewing it with {@code /hof link upgrade done}, each copied link's trigger as it was
+   * ({@code both} or {@code area}) by id, for the report, and a fingerprint of hall.yml's links as
+   * they were copied, so a change made to them by the previous Seasons since is noticed.
    */
-  public record Upgrade(String at, boolean done, Map<String, String> before) {
+  public record Upgrade(String at, boolean done, Map<String, String> before, String frozen) {
     public Upgrade {
       before = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(before));
     }
 
     public Upgrade finished() {
-      return new Upgrade(at, true, before);
+      return new Upgrade(at, true, before, frozen);
+    }
+
+    /** The upgrade note after hall.yml's links were copied again, as they are now. */
+    public Upgrade recopied(String next) {
+      return new Upgrade(at, done, before, next);
     }
   }
 

@@ -158,6 +158,19 @@ public final class LinkCommands {
                                     CommandNode.argument("condition", ArgumentType.greedy())
                                         .executes(this::when))))
                 .then(
+                    CommandNode.literal("upgrade")
+                        .permission(admin)
+                        .then(CommandNode.literal("report").executes(this::upgradeReport))
+                        .then(CommandNode.literal("done").executes(this::upgradeDone))
+                        .then(
+                            CommandNode.literal("import")
+                                .executes(this::upgradeImport)
+                                .then(
+                                    CommandNode.argument("options", ArgumentType.greedy())
+                                        .suggests((s, t) -> List.of("--replace"))
+                                        .executes(this::upgradeImport)))
+                        .then(CommandNode.literal("forget-old").executes(this::upgradeForget)))
+                .then(
                     CommandNode.literal("go")
                         .then(
                             CommandNode.argument("link", ArgumentType.word()).executes(this::go))))
@@ -847,6 +860,117 @@ public final class LinkCommands {
             at -> lines.add(messages().get("hof.link.info-landing", place("link", link.id(), at))));
     link.pair().ifPresent(p -> lines.add(messages().get("hof.link.info-pair", "other", p)));
     return lines;
+  }
+
+  // The upgrade from 1.1 (M8, Upgrading existing setups)
+
+  /** {@code /hof link upgrade report}: each copied link, its trigger before and after. */
+  void upgradeReport(CommandSource source, Arguments arguments) {
+    HallLayout layout = hall.layout();
+    if (layout.upgrade().isEmpty() || layout.upgrade().get().before().isEmpty()) {
+      source.reply(messages().get("hof.link.upgrade.none"));
+      return;
+    }
+    for (Map.Entry<String, String> entry : layout.upgrade().get().before().entrySet()) {
+      Optional<HallLayout.Link> link = layout.link(entry.getKey());
+      if (link.isEmpty()) {
+        source.reply(messages().get("hof.link.upgrade.gone", "link", entry.getKey()));
+        continue;
+      }
+      String[] where = place("link", link.get().id(), link.get().block());
+      if (entry.getValue().equals("area")) {
+        source.reply(messages().get("hof.link.upgrade.area", where));
+        continue;
+      }
+      Optional<HallLayout.BlockKind> now =
+          link.get().triggers().stream()
+              .filter(t -> t instanceof HallLayout.Trigger.OnBlock)
+              .map(t -> ((HallLayout.Trigger.OnBlock) t).kind())
+              .findFirst();
+      if (now.isEmpty() || now.get() == HallLayout.BlockKind.BOTH) {
+        source.reply(messages().get("hof.link.upgrade.same", where));
+      } else {
+        source.reply(
+            messages()
+                .get(
+                    "hof.link.upgrade.changed",
+                    with(where, "now", messages().text("hof.link.kind-" + now.get().word()))));
+      }
+    }
+    source.reply(messages().get("hof.link.upgrade.hint"));
+  }
+
+  void upgradeDone(CommandSource source, Arguments arguments) {
+    if (left(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    if (layout.upgrade().isEmpty()) {
+      source.reply(messages().get("hof.link.upgrade.none"));
+      return;
+    }
+    save(
+        source,
+        layout.withUpgrade(layout.upgrade().map(HallLayout.Upgrade::finished)),
+        List.of(messages().get("hof.link.upgrade.done")),
+        "link-upgrade-done",
+        "links",
+        "");
+  }
+
+  /** {@code /hof link upgrade import --replace}: hall.yml's 1.1 links copied again. */
+  void upgradeImport(CommandSource source, Arguments arguments) {
+    if (left(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    if (layout.frozen().isEmpty()) {
+      source.reply(messages().get("hof.link.upgrade.no-old"));
+      return;
+    }
+    if (!Words.of(arguments.optionalString("options").orElse("")).contains("--replace")) {
+      source.reply(messages().get("hof.link.upgrade.import-replace"));
+      return;
+    }
+    int count = layout.frozen().size();
+    save(
+        source,
+        links.recopy(layout),
+        List.of(
+            messages()
+                .get(
+                    count == 1 ? "hof.link.upgrade.imported-one" : "hof.link.upgrade.imported",
+                    "count",
+                    Integer.toString(count))),
+        "link-upgrade-import",
+        "links",
+        String.join(", ", layout.frozen().keySet()));
+  }
+
+  /** {@code /hof link upgrade forget-old}: hall.yml keeps no links of its own any more. */
+  void upgradeForget(CommandSource source, Arguments arguments) {
+    if (left(source)) {
+      return;
+    }
+    HallLayout layout = hall.layout();
+    if (layout.frozen().isEmpty()) {
+      source.reply(messages().get("hof.link.upgrade.no-old"));
+      return;
+    }
+    save(
+        source,
+        layout.withFrozen(Map.of()),
+        List.of(messages().get("hof.link.upgrade.forgotten")),
+        "link-upgrade-forget",
+        "links",
+        String.join(", ", layout.frozen().keySet()));
+  }
+
+  private static String[] with(String[] placeholders, String key, String value) {
+    String[] all = java.util.Arrays.copyOf(placeholders, placeholders.length + 2);
+    all[placeholders.length] = key;
+    all[placeholders.length + 1] = value;
+    return all;
   }
 
   // Points

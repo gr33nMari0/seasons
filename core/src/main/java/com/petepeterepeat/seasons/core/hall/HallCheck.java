@@ -142,6 +142,9 @@ public final class HallCheck {
             .ifPresent(area -> found.add(messages.get("hof.check.no-floor", "what", key)));
       }
     }
+    if (LinkService.frozenChanged(hall)) {
+      found.add(messages.get("hof.check.links-frozen-changed"));
+    }
     for (HallLayout.Link link : hall.links().values()) {
       if (link.to().isEmpty()) {
         found.add(messages.get("hof.check.link-nowhere", "link", link.id()));
@@ -150,8 +153,25 @@ public final class HallCheck {
         found.add(
             messages.get(
                 "hof.check.link-no-spawn", "link", link.id(), "season", Integer.toString(season)));
+      } else if (link.to().get() instanceof HallLayout.Target.AtPoint(String point)
+          && hall.point(point).isEmpty()) {
+        found.add(messages.get("hof.check.link-no-point", "link", link.id(), "point", point));
+      } else if (link.to().get() instanceof HallLayout.Target.ToLink(String other)
+          && hall.link(other).filter(HallLayout.Link::placed).isEmpty()) {
+        found.add(messages.get("hof.check.link-no-link", "link", link.id(), "other", other));
+      } else if (link.to().get() instanceof HallLayout.Target.ToGallery(String gallery)
+          && galleries.stream().noneMatch(g -> g.id().equals(gallery))) {
+        found.add(messages.get("hof.check.link-no-gallery", "link", link.id(), "gallery", gallery));
       }
-      if (air.test(link.block())) {
+      if (link.pair().isPresent()
+          && hall.link(link.pair().get()).map(l -> l.triggers().isEmpty()).orElse(false)) {
+        found.add(
+            messages.get(
+                "hof.check.link-pair-unplaced", "link", link.id(), "other", link.pair().get()));
+      }
+      boolean onBlock =
+          link.triggers().stream().anyMatch(t -> t instanceof HallLayout.Trigger.OnBlock);
+      if (onBlock && air.test(link.block())) {
         Position at = link.block();
         found.add(
             messages.get(

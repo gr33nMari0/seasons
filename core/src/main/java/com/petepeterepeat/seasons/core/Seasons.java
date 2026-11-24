@@ -881,6 +881,14 @@ public final class Seasons implements SeasonsApi {
           SeasonCommands.recordsAhead(snapshot.messages(), service.state().get(), store)
               .forEach(line -> platform.players().sendMessage(player.id(), line));
         }
+        // Links copied from hall.yml and not yet reviewed (M8, Upgrading existing setups).
+        if (platform.players().find(player.id()).isPresent()
+            && snapshot.hall().upgrade().filter(u -> !u.done() && !u.before().isEmpty()).isPresent()
+            && platform.permissions().has(player.id(), LinkService.PERMISSION_ADMIN)) {
+          platform
+              .players()
+              .sendMessage(player.id(), snapshot.messages().get("hof.link.upgrade.reminder"));
+        }
         if (platform.players().find(player.id()).isPresent()
             && (snapshot.anyGalleryLeftOut() || !snapshot.markersLeftOut().isEmpty())
             && platform.permissions().has(player.id(), SeasonService.ADMIN_PERMISSION)) {

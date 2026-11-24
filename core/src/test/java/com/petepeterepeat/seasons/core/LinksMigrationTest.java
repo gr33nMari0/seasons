@@ -177,6 +177,20 @@ class LinksMigrationTest {
   }
 
   @Test
+  void writesCarryTheFrozenLinksThroughWithNoSchemaVersionChange() throws IOException {
+    start(null);
+    // A link edit writes only links.yml.
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof link to sign season 2");
+    assertThat(Files.readString(dir.resolve("world/seasons/hall.yml"))).isEqualTo(HALL_YML);
+    // A hub edit rewrites hall.yml with its 1.1 links as they were.
+    TestCommands.run(fake.commands.get(1), TestSource.console(), "/hof hall hub -9 60 0 -1 80 20");
+    String hall = Files.readString(dir.resolve("world/seasons/hall.yml"));
+    assertThat(hall).contains("schema-version: 1", "sign:", "season: 3", "tile:", "door:");
+    assertThat(Files.readString(dir.resolve("world/seasons/links.yml")))
+        .contains("schema-version: 1");
+  }
+
+  @Test
   void linksYmlReadsBackAsWritten() throws Exception {
     HallLayout.Link full =
         new HallLayout.Link(
@@ -232,7 +246,8 @@ class LinksMigrationTest {
                     Optional.of(Bounds.between(OVERWORLD, 512, 70, -300, 514, 70, -298))))
             .withUpgrade(
                 Optional.of(
-                    new HallLayout.Upgrade("2026-11-24T08:00:00Z", true, Map.of("a", "both"))));
+                    new HallLayout.Upgrade(
+                        "2026-11-24T08:00:00Z", true, Map.of("a", "both"), "1a2b")));
     Path file = dir.resolve("links.yml");
     LinksFiles.write(file, dir.resolve("backups"), hall);
     LinksFiles.Contents read =

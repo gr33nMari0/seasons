@@ -93,7 +93,8 @@ public final class LinksFiles {
               new HallLayout.Upgrade(
                   upgraded.node("at").getString(""),
                   upgraded.node("done").getBoolean(false),
-                  before));
+                  before,
+                  upgraded.node("frozen").getString("")));
     }
     return new Contents(links, points, upgrade);
   }
@@ -264,6 +265,7 @@ public final class LinksFiles {
       at.node("from").set("hall.yml");
       at.node("at").set(upgrade.at());
       at.node("done").set(upgrade.done());
+      at.node("frozen").set(upgrade.frozen());
       for (Map.Entry<String, String> before : upgrade.before().entrySet()) {
         at.node("before", before.getKey()).set(before.getValue());
       }

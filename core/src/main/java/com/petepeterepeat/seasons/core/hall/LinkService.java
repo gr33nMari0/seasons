@@ -176,9 +176,54 @@ public final class LinkService {
         layout
             .withLinks(copied)
             .withUpgrade(
-                Optional.of(new HallLayout.Upgrade(clock.instant().toString(), false, before)));
+                Optional.of(
+                    new HallLayout.Upgrade(
+                        clock.instant().toString(), false, before, fingerprint(layout.frozen()))));
     var _ = halls.saveHall(next);
     return Optional.of(new int[] {copied.size(), clickOnly});
+  }
+
+  /**
+   * A fingerprint of hall.yml's 1.1 links: their ids, places and destinations, so a change made to
+   * them since the copy (by the previous Seasons, after going back) is noticed.
+   */
+  public static String fingerprint(Map<String, HallLayout.Link> frozen) {
+    return Integer.toHexString(frozen.toString().hashCode());
+  }
+
+  /** Whether hall.yml's 1.1 links changed since they were copied into links.yml. */
+  public static boolean frozenChanged(HallLayout layout) {
+    return layout.upgrade().isPresent()
+        && !layout.frozen().isEmpty()
+        && !layout.upgrade().get().frozen().equals(fingerprint(layout.frozen()));
+  }
+
+  /**
+   * hall.yml's 1.1 links copied into links.yml again, replacing links of the same ids ({@code /hof
+   * link upgrade import --replace}), with the kinds the upgrade gives their blocks.
+   */
+  public HallLayout recopy(HallLayout layout) {
+    String keepStepping = settings().upgrade().keepStepping();
+    HallLayout next = layout;
+    for (HallLayout.Link old : layout.frozen().values()) {
+      List<HallLayout.Trigger> triggers = new ArrayList<>();
+      for (HallLayout.Trigger trigger : old.triggers()) {
+        triggers.add(
+            trigger instanceof HallLayout.Trigger.OnBlock(Position at, HallLayout.BlockKind kind)
+                ? new HallLayout.Trigger.OnBlock(
+                    at, upgradedKind(platform.world().block(at), keepStepping))
+                : trigger);
+      }
+      next = next.withLink(old.withTriggers(triggers));
+    }
+    String print = fingerprint(layout.frozen());
+    return next.withUpgrade(
+        Optional.of(
+            layout
+                .upgrade()
+                .map(u -> u.recopied(print))
+                .orElse(
+                    new HallLayout.Upgrade(clock.instant().toString(), false, Map.of(), print))));
   }
 
   // Where a link leads
