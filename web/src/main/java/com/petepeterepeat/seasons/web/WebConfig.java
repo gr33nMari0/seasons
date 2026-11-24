@@ -28,7 +28,8 @@ record WebConfig(
     List<WebSettings.Link> links,
     List<String> frameOrigins,
     Visibility visibility,
-    Map<String, List<String>> screens) {
+    Map<String, List<String>> screens,
+    List<String> gameAddresses) {
   static final String SPOTIFY = "https://open.spotify.com";
 
   /**
@@ -140,9 +141,29 @@ record WebConfig(
     if (settings.sessions().lifetime().compareTo(Duration.ofMinutes(1)) < 0) {
       return new Off("sessions.lifetime must be at least a minute", warnings);
     }
+    List<String> gameAddresses = new ArrayList<>();
+    for (String typed : settings.gameAddresses()) {
+      Optional<String> address = Discovery.normalise(typed);
+      if (address.isEmpty()) {
+        warnings.add(
+            "game-addresses: \""
+                + typed
+                + "\" is left out: a game address is a host name, with a port if not 25565");
+      } else if (!gameAddresses.contains(address.get())) {
+        gameAddresses.add(address.get());
+      }
+    }
     return new Ready(
         new WebConfig(
-            settings, bind, publicUrl, clientIp, links, List.copyOf(frames), visibility, screens),
+            settings,
+            bind,
+            publicUrl,
+            clientIp,
+            links,
+            List.copyOf(frames),
+            visibility,
+            screens,
+            List.copyOf(gameAddresses)),
         warnings);
   }
 

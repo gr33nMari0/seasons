@@ -309,6 +309,7 @@ final class Web implements AutoCloseable {
         d.bind(),
         d.publicUrl(),
         d.name(),
+        d.gameAddresses(),
         d.open(),
         d.proxy(),
         d.links(),

@@ -7,6 +7,12 @@ import http from 'node:http'
 import { dirname, extname, join, normalize, relative } from 'node:path'
 import { chromium } from 'playwright'
 
+// The scenario suite builds the site only to open its pages, and skips the images.
+if (process.env.SEASONS_SITE_PREVIEWS === 'off') {
+  console.log('preview images skipped (SEASONS_SITE_PREVIEWS=off)')
+  process.exit(0)
+}
+
 const SITE = join(import.meta.dirname, '..')
 const DIST = join(SITE, 'dist')
 const TYPES = { '.html': 'text/html', '.css': 'text/css', '.mjs': 'text/javascript', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' }

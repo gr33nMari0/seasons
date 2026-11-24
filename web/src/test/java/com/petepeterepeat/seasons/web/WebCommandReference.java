@@ -23,7 +23,8 @@ public final class WebCommandReference {
   public static void main(String[] args) throws IOException {
     Path out = Path.of(args[0]);
     Files.createDirectories(out.getParent());
-    Files.writeString(out, json(Files.createTempDirectory("web-reference")), StandardCharsets.UTF_8);
+    Files.writeString(
+        out, json(Files.createTempDirectory("web-reference")), StandardCharsets.UTF_8);
   }
 
   /** A command for the reference: its literal words, usage lines and help. */
@@ -33,7 +34,8 @@ public final class WebCommandReference {
     SettingsFile.writeDefault(folder, SettingsFile.MESSAGES);
     Messages messages = Messages.load(folder);
     @SuppressWarnings("NullAway")
-    CommandNode<CommandSourceStack> root = new PaperWebCommands(null, () -> null, () -> null).node();
+    CommandNode<CommandSourceStack> root =
+        new PaperWebCommands(null, () -> null, () -> null, () -> null).node();
     List<Entry> entries = new ArrayList<>();
     for (CommandNode<CommandSourceStack> child : root.getChildren()) {
       List<String> usages = new ArrayList<>();
@@ -50,7 +52,10 @@ public final class WebCommandReference {
       out.add(line);
     }
     for (CommandNode<CommandSourceStack> child : node.getChildren()) {
-      String word = child instanceof ArgumentCommandNode<?, ?> ? "<" + child.getName() + ">" : child.getName();
+      String word =
+          child instanceof ArgumentCommandNode<?, ?>
+              ? "<" + child.getName() + ">"
+              : child.getName();
       usages(child, line + " " + word, out);
     }
   }
@@ -67,7 +72,12 @@ public final class WebCommandReference {
           .append(", \"description\": ")
           .append(string(e.description()))
           .append(", \"permissions\": ")
-          .append(array(List.of(PaperWebCommands.PERMISSION)))
+          .append(
+              array(
+                  List.of(
+                      e.words().get(1).equals("discovery")
+                          ? PaperWebCommands.DISCOVERY_PERMISSION
+                          : PaperWebCommands.PERMISSION)))
           .append('}')
           .append(i + 1 < entries.size() ? ",\n" : "\n");
     }

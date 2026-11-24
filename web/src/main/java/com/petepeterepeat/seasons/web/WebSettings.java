@@ -16,6 +16,9 @@ import org.spongepowered.configurate.objectmapping.meta.Setting;
  * @param publicUrl the https address players use, such as {@code https://seasons.example.com};
  *     empty while only localhost is bound
  * @param name the server's name on the connect page; empty for the server's MOTD
+ * @param gameAddresses the addresses players join the game with, such as {@code play.example.com},
+ *     listed in {@code /.well-known/seasons.json} so the public connect page can confirm it found
+ *     the right dashboard (questions 336)
  * @param open whether visitors who aren't logged in see the public widgets ({@code public})
  * @param visibility each widget's or field's visibility: public, players, admins or hidden
  * @param screens second-screen layouts by name, shown at {@code /screen/<name>}; {@code
@@ -28,6 +31,7 @@ record WebSettings(
     String bind,
     String publicUrl,
     String name,
+    List<String> gameAddresses,
     @Setting("public") boolean open,
     Proxy proxy,
     List<Link> links,
@@ -38,6 +42,7 @@ record WebSettings(
     Cache cache,
     Map<String, Screen> screens) {
   WebSettings {
+    gameAddresses = List.copyOf(gameAddresses);
     links = List.copyOf(links);
     visibility = Map.copyOf(visibility);
     screens = Map.copyOf(screens);

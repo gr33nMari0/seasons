@@ -26,6 +26,7 @@
     {"node": "seasons.hof.anywhere", "plugin": "Seasons", "default": "op", "description": "Use /hof with no bed near and skip its other entry checks but the rate limit", "children": []},
     {"node": "seasons.hof.roam", "plugin": "Seasons", "default": "op", "description": "Leave the Hall of Fame by any route, the Intermission included", "children": []},
     {"node": "seasons.web", "plugin": "Seasons Web", "default": "true", "description": "/web link, sessions, logout and privacy", "children": []},
+    {"node": "seasons.web.discovery", "plugin": "Seasons Web", "default": "op", "description": "/web discovery, the DNS records that let players find the dashboard from the game address", "children": []},
     {"node": "seasons.web.admin", "plugin": "Seasons Web", "default": "false", "description": "Admin dashboard widgets. Never granted by default", "children": []}
   ]
 }

@@ -42,6 +42,7 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
   private @Nullable Metrics metrics;
   private @Nullable Web web;
   private @Nullable WebCommands commands;
+  private @Nullable DiscoveryLookups lookups;
   private volatile Optional<SeasonsApi> api = Optional.empty();
   private volatile Optional<Routes.Health> health = Optional.empty();
   private @Nullable ScheduledTask adminCheck;
@@ -87,15 +88,19 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
     running.follow(api);
     var _ = running.reload();
     getServer().getPluginManager().registerEvents(this, this);
+    DiscoveryLookups looking = new DiscoveryLookups(getPluginMeta().getVersion());
+    lookups = looking;
     PaperWebCommands paper =
-        new PaperWebCommands(this, () -> requireWeb(), () -> requireCommands());
+        new PaperWebCommands(this, () -> requireWeb(), () -> requireCommands(), () -> looking);
     getLifecycleManager()
         .registerEventHandler(
             LifecycleEvents.COMMANDS,
             event ->
                 event
                     .registrar()
-                    .register(paper.node(), "Seasons Web: link this dashboard, devices, privacy"));
+                    .register(
+                        paper.node(),
+                        "Seasons Web: link this dashboard, devices, privacy, discovery"));
     adminCheck =
         getServer()
             .getGlobalRegionScheduler()
@@ -232,6 +237,11 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
     web = null;
     if (running != null) {
       running.close();
+    }
+    DiscoveryLookups looking = lookups;
+    lookups = null;
+    if (looking != null) {
+      looking.close();
     }
     Metrics started = metrics;
     if (started != null) {

@@ -167,7 +167,8 @@
     "/web link": "1.2.0",
     "/web sessions": "1.2.0",
     "/web logout": "1.2.0",
-    "/web privacy": "1.2.0"
+    "/web privacy": "1.2.0",
+    "/web discovery": "1.4.0"
   },
   "permissions": {
     "seasons.info": "1.0.0",
@@ -196,6 +197,7 @@
     "seasons.hof.anywhere": "1.0.0",
     "seasons.hof.roam": "1.0.0",
     "seasons.web": "1.0.0",
-    "seasons.web.admin": "1.0.0"
+    "seasons.web.admin": "1.0.0",
+    "seasons.web.discovery": "1.4.0"
   }
 }

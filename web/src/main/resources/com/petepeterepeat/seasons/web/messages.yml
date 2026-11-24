@@ -9,6 +9,7 @@ help:
     sessions: "List the devices logged in to the dashboard as you."
     logout: "Log out of one device by its id from /web sessions, or of every device with all."
     privacy: "Hide yourself from the dashboard's leaderboards, or show yourself again."
+    discovery: "Print the DNS records that let players find this dashboard from the address they play on; check looks them up."
 link:
   usage: "<gray>Show a code on the dashboard, then type /web link with it."
   linked: "<green>Linked: this device is now logged in as <player>."
@@ -35,6 +36,19 @@ logout:
   all: "<green>Logged out of <count> <devices>."
   unknown: "<red>You have no device <id>. /web sessions lists them."
   choose: "<gray>You have <count> logged-in devices: /web logout and an id from /web sessions, or /web logout all."
+discovery:
+  no-url: "<red>Set public-url in web.yml first: the record names the dashboard's https address."
+  no-addresses: "<red>Add the addresses players join with to web.yml, such as game-addresses: [play.example.com], then restart."
+  header: "<gold>Publish one TXT record per game address at your DNS host, so players can find this dashboard from the address they play on:"
+  record: "<gray><address>:</gray> <white><name></white> <gray>TXT</gray> <white>\"<value>\"</white>"
+  then-check: "<gray>Then run /web discovery check. Records can take a few minutes to appear."
+  checking: "<gray>Looking up the records and asking the dashboard…"
+  ok: "<green><address>: found, and <url> answers for it."
+  missing: "<red><address>: no Seasons record at <name> yet. /web discovery shows what to add."
+  elsewhere: "<red><address>: the record points at <url>, not this dashboard's <ours>."
+  unreachable: "<gold><address>: the record is right, but <url> didn't answer as a Seasons dashboard. Check the tunnel or proxy."
+  not-listed: "<gold><address>: the dashboard doesn't list it yet. Restart after changing game-addresses in web.yml."
+  lookup-failed: "<red><address>: this server couldn't look up DNS. Check from another machine, or try again."
 privacy:
   hidden: "<gold>You're now hidden from the dashboard's leaderboards. /web privacy shows you again."
   shown: "<green>You're now shown on the dashboard's leaderboards."

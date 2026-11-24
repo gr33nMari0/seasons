@@ -17,6 +17,7 @@ class WebConfigTest {
         bind,
         publicUrl,
         "",
+        List.of(),
         true,
         d.proxy(),
         links,
@@ -160,5 +161,37 @@ class WebConfigTest {
                         new WebSettings.Link("Other", "https://other.example.com", "frame"))));
     assertThat(ready.config().map())
         .hasValueSatisfying(m -> assertThat(m.label()).isEqualTo("Map"));
+  }
+
+  @Test
+  void gameAddressesAreNormalisedAndBadOnesLeftOutWithAWarning() {
+    WebSettings d = SettingsFile.defaults();
+    WebSettings with =
+        new WebSettings(
+            1,
+            true,
+            "127.0.0.1:8019",
+            "https://seasons.example.com",
+            "",
+            List.of(
+                "Play.Example.com",
+                "play.example.com:25565",
+                "mc.example.com:25566",
+                "203.0.113.7"),
+            true,
+            d.proxy(),
+            List.of(),
+            Map.of(),
+            d.sessions(),
+            d.rateLimits(),
+            d.stream(),
+            d.cache(),
+            d.screens());
+    WebConfig.Result result = WebConfig.check(with);
+    assertThat(result).isInstanceOf(WebConfig.Ready.class);
+    WebConfig.Ready ready = (WebConfig.Ready) result;
+    assertThat(ready.config().gameAddresses())
+        .containsExactly("play.example.com", "mc.example.com:25566");
+    assertThat(ready.warnings()).anyMatch(w -> w.startsWith("game-addresses: \"203.0.113.7\""));
   }
 }

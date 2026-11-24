@@ -296,6 +296,11 @@ final class Routes {
       o.add("dashboard", JsonNull.INSTANCE);
     }
     o.addProperty("public", config.visibility().open());
+    // The addresses players join with, so the public connect page can confirm a dashboard it
+    // found from one is this server's (questions 336).
+    JsonArray games = new JsonArray();
+    config.gameAddresses().forEach(games::add);
+    o.add("gameAddresses", games);
     JsonArray features = new JsonArray();
     Visibility.WIDGETS.stream().filter(config.visibility()::shown).forEach(features::add);
     o.add("features", features);

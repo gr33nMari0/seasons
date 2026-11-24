@@ -4,6 +4,7 @@
     {"words": ["web", "link"], "usages": ["/web link", "/web link <code>"], "description": "Log this device in to the dashboard: show a code on the dashboard, then type it here.", "permissions": ["seasons.web"]},
     {"words": ["web", "sessions"], "usages": ["/web sessions"], "description": "List the devices logged in to the dashboard as you.", "permissions": ["seasons.web"]},
     {"words": ["web", "logout"], "usages": ["/web logout", "/web logout <device>"], "description": "Log out of one device by its id from /web sessions, or of every device with all.", "permissions": ["seasons.web"]},
-    {"words": ["web", "privacy"], "usages": ["/web privacy"], "description": "Hide yourself from the dashboard's leaderboards, or show yourself again.", "permissions": ["seasons.web"]}
+    {"words": ["web", "privacy"], "usages": ["/web privacy"], "description": "Hide yourself from the dashboard's leaderboards, or show yourself again.", "permissions": ["seasons.web"]},
+    {"words": ["web", "discovery"], "usages": ["/web discovery", "/web discovery check"], "description": "Print the DNS records that let players find this dashboard from the address they play on; check looks them up.", "permissions": ["seasons.web.discovery"]}
   ]
 }

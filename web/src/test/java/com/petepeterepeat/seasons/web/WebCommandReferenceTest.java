@@ -31,6 +31,7 @@ class WebCommandReferenceTest {
     assertThat(entries)
         .allSatisfy(e -> assertThat(e.description()).doesNotStartWith("help.").isNotBlank());
     assertThat(entries)
-        .anySatisfy(e -> assertThat(e.usages()).containsExactly("/web logout", "/web logout <device>"));
+        .anySatisfy(
+            e -> assertThat(e.usages()).containsExactly("/web logout", "/web logout <device>"));
   }
 }
