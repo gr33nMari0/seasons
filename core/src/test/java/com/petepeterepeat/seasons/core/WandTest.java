@@ -361,10 +361,13 @@ class WandTest {
   void aTriggerOpensItsEditor() {
     click(60, 63, 15, "up", false, false);
     fake.choices.getLast().click("minecraft:lodestone");
-    int menus = fake.choices.size();
     click(60, 63, 15, "up", false, false);
-    assertThat(fake.choices).hasSize(menus);
+    // No second link: the editor, as a choice menu where the game shows no forms.
+    assertThat(fake.choices.getLast().icons())
+        .containsExactly("minecraft:compass", "minecraft:ender_pearl", "minecraft:barrier");
     assertThat(said()).contains("Link l1:");
+    fake.choices.getLast().click("minecraft:barrier");
+    assertThat(said()).contains("Removed link l1.");
   }
 
   @Test

@@ -53,6 +53,7 @@ import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.LinkCommands;
+import com.petepeterepeat.seasons.core.hall.LinkEditor;
 import com.petepeterepeat.seasons.core.hall.LinkService;
 import com.petepeterepeat.seasons.core.hall.LinkWorld;
 import com.petepeterepeat.seasons.core.hall.Museum;
@@ -728,7 +729,10 @@ public final class Seasons implements SeasonsApi {
         new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
     hallCommands.bindLinks(linkCommands);
     wanding.bindLinks(linkCommands, hallCommands);
-    linkWorld.bindEditor(linkCommands::edit);
+    LinkEditor linkEditor = new LinkEditor(platform, config, halls, linkCommands, visiting);
+    linkCommands.bindEditor(linkEditor::open);
+    linkWorld.bindEditor(linkEditor::open);
+    hooks.ifPresent(h -> h.bindDialogs(linkEditor::openFor, linkEditor::answerFor));
     linkWorld.start();
     CommandNode hof =
         hallCommands

@@ -128,6 +128,104 @@ final class PaperMenus implements Menus, Listener {
     player.openInventory(inventory);
   }
 
+  /**
+   * A form as the game's dialog screen (M8), each button a callback on the server thread that reads
+   * what was filled in. Clients older than dialogs, through a protocol translation, can't show it;
+   * Seasons then falls back to a choice menu.
+   */
+  @Override
+  public boolean openForm(PlayerId viewer, Form form, Answered answered) {
+    Optional<Player> found = players.player(viewer);
+    if (found.isEmpty()) {
+      return false;
+    }
+    Player player = found.get();
+    List<io.papermc.paper.registry.data.dialog.input.DialogInput> inputs =
+        new java.util.ArrayList<>();
+    for (Field field : form.fields()) {
+      switch (field) {
+        case Field.Text t ->
+            inputs.add(
+                io.papermc.paper.registry.data.dialog.input.DialogInput.text(
+                        t.key(), text.render(t.label()))
+                    .initial(t.initial())
+                    .maxLength(Math.max(1, t.maxLength()))
+                    .width(300)
+                    .build());
+        case Field.Choice c -> {
+          List<io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput.OptionEntry>
+              options = new java.util.ArrayList<>();
+          for (int i = 0; i < c.options().size(); i++) {
+            options.add(
+                io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput.OptionEntry
+                    .create(
+                        c.options().get(i),
+                        text.render(c.labels().get(i)),
+                        c.options().get(i).equals(c.initial())));
+          }
+          inputs.add(
+              io.papermc.paper.registry.data.dialog.input.DialogInput.singleOption(
+                      c.key(), text.render(c.label()), options)
+                  .build());
+        }
+        case Field.Toggle t ->
+            inputs.add(
+                io.papermc.paper.registry.data.dialog.input.DialogInput.bool(
+                        t.key(), text.render(t.label()))
+                    .initial(t.initial())
+                    .build());
+      }
+    }
+    List<io.papermc.paper.registry.data.dialog.ActionButton> buttons = new java.util.ArrayList<>();
+    for (Button button : form.buttons()) {
+      buttons.add(
+          io.papermc.paper.registry.data.dialog.ActionButton.create(
+              text.render(button.label()),
+              null,
+              150,
+              io.papermc.paper.registry.data.dialog.action.DialogAction.customClick(
+                  (view, audience) -> {
+                    java.util.Map<String, String> values = new java.util.HashMap<>();
+                    for (Field field : form.fields()) {
+                      String value =
+                          field instanceof Field.Toggle
+                              ? String.valueOf(view.getBoolean(field.key()))
+                              : view.getText(field.key());
+                      if (value != null) {
+                        values.put(field.key(), value);
+                      }
+                    }
+                    answered.answered(button.key(), values);
+                  },
+                  net.kyori.adventure.text.event.ClickCallback.Options.builder()
+                      .uses(1)
+                      .lifetime(java.time.Duration.ofMinutes(10))
+                      .build())));
+    }
+    List<io.papermc.paper.registry.data.dialog.body.DialogBody> body = new java.util.ArrayList<>();
+    for (Message line : form.body()) {
+      body.add(
+          io.papermc.paper.registry.data.dialog.body.DialogBody.plainMessage(text.render(line)));
+    }
+    io.papermc.paper.dialog.Dialog dialog =
+        io.papermc.paper.dialog.Dialog.create(factory ->
+            factory
+                .empty()
+                .base(
+                    io.papermc.paper.registry.data.dialog.DialogBase.builder(
+                            text.render(form.title()))
+                        .body(body)
+                        .inputs(inputs)
+                        .canCloseWithEscape(true)
+                        .build())
+                .type(
+                    io.papermc.paper.registry.data.dialog.type.DialogType.multiAction(buttons)
+                        .columns(2)
+                        .build()));
+    player.showDialog(dialog);
+    return true;
+  }
+
   @EventHandler(priority = EventPriority.LOWEST)
   void onClick(InventoryClickEvent event) {
     if (!isViewOnly(event.getView().getTopInventory())) {

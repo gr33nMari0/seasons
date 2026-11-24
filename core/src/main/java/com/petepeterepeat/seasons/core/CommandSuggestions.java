@@ -94,7 +94,12 @@ final class CommandSuggestions implements CommandHelp.Suggestions, CommandHelp.C
               path.contains("candidate") && !path.contains("add")
                   ? (source, typed) -> candidates()
                   : null;
-          case "link" -> path.contains("add") ? null : (source, typed) -> links();
+          case "link" ->
+              path.contains("add") && !path.contains("trigger") && !path.contains("text")
+                  ? null
+                  : (source, typed) -> links();
+          case "other" -> (source, typed) -> links();
+          case "point" -> path.contains("point add") ? null : (source, typed) -> points();
           case "id", "zone" ->
               (path.contains("zone") && !path.contains("add")) || argument.name().equals("zone")
                   ? (source, typed) -> zones()
@@ -165,6 +170,10 @@ final class CommandSuggestions implements CommandHelp.Suggestions, CommandHelp.C
 
   private List<String> links() {
     return List.copyOf(config.get().hall().links().keySet());
+  }
+
+  private List<String> points() {
+    return List.copyOf(config.get().hall().points().keySet());
   }
 
   private List<String> zones() {

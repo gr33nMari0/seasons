@@ -230,6 +230,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
           sender.sendMessage("Armed save point " + point + " for " + args[2]);
         }
         case "act-at" -> actAt(sender, hooks, args);
+        case "dialog" -> dialog(sender, hooks, args);
         case "hold" ->
             sender.sendMessage(
                 hooks.hold(id(args[1])) ? "Holding " + args[1] : args[1] + " is held already");
@@ -312,6 +313,7 @@ final class ScenarioCommands implements BasicCommand, Listener {
         case "bucket" -> bucket(sender, args);
         case "ignite" -> ignite(sender, args);
         case "permit" -> permit(sender, args);
+        case "unpermit" -> unpermit(sender, args);
         case "workstation" -> workstation(sender, args);
         case "cursor" -> cursor(sender, args);
         case "tagged" -> tagged(sender, args);
@@ -1034,6 +1036,56 @@ final class ScenarioCommands implements BasicCommand, Listener {
     }
     sender.sendMessage(
         "Swapped hands for " + args[1] + ": " + (event.isCancelled() ? "refused" : "done"));
+  }
+
+  /**
+   * {@code /scenario dialog <player> [button [key=value|key=value…]]}: what form a player has open,
+   * or clicks one of its buttons with what is filled in, as the client's click would (M8; bots
+   * can't see dialogs through the protocol translation).
+   */
+  private void dialog(CommandSender sender, ScenarioHooks hooks, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("No dialog for " + args[1]);
+      return;
+    }
+    PlayerId id = id(args[1]);
+    if (args.length == 2) {
+      sender.sendMessage(
+          hooks
+              .dialogOpen(id)
+              .map(link -> "Dialog for " + args[1] + ": link " + link)
+              .orElse("No dialog for " + args[1]));
+      return;
+    }
+    java.util.Map<String, String> values = new java.util.HashMap<>();
+    String rest = String.join(" ", java.util.Arrays.asList(args).subList(3, args.length));
+    for (String pair : java.util.regex.Pattern.compile("\\|").splitAsStream(rest).toList()) {
+      int eq = pair.indexOf('=');
+      if (eq > 0) {
+        values.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
+      }
+    }
+    sender.sendMessage(
+        hooks.answerDialog(id, args[2], values)
+            ? "Answered " + args[1] + "'s dialog: " + args[2]
+            : "No dialog for " + args[1]);
+  }
+
+  /** Takes back a node {@code /scenario permit} gave. */
+  private void unpermit(CommandSender sender, String[] args) {
+    Player player = plugin.getServer().getPlayerExact(args[1]);
+    if (player == null) {
+      sender.sendMessage("Can't unpermit " + args[1]);
+      return;
+    }
+    for (org.bukkit.permissions.PermissionAttachmentInfo info : player.getEffectivePermissions()) {
+      if (info.getAttachment() != null && info.getAttachment().getPlugin().equals(plugin)) {
+        info.getAttachment().unsetPermission(args[2]);
+      }
+    }
+    player.recalculatePermissions();
+    sender.sendMessage("Unpermitted " + args[1] + " " + args[2]);
   }
 
   private void permit(CommandSender sender, String[] args) {
