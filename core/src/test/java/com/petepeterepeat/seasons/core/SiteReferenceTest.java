@@ -42,6 +42,19 @@ class SiteReferenceTest {
         .contains("\"permissions\": [\"seasons.admin.season\"]");
   }
 
+  /**
+   * Argument texts are plain words (messages.yml says so): a {@code <name>} in one would be read as
+   * a MiniMessage tag and vanish, leaving holes in /hof help and in the reference.
+   */
+  @Test
+  void noUsageLineHasAHoleWhereATagWas() throws IOException {
+    for (String line :
+        SiteReference.commands().lines().filter(l -> l.contains("\"usages\"")).toList()) {
+      String usages = line.replaceAll(".*\"usages\": \\[(.*?)\\], \"description.*", "$1");
+      assertThat(usages).as(line).doesNotContain("  ").doesNotContain("[ ").doesNotContain(": >");
+    }
+  }
+
   @Test
   void helpTextLosesItsTags() {
     assertThat(SiteReference.plain("<gray>Go <white>there</white>.</gray>")).isEqualTo("Go there.");
