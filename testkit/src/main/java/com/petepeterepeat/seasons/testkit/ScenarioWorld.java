@@ -104,6 +104,25 @@ final class ScenarioWorld implements Listener {
   }
 
   /**
+   * After a restart that isn't a fresh boot, such as between a scenario's sessions: the server
+   * loads some chunks before this plugin can listen (force-loaded ones, from the worlds' saved
+   * data, and the spawn area). One this shard has never seen loaded has no copy yet, and the next
+   * reset would report it; it gets its copy now. It comes from disk as it was generated, since
+   * nothing could change it while this plugin wasn't watching: any chunk a scenario loaded was seen
+   * then and copied.
+   */
+  void afterRestart() {
+    for (World world : server.getWorlds()) {
+      for (Chunk chunk : world.getLoadedChunks()) {
+        if (!Files.exists(pristineFile(world, chunk.getX(), chunk.getZ()))) {
+          keepPristine(chunk);
+          touch(world, chunk.getX(), chunk.getZ());
+        }
+      }
+    }
+  }
+
+  /**
    * On a fresh boot, before any scenario: copies every chunk already loaded (generated before this
    * plugin could listen), removes what the world generated besides blocks, such as animals, and
    * writes the fingerprint later resets are compared with.

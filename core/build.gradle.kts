@@ -42,3 +42,22 @@ tasks.register<JavaExec>("configReference") {
         rootProject.file("docs/config.md").path,
     )
 }
+
+// The public docs' generated references (M9): every command, and every permission node of both
+// plugins, as JSON for the site (SiteReference, in the tests). SiteReferenceTest fails until the
+// committed files match.
+tasks.register<JavaExec>("commandReference") {
+    group = "documentation"
+    description = "Writes site/src/data/commands/seasons.json from the command trees"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.petepeterepeat.seasons.core.SiteReference"
+    args("commands", rootProject.file("site/src/data").path)
+}
+
+tasks.register<JavaExec>("permissionReference") {
+    group = "documentation"
+    description = "Writes site/src/data/permissions.json from both plugins' paper-plugin.yml"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.petepeterepeat.seasons.core.SiteReference"
+    args("permissions", rootProject.file("site/src/data").path, rootProject.projectDir.path)
+}

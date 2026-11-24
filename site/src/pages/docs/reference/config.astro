@@ -1,0 +1,14 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The configuration reference: docs/config.md, generated from the code by
+// ./gradlew :core:configReference, shown as a docs page with its own contents.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import { getEntry, render } from 'astro:content'
+
+const entry = await getEntry('configref', 'config')
+if (!entry) throw new Error('docs/config.md was not loaded')
+const { Content, headings } = await render(entry)
+---
+<StarlightPage frontmatter={{ title: 'Configuration', description: 'Every setting in config.yml and secrets.yml, its default and what it does.', tableOfContents: { minHeadingLevel: 2, maxHeadingLevel: 3 } }} headings={headings.filter((h) => h.depth > 1)}>
+  <div class="config-ref"><Content /></div>
+</StarlightPage>

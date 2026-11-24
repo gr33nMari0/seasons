@@ -10,6 +10,6 @@ Seasons and Seasons Web are licensed under the PolyForm Noncommercial License 1.
 | [geantyref](https://github.com/leangen/geantyref) (a Configurate dependency) | 1.3.16 | Apache-2.0 | Seasons |
 | [option](https://github.com/KyoriPowered/option) (a Configurate dependency) | 1.1.0 | MIT | Seasons |
 | [bStats](https://github.com/Bastian/bstats-metrics) (`bstats-bukkit`, `bstats-base`) | 3.2.1 | MIT | Seasons, Seasons Web |
-| [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans), [Inter](https://github.com/rsms/inter) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) typefaces (ADR 0009; licences in `design/fonts/`) | Fontsource 5.3.0 | OFL-1.1 | Seasons Web, the public site |
+| [Pixelify Sans](https://github.com/eifetx/Pixelify-Sans), [Inter](https://github.com/rsms/inter) and [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) typefaces (ADR 0009; licences in `design/fonts/`) | Fontsource 5.3.0 (woff2); Google Fonts' variable TrueType for preview pictures (ADR 0011) | OFL-1.1 | Seasons Web, the public site |
 
 Build- and test-only tools (never bundled in a jar): Astro and Starlight (MIT, they build the public site, ADR 0008), starlight-links-validator (MIT) and @axe-core/playwright (MPL-2.0, ADR 0010), Playwright (Apache-2.0, ADR 0007), Mineflayer (MIT), ViaVersion and ViaBackwards (GPL-3.0, downloaded onto test servers only), JUnit, AssertJ, MockBukkit, Error Prone, NullAway, Spotless.

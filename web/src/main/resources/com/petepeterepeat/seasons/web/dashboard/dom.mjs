@@ -76,3 +76,20 @@ export function head (skin, name) {
     el('img', { class: 'face', src: skin, alt: '', referrerpolicy: 'no-referrer' }),
     el('img', { class: 'hat', src: skin, alt: '', referrerpolicy: 'no-referrer' }))
 }
+
+/** One of the design's pixel UI icons (design/icons.svg), in the text's colour. */
+export function px (name, label) {
+  const svg = document.createElementNS(SVG, 'svg')
+  svg.setAttribute('class', 'px')
+  svg.setAttribute('viewBox', '0 0 16 16')
+  if (label) {
+    svg.setAttribute('role', 'img')
+    svg.setAttribute('aria-label', label)
+  } else {
+    svg.setAttribute('aria-hidden', 'true')
+  }
+  const use = document.createElementNS(SVG, 'use')
+  use.setAttribute('href', `/app/design/icons.svg#${name}`)
+  svg.append(use)
+  return svg
+}

@@ -4,6 +4,19 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- A new public site and full docs at [seasonsmc.petepeterepeat.com](https://seasonsmc.petepeterepeat.com): install, your first season (a checklist you can tick off), running a server, guides (regenerating the End, importing a hand-built Hall, picking a spawn, troubleshooting), a players' guide, and every command, permission and setting, generated from the code and searchable. Light and dark themes that follow your device, and a rich preview when any page is shared.
+- The dashboard, redesigned: Seasons' pixel look in dark and parchment light (following your device), a login page that shows the code large with a countdown, layouts that fit phones, tablets and wide screens, and a Help page with the players' guides plus your own `help.links` and `help.rules` from `web.yml`.
+- Your own dashboards: choose Edit layout to drag, resize, add and remove widgets (or move them with the keyboard), keep several, show one on `/screen` on that device, and share a layout as a code. Admins can copy a layout as `web.yml`'s `screens:` block. Layouts stay in your browser.
+- Rich link previews: a shared dashboard link unfurls with a picture of the season, a player's card (only what anyone may see; nothing for players hidden with `/web privacy`), a gallery or the museum. `previews:` in `web.yml` turns them or players' skins off. `/p/<name>` links to a player's profile.
+- Seasons API 1.4: `playerId(name)`.
+- Find your server's dashboard from the address you play on: type `play.example.com` on the connect page and land on its Seasons Web dashboard, or be told whether the server runs Seasons Web or is offline. List your game addresses under `game-addresses` in `web.yml` and publish the DNS record `/web discovery` prints; `/web discovery check` checks it. `seasons.web.discovery` (ops by default) runs them.
+
+### Fixed
+
+- `/hof help` and `/season help` show every word of each argument's description: several link commands lost words that looked like formatting tags.
+
 ## [1.3.0] - 2026-11-24
 
 ### Added
@@ -86,7 +99,7 @@ Back up the world folder, swap the jar, read the startup line and `/hof link upg
 - The dragon egg is frozen on the exit portal from the kill until Seasons takes it, so nobody can click, push or blow it away in between; an egg that leaves the portal anyway is reported and the slayer is given none, rather than a second egg. After a crash, Seasons sets the End's previously-killed flag again and takes off an egg the vault already holds, since the End can roll back to before both.
 - `/museum add` and `remove` are refused on a plinth whose last change a crash interrupted, until recovery settles it.
 - A museum cell can have several trophy anchors, such as an egg wall: each egg plinth shows its own season's egg.
-- The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Taran" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
+- The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Alex" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
 
 ### Changed
 

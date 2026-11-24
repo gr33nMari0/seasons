@@ -1,0 +1,25 @@
+---
+title: Permissions
+description: Every permission node in Seasons and Seasons Web, who has it by default and what it allows.
+art: shield
+audience: owners
+sidebar:
+  order: 2
+---
+import PermissionReference from '../../../../components/PermissionReference.astro'
+
+Generated from the plugins' `paper-plugin.yml`. **Everyone** nodes are granted to every player, **Ops** nodes to server operators, and **Nobody** nodes to no one until you grant them, ops included.
+
+Any permissions plugin can grant or deny these, per player or per group. With LuckPerms:
+
+```text
+/lp group curators permission set seasons.curate.* true
+/lp group builders permission set seasons.hof.bypass true
+/lp user Alex permission set seasons.link.use.vip true
+```
+
+## Nodes you add yourself
+
+- **`seasons.link.use.<id>`** — take the link `<id>` when its access is set to permission (`/hof link access <id> permission`). A link can name any other node instead, such as a group's (`/hof link access <id> permission group.vip`). `seasons.link.use.*` covers every link that uses the default node.
+
+<PermissionReference />

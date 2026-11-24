@@ -1,0 +1,74 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The command reference's filter: narrows every CommandReference on the page as you type, by who
+// may run a command, and copies a usage line when it is clicked. ?q= fills it in.
+import Icon from './Icon.astro'
+---
+<div class="cmdref-filter not-content" data-cmdfilter>
+  <label for="cmd-filter"><Icon name="search" /> <span>Filter commands</span></label>
+  <input id="cmd-filter" type="search" placeholder="Try link, zone or homecoming" autocomplete="off" spellcheck="false" data-cmd-filter />
+  <div class="cmdref-who" role="group" aria-label="Who can run it">
+    <button type="button" aria-pressed="true" data-who="all">All</button>
+    <button type="button" aria-pressed="false" data-who="everyone">Players</button>
+    <button type="button" aria-pressed="false" data-who="ops">Admins</button>
+  </div>
+  <p class="cmdref-count" data-cmd-count aria-live="polite"></p>
+</div>
+<p class="cmdref-none" data-cmd-none hidden>No command matches. Try another word, or see <a href="/docs/faq/">the FAQ</a>.</p>
+
+<script>
+  const bar = document.querySelector<HTMLElement>('[data-cmdfilter]')
+  if (bar) {
+    const input = bar.querySelector<HTMLInputElement>('[data-cmd-filter]')!
+    const count = bar.querySelector<HTMLElement>('[data-cmd-count]')!
+    const none = document.querySelector<HTMLElement>('[data-cmd-none]')!
+    const cmds = [...document.querySelectorAll<HTMLElement>('[data-cmd]')]
+    const roots = [...document.querySelectorAll<HTMLElement>('[data-cmdref-root]')]
+    let who = 'all'
+
+    const apply = () => {
+      const words = input.value.toLowerCase().trim().replace(/^\//, '').split(/\s+/).filter(Boolean)
+      let shown = 0
+      for (const c of cmds) {
+        const ok = (who === 'all' || c.dataset.access === who) && words.every((w) => c.dataset.text!.includes(w))
+        c.hidden = !ok
+        if (ok) shown++
+      }
+      for (const g of document.querySelectorAll<HTMLElement>('[data-group]')) g.hidden = !g.querySelector('[data-cmd]:not([hidden])')
+      for (const r of roots) {
+        const empty = !r.querySelector('[data-cmd]:not([hidden])')
+        r.hidden = empty
+        // The root's heading and lead, written in the page, go with it.
+        let el = r.previousElementSibling as HTMLElement | null
+        while (el && !el.matches('[data-cmdref-root], .cmdref-filter, .cmdref-none')) {
+          el.hidden = empty
+          if (/^H2$/.test(el.tagName) || el.classList.contains('sl-heading-wrapper')) break
+          el = el.previousElementSibling as HTMLElement | null
+        }
+      }
+      none.hidden = shown > 0
+      count.textContent = shown === cmds.length ? `${cmds.length} commands` : `${shown} of ${cmds.length} commands`
+    }
+
+    input.addEventListener('input', apply)
+    for (const b of bar.querySelectorAll<HTMLButtonElement>('[data-who]')) {
+      b.addEventListener('click', () => {
+        who = b.dataset.who!
+        for (const o of bar.querySelectorAll('[data-who]')) o.setAttribute('aria-pressed', String(o === b))
+        apply()
+      })
+    }
+    document.addEventListener('click', async (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-copy]')
+      if (!b) return
+      try {
+        await navigator.clipboard.writeText(b.dataset.copy!)
+        b.dataset.copied = 'true'
+        setTimeout(() => delete b.dataset.copied, 1200)
+      } catch {}
+    })
+    const q = new URLSearchParams(location.search).get('q')
+    if (q) input.value = q
+    apply()
+  }
+</script>

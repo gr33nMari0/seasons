@@ -60,6 +60,24 @@ val installBrowsers = tasks.register<Exec>("installBrowsers") {
     commandLine("npx", "playwright", "install", "chromium", "webkit")
 }
 
+// The public site, built as Pages builds it but without its preview images, for the scenarios that
+// open its connect page (m7-connect). Skipped when nothing it reads has changed.
+val siteDir = rootProject.layout.projectDirectory.dir("site")
+val buildSite = tasks.register<Exec>("buildSite") {
+    description = "Builds the public site into site/dist for the connect-page scenarios."
+    workingDir(siteDir)
+    environment("ASTRO_TELEMETRY_DISABLED", "1")
+    environment("SEASONS_SITE_PREVIEWS", "off")
+    commandLine("sh", "-c", "npm ci --no-audit --no-fund && npm run build")
+    inputs.dir(siteDir.dir("src"))
+    inputs.dir(siteDir.dir("public"))
+    inputs.dir(siteDir.dir("scripts"))
+    inputs.dir(rootProject.layout.projectDirectory.dir("design"))
+    inputs.file(siteDir.file("package-lock.json"))
+    inputs.file(siteDir.file("astro.config.mjs"))
+    outputs.dir(siteDir.dir("dist"))
+}
+
 // The scenarios, from their files. Header lines: "// @sessions <n>" restarts the server between
 // sessions on the same world; "// @isolated <reason>" gives the scenario a fresh server of its own
 // instead of sharing one (docs/adr/0003); "// @plugins <name>..." gives it a fresh server of its
@@ -219,7 +237,7 @@ val scenarioRuns = minecraftVersions.map { version ->
     tasks.register("scenarioRun_$v") {
         group = "verification"
         description = "Runs the acceptance scenarios on Paper $version, in shards side by side."
-        dependsOn(installBots, installBrowsers, scenarioTls)
+        dependsOn(installBots, installBrowsers, scenarioTls, buildSite)
         // -PscenarioJars=<dir> runs the jars a CI build job made (Seasons, Seasons Web and this
         // test plugin) instead of building them.
         val prebuilt = providers.gradleProperty("scenarioJars").orNull

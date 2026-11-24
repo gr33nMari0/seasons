@@ -1,0 +1,9 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The two-state theme toggle (questions 335). design/theme.js wires every [data-theme-toggle].
+import Icon from './Icon.astro'
+---
+<button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" aria-label="Switch to the light theme" data-label-light="Switch to the light theme" data-label-dark="Switch to the dark theme" title="Theme">
+  <Icon name="sun" class="when-dark" />
+  <Icon name="moon" class="when-light" />
+</button>

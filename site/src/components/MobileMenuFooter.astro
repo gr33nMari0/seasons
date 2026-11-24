@@ -1,0 +1,11 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The bottom of the mobile menu: the site navigation, GitHub and the theme toggle.
+import SocialIcons from 'virtual:starlight/components/SocialIcons'
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect'
+import Nav from './Nav.astro'
+---
+<div class="mobile-footer">
+  <Nav class="menu-nav" />
+  <div class="sl-flex mobile-footer-row"><SocialIcons /><ThemeSelect /></div>
+</div>

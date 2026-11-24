@@ -21,3 +21,9 @@ export async function post (path) {
   } catch {}
   return { status: res.status, json, retryAfter: Number(res.headers.get('Retry-After')) || 0 }
 }
+
+/** Resolves with { status, text } for a GET of a text file, such as a bundled guide. */
+export async function getText (path) {
+  const res = await fetch(path, { credentials: 'same-origin', headers: { Accept: 'text/markdown, text/plain' } })
+  return { status: res.status, text: res.ok ? await res.text() : '' }
+}

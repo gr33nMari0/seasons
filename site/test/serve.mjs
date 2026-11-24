@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// Serves public/ over http on a free local port, as GitHub Pages serves it, for the browser tests.
+// Serves the built site (dist/, from npm run build) over http on a free local port, as GitHub Pages
+// serves it, for the browser tests.
 import { readFileSync } from 'node:fs'
 import http from 'node:http'
 import { extname, join, normalize } from 'node:path'
 
-const ROOT = join(import.meta.dirname, '../public')
-const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' }
+const ROOT = join(import.meta.dirname, '../dist')
+const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.wasm': 'application/wasm', '.xml': 'application/xml', '.txt': 'text/plain' }
 
 export async function serve () {
   const server = http.createServer((req, res) => {

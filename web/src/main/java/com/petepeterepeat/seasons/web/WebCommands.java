@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /**
- * What {@code /web link|sessions|logout|privacy} do, as lines to tell the player; {@link
+ * What {@code /web link|sessions|logout|privacy|discovery} do, as lines to tell the player; {@link
  * PaperWebCommands} wires them to Brigadier. Logins, failed codes and logouts are audited.
  */
 final class WebCommands {
@@ -49,6 +49,23 @@ final class WebCommands {
     var _ = web.wrongCodes().take(key, limit);
     web.audit().record(name, "web.link-failed", name, "refused", "unknown or expired code");
     return List.of(Line.of("link.invalid"));
+  }
+
+  /**
+   * {@code /web discovery}: the DNS records that let players find this dashboard (questions 336).
+   */
+  List<Line> discovery() {
+    WebConfig config = web.config();
+    return Discovery.records(config.gameAddresses(), config.publicUrl());
+  }
+
+  /**
+   * {@code /web discovery check}: looks each record up and asks the dashboard, off the server
+   * thread.
+   */
+  CompletableFuture<List<Line>> discoveryCheck(Discovery.Resolver resolver, Discovery.Asker asker) {
+    WebConfig config = web.config();
+    return Discovery.check(config.gameAddresses(), config.publicUrl(), resolver, asker);
   }
 
   List<Line> linkUsage() {

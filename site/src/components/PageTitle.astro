@@ -1,0 +1,15 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// A docs page's title, with its audience chip and "since" badge when the page has them.
+const { entry } = Astro.locals.starlightRoute
+const data = entry.data as { title: string; since?: string; audience?: string }
+const custom = !Astro.url.pathname.startsWith('/docs/')
+const AUDIENCE: Record<string, string> = { owners: 'Server owners', admins: 'Admins', players: 'Players', everyone: 'Everyone' }
+---
+{custom ? <span class="page-title-none" hidden></span> : <h1 id="_top">{data.title}</h1>}
+{(data.audience || data.since) && (
+  <p class="page-chips">
+    {data.audience && <span class="chip chip-audience">{AUDIENCE[data.audience]}</span>}
+    {data.since && <span class="chip chip-since">Since {data.since}</span>}
+  </p>
+)}

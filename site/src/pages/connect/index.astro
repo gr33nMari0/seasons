@@ -1,0 +1,54 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The connect page: type the address you play on and land on that server's own dashboard
+// (spec, Connect flow; questions 336). public/connect/connect.mjs does the finding; this page holds
+// no data and sends nothing but the address typed, and only where the page says.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import Art from '../../components/Art.astro'
+import Icon from '../../components/Icon.astro'
+import '../../styles/site.css'
+---
+<StarlightPage frontmatter={{ title: 'Find your server\'s dashboard', description: 'Type the address you play on and go straight to your Minecraft server\'s Seasons dashboard.', template: 'splash' }}>
+<div class="page not-content connect-page">
+  <section class="connect">
+    <div class="connect-card">
+      <Art name="figure-diamond" size={72} class="connect-figure" />
+      <p class="kicker">Seasons Web</p>
+      <h1 id="_top" class="pixel-heading">Find your server's dashboard</h1>
+      <p class="connect-lead">Live stats, the map, your Hall of Fame cell and your server's links, on your phone, tablet or second monitor.</p>
+      <form data-connect class="connect-form" novalidate>
+        <label for="server">Server address</label>
+        <div class="connect-row">
+          <input id="server" name="server" type="text" inputmode="url" autocomplete="url" autocapitalize="none" spellcheck="false" placeholder="play.example.com" required aria-describedby="server-help" />
+          <button type="submit" class="button"><Icon name="search" /> Find dashboard</button>
+        </div>
+        <p id="server-help" class="connect-help">The address you join the game with. A dashboard address such as <code>seasons.example.com</code> works too.</p>
+        <label class="connect-remember"><input type="checkbox" name="remember" checked /> Remember this server on this device</label>
+      </form>
+      <div class="connect-progress" data-progress hidden aria-hidden="true"><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>
+      <p class="connect-status" data-status role="status" aria-live="polite"></p>
+      <div class="connect-actions" data-actions hidden></div>
+      <div class="recent" data-recent hidden>
+        <p class="kicker">Recent on this device</p>
+        <ul data-recent-list></ul>
+      </div>
+    </div>
+
+    <aside class="connect-side">
+      <h2 class="pixel-heading">What happens next</h2>
+      <ol class="web-steps">
+        <li><span class="step-n">1</span><div><h3>We find your server's dashboard</h3><p>From the records your server's owner publishes, then we check it really is a Seasons dashboard for that server.</p></div></li>
+        <li><span class="step-n">2</span><div><h3>You're sent there</h3><p>The dashboard runs on your server, not on this site. Your login lives there too.</p></div></li>
+        <li><span class="step-n">3</span><div><h3>Type a code in Minecraft</h3><p><code>/web link</code> plus the code on screen. No passwords.</p></div></li>
+      </ol>
+      <details class="privacy">
+        <summary><Icon name="info" /> What this page sends, and where</summary>
+        <p>Only the server address you type, to look up its records: to Cloudflare's and Google's public DNS-over-HTTPS resolvers, then to the dashboard addresses those records name. If no dashboard is found, the address goes to the public status service <code>api.mcsrvstat.us</code> to tell you whether the server is online.</p>
+        <p>This site is static. It has no cookies and no trackers, and never sees your login or anything from your server. "Recent on this device" is kept in your browser only; remove it any time.</p>
+      </details>
+      <p class="small">Running a server? <a href="/docs/guides/publish-dashboard/">Let players find your dashboard</a>.</p>
+    </aside>
+  </section>
+</div>
+<script is:inline type="module" src="/connect/connect.mjs"></script>
+</StarlightPage>

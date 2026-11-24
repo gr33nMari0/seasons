@@ -1,0 +1,37 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// Every permission node of both plugins, generated from their paper-plugin.yml, with who has it by
+// default and which commands it guards.
+import { commands, permissions } from '../lib/reference'
+const DEFAULT: Record<string, string> = { true: 'Everyone', op: 'Ops', false: 'Nobody' }
+const anchor = (node: string) => 'perm-' + node.replace(/[.*]/g, (m) => (m === '.' ? '-' : 'all'))
+---
+<div class="not-content permref">
+  {['Seasons', 'Seasons Web'].map((plugin) => (
+    <section>
+      <h2 id={`plugin-${plugin.toLowerCase().replace(/ /g, '-')}`}>{plugin}</h2>
+      <div class="permref-list">
+        {permissions.filter((p) => p.plugin === plugin).map((p) => {
+          const guards = commands.filter((c) => c.permissions.includes(p.node))
+          return (
+            <article class="perm" id={anchor(p.node)}>
+              <h3><code>{p.node}</code></h3>
+              <p class="cmd-meta">
+                <span class:list={['chip', p.default === 'true' ? 'chip-default' : 'chip-perm']}>{DEFAULT[p.default] ?? p.default}</span>
+                {p.since && <span class="chip chip-since">Since {p.since}</span>}
+              </p>
+              <p>{p.description}</p>
+              {p.children.length > 0 && <p class="perm-children">Includes {p.children.map((c, i) => <>{i > 0 && ', '}<a href={`#${anchor(c)}`}><code>{c}</code></a></>)}.</p>}
+              {guards.length > 0 && (
+                <details class="perm-guards">
+                  <summary>{guards.length} {guards.length === 1 ? 'command' : 'commands'}</summary>
+                  <ul>{guards.map((c) => <li><a href={`/docs/reference/commands/#${c.id}`}><code>{c.name}</code></a></li>)}</ul>
+                </details>
+              )}
+            </article>
+          )
+        })}
+      </div>
+    </section>
+  ))}
+</div>

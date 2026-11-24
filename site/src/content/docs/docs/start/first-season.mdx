@@ -1,0 +1,44 @@
+---
+title: Your first season
+description: From install to launch in eleven steps, ticked off as you go.
+art: hourglass
+audience: owners
+sidebar:
+  order: 2
+---
+import Checklist from '../../../../components/Checklist.astro'
+import { Aside } from '@astrojs/starlight/components'
+
+This is the whole journey once: record the season you're in, build and mark the Hall, lock the old world, pick the next spawn, end the season at a live event, and launch the next one. Tick each step off as you go; your progress is kept in this browser.
+
+<Aside type="caution" title="Back up first">
+Take a full backup of the world and `plugins/` before you start, and try the rollover on a copy before doing it for real. A copy with a few friends, or bots, joined is the best rehearsal.
+</Aside>
+
+<Checklist id="first-season">
+
+1. **Install Seasons.** Put the jar in `plugins/` and restart. See [Install](/docs/start/install/).
+
+2. **Record the season you're in.** On a server partway through its own season 2, run `/season init 2`: the first `/season end` then archives Season 2. On a brand-new server, `/season init 1`. `/season info` shows where things stand at any time.
+
+3. **Build the Hall, then mark the hub.** Build it however you like, anywhere: a hub with galleries leading off it. Run `/hof wand`, click two opposite corners of the hub with the wand, then `/hof hall hub`. Stand where visitors should arrive and run `/hof hall spawn`. See [The Hall](/docs/owners/the-hall/).
+
+4. **Make a gallery for the season.** `/hof gallery create season-2 2`, select its corners with the wand, `/hof gallery bounds season-2`, then stand at its entrance and `/hof gallery entry season-2`.
+
+5. **Add the cells.** Tag each cell you've built with `/hof cell new season-2` and two wand corners, then right-click blocks with the wand to place a **figure**, an **archive** chest and a **plaque**. `/hof cell row` repeats a cell along a hallway; `/hof stamp alcove season-2 10` pastes ready-made ones. See [Anchors](/docs/owners/anchors/). Run `/hof hall check` until it's clear.
+
+6. **Lock the old world.** Stand at the middle of your old builds and run `/season zone add old-world cylinder <radius>`, with the radius just past your furthest build, so it covers your old spawns too. Add a box for any build outside it. `/season zone list` shows them. They lock at launch and open at Homecoming. See [Old-world zones](/docs/owners/zones/).
+
+7. **Choose the next spawn.** Mark candidates far out in unexplored land with `/season spawn candidate add <name>`; they appear on BlueMap. Let the group vote, then `/season spawn set <name>`. See [Picking a spawn](/docs/guides/spawn-picking/).
+
+8. **Set the end date.** `/season schedule end 2026-12-20T20:00+00:00`. Reminders go out 7 days, 1 day, 1 hour and 10 minutes before, in chat and on Discord. The decorating window opens a week before, and everyone who played gets a cell; players can swap with `/hof swap <player>`.
+
+9. **The day before,** run `/season end --dry-run` and fix whatever it reports, such as too few cells.
+
+10. **At the live event,** run `/season end`. After a ten-minute countdown every gallery locks, everyone online is archived into their cell, and owners get 15 minutes to arrange it. This is the Intermission: tour the Hall, hand out the awards. See [Rollover day](/docs/owners/rollover-day/).
+
+11. **Launch.** `/season launch --dry-run`, then `/season launch`. Everyone, with their registered pets, goes to the new spawn, and the old world locks. Whenever the group votes for it, `/season unlock homecoming` opens it all again. See [Homecoming](/docs/owners/homecoming/).
+
+</Checklist>
+
+After a setup step, Seasons privately suggests one to three clickable next steps in chat. Turn them off with `admin.hints: false`.

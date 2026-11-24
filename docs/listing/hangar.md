@@ -52,13 +52,13 @@ Every step that moves an item is journalled before it happens. A crash at any mo
 
 ## Getting started
 
-1. Put the jar in `plugins/` and restart. Seasons writes `config.yml`, `messages.yml` and `secrets.yml` to `plugins/Seasons/`. Every setting is explained in the file and in the [configuration reference](https://github.com/gr33nMari0/seasons/blob/main/docs/config.md).
+1. Put the jar in `plugins/` and restart. Seasons writes `config.yml`, `messages.yml` and `secrets.yml` to `plugins/Seasons/`. Every setting is explained in the file and in the [configuration reference](https://seasonsmc.petepeterepeat.com/docs/reference/config/).
 2. Record the season you're in: `/season init 1` on a new server, or `/season init 2` if you're partway through your own season 2. Seasons sits idle until you do this, so installing it mid-season is fine.
 3. Build the Hall, mark it with the wand (`/hof wand`) and add a gallery and cells.
 4. Lock the old world with `/season zone add old-world cylinder <radius>`.
 5. Pick the next spawn, set the end date with `/season schedule end <date>`, and run `/season end --dry-run` the day before.
 
-**Back up your world and try a rollover on a copy first.** The [full walkthrough](https://github.com/gr33nMari0/seasons#your-first-season) covers every step, and `/season help` and `/hof help` explain every command in-game.
+**Back up your world and try a rollover on a copy first.** The [full walkthrough](https://seasonsmc.petepeterepeat.com/docs/start/first-season/) covers every step, and `/season help` and `/hof help` explain every command in-game.
 
 ## Player commands
 
@@ -71,7 +71,7 @@ Every step that moves an item is journalled before it happens. A crash at any mo
 | `/pet add` / `remove` / `list` | Register pets to travel with you to the next spawn |
 | `/season info` | The season, its phase, the planned end, your cell |
 
-Admin commands sit under `/season` and `/hof`, are op-only by default, and are split into permission groups so you can hand out exactly what each rank needs. The [README](https://github.com/gr33nMari0/seasons#commands) lists every command and permission node.
+Admin commands sit under `/season` and `/hof`, are op-only by default, and are split into permission groups so you can hand out exactly what each rank needs. The [command reference](https://seasonsmc.petepeterepeat.com/docs/reference/commands/) lists every command and permission node.
 
 ## Links
 

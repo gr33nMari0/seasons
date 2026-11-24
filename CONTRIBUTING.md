@@ -16,6 +16,9 @@ You need JDK 25 (Temurin) and Node 24. On macOS: `brew install --cask temurin@25
 ./gradlew scenarioTest                # Paper servers plus Mineflayer bots run the acceptance scenarios
 ./gradlew scenarioTest -Pscenarios=a33-homecoming,m3-*   # just those scenarios
 ./gradlew :core:configReference       # regenerate config.yml's comments and docs/config.md
+./gradlew commandReference permissionReference   # regenerate the docs' command and permission references
+cd site && npm ci && npm run dev      # the public site and docs at http://localhost:4321
+cd site && npm run build && npm test  # build the site as Pages does, then its tests
 ```
 
 The jars land in `adapters/paper/build/libs/Seasons-<version>.jar` and `web/build/libs/SeasonsWeb-<version>.jar`. `scenarioTest` runs the scenarios in shards side by side, each shard on one Paper server that is reset between scenarios; `-PscenarioIsolation=fresh` gives every scenario a server of its own instead. Server logs and results land in `testkit/build/scenario-results/`, timings in `build/reports/scenario-timings.md`. The dev server and the scenario servers never report to bStats: both turn it off before every boot.
@@ -26,7 +29,8 @@ core/                all season logic; plain Java, no Minecraft imports; owns th
 adapters/paper/      the Paper Seasons Adapter: implements the ports with public Paper API
 integrations/        BlueMap and Discord, each enabled only when present
 web/                 the Seasons Web plugin, with the dashboard page in its resources
-site/                the public site (site/public), published by GitHub Pages, and its tests
+site/                the public site and docs (Astro and Starlight), published by GitHub Pages at each release
+design/              the design shared by the site, the docs and the dashboard: tokens, fonts, icons, art
 testkit/             the test plugin and the Mineflayer scenario suite (testkit/bots)
 buildSrc/            the build logic that runs scenario shards
 docs/                spec, config reference, paper-api.md, questions.md, adr/
@@ -44,11 +48,12 @@ The full design is in [docs/spec.md](docs/spec.md).
 - Public Paper API only, and list every Paper API you call in `docs/paper-api.md`.
 - Player-facing text goes in `messages.yml`. Settings are Configurate records in `core/.../config/SeasonsConfig.java`, each component described by a `@Comment`; after changing one, run `./gradlew :core:configReference`, which writes the bundled `config.yml` and `docs/config.md` from them.
 - Add a changelog entry for every behaviour change.
+- Update the public docs in the same pull request (see `AGENTS.md`): the page under `site/src/content/docs/docs/` that explains the change, the regenerated references, and `site/src/data/since.json` for anything new. `npm test` in `site/` checks the docs against the code, links, previews and accessibility. Preview with `npm run dev`.
 - No new dependency without a short record in `docs/adr/`. After any dependency change (Dependabot pull requests included), refresh `gradle/verification-metadata.xml` with `./gradlew --write-verification-metadata sha256 build scenarioTest` and commit it. Run it with an empty Gradle cache (`GRADLE_USER_HOME=$(mktemp -d)`) so it records everything CI will download.
 
 ## Releasing
 
-Set `version` in `gradle.properties` (for example `1.0.0`, or `1.1.0-beta.1` for a beta), move the changelog's Unreleased entries under that version, merge to `main` and wait for the build to pass. Then `git tag v1.0.0 && git push origin v1.0.0`. `release.yml` attaches both jars and `SHA256SUMS` to a GitHub Release, then publishes the Seasons jar to Hangar and Modrinth with that version's changelog section (ADR 0006). A version with a hyphen is a pre-release on GitHub, the `Beta` channel on Hangar and a beta on Modrinth. The Hangar project (`hangarProject` in `gradle.properties`, with a `Beta` channel) and the Modrinth project (`modrinthProject`) must exist, and the repository needs the secrets `HANGAR_API_TOKEN` and `MODRINTH_TOKEN`. A failed store upload can be re-run on its own from the workflow run. Afterwards set the version to the next `-SNAPSHOT`.
+Set `version` in `gradle.properties` (for example `1.0.0`, or `1.1.0-beta.1` for a beta), move the changelog's Unreleased entries under that version, merge to `main` and wait for the build to pass. Then `git tag v1.0.0 && git push origin v1.0.0`. `release.yml` attaches both jars and `SHA256SUMS` to a GitHub Release, then publishes the Seasons jar to Hangar and Modrinth with that version's changelog section (ADR 0006). A version with a hyphen is a pre-release on GitHub, the `Beta` channel on Hangar and a beta on Modrinth. The Hangar project (`hangarProject` in `gradle.properties`, with a `Beta` channel) and the Modrinth project (`modrinthProject`) must exist, and the repository needs the secrets `HANGAR_API_TOKEN` and `MODRINTH_TOKEN`. A failed store upload can be re-run on its own from the workflow run. The tag also publishes the public site and docs (`pages.yml`), so they describe the version people can download; to republish a docs fix between releases, run `pages.yml` by hand from the release tag. Afterwards set the version to the next `-SNAPSHOT`.
 
 ## Store pages
 

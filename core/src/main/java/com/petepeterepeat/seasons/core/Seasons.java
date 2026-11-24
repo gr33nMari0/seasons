@@ -1166,6 +1166,11 @@ public final class Seasons implements SeasonsApi {
   }
 
   @Override
+  public CompletableFuture<Optional<java.util.UUID>> playerId(String name) {
+    return api == null ? CompletableFuture.completedFuture(Optional.empty()) : api.playerId(name);
+  }
+
+  @Override
   public CompletableFuture<Optional<GalleryView>> gallery(int season) {
     return api == null ? CompletableFuture.completedFuture(Optional.empty()) : api.gallery(season);
   }

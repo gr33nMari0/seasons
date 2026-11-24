@@ -1,0 +1,21 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The site's top navigation, shared by the header and the mobile menu.
+const here = Astro.url.pathname
+const LINKS = [
+  { href: '/#features', label: 'Features', match: '#' },
+  { href: '/docs/', label: 'Docs', match: '/docs/' },
+  { href: '/docs/reference/commands/', label: 'Commands', match: '/docs/reference/commands/' },
+  { href: '/download/', label: 'Download', match: '/download/' },
+  { href: '/connect/', label: 'Connect', match: '/connect/' }
+]
+const current = (m: string) => {
+  if (m === '#') return false
+  if (m === '/docs/') return here.startsWith('/docs/') && !here.startsWith('/docs/reference/commands/')
+  return here.startsWith(m)
+}
+interface Props { class?: string }
+---
+<nav class:list={['site-nav', Astro.props.class]} aria-label="Site">
+  {LINKS.map((l) => <a href={l.href} aria-current={current(l.match) ? 'page' : undefined}>{l.label}</a>)}
+</nav>

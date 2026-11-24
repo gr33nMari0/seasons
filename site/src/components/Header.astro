@@ -1,0 +1,24 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The header on every page: brand, site navigation, search, GitHub and the theme toggle. On narrow
+// screens the navigation moves into the mobile menu (MobileMenuFooter) or, on pages without a
+// sidebar, into a row of its own under the header.
+import config from 'virtual:starlight/user-config'
+import Search from 'virtual:starlight/components/Search'
+import SiteTitle from 'virtual:starlight/components/SiteTitle'
+import SocialIcons from 'virtual:starlight/components/SocialIcons'
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect'
+import Nav from './Nav.astro'
+const { hasSidebar } = Astro.locals.starlightRoute
+---
+<div class="site-header">
+  <div class="title-wrapper sl-flex"><SiteTitle /></div>
+  <Nav class="desktop-nav" />
+  <div class="sl-flex print:hidden search-wrap">{config.pagefind && <Search />}</div>
+  <div class="sl-hidden md:sl-flex print:hidden right-group">
+    <div class="sl-flex social-icons"><SocialIcons /></div>
+    <ThemeSelect />
+  </div>
+  {!hasSidebar && <div class="md:sl-hidden mobile-theme"><ThemeSelect /></div>}
+</div>
+{!hasSidebar && <Nav class="mobile-nav md:sl-hidden" />}

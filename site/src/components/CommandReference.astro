@@ -1,0 +1,38 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The commands under one root, generated from the code (src/lib/reference.ts): grouped by
+// subcommand, each with its usage lines (click to copy), help, who may run it by default, its
+// permission nodes and the release it arrived in. CommandFilter narrows every root on the page.
+import { ACCESS_LABEL, groups } from '../lib/reference'
+import Icon from './Icon.astro'
+interface Props { root: string }
+const { root } = Astro.props
+const list = groups(root)
+const nodeAnchor = (p: string) => `/docs/reference/permissions/#perm-${p.replace(/[.*]/g, (m) => (m === '.' ? '-' : 'all'))}`
+const copyText = (u: string) => u.replace(/ \[.*$/, '').replace(/ <.*$/, '')
+---
+<div class="cmdref not-content" data-cmdref-root={root}>
+  {list.map((g) => (
+    <section class="cmdref-group" data-group>
+      {list.length > 1 && <h3 id={g.id}><code>{g.name}</code></h3>}
+      {g.commands.map((c) => (
+        <article class="cmd" id={c.id} data-cmd data-access={c.access} data-text={`${c.name} ${c.description} ${c.permissions.join(' ')}`.toLowerCase()}>
+          <div class="cmd-usages">
+            {c.usages.map((u) => (
+              <button type="button" class="cmd-usage" data-copy={copyText(u)} title="Copy">
+                <code>{u}</code><Icon name="copy" class="cmd-copy" />
+              </button>
+            ))}
+          </div>
+          <p class="cmd-desc">{c.description}</p>
+          <p class="cmd-meta">
+            <span class:list={['chip', c.access === 'everyone' ? 'chip-default' : 'chip-perm']}>{ACCESS_LABEL[c.access]}</span>
+            {c.permissions.map((p) => <a class="chip chip-node" href={nodeAnchor(p)}>{p}</a>)}
+            {c.since && <span class="chip chip-since">Since {c.since}</span>}
+            <a class="cmd-anchor" href={`#${c.id}`} aria-label={`Link to ${c.name}`}><Icon name="link" /></a>
+          </p>
+        </article>
+      ))}
+    </section>
+  ))}
+</div>

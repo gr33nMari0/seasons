@@ -202,6 +202,53 @@ public final class CommandHelp {
     return lines;
   }
 
+  /**
+   * One command for the public command reference (M9): its words, each usage line, its help text
+   * and the permission nodes that guard it, outermost first.
+   *
+   * @param words the literal words, root first, such as {@code [hof, link, go]}
+   * @param usages the usage lines, as {@code /hof help} shows them
+   * @param description the help text from {@code help.<words>} in messages.yml
+   * @param permissions the permission nodes along the command's path, outermost first
+   */
+  public record Entry(
+      List<String> words, List<String> usages, String description, List<String> permissions) {}
+
+  /** Every command under every root, in tree order, for the public command reference. */
+  public List<Entry> reference() {
+    List<Entry> entries = new ArrayList<>();
+    Messages text = messages.get();
+    for (CommandNode root : roots.values()) {
+      List<List<CommandNode>> runs = new ArrayList<>();
+      collect(null, root, new ArrayList<>(), runs);
+      Map<String, List<List<CommandNode>>> groups = new LinkedHashMap<>();
+      for (List<CommandNode> run : runs) {
+        String key =
+            String.join(
+                ".", run.stream().filter(CommandNode::isLiteral).map(CommandNode::name).toList());
+        groups.computeIfAbsent(key, k -> new ArrayList<>()).add(run);
+      }
+      for (Map.Entry<String, List<List<CommandNode>>> group : groups.entrySet()) {
+        List<List<CommandNode>> chain = new ArrayList<>(group.getValue());
+        chain.sort(java.util.Comparator.comparingInt(List::size));
+        String key = "help." + group.getKey();
+        List<String> permissions = new ArrayList<>();
+        for (List<CommandNode> run : chain) {
+          for (CommandNode node : run) {
+            node.permission().filter(p -> !permissions.contains(p)).ifPresent(permissions::add);
+          }
+        }
+        entries.add(
+            new Entry(
+                List.of(group.getKey().split("\\.")),
+                usages(chain),
+                text.has(key) ? text.text(key) : "",
+                List.copyOf(permissions)));
+      }
+    }
+    return entries;
+  }
+
   /** The help keys every command needs, for a test that none is missing from messages.yml. */
   public List<String> keys() {
     List<String> keys = new ArrayList<>();

@@ -1,11 +1,12 @@
-# The public site (site/public): what Seasons is and the connect page, published by GitHub Pages
-# from main. Its tests run in build.yml on every pull request. The repository's Pages source must be
-# "GitHub Actions"; a custom address needs site/public/CNAME and its DNS record.
+# The public site and its docs (site/, ADR 0008), built and published by GitHub Pages at each
+# release, so the docs describe the version people can download, never one still on main. Run it
+# by hand (workflow_dispatch, from a release tag) to republish a fix to the docs between releases.
+# The site reads CHANGELOG.md, gradle.properties and design/ as well as site/. The repository's Pages
+# source must be "GitHub Actions"; the custom address comes from site/public/CNAME and its DNS record.
 name: pages
 on:
   push:
-    branches: [main]
-    paths: ['site/public/**', '.github/workflows/pages.yml']
+    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,11 +22,29 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      ASTRO_TELEMETRY_DISABLED: '1'
+    defaults:
+      run:
+        working-directory: site
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - id: playwright
+        run: echo "version=$(jq -r '.packages["node_modules/playwright"].version' package-lock.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - run: npm ci --no-audit --no-fund
+      # Chromium draws the preview images (ADR 0011).
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site/public
+          path: site/dist
       - id: deployment
         uses: actions/deploy-pages@v4

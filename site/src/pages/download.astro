@@ -1,0 +1,67 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// Downloads: the newest release's jars, where else to get them, checksums and requirements. The
+// version and its date come from CHANGELOG.md (src/lib/release.ts).
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import Art from '../components/Art.astro'
+import Icon from '../components/Icon.astro'
+import { downloads, latest, minecraft } from '../lib/release'
+import '../styles/site.css'
+---
+<StarlightPage frontmatter={{ title: 'Download', description: `Download Seasons ${latest.version} and Seasons Web for Paper ${minecraft.join(', ')}.`, template: 'splash' }}>
+<div class="page not-content">
+  <section class="page-head">
+    <p class="kicker">Download</p>
+    <h1 id="_top" class="pixel-heading">Seasons {latest.version}</h1>
+    <p class="section-lead">Released {new Date(latest.date + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })} for Paper {minecraft.join(', ')}. <a href="/changelog/">What's new</a>.</p>
+  </section>
+
+  <section class="downloads">
+    <article class="download-card">
+      <Art name="trophy" size={56} />
+      <div>
+        <h2>Seasons</h2>
+        <p>The plugin: seasons, the Hall of Fame, the old world, links and everything else.</p>
+        <p class="download-file"><code>Seasons-{latest.version}.jar</code></p>
+        <a class="button" href={downloads.seasonsJar}><Icon name="download" /> Download Seasons</a>
+      </div>
+    </article>
+    <article class="download-card">
+      <Art name="map" size={56} />
+      <div>
+        <h2>Seasons Web <span class="chip">Optional</span></h2>
+        <p>A live dashboard served from your own server, for phones, tablets and second screens. Needs Seasons.</p>
+        <p class="download-file"><code>SeasonsWeb-{latest.version}.jar</code></p>
+        <a class="button secondary" href={downloads.webJar}><Icon name="download" /> Download Seasons Web</a>
+      </div>
+    </article>
+  </section>
+
+  <section class="band">
+    <h2 class="pixel-heading">Also on</h2>
+    <ul class="mirrors">
+      <li><a class="card-link" href={downloads.modrinth}><Icon name="globe" /><span><strong>Modrinth</strong><span>seasonsmc</span></span></a></li>
+      <li><a class="card-link" href={downloads.hangar}><Icon name="server" /><span><strong>Hangar</strong><span>PaperMC's plugin site</span></span></a></li>
+      <li><a class="card-link" href={downloads.github}><Icon name="github" /><span><strong>GitHub Releases</strong><span>Every version, with notes</span></span></a></li>
+    </ul>
+  </section>
+
+  <section class="band two-col">
+    <div>
+      <h2 class="pixel-heading">Requirements</h2>
+      <ul class="plain">
+        <li><Icon name="check" /> Paper {minecraft.join(', ')}, or a fork that runs Paper plugins, such as Purpur. Spigot and Folia aren't supported.</li>
+        <li><Icon name="check" /> Java 25.</li>
+        <li><Icon name="check" /> Optional: BlueMap 5.24 or newer, for zones, spawns and waypoints on the map.</li>
+        <li><Icon name="check" /> Optional: any permissions plugin, such as LuckPerms.</li>
+      </ul>
+    </div>
+    <div>
+      <h2 class="pixel-heading">Check the download</h2>
+      <p>Each release lists SHA-256 checksums in <a href={downloads.sums}><code>SHA256SUMS</code></a>. Compare yours:</p>
+      <pre class="shell"><code>sha256sum Seasons-{latest.version}.jar</code></pre>
+      <p>Then follow <a href="/docs/start/install/">Install</a> and <a href="/docs/start/first-season/">Your first season</a>.</p>
+    </div>
+  </section>
+</div>
+</StarlightPage>

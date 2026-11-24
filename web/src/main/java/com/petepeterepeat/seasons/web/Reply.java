@@ -13,6 +13,8 @@ import java.util.Map;
  * every response carries.
  *
  * @param personal whether it depends on who asked, so it is never cached for anyone else
+ * @param bytes a binary body, such as a font or a preview image, sent instead of {@code body} when
+ *     not empty
  */
 record Reply(
     int status,
@@ -20,12 +22,33 @@ record Reply(
     String body,
     Map<String, String> headers,
     List<String> cookies,
-    boolean personal) {
+    boolean personal,
+    Blob bytes) {
   static final String JSON = "application/json; charset=utf-8";
 
   Reply {
     headers = Map.copyOf(headers);
     cookies = List.copyOf(cookies);
+  }
+
+  Reply(
+      int status,
+      String contentType,
+      String body,
+      Map<String, String> headers,
+      List<String> cookies,
+      boolean personal) {
+    this(status, contentType, body, headers, cookies, personal, Blob.EMPTY);
+  }
+
+  /** A binary reply, such as a font or a PNG. */
+  static Reply binary(String contentType, Blob bytes) {
+    return new Reply(200, contentType, "", Map.of(), List.of(), false, bytes);
+  }
+
+  /** What goes on the wire. */
+  byte[] wire() {
+    return bytes.isEmpty() ? body.getBytes(java.nio.charset.StandardCharsets.UTF_8) : bytes.copy();
   }
 
   static Reply json(int status, JsonElement body) {
@@ -49,16 +72,16 @@ record Reply(
   Reply withHeader(String name, String value) {
     Map<String, String> next = new LinkedHashMap<>(headers);
     next.put(name, value);
-    return new Reply(status, contentType, body, next, cookies, personal);
+    return new Reply(status, contentType, body, next, cookies, personal, bytes);
   }
 
   Reply withCookie(String line) {
     List<String> next = new ArrayList<>(cookies);
     next.add(line);
-    return new Reply(status, contentType, body, headers, next, true);
+    return new Reply(status, contentType, body, headers, next, true, bytes);
   }
 
   Reply privately() {
-    return new Reply(status, contentType, body, headers, cookies, true);
+    return new Reply(status, contentType, body, headers, cookies, true, bytes);
   }
 }

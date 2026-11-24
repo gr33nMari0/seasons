@@ -550,3 +550,15 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | Recovering `--force` displaced items in the curator view | Later | Questions 23 and 221: no command of the spec's opens a displaced file |
 | Seasons Web on Hangar and Modrinth | M7 | Questions 292 |
 | Fabric and NeoForge adapters; Bedrock players through Geyser | Later | Milestone list ("Later: Seasons Adapters") |
+
+## M9: dashboard and docs design overhaul
+
+**One design for the site, the docs and the dashboard; full public docs; finding a dashboard from the game address; rich previews; customisable dashboards** (plan in `docs/plans/m9-design-overhaul.md`; readings in `docs/questions.md` from 335; ADRs 0008 to 0011). Delivered in three pull requests rather than the plan's nine, because the site, the docs and discovery link to each other and the dashboard's parts share one settings file:
+
+| Pull request | Phases | Checks |
+| --- | --- | --- |
+| `m9-design` (#42) | 0, design foundation | `site/test/design.test.mjs` (WCAG AA for every token pair), `theme.spec.mjs` (the theme rule in Chromium and WebKit) |
+| `m9-site` | 1 to 4 and 8: the site, generated references, the docs, discovery, the rules for agents | `site/test`: strict CSP, links, previews, axe on every page, generic content, docs coverage against the code, the connect flow against stubbed DNS; `SiteReferenceTest`, `WebCommandReferenceTest`, `DiscoveryTest`; `m7-connect`, `m9-discovery` |
+| `m9-dashboard` | 5 to 7: the dashboard's look, help, previews and layouts | `WebTest` (preview tags, pictures, hidden players, short links), `WebConfigTest`, `layout.test.mjs`, `help.test.mjs`, `page.test.mjs`; `m9-dashboard` (login page, Help, theme, layout editing, a shared layout's unavailable widget) and every `m7-*` scenario |
+
+The public site is published at each release tag (`pages.yml`), so the docs describe the version people can download.

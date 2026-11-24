@@ -1,0 +1,26 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The changelog: the repository's CHANGELOG.md, rendered as it is, with an index of versions.
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import { getEntry, render } from 'astro:content'
+import { downloads, releases } from '../lib/release'
+import '../styles/site.css'
+
+const entry = await getEntry('changelog', 'changelog')
+if (!entry) throw new Error('CHANGELOG.md was not loaded')
+const { Content, headings } = await render(entry)
+const versions = releases().map((r) => ({ ...r, id: headings.find((h) => h.depth === 2 && h.text.startsWith(`[${r.version}]`))?.slug }))
+---
+<StarlightPage frontmatter={{ title: 'Changelog', description: 'What changed in each release of Seasons and Seasons Web.', template: 'splash' }}>
+<div class="page not-content">
+  <section class="page-head">
+    <p class="kicker">Changelog</p>
+    <h1 id="_top" class="pixel-heading">What's new</h1>
+    <p class="section-lead">Every behaviour change in every release. Before you update, back up the world folder, then read the version's "Upgrading" notes. <a href={downloads.github}>All releases on GitHub</a>.</p>
+  </section>
+  <nav class="release-index" aria-label="Versions">
+    {versions.filter((v) => v.id).map((v) => <a href={`#${v.id}`}>{v.version}</a>)}
+  </nav>
+  <section class="changelog"><Content /></section>
+</div>
+</StarlightPage>
