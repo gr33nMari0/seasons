@@ -4,6 +4,15 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- A new public site and full docs at [seasonsmc.petepeterepeat.com](https://seasonsmc.petepeterepeat.com): install, your first season (a checklist you can tick off), running a server, guides (regenerating the End, importing a hand-built Hall, picking a spawn, troubleshooting), a players' guide, and every command, permission and setting, generated from the code and searchable. Light and dark themes that follow your device, and a rich preview when any page is shared.
+- Find your server's dashboard from the address you play on: type `play.example.com` on the connect page and land on its Seasons Web dashboard, or be told whether the server runs Seasons Web or is offline. List your game addresses under `game-addresses` in `web.yml` and publish the DNS record `/web discovery` prints; `/web discovery check` checks it. `seasons.web.discovery` (ops by default) runs them.
+
+### Fixed
+
+- `/hof help` and `/season help` show every word of each argument's description: several link commands lost words that looked like formatting tags.
+
 ## [1.3.0] - 2026-11-24
 
 ### Added

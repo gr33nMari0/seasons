@@ -1,11 +1,12 @@
-# The public site and its docs (site/, ADR 0008), built and published by GitHub Pages from main.
-# The site reads CHANGELOG.md, gradle.properties and design/ as well as site/, so every push to main
-# rebuilds it. The repository's Pages source must be "GitHub Actions"; the custom address comes from
-# site/public/CNAME and its DNS record.
+# The public site and its docs (site/, ADR 0008), built and published by GitHub Pages at each
+# release, so the docs describe the version people can download, never one still on main. Run it
+# by hand (workflow_dispatch, from a release tag) to republish a fix to the docs between releases.
+# The site reads CHANGELOG.md, gradle.properties and design/ as well as site/. The repository's Pages
+# source must be "GitHub Actions"; the custom address comes from site/public/CNAME and its DNS record.
 name: pages
 on:
   push:
-    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: read

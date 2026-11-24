@@ -35,10 +35,13 @@ public final class SiteReference {
     Files.createDirectories(data.resolve("commands"));
     switch (args[0]) {
       case "commands" ->
-          Files.writeString(data.resolve("commands/seasons.json"), commands(), StandardCharsets.UTF_8);
+          Files.writeString(
+              data.resolve("commands/seasons.json"), commands(), StandardCharsets.UTF_8);
       case "permissions" ->
           Files.writeString(
-              data.resolve("permissions.json"), permissions(Path.of(args[2])), StandardCharsets.UTF_8);
+              data.resolve("permissions.json"),
+              permissions(Path.of(args[2])),
+              StandardCharsets.UTF_8);
       default -> throw new IllegalArgumentException("commands or permissions, not " + args[0]);
     }
   }
@@ -85,7 +88,8 @@ public final class SiteReference {
   @SuppressWarnings("unchecked")
   public static String permissions(Path repository) throws IOException {
     Map<String, Path> plugins = new LinkedHashMap<>();
-    plugins.put("Seasons", repository.resolve("adapters/paper/src/main/resources/paper-plugin.yml"));
+    plugins.put(
+        "Seasons", repository.resolve("adapters/paper/src/main/resources/paper-plugin.yml"));
     plugins.put("Seasons Web", repository.resolve("web/src/main/resources/paper-plugin.yml"));
     List<String> rows = new ArrayList<>();
     for (Map.Entry<String, Path> plugin : plugins.entrySet()) {
