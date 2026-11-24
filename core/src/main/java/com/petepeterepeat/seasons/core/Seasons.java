@@ -1170,6 +1170,11 @@ public final class Seasons implements SeasonsApi {
     return Optional.ofNullable(commandHelp);
   }
 
+  /** The Hall, once started, for tests. */
+  Optional<HallService> hall() {
+    return Optional.ofNullable(hallService);
+  }
+
   /** Player records, once started. */
   Optional<PlayerStore> players() {
     return Optional.ofNullable(store);

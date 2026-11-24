@@ -306,6 +306,7 @@ hof:
     cells-outside: "<red>Cell <cell> would end up outside gallery <gallery>.</red>"
     entry: "<green>Gallery <gallery>'s entry is now at <x>, <y>, <z>.</green>"
     entry-area: "<green>Gallery <gallery>'s entry is now <from> to <to>.</green>"
+    entry-none: "<green>Gallery <gallery> has no entry now.</green>"
     exit-area: "<green>Added an exit to gallery <gallery>: <from> to <to>.</green>"
     removed: "<green>Removed gallery <gallery>.</green>"
     created-legacy: "<green>Created gallery <gallery> for Season <season>, kept as built (legacy).</green>"
@@ -458,6 +459,8 @@ hof:
     not-yet: "<red>The Hall of Fame opens once a season is recorded.</red>"
     no-spawn: "<red>The Hall of Fame has no spawn yet.</red>"
     no-season: "<red>Season <season> has no gallery to visit.</red>"
+    no-entry: "<red>Season <season>'s gallery has no entry yet.</red>"
+    no-entry-next: "<gray>Next: /hof gallery entry <gallery></gray>"
     no-cell: "<red><name> has no cell in the Hall of Fame.</red>"
     failed: "<red>You couldn't be moved. Try again in a moment.</red>"
   entry:

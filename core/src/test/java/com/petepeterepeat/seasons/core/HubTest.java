@@ -589,4 +589,60 @@ class HubTest {
     assertThat(hof("/hof hall spawn -3 64 3 90"))
         .containsExactly("The Hall spawn is now at -3, 64, 3.");
   }
+
+  /** A legacy Season 1 wing beside the gallery, with an entry unless told otherwise. */
+  private void legacyWing(boolean entry) throws IOException {
+    Files.writeString(
+        dir.resolve("world/seasons/galleries/season-1.yml"),
+        """
+        schema-version: 1
+        id: season-1
+        season: 1
+        kind: legacy
+        bounds: { min: [0, 60, 21], max: [20, 80, 40] }
+        """
+            + (entry ? "entry: { pos: [3, 64, 25] }\n" : "")
+            + """
+            cells:
+              a:
+                bounds: { min: [4, 64, 30], max: [8, 69, 34] }
+            """);
+    run("/season reload");
+  }
+
+  @Test
+  void aSeasonsLegacyGalleryIsVisitable() throws IOException {
+    legacyWing(true);
+    as(alex, "/hof 1");
+    assertThat(at(alex).blockX()).isEqualTo(3);
+    assertThat(at(alex).blockZ()).isEqualTo(25);
+    assertThat(lastHeard(alex))
+        .isEqualTo("Welcome to the Hall of Fame. /hof leave takes you back.");
+  }
+
+  @Test
+  void aGalleryWithoutAnEntrySaysSo() throws IOException {
+    legacyWing(false);
+    as(alex, "/hof 1");
+    assertThat(at(alex)).isEqualTo(HOME);
+    List<String> heard =
+        fake.sent.stream()
+            .filter(s -> s.player().equals(alex.id()))
+            .map(s -> Messages.plain(s.message()))
+            .toList();
+    assertThat(heard.subList(heard.size() - 2, heard.size()))
+        .containsExactly(
+            "Season 1's gallery has no entry yet.", "Next: /hof gallery entry season-1");
+    as(alex, "/hof 7");
+    assertThat(lastHeard(alex)).isEqualTo("Season 7 has no gallery to visit.");
+  }
+
+  @Test
+  void legacyGalleriesStayOutOfTheDraw() throws IOException {
+    legacyWing(true);
+    assertThat(seasons.hall().orElseThrow().seasonGalleries(1)).isEmpty();
+    assertThat(seasons.hall().orElseThrow().visitableGalleries(1))
+        .extracting(g -> g.id())
+        .containsExactly("season-1");
+  }
 }

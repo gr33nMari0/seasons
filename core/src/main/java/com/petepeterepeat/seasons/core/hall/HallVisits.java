@@ -352,15 +352,21 @@ public final class HallVisits {
     String text = target.get();
     if (text.chars().allMatch(Character::isDigit) && !text.isEmpty() && text.length() < 9) {
       int season = Integer.parseInt(text);
-      Optional<Position> entry =
-          halls.seasonGalleries(season).stream()
-              .filter(g -> g.entry().isPresent())
-              .findFirst()
-              .flatMap(halls::galleryEntry);
-      if (entry.isEmpty()) {
-        tell(player, "hof.visit.no-season", "season", text);
+      List<Gallery> visitable = halls.visitableGalleries(season);
+      Optional<Gallery> withEntry =
+          visitable.stream().filter(g -> g.entry().isPresent()).findFirst();
+      if (withEntry.isPresent()) {
+        return halls.galleryEntry(withEntry.get());
       }
-      return entry;
+      if (visitable.isEmpty()) {
+        tell(player, "hof.visit.no-season", "season", text);
+      } else {
+        tell(player, "hof.visit.no-entry", "season", text);
+        if (platform.permissions().has(player, HallCommands.PERMISSION_ADMIN)) {
+          tell(player, "hof.visit.no-entry-next", "gallery", visitable.getFirst().id());
+        }
+      }
+      return Optional.empty();
     }
     Optional<PlayerId> owner =
         platform

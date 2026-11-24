@@ -203,6 +203,22 @@ public record Gallery(
         new Areas(area, areas.exits()));
   }
 
+  /** No entry: {@code /hof gallery entry <gallery> none}. */
+  public Gallery withoutEntry() {
+    return new Gallery(
+        id,
+        kind,
+        season,
+        dimension,
+        bounds,
+        Optional.empty(),
+        exits,
+        cells,
+        settings,
+        launch,
+        new Areas(Optional.empty(), areas.exits()));
+  }
+
   /** An exit that is a box. */
   public Gallery withExitArea(Bounds area) {
     List<Bounds> next = new ArrayList<>(areas.exits());

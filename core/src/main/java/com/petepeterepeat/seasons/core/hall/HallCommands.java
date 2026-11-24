@@ -500,6 +500,13 @@ public final class HallCommands {
       return;
     }
     Optional<String> typed = arguments.optionalString("at");
+    if (typed.map(String::trim).filter("none"::equals).isPresent()) {
+      saved(
+          source,
+          hall.save(found.get().withoutEntry()),
+          messages().get("hof.gallery.entry-none", "gallery", found.get().id()));
+      return;
+    }
     Optional<Spot> spot;
     if (typed.isPresent()
         && (Splitter.split(typed.get()).length >= 6

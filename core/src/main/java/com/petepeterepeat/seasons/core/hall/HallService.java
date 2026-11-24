@@ -195,6 +195,20 @@ public final class HallService {
     return config.get().gallery(id);
   }
 
+  /**
+   * A season's galleries a visitor can go to with {@code /hof <season>}: its {@code season}
+   * galleries, then its legacy ones, each kind by id. Legacy galleries take no part in assignment,
+   * locking or shortfalls (questions 281), but they are still somewhere to visit.
+   */
+  public List<Gallery> visitableGalleries(int season) {
+    return galleries().stream()
+        .filter(g -> g.kind() != Gallery.Kind.MUSEUM && g.season() == season)
+        .sorted(
+            java.util.Comparator.comparing((Gallery g) -> g.kind() != Gallery.Kind.SEASON)
+                .thenComparing(Gallery::id))
+        .toList();
+  }
+
   /** The galleries of one season, in id order. */
   public List<Gallery> seasonGalleries(int season) {
     return galleries().stream()
