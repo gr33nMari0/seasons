@@ -86,7 +86,7 @@ Back up the world folder, swap the jar, read the startup line and `/hof link upg
 - The dragon egg is frozen on the exit portal from the kill until Seasons takes it, so nobody can click, push or blow it away in between; an egg that leaves the portal anyway is reported and the slayer is given none, rather than a second egg. After a crash, Seasons sets the End's previously-killed flag again and takes off an egg the vault already holds, since the End can roll back to before both.
 - `/museum add` and `remove` are refused on a plinth whose last change a crash interrupted, until recovery settles it.
 - A museum cell can have several trophy anchors, such as an egg wall: each egg plinth shows its own season's egg.
-- The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Taran" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
+- The egg wall: a museum trophy anchor with `egg: <season>` shows that season's dragon egg with "Season 3 · slain by Alex" once the season has ended. `/season end --dry-run` warns when the season has no egg plinth.
 
 ### Changed
 

@@ -6,6 +6,7 @@
 #
 # Documentation is exactly:
 #   docs/**              the spec, ADRs, questions, progress, Paper API list
+#   site/**              the public site and its docs, which the site job builds and tests itself
 #   *.md at the root     README, CONTRIBUTING, CHANGELOG, SECURITY, AGENTS, CLAUDE, notices
 #   LICENSE
 # Anything else, including an empty list, is not docs-only, so the shards run.
@@ -16,7 +17,7 @@ while IFS= read -r path || [ -n "$path" ]; do
   [ -z "$path" ] && continue
   any=true
   case "$path" in
-    docs/*) ;;
+    docs/* | site/*) ;;
     */*) echo false; exit 0 ;;
     *.md | LICENSE) ;;
     *) echo false; exit 0 ;;

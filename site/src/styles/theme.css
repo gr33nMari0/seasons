@@ -1,0 +1,421 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 */
+/* Starlight in Seasons' design: its variables point at design/tokens.css, which switches with the
+   theme, then the header, footer and the pieces every page shares. Landing-page sections live in
+   site.css. */
+
+:root,
+:root[data-theme='light'] {
+  --sl-font: var(--font-body);
+  --sl-font-mono: var(--font-mono);
+  --sl-color-white: var(--text);
+  --sl-color-gray-1: var(--text);
+  --sl-color-gray-2: var(--text-2);
+  --sl-color-gray-3: var(--text-3);
+  --sl-color-gray-4: var(--text-3);
+  --sl-color-gray-5: var(--border);
+  --sl-color-gray-6: var(--surface);
+  --sl-color-gray-7: var(--surface-2);
+  --sl-color-black: var(--bg);
+  --sl-color-bg: var(--bg);
+  --sl-color-bg-nav: var(--surface);
+  --sl-color-bg-sidebar: var(--bg);
+  --sl-color-bg-inline-code: var(--code-bg);
+  --sl-color-bg-accent: var(--accent);
+  --sl-color-hairline: var(--border);
+  --sl-color-hairline-light: var(--border-soft);
+  --sl-color-hairline-shade: var(--border);
+  --sl-color-text: var(--text-2);
+  --sl-color-text-accent: var(--accent-text);
+  --sl-color-text-invert: var(--on-accent);
+  --sl-color-accent-low: var(--surface-2);
+  --sl-color-accent: var(--accent);
+  --sl-color-accent-high: var(--accent-text);
+  --sl-color-backdrop-overlay: rgb(14 18 28 / 66%);
+  --sl-color-orange-low: var(--surface-2);
+  --sl-color-orange: var(--warning);
+  --sl-color-orange-high: var(--warning);
+  --sl-color-green-low: var(--surface-2);
+  --sl-color-green: var(--success);
+  --sl-color-green-high: var(--success);
+  --sl-color-blue-low: var(--surface-2);
+  --sl-color-blue: var(--info);
+  --sl-color-blue-high: var(--info);
+  --sl-color-purple-low: var(--surface-2);
+  --sl-color-purple: var(--accent);
+  --sl-color-purple-high: var(--accent-text);
+  --sl-color-red-low: var(--surface-2);
+  --sl-color-red: var(--danger);
+  --sl-color-red-high: var(--danger);
+  --sl-shadow-sm: var(--shadow-chip);
+  --sl-shadow-md: var(--shadow-card);
+  --sl-shadow-lg: var(--shadow-card);
+  --sl-nav-height: 4rem;
+  --sl-content-width: 46rem;
+  --sl-text-h1: 2.4rem;
+  --sl-line-height-headings: 1.2;
+}
+
+::selection { background: var(--selection); }
+
+body {
+  background: var(--bg);
+  color: var(--text-2);
+  font-family: var(--font-body);
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Icons and pixel art */
+
+.px-icon {
+  width: 1em;
+  height: 1em;
+  flex: none;
+  vertical-align: -0.12em;
+}
+
+.px-art,
+.site-brand img {
+  image-rendering: pixelated;
+}
+
+/* Headings: Pixelify Sans for the big ones, Inter for the rest */
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+h1#_top,
+.content-panel h1,
+.pixel-heading {
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Header */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 100%;
+}
+
+.site-header .title-wrapper {
+  flex: none;
+  overflow: clip;
+  padding: 0.25rem;
+  margin: -0.25rem;
+}
+
+.site-header .search-wrap {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.site-header .right-group,
+.site-header .social-icons {
+  gap: 0.75rem;
+  align-items: center;
+}
+
+@media (max-width: 49.99rem) {
+  .site-header .mobile-theme { display: flex; align-items: center; }
+}
+
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+  text-decoration: none;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.site-brand:hover { color: var(--accent-text); }
+
+.site-nav {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.site-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding: 0 0.7rem;
+  color: var(--text-2);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 3px solid transparent;
+}
+
+.site-nav a:hover { color: var(--text); }
+
+.site-nav a[aria-current='page'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.desktop-nav { display: none; }
+
+@media (min-width: 72rem) {
+  .desktop-nav { display: flex; }
+}
+
+.mobile-nav {
+  position: fixed;
+  top: var(--sl-nav-height);
+  inset-inline: 0;
+  z-index: var(--sl-z-index-navbar);
+  overflow-x: auto;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 var(--gutter);
+  scrollbar-width: none;
+}
+
+@media (min-width: 50rem) {
+  .mobile-nav { display: none; }
+}
+
+@media (max-width: 49.99rem) {
+  :root:not([data-has-sidebar]) .main-frame { padding-top: calc(var(--sl-nav-height) + var(--touch)); }
+}
+
+.mobile-footer { display: flex; flex-direction: column; gap: 1rem; }
+.mobile-footer .menu-nav { flex-direction: column; align-items: stretch; }
+.mobile-footer .menu-nav a { border-bottom: 1px solid var(--border-soft); }
+.mobile-footer-row { justify-content: space-between; align-items: center; gap: 1rem; }
+
+/* The theme toggle */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch);
+  height: var(--touch);
+  background: var(--surface-2);
+  color: var(--accent-text);
+  border: var(--border-width) solid var(--border);
+  cursor: pointer;
+  font-size: 1.15rem;
+}
+
+.theme-toggle:hover { border-color: var(--accent); }
+.theme-toggle .when-light { display: none; }
+:root[data-theme='light'] .theme-toggle .when-light { display: block; }
+:root[data-theme='light'] .theme-toggle .when-dark { display: none; }
+
+/* Search: square, bordered */
+
+site-search button[data-open-modal] {
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-2);
+  min-height: var(--touch);
+}
+
+/* The search button shows only "Search", so its visible text matches its accessible name (WCAG
+   2.5.3); Ctrl K or ⌘ K still opens it, announced through aria-keyshortcuts. */
+site-search button > kbd { display: none; }
+
+site-search dialog {
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-card);
+}
+
+/* The site's own pages have their own h1; Starlight's title panel is left out for them. */
+.content-panel:has(.page-title-none) { display: none; }
+.content-panel:has(.page-title-none) + .content-panel { border-top: 0; }
+
+/* Page title chips */
+
+.page-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.chip-since { color: var(--accent-text); border-color: var(--accent-pressed); }
+.chip-audience { color: var(--info); }
+.chip-perm { color: var(--travel); }
+.chip-default { color: var(--success); }
+
+/* Markdown content: square everything, pixel shadows on the boxes */
+
+.sl-markdown-content :is(table) {
+  border: var(--border-width) solid var(--border);
+  border-collapse: collapse;
+}
+
+.sl-markdown-content :is(th) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.sl-markdown-content :is(th, td) {
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sl-markdown-content code:not(:where(.not-content *)) {
+  border-radius: 0;
+  font-size: 0.9em;
+  border: 1px solid var(--border-soft);
+  padding: 0.08em 0.35em;
+}
+
+.sl-markdown-content a:not(:where(.not-content *)) { color: var(--link); text-underline-offset: 0.18em; }
+.sl-markdown-content a:not(:where(.not-content *)):hover { color: var(--link-hover); }
+
+.starlight-aside {
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  border-inline-start-width: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow-chip);
+}
+
+.starlight-aside--note { border-inline-start-color: var(--info); }
+.starlight-aside--tip { border-inline-start-color: var(--success); }
+.starlight-aside--caution { border-inline-start-color: var(--warning); }
+.starlight-aside--danger { border-inline-start-color: var(--danger); }
+
+.expressive-code .frame,
+.expressive-code pre {
+  border-radius: 0 !important;
+}
+
+.card,
+.sl-link-card {
+  border-radius: 0;
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-chip);
+  background: var(--surface);
+}
+
+.sl-link-card:hover {
+  border-color: var(--accent);
+}
+
+/* Sidebar */
+
+.sidebar-content a[aria-current='page'] {
+  background: var(--surface-2);
+  color: var(--accent-text);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: 0;
+  font-weight: 700;
+}
+
+.sidebar-content summary .group-label { font-family: var(--font-pixel); font-weight: 600; color: var(--text); }
+
+/* Buttons */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--touch);
+  padding: 0 1.1rem;
+  font-weight: 700;
+  font-size: 1rem;
+  text-decoration: none;
+  border: var(--border-width) solid var(--shadow-color);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-chip);
+  cursor: pointer;
+  transition: transform var(--speed) steps(2), box-shadow var(--speed) steps(2);
+}
+
+.button:hover { background: var(--accent-hover); color: var(--on-accent); }
+.button:active { transform: translate(2px, 2px); box-shadow: var(--shadow-press); }
+
+.button.secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.button.secondary:hover { border-color: var(--accent); color: var(--text); }
+
+/* The site footer */
+
+.site-footer {
+  margin-top: 4rem;
+  background: var(--night);
+  color: var(--ink-2);
+}
+
+.site-footer .ground {
+  height: 24px;
+  background: url('/design/art/ground-wide.svg') repeat-x left top / auto 24px;
+  image-rendering: pixelated;
+}
+
+.site-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem 4rem;
+  justify-content: space-between;
+  padding: 2rem var(--gutter) 1rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.site-footer-brand { display: flex; gap: 0.75rem; align-items: flex-start; }
+.site-footer-brand p { margin: 0; color: var(--ink-3); }
+.site-footer-brand strong { font-family: var(--font-pixel); font-size: 1.3rem; color: var(--ink); }
+
+.site-footer-links { display: flex; flex-wrap: wrap; gap: 2rem 3rem; }
+.site-footer-links div { display: flex; flex-direction: column; gap: 0.15rem; }
+.site-footer-links h2 { font-family: var(--font-pixel); font-size: 1rem; color: var(--gold); margin: 0 0 0.35rem; }
+.site-footer-links a { color: var(--ink-2); text-decoration: none; min-height: 32px; display: inline-flex; align-items: center; }
+.site-footer-links a:hover { color: var(--gold-hi); }
+
+.site-footer-legal {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem var(--gutter) 2rem;
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+
+.site-footer-legal a { color: var(--gold); }
+
+/* Starlight's footer sits inside the content column; ours spans the page. */
+footer .site-footer { margin-inline: calc(-1 * var(--sl-content-pad-x, 1rem)); }

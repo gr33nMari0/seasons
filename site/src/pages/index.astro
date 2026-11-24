@@ -1,0 +1,262 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// The landing page: what Seasons is, how a season runs, and where to go next. Generic: no server
+// is named, examples use placeholders (docs/plans/m9-design-overhaul.md, content rules).
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro'
+import Art from '../components/Art.astro'
+import Icon from '../components/Icon.astro'
+import { downloads, latest, minecraft } from '../lib/release'
+import '../styles/site.css'
+
+const PHASES = [
+  { art: 'tree', name: 'Frontier', text: 'Everyone starts at a fresh spawn far out in land nobody has explored. The old world is locked; everywhere else, go as far as you like.' },
+  { art: 'lock-open', name: 'Open', text: 'Homecoming, when the group votes. The whole world unlocks: old bases, chests and items are playable again.' },
+  { art: 'hourglass', name: 'Ending', text: 'The group votes to end, an admin sets the date, and at a live event everyone online is archived after a countdown.' },
+  { art: 'trophy', name: 'Intermission', text: 'Everyone wakes up in their Hall of Fame cell. Tour the Hall, hand out the awards and the season firsts.' },
+  { art: 'firework', name: 'Launch', text: 'An admin presses the button. Everyone, with their registered pets, arrives at the new spawn with a fanfare.' }
+]
+
+const PLACES = [
+  { art: 'chestplate', kicker: 'Everything you carry', name: 'Your Hall of Fame cell', text: 'Your armour on a figure in your skin, the rest in a view-only chest, your season card and awards on the wall. Forever.' },
+  { art: 'house', kicker: 'The old world', name: 'Locked until Homecoming', text: 'Old bases, farms, chests and ender chests wait, untouched, until the group votes. Then the whole world opens. Nothing is wiped.' },
+  { art: 'egg', kicker: 'One-of-a-kind trophies', name: 'The museum', text: 'Each season\'s dragon egg goes to its slayer, with a plinth in the museum. One-off items stay on display for good.' },
+  { art: 'tree', kicker: 'The new frontier', name: 'Yours from day one', text: 'Fresh land far from the old world, with the newest biomes, a stronghold in reach and no distance limit.' }
+]
+
+const FEATURES = [
+  { icon: 'star', name: 'Automatic archiving', text: 'Everyone online is archived at the end; anyone offline, the moment they next log in. Nobody is skipped, nobody archived twice.' },
+  { icon: 'home', name: 'Works with any Hall', text: 'Build the Hall your way, tag cells with the wand, repeat a row, or stamp a template. Keep a hand-built Hall as it is.' },
+  { icon: 'user', name: 'Your skin, your gear', text: 'A mannequin wearing your armour in your skin, with every name, enchant and trim kept.' },
+  { icon: 'clock', name: 'Visit from your bed', text: 'Sneak and right-click a bed, or type /hof, to visit. /hof leave brings you back where you were, checked for safety.' },
+  { icon: 'link', name: 'Links anywhere', text: 'Buttons, signs, plates, doorways and floating text that take players to the Hall, any season\'s spawn or a named point.' },
+  { icon: 'lock', name: 'Old world locked, never wiped', text: 'Zones you draw lock old land, or make it no-build or announce-only, until Homecoming opens it all at once.' },
+  { icon: 'trophy', name: 'A new egg for each slayer', text: 'Whoever kills the dragon gets a fresh egg with a fanfare, and the season\'s plinth in the museum shows it.' },
+  { icon: 'users', name: 'Bring your pets', text: 'Register tamed pets with /pet add and they travel with you to the new spawn.' },
+  { icon: 'book', name: 'Cards, awards and firsts', text: 'A season card for everyone, awards with trophies, and the first to each milestone announced.' },
+  { icon: 'edit', name: 'Curators', text: 'Trusted players can return an archived item to its owner or move it to the museum, every time saved, logged and announced.' },
+  { icon: 'map', name: 'Maps and Discord', text: 'Spawns, zones, the Hall and shared waypoints on BlueMap; reminders, firsts and the big moments posted to Discord.' },
+  { icon: 'server', name: 'A live web dashboard', text: 'Add Seasons Web for a dashboard on your own server: the clock, who\'s online, the feed, profiles and the Hall.' }
+]
+
+const SAFETY = [
+  { name: 'No real items in the Hall', text: 'Figures and chests show copies. The items themselves live in Seasons\' own files, never in the world.' },
+  { name: 'Crash-safe rollover', text: 'Every item move is journalled. Pull the plug at any moment and every item exists exactly once.' },
+  { name: 'Dupe tripwire', text: 'A display copy that escapes is caught on sight, removed and reported.' },
+  { name: 'Self-healing displays', text: 'Figures, plaques and displays are checked and redrawn if anything breaks or goes missing.' },
+  { name: 'Audit log', text: 'Archiving, withdrawals, curation, config changes and every refusal in an append-only log.' },
+  { name: 'Locked down by default', text: 'Admin commands need permissions, nobody bypasses the protection by default, and reloads can\'t break the running config.' }
+]
+
+const PLAYER_COMMANDS = [
+  ['/hof', 'Visit the Hall of Fame from near a bed'],
+  ['/hof leave', 'Go back to where you were'],
+  ['/hof swap <player>', 'Swap cells while decorating'],
+  ['/vault', 'Your ender vault: look now, take after Homecoming'],
+  ['/pet add', 'Register a pet to travel with you'],
+  ['/season info', 'The season, its phase and your cell'],
+  ['/web link <code>', 'Log in to your server\'s dashboard']
+]
+
+const ADMIN_COMMANDS = [
+  ['/season init <n>', 'Record the season you\'re in'],
+  ['/hof wand', 'Mark the hub, galleries, cells and links'],
+  ['/season zone add …', 'Lock the old world'],
+  ['/season spawn set …', 'Choose the next spawn'],
+  ['/season end', 'The live event: archive everyone'],
+  ['/season launch', 'Send everyone to the new spawn'],
+  ['/season unlock homecoming', 'Open the old world']
+]
+
+const STEPS = [
+  { name: 'Install', text: 'Drop the jar in plugins/ and restart. Players install nothing.', href: '/docs/start/install/' },
+  { name: 'Set up the Hall', text: 'Mark the hub, a gallery and its cells with the wand.', href: '/docs/owners/the-hall/' },
+  { name: 'Lock the old world', text: 'Draw a zone around old land. It opens at Homecoming.', href: '/docs/owners/zones/' },
+  { name: 'Pick the new spawn', text: 'Mark candidates, let the group vote, set the winner.', href: '/docs/guides/spawn-picking/' },
+  { name: 'Set the end date', text: 'Reminders go out; the decorating window opens a week before.', href: '/docs/owners/season-lifecycle/' },
+  { name: 'Roll over', text: 'One live event: /season end, the Intermission, /season launch.', href: '/docs/owners/rollover-day/' }
+]
+
+const FAQ = [
+  ['Do players need to install anything?', 'No. Seasons is a server-side Paper plugin. Players join with an unmodified game.'],
+  ['Which versions does it support?', `Paper ${minecraft.join(', ')} (or a fork that runs Paper plugins, such as Purpur) on Java 25. Spigot and Folia aren't supported.`],
+  ['Will it delete parts of my world?', 'Never. The old world is locked by zones, not wiped, and opens again at Homecoming. Seasons doesn\'t trim or regenerate chunks.'],
+  ['Can I keep my existing Hall of Fame?', 'Yes. Keep a hand-built gallery exactly as it is, as a legacy gallery, or convert it with /hof import.'],
+  ['What if the server crashes mid-rollover?', 'Every item move is journalled. On the next start Seasons finishes or undoes each one, so every item exists exactly once.'],
+  ['Can players get their old gear back?', 'Archives are view-only forever. A curator can return a single item to its owner, and every return is saved, logged and announced.'],
+  ['Is there a web dashboard?', 'Yes: Seasons Web, an optional second plugin, serves a live dashboard from your own server for phones, tablets and second screens.'],
+  ['Does it work on Fabric or NeoForge?', 'Not yet. The core is platform-neutral, and adapters for Fabric and NeoForge are on the roadmap.']
+]
+---
+<StarlightPage frontmatter={{ title: 'Seasons', description: 'A Paper plugin that runs your Minecraft server in seasons on one world that never resets: a Hall of Fame for everyone\'s gear, a fresh spawn each season, and the old world locked until Homecoming.', template: 'splash' }}>
+<div class="landing not-content">
+
+  <section class="hero" aria-labelledby="_top">
+    <div class="hero-text">
+      <p class="eyebrow"><span>Paper plugin</span><span>Minecraft {minecraft.join(', ')}</span><span>v{latest.version}</span></p>
+      <h1 id="_top" class="pixel-heading">One world.<br /><span class="gold">A fresh start every season.</span></h1>
+      <p class="lead">Seasons runs the season format for you. At season end it archives everyone's gear into your Hall of Fame, moves everyone to fresh land, and keeps the old world locked until Homecoming unlocks it all. Nothing is wiped: your megaprojects stay standing, ready to carry on.</p>
+      <div class="actions">
+        <a class="button" href="/download/"><Icon name="download" /> Download {latest.version}</a>
+        <a class="button secondary" href="/docs/"><Icon name="book" /> Read the docs</a>
+      </div>
+      <p class="small">Players install nothing. Works with any Hall of Fame build. Add Seasons Web for a live dashboard.</p>
+    </div>
+
+    <figure class="cell" aria-label="A Hall of Fame cell: a figure in diamond armour, a chest of archived items and a plaque">
+      <div class="cell-arch">
+        <div class="cell-inside">
+          <Art name="figure-diamond" size={144} class="cell-figure" />
+          <button type="button" class="cell-chest" aria-describedby="chest-tip">
+            <Art name="chest" size={72} alt="Archived items" />
+          </button>
+          <div class="tooltip" id="chest-tip" role="tooltip">
+            <p class="t-name t-aqua">Diamond Sword</p>
+            <p class="t-enchant">Sharpness V</p>
+            <p class="t-enchant">Looting III</p>
+            <p class="t-enchant">Mending</p>
+            <p class="t-name t-gold">Netherite Upgrade</p>
+            <p class="t-lore">Archived · Season 3 · view-only</p>
+          </div>
+        </div>
+      </div>
+      <figcaption class="plaque"><span>Alex · Season 3</span></figcaption>
+    </figure>
+  </section>
+
+  <section id="how" class="band" aria-labelledby="how-title">
+    <p class="kicker">The season loop</p>
+    <h2 id="how-title" class="pixel-heading">Five phases, one live event</h2>
+    <p class="section-lead">The group votes on when to end, and an admin runs one live event. Seasons does everything in between, including for players who were offline.</p>
+    <ol class="phases">
+      {PHASES.map((p, i) => (
+        <li class="phase">
+          <span class="phase-n">{i + 1}</span>
+          <Art name={p.art} size={56} />
+          <h3>{p.name}</h3>
+          <p>{p.text}</p>
+        </li>
+      ))}
+    </ol>
+    <div class="ground-strip" aria-hidden="true"></div>
+    <p class="note"><Icon name="info" /> <span><strong>Offline when the season ends?</strong> You're archived the moment you next log in, then sent to your cell or the new spawn.</span></p>
+  </section>
+
+  <section id="places" class="band" aria-labelledby="places-title">
+    <p class="kicker">Where your stuff goes</p>
+    <h2 id="places-title" class="pixel-heading">Four places, four rules</h2>
+    <p class="section-lead">A level playing field every season, without losing anything you built or earned.</p>
+    <div class="places">
+      {PLACES.map((p) => (
+        <article class="tile">
+          <Art name={p.art} size={64} />
+          <p class="kicker small-kicker">{p.kicker}</p>
+          <h3>{p.name}</h3>
+          <p>{p.text}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section id="features" class="band" aria-labelledby="features-title">
+    <p class="kicker">Features</p>
+    <h2 id="features-title" class="pixel-heading">All the rollover work, done for you</h2>
+    <p class="section-lead">Everything that used to mean an evening of copying chests and teleporting players, in one plugin with one button per season.</p>
+    <div class="features">
+      {FEATURES.map((f) => (
+        <article class="feature">
+          <span class="feature-icon"><Icon name={f.icon} /></span>
+          <div><h3>{f.name}</h3><p>{f.text}</p></div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  <section class="band dark-band theme-dark" aria-labelledby="safety-title">
+    <div class="band-inner">
+      <p class="kicker">Built to be trusted</p>
+      <h2 id="safety-title" class="pixel-heading">Nothing lost, duped or stolen</h2>
+      <div class="safety">
+        {SAFETY.map((s) => (
+          <article class="safety-item">
+            <Art name="shield" size={40} />
+            <div><h3>{s.name}</h3><p>{s.text}</p></div>
+          </article>
+        ))}
+      </div>
+      <a class="text-link" href="/docs/owners/safety/">How Seasons keeps items safe <Icon name="arrow" /></a>
+    </div>
+  </section>
+
+  <section id="web" class="band" aria-labelledby="web-title">
+    <p class="kicker">Seasons Web</p>
+    <h2 id="web-title" class="pixel-heading">Your server, on a second screen</h2>
+    <div class="web">
+      <ol class="web-steps">
+        <li><span class="step-n">1</span><div><h3>Type your server's address</h3><p>The one you join the game with, such as <code>play.example.com</code>, on <a href="/connect/">the connect page</a>.</p></div></li>
+        <li><span class="step-n">2</span><div><h3>Land on its dashboard</h3><p>Seasons finds your server's own dashboard and takes you there. It runs on that server, not here.</p></div></li>
+        <li><span class="step-n">3</span><div><h3>Type the code in game</h3><p>Run <code>/web link</code> with the code on screen. No passwords, ever.</p></div></li>
+      </ol>
+      <div class="code-demo theme-dark" aria-hidden="true">
+        <p class="code-demo-cmd">/web link <span>K7QX-2M</span></p>
+        <div class="code-cells"><span>K</span><span>7</span><span>Q</span><span>X</span><i>-</i><span>2</span><span>M</span></div>
+        <div class="code-bar"><b></b><b></b><b></b><b></b><b></b><b></b><s></s><s></s><s></s><s></s></div>
+        <p class="code-demo-status">Waiting for you in game…</p>
+      </div>
+    </div>
+    <ul class="checks">
+      <li><Icon name="check" /> Off until you enable it</li>
+      <li><Icon name="check" /> Read-only: admin actions stay in game</li>
+      <li><Icon name="check" /> No open ports, behind your tunnel or proxy</li>
+      <li><Icon name="check" /> You choose what's public</li>
+    </ul>
+    <p><a class="text-link" href="/docs/owners/seasons-web/">Set up Seasons Web <Icon name="arrow" /></a></p>
+  </section>
+
+  <section id="commands" class="band" aria-labelledby="commands-title">
+    <p class="kicker">Commands</p>
+    <h2 id="commands-title" class="pixel-heading">A few for players, a handful for admins</h2>
+    <div class="commands">
+      <div class="command-list">
+        <h3><Icon name="user" /> Players</h3>
+        <dl>{PLAYER_COMMANDS.map(([c, d]) => <><dt><code>{c}</code></dt><dd>{d}</dd></>)}</dl>
+      </div>
+      <div class="command-list">
+        <h3><Icon name="gear" /> Admins</h3>
+        <dl>{ADMIN_COMMANDS.map(([c, d]) => <><dt><code>{c}</code></dt><dd>{d}</dd></>)}</dl>
+      </div>
+    </div>
+    <p><a class="text-link" href="/docs/reference/commands/">Every command, permission and argument <Icon name="arrow" /></a></p>
+  </section>
+
+  <section id="setup" class="band" aria-labelledby="setup-title">
+    <p class="kicker">Getting started</p>
+    <h2 id="setup-title" class="pixel-heading">Set up once, then one button per season</h2>
+    <ol class="steps">
+      {STEPS.map((s, i) => (
+        <li><a href={s.href}><span class="step-n">{i + 1}</span><span><strong>{s.name}</strong><span>{s.text}</span></span></a></li>
+      ))}
+    </ol>
+    <p><a class="button" href="/docs/start/first-season/">Your first season, step by step <Icon name="arrow" /></a></p>
+  </section>
+
+  <section id="faq" class="band" aria-labelledby="faq-title">
+    <p class="kicker">FAQ</p>
+    <h2 id="faq-title" class="pixel-heading">Questions server owners ask</h2>
+    <div class="faq">
+      {FAQ.map(([q, a]) => (
+        <details><summary>{q}</summary><p>{a}</p></details>
+      ))}
+    </div>
+    <p><a class="text-link" href="/docs/faq/">More answers <Icon name="arrow" /></a></p>
+  </section>
+
+  <section class="cta" aria-labelledby="cta-title">
+    <img src="/design/art/logo.svg" alt="" width="96" height="87" class="px-art" />
+    <h2 id="cta-title" class="pixel-heading">Ready for your next season?</h2>
+    <div class="actions">
+      <a class="button" href="/download/"><Icon name="download" /> Download {latest.version}</a>
+      <a class="button secondary" href={downloads.github}><Icon name="github" /> Release notes</a>
+    </div>
+  </section>
+</div>
+</StarlightPage>
