@@ -4,6 +4,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-25
+
 ### Added
 
 - A new public site and full docs at [seasonsmc.petepeterepeat.com](https://seasonsmc.petepeterepeat.com): install, your first season (a checklist you can tick off), running a server, guides (regenerating the End, importing a hand-built Hall, picking a spawn, troubleshooting), a players' guide, and every command, permission and setting, generated from the code and searchable. Light and dark themes that follow your device, and a rich preview when any page is shared.
