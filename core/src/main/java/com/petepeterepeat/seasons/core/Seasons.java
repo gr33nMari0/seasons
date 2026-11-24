@@ -52,6 +52,7 @@ import com.petepeterepeat.seasons.core.hall.HallRenderer;
 import com.petepeterepeat.seasons.core.hall.HallRules;
 import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
+import com.petepeterepeat.seasons.core.hall.LinkCommands;
 import com.petepeterepeat.seasons.core.hall.LinkService;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
@@ -719,10 +720,17 @@ public final class Seasons implements SeasonsApi {
     outlines = outlining;
     hallCommands.bindOutlines(outlining);
     outlining.start();
+    LinkCommands linkCommands =
+        new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
+    hallCommands.bindLinks(linkCommands);
     CommandNode hof =
         hallCommands
             .root()
-            .merge(new HallLists(platform, config, halls, players, cellEdits).root())
+            .merge(
+                new HallLists(platform, config, halls, players, cellEdits)
+                    .bindLinks(linkCommands)
+                    .root())
+            .merge(linkCommands.root())
             .merge(
                 new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
                     .root())

@@ -37,7 +37,7 @@ export default {
     await link(ctx, admin, 'add l-rel from ~ ~ ~2 to point steps', /^Link l-rel leads to point steps, from the block at 12, -60, 30, clicked\.$/)
     await link(ctx, admin, 'add l-here from here --trigger step to hall', /^Link l-here leads to the Hall spawn, from the block at 12, -60, 28, stepped on\.$/)
     await ctx.command(admin, '/hof sel pos1 9 -60 24', /^Corner 1: /)
-    await ctx.command(admin, '/hof sel pos2 9 -58 26', /^Corner 2: /)
+    await ctx.command(admin, '/hof sel pos2 9 -58 26', /^Selected 9, -60, 24 to 9, -58, 26 /)
     await link(ctx, admin, 'add l-sel from sel to gallery season-2', /^Link l-sel leads to gallery season-2's entry, from an area from 9, -60, 24 to 9, -58, 26\.$/)
     await link(ctx, admin, 'add l-point from point steps to link l-xyz', /^Link l-point leads to link l-xyz, from the block at 150, -60, 150, stepped on\.$/)
     await link(ctx, admin, 'add l-s3 to season 3', /^Link l-s3 leads to Season 3's spawn, from no trigger \(only \/hof link go and send\)\.$/)
@@ -78,7 +78,9 @@ export default {
 
     // The triggers themselves: a click on the typed block, a walk through the selection.
     await standAt(ctx, admin, 'Visitor', { x: 12, y: FLOOR, z: 22 })
+    const trip = ctx.waitForMessages(visitor, FOLLOWED)
     await click(ctx, admin, 'Visitor', LODESTONE)
+    await trip
     await waitNear(ctx, admin, 'Visitor', middle(SPOT))
     await ctx.advance(admin, 6_000)
     await standAt(ctx, admin, 'Visitor', { x: 11, y: FLOOR, z: 25 })

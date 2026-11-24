@@ -34,11 +34,15 @@ export default {
     assert(linkInFile(ctx, 'many').triggers.length === 3, 'three triggers in links.yml')
 
     await standAt(ctx, admin, 'Visitor', { x: 12, y: FLOOR, z: 23 })
+    let trip = ctx.waitForMessages(visitor, FOLLOWED)
     await click(ctx, admin, 'Visitor', SIGN)
+    await trip
     await waitNear(ctx, admin, 'Visitor', middle(SPOT))
     await ctx.advance(admin, 6_000)
     await standAt(ctx, admin, 'Visitor', { x: 12, y: FLOOR, z: 23 })
+    trip = ctx.waitForMessages(visitor, FOLLOWED)
     await click(ctx, admin, 'Visitor', BUTTON)
+    await trip
     await waitNear(ctx, admin, 'Visitor', middle(SPOT))
     await ctx.advance(admin, 6_000)
     await standAt(ctx, admin, 'Visitor', { x: 11, y: FLOOR, z: 28 })
@@ -61,7 +65,9 @@ export default {
     await link(ctx, admin, `landing far-back ${FAR.x} ${FAR.y} ${FAR.z}`, /^Link far-back lands at 200, -60, 200\.$/)
 
     await standAt(ctx, admin, 'Visitor', { x: 13, y: FLOOR, z: 29 })
+    trip = ctx.waitForMessages(visitor, FOLLOWED)
     await click(ctx, admin, 'Visitor', HUB_BUTTON)
+    await trip
     await waitNear(ctx, admin, 'Visitor', middle(FAR))
     await ctx.advance(admin, 6_000)
     // far-back leads to far's landing: in front of the hub's button, not on it.

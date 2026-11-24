@@ -18,6 +18,7 @@ import com.petepeterepeat.seasons.core.port.Position;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Listing, showing, moving and removing the Hall's parts (questions 269 and 270): {@code /hof
@@ -90,14 +91,15 @@ public final class HallLists {
                                 .executes(this::cellRemove))))
         .then(
             CommandNode.literal("link")
-                .permission(admin)
                 .then(
                     CommandNode.literal("info")
+                        .permission(LinkService.PERMISSION_ADMIN)
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
                                 .executes(this::linkInfo)))
                 .then(
                     CommandNode.literal("move")
+                        .permission(LinkService.PERMISSION_ADMIN)
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
                                 .executes(this::linkMove)
@@ -306,6 +308,17 @@ public final class HallLists {
       return;
     }
     source.reply(linkLine(link.get()));
+    if (linkCommands != null) {
+      linkCommands.details(link.get()).forEach(source::reply);
+    }
+  }
+
+  private @Nullable LinkCommands linkCommands;
+
+  /** Connects M8's link commands, for the details of a link 1.1 couldn't have made. */
+  public HallLists bindLinks(LinkCommands next) {
+    this.linkCommands = next;
+    return this;
   }
 
   void linkMove(CommandSource source, Arguments arguments) {
@@ -350,7 +363,16 @@ public final class HallLists {
               .get("hof.link.taken", "link", there.get().id(), "x", x(at), "y", y(at), "z", z(at)));
       return;
     }
-    HallLayout.Link next = new HallLayout.Link(id, at, link.get().to());
+    if (link.get().triggers().size() > 1) {
+      source.reply(messages().get("hof.link.move-many", "link", id));
+      return;
+    }
+    // The block moves with the trigger the 1.1 form would give it there (M8); the rest stays.
+    HallLayout.BlockKind kind =
+        LinkService.upgradedKind(
+            platform.world().block(at), config.get().config().links().upgrade().keepStepping());
+    HallLayout.Link next =
+        link.get().withTriggers(java.util.List.of(new HallLayout.Trigger.OnBlock(at, kind)));
     edits.saved(
         source,
         hall.saveHall(hall.layout().withLink(next)),

@@ -59,6 +59,10 @@ public final class Wand {
   private final CellEdits edits;
   private final Supplier<OptionalInt> season;
   private final Map<PlayerId, Selection> selections = new HashMap<>();
+
+  /** A block each admin put aside with the wand for {@code /hof link add} to take (M8). */
+  private final Map<PlayerId, Position> pending = new HashMap<>();
+
   private final Map<PlayerId, String> cells = new HashMap<>();
 
   /** Admins whose corners take the block against the face clicked (questions 272). */
@@ -103,6 +107,16 @@ public final class Wand {
    */
   public void focus(PlayerId player, HallService.CellRef ref) {
     cells.put(player, ref.key());
+  }
+
+  /** Puts a block aside for the admin's next {@code /hof link add} with no {@code from} (M8). */
+  public void putAside(PlayerId player, Position block) {
+    pending.put(player, block);
+  }
+
+  /** The block the admin put aside, taken: once only. */
+  public Optional<Position> takePending(PlayerId player) {
+    return Optional.ofNullable(pending.remove(player));
   }
 
   /** An admin's complete selection, if they have one. */

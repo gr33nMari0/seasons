@@ -31,8 +31,8 @@ export default {
     await drawBase(ctx, admin)
 
     // Past seasons' spawns: one inside the locked base, one elsewhere.
-    await ctx.command(admin, `/season spawn record 1 ${S1.x} ${S1.y} ${S1.z} 90`, /^Season 1's spawn is recorded at 510, -60, 500\.$/)
-    await ctx.command(admin, '/season spawn record 2 3100 -60 50', /^Season 2's spawn is recorded at 3100, -60, 50\.$/)
+    await ctx.command(admin, `/season spawn record 1 ${S1.x} ${S1.y} ${S1.z} 90`, /^Season 1's spawn is recorded at 510, -60, 500 in minecraft:overworld\.$/)
+    await ctx.command(admin, '/season spawn record 2 3100 -60 50', /^Season 2's spawn is recorded at 3100, -60, 50 in minecraft:overworld\.$/)
     await ctx.command(admin, '/season spawn record 3 3100 -60 60', /^Season 3 isn't over yet: /)
     await ctx.command(admin, '/season spawn record 5 3100 -60 60', /^Season 5 isn't over yet: /)
     await ctx.command(admin, '/season spawn record 1 18 -60 21', /^Season 1's spawn can't be inside the Hall of Fame\.$/)

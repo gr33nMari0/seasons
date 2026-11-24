@@ -378,7 +378,12 @@ public final class LinkService {
           case OP ->
               platform.permissions().has(player, PERMISSION_OP)
                   || platform.permissions().isOperator(player);
-          case PERMISSION -> platform.permissions().has(player, link.access().node(link.id()));
+          case PERMISSION ->
+              platform.permissions().has(player, link.access().node(link.id()))
+                  // LuckPerms reads wildcards itself; Bukkit alone doesn't, so the default
+                  // node's wildcard is asked for too.
+                  || (link.access().node().isEmpty()
+                      && platform.permissions().has(player, "seasons.link.use.*"));
         };
     if (!allowed) {
       return Optional.of("hof.link.not-allowed");

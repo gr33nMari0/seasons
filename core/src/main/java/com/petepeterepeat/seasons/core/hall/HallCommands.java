@@ -140,9 +140,9 @@ public final class HallCommands {
                 .then(CommandNode.literal("check").executes(this::hallCheck)))
         .then(
             CommandNode.literal("link")
-                .permission(PERMISSION_ADMIN)
                 .then(
                     CommandNode.literal("add")
+                        .permission(LinkService.PERMISSION_ADMIN)
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
                                 .executes(this::linkAdd)
@@ -151,6 +151,7 @@ public final class HallCommands {
                                         .executes(this::linkAdd))))
                 .then(
                     CommandNode.literal("to")
+                        .permission(LinkService.PERMISSION_ADMIN)
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
                                 .executes(this::linkTo)
@@ -159,10 +160,22 @@ public final class HallCommands {
                                         .executes(this::linkTo))))
                 .then(
                     CommandNode.literal("remove")
+                        .permission(LinkService.PERMISSION_ADMIN)
                         .then(
                             CommandNode.argument("link", ArgumentType.word())
-                                .executes(this::linkRemove)))
-                .then(CommandNode.literal("list").executes(this::linkList)))
+                                .executes(this::linkRemove)
+                                .then(
+                                    CommandNode.argument("options", ArgumentType.greedy())
+                                        .suggests((s, t) -> List.of("--both", "--force"))
+                                        .executes(this::linkRemove))))
+                .then(
+                    CommandNode.literal("list")
+                        .permission(LinkService.PERMISSION_ADMIN)
+                        .executes(this::linkList)
+                        .then(
+                            CommandNode.argument("filter", ArgumentType.greedy())
+                                .suggests((s, t) -> List.of("near", "world", "to"))
+                                .executes(this::linkList))))
         .then(CommandNode.argument("target", ArgumentType.word()).executes(this::visit))
         .then(
             CommandNode.literal("gallery")
@@ -990,6 +1003,11 @@ public final class HallCommands {
       return;
     }
     String id = arguments.string("link");
+    String rest = arguments.optionalString("rest").orElse("");
+    if (linkCommands != null && LinkCommands.newGrammar(rest)) {
+      linkCommands.add(source, id, rest);
+      return;
+    }
     if (!HallFiles.ID.matcher(id).matches()) {
       source.reply(messages().get("hof.bad-id"));
       return;
@@ -1109,6 +1127,11 @@ public final class HallCommands {
       return;
     }
     String id = arguments.string("link");
+    if (linkCommands != null
+        && LinkCommands.newDestination(arguments.optionalString("at").orElse(""))) {
+      linkCommands.to(source, id, arguments.optionalString("at").orElse(""));
+      return;
+    }
     Optional<HallLayout.Link> link = hall.layout().link(id);
     if (link.isEmpty()) {
       source.reply(messages().get("hof.link.unknown", "link", id));
@@ -1131,6 +1154,10 @@ public final class HallCommands {
       return;
     }
     String id = arguments.string("link");
+    if (linkCommands != null) {
+      linkCommands.remove(source, id, arguments.optionalString("options").orElse(""));
+      return;
+    }
     if (hall.layout().link(id).isEmpty()) {
       source.reply(messages().get("hof.link.unknown", "link", id));
       return;
@@ -1142,17 +1169,32 @@ public final class HallCommands {
   }
 
   void linkList(CommandSource source, Arguments arguments) {
+    if (linkCommands != null && arguments.optionalString("filter").isPresent()) {
+      linkCommands.list(source, arguments.optionalString("filter").get(), this::linkLine);
+      return;
+    }
     if (hall.layout().links().isEmpty()) {
       source.reply(messages().get("hof.link.none"));
       return;
     }
     for (HallLayout.Link link : hall.layout().links().values()) {
-      String[] where = place("link", link.id(), link.block());
-      source.reply(
-          link.to().isEmpty()
-              ? messages().get("hof.link.line-nowhere", where)
-              : messages().get("hof.link.line", with(where, "to", describe(link.to().get()))));
+      source.reply(linkLine(link));
     }
+  }
+
+  /** One link as {@code /hof link list} shows it. */
+  private Message linkLine(HallLayout.Link link) {
+    String[] where = place("link", link.id(), link.block());
+    return link.to().isEmpty()
+        ? messages().get("hof.link.line-nowhere", where)
+        : messages().get("hof.link.line", with(where, "to", describe(link.to().get())));
+  }
+
+  private @Nullable LinkCommands linkCommands;
+
+  /** Connects M8's link commands, which take the new grammar of add, to, remove and list. */
+  public void bindLinks(LinkCommands next) {
+    this.linkCommands = next;
   }
 
   private static String[] xyz(Position at) {
