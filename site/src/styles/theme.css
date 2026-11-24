@@ -419,3 +419,105 @@ site-search dialog {
 
 /* Starlight's footer sits inside the content column; ours spans the page. */
 footer .site-footer { margin-inline: calc(-1 * var(--sl-content-pad-x, 1rem)); }
+
+/* The command and permission references */
+
+.cmdref-filter {
+  position: sticky;
+  top: calc(var(--sl-nav-height) + 0.5rem);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+  align-items: center;
+  margin: 1.5rem 0;
+  padding: 0.9rem 1rem;
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  box-shadow: var(--shadow-chip);
+}
+
+.cmdref-filter label { display: inline-flex; gap: 0.4rem; align-items: center; font-weight: 700; color: var(--text); }
+.cmdref-filter label span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.cmdref-filter input {
+  flex: 1 1 14rem;
+  min-height: var(--touch);
+  padding: 0 0.8rem;
+  font: inherit;
+  font-family: var(--font-mono);
+  color: var(--text);
+  background: var(--surface-2);
+  border: var(--border-width) solid var(--border);
+  border-radius: 0;
+}
+
+.cmdref-who { display: flex; }
+.cmdref-who button {
+  min-height: var(--touch);
+  padding: 0 0.8rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: var(--border-width) solid var(--border);
+  cursor: pointer;
+}
+.cmdref-who button + button { border-left: 0; }
+.cmdref-who button[aria-pressed='true'] { color: var(--on-accent); background: var(--accent); }
+.cmdref-count { margin: 0; font-size: 0.9rem; color: var(--text-3); }
+
+.cmdref-root h2 { font-family: var(--font-pixel); color: var(--text); margin: 2.5rem 0 0.25rem; font-size: 1.9rem; }
+.cmdref-root > p { margin: 0 0 1rem; }
+.cmdref-group h3 { margin: 1.75rem 0 0.75rem; font-size: 1.15rem; }
+.cmdref-group h3 code { font-family: var(--font-mono); color: var(--accent-text); background: none; border: 0; padding: 0; }
+
+.cmd, .perm {
+  margin: 0 0 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  scroll-margin-top: 9rem;
+}
+
+.cmd:target, .perm:target { border-color: var(--accent); box-shadow: var(--shadow-chip); }
+.cmd-usages { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+
+.cmd-usage {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0.25rem 0.6rem;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--code-bg);
+  border: 1px solid var(--border-soft);
+  cursor: copy;
+}
+
+.cmd-usage code { font-family: var(--font-mono); font-size: 0.9rem; white-space: normal; overflow-wrap: anywhere; color: var(--text); }
+.cmd-usage:hover { border-color: var(--accent); }
+.cmd-copy { color: var(--text-3); }
+.cmd-usage[data-copied] .cmd-copy { color: var(--success); }
+.cmd-usage[data-copied]::after { content: 'Copied'; font-size: 0.8rem; color: var(--success); font-weight: 700; }
+
+.cmd-desc { margin: 0.6rem 0 0.4rem; color: var(--text-2); }
+.cmd-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0; }
+.chip-node { text-decoration: none; color: var(--travel); }
+.chip-node:hover { border-color: var(--accent); }
+.cmd-anchor { margin-left: auto; display: inline-grid; place-items: center; width: 32px; height: 32px; color: var(--text-3); }
+.cmd-anchor:hover { color: var(--accent-text); }
+.cmdref-none { padding: 1rem; border: var(--border-width) dashed var(--border); }
+
+.permref h2 { font-family: var(--font-pixel); color: var(--text); margin: 2.5rem 0 1rem; }
+.perm h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+.perm h3 code { font-family: var(--font-mono); color: var(--accent-text); background: none; border: 0; padding: 0; }
+.perm p { margin: 0.4rem 0; }
+.perm-guards summary { cursor: pointer; font-weight: 600; color: var(--text-2); min-height: 32px; display: flex; align-items: center; }
+.perm-guards ul { margin: 0.25rem 0 0; padding-left: 1.25rem; columns: 2 16rem; }
+.perm-guards a, .perm-children a { color: var(--link); }
+
+/* The configuration reference renders docs/config.md, whose own h1 the page title replaces. */
+.config-ref > h1:first-child { display: none; }

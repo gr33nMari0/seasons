@@ -1,0 +1,31 @@
+{
+  "permissions": [
+    {"node": "seasons.info", "plugin": "Seasons", "default": "true", "description": "/season info", "children": []},
+    {"node": "seasons.hof.visit", "plugin": "Seasons", "default": "true", "description": "Visit the Hall of Fame with /hof and leave with /hof leave", "children": []},
+    {"node": "seasons.hof.swap", "plugin": "Seasons", "default": "true", "description": "Swap cells during the decorating window", "children": []},
+    {"node": "seasons.hof.claim", "plugin": "Seasons", "default": "true", "description": "Claim a free cell in galleries that use claim assignment", "children": []},
+    {"node": "seasons.hof.gate", "plugin": "Seasons", "default": "true", "description": "Open or shut your own cell's gate with /hof gate", "children": []},
+    {"node": "seasons.vault", "plugin": "Seasons", "default": "true", "description": "View, or after Homecoming withdraw from, your ender vault", "children": []},
+    {"node": "seasons.pet", "plugin": "Seasons", "default": "true", "description": "Register tamed pets to travel to the next season's spawn", "children": []},
+    {"node": "seasons.admin.season", "plugin": "Seasons", "default": "op", "description": "Season admin commands", "children": []},
+    {"node": "seasons.admin.config", "plugin": "Seasons", "default": "op", "description": "Zones, config and markers", "children": []},
+    {"node": "seasons.admin.hof", "plugin": "Seasons", "default": "op", "description": "Hall of Fame admin commands", "children": ["seasons.admin.links"]},
+    {"node": "seasons.admin.links", "plugin": "Seasons", "default": "op", "description": "Make, change and remove Hall links and points anywhere, the link editor and /hof link send", "children": []},
+    {"node": "seasons.link.op", "plugin": "Seasons", "default": "op", "description": "Take Hall links whose access is op", "children": []},
+    {"node": "seasons.link.place", "plugin": "Seasons", "default": "op", "description": "Place link signs from /hof link item", "children": []},
+    {"node": "seasons.link.text.style", "plugin": "Seasons", "default": "op", "description": "Style sign and floating text through Seasons", "children": []},
+    {"node": "seasons.link.use.*", "plugin": "Seasons", "default": "false", "description": "Take every Hall link whose access is permission with no node of its own", "children": []},
+    {"node": "seasons.curate.view", "plugin": "Seasons", "default": "op", "description": "Open the curator view with /hof curate, or by sneak-clicking an archive", "children": []},
+    {"node": "seasons.curate.museum", "plugin": "Seasons", "default": "op", "description": "Curation, putting an archived item in the museum", "children": []},
+    {"node": "seasons.curate.return", "plugin": "Seasons", "default": "op", "description": "Curation, returning an archived item to its owner's vault", "children": []},
+    {"node": "seasons.curate.take", "plugin": "Seasons", "default": "op", "description": "Curation, taking an archived item into your inventory", "children": []},
+    {"node": "seasons.curate.destroy", "plugin": "Seasons", "default": "op", "description": "Curation, destroying an archived item into the recycle bin, and /hof curate undo", "children": []},
+    {"node": "seasons.curate.*", "plugin": "Seasons", "default": "op", "description": "Every curation node, for a curator group", "children": ["seasons.curate.view", "seasons.curate.museum", "seasons.curate.return", "seasons.curate.take", "seasons.curate.destroy"]},
+    {"node": "seasons.zone.bypass", "plugin": "Seasons", "default": "false", "description": "Ignore old-world zones. Never granted by default", "children": []},
+    {"node": "seasons.hof.bypass", "plugin": "Seasons", "default": "false", "description": "Ignore Hall of Fame protection. Never granted by default", "children": []},
+    {"node": "seasons.hof.anywhere", "plugin": "Seasons", "default": "op", "description": "Use /hof with no bed near and skip its other entry checks but the rate limit", "children": []},
+    {"node": "seasons.hof.roam", "plugin": "Seasons", "default": "op", "description": "Leave the Hall of Fame by any route, the Intermission included", "children": []},
+    {"node": "seasons.web", "plugin": "Seasons Web", "default": "true", "description": "/web link, sessions, logout and privacy", "children": []},
+    {"node": "seasons.web.admin", "plugin": "Seasons Web", "default": "false", "description": "Admin dashboard widgets. Never granted by default", "children": []}
+  ]
+}

@@ -41,7 +41,7 @@ export default defineConfig({
         { label: 'Running a server', items: [{ autogenerate: { directory: 'docs/owners' } }] },
         { label: 'Guides', items: [{ autogenerate: { directory: 'docs/guides' } }] },
         { label: 'For players', items: [{ autogenerate: { directory: 'docs/players' } }] },
-        { label: 'Reference', items: [{ autogenerate: { directory: 'docs/reference' } }] },
+        { label: 'Reference', items: [{ autogenerate: { directory: 'docs/reference' } }, { label: 'Configuration', link: '/docs/reference/config/' }] },
         { label: 'FAQ', link: '/docs/faq/' }
       ],
       plugins: [starlightLinksValidator({ errorOnLocalLinks: false, exclude: ['/', '/download/', '/connect/', '/changelog/', '/connect/**'] })]

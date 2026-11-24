@@ -14,6 +14,8 @@ dependencies {
     implementation(libs.configurate.yaml)
 
     testImplementation(project(":api"))
+    // The /web command tree, walked for the public command reference (WebCommandReference).
+    testImplementation(libs.paper.api)
     testImplementation(libs.gson)
     testImplementation(libs.slf4j.api)
 }
@@ -59,3 +61,12 @@ val jsTest = tasks.register<Exec>("jsTest") {
 }
 
 tasks.check { dependsOn(jsTest) }
+
+// The public docs' reference for /web (M9): WebCommandReferenceTest fails until it matches.
+tasks.register<JavaExec>("commandReference") {
+    group = "documentation"
+    description = "Writes site/src/data/commands/web.json from the /web command tree"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "com.petepeterepeat.seasons.web.WebCommandReference"
+    args(rootProject.file("site/src/data/commands/web.json").path)
+}

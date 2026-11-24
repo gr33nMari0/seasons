@@ -2,6 +2,13 @@
 # plain text.
 schema-version: 1
 dashboard-off: "<red>The Seasons dashboard is off on this server."
+# What each /web command does, for the public command reference (site/src/data/commands/web.json).
+help:
+  web:
+    link: "Log this device in to the dashboard: show a code on the dashboard, then type it here."
+    sessions: "List the devices logged in to the dashboard as you."
+    logout: "Log out of one device by its id from /web sessions, or of every device with all."
+    privacy: "Hide yourself from the dashboard's leaderboards, or show yourself again."
 link:
   usage: "<gray>Show a code on the dashboard, then type /web link with it."
   linked: "<green>Linked: this device is now logged in as <player>."
