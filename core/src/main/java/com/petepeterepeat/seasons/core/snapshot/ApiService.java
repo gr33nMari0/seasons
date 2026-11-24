@@ -382,6 +382,17 @@ public final class ApiService {
         worker);
   }
 
+  /** The player last seen with a name, ignoring case. */
+  public CompletableFuture<Optional<UUID>> playerId(String name) {
+    return CompletableFuture.supplyAsync(
+        () ->
+            players.all().stream()
+                .filter(r -> r.lastName().equalsIgnoreCase(name.strip()))
+                .findFirst()
+                .map(r -> r.id().uuid()),
+        worker);
+  }
+
   public CompletableFuture<Optional<PlayerProfile>> profile(UUID uuid) {
     PlayerId player = new PlayerId(uuid);
     Optional<PlayerRecord> found = players.find(player);

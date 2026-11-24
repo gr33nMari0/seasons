@@ -26,7 +26,9 @@ class WebConfigTest {
         d.rateLimits(),
         d.stream(),
         d.cache(),
-        d.screens());
+        d.screens(),
+        d.help(),
+        d.previews());
   }
 
   private static WebConfig.Result check(String bind, String publicUrl) {
@@ -186,7 +188,9 @@ class WebConfigTest {
             d.rateLimits(),
             d.stream(),
             d.cache(),
-            d.screens());
+            d.screens(),
+            d.help(),
+            d.previews());
     WebConfig.Result result = WebConfig.check(with);
     assertThat(result).isInstanceOf(WebConfig.Ready.class);
     WebConfig.Ready ready = (WebConfig.Ready) result;

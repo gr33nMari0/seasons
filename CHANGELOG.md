@@ -7,6 +7,10 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 ### Added
 
 - A new public site and full docs at [seasonsmc.petepeterepeat.com](https://seasonsmc.petepeterepeat.com): install, your first season (a checklist you can tick off), running a server, guides (regenerating the End, importing a hand-built Hall, picking a spawn, troubleshooting), a players' guide, and every command, permission and setting, generated from the code and searchable. Light and dark themes that follow your device, and a rich preview when any page is shared.
+- The dashboard, redesigned: Seasons' pixel look in dark and parchment light (following your device), a login page that shows the code large with a countdown, layouts that fit phones, tablets and wide screens, and a Help page with the players' guides plus your own `help.links` and `help.rules` from `web.yml`.
+- Your own dashboards: choose Edit layout to drag, resize, add and remove widgets (or move them with the keyboard), keep several, show one on `/screen` on that device, and share a layout as a code. Admins can copy a layout as `web.yml`'s `screens:` block. Layouts stay in your browser.
+- Rich link previews: a shared dashboard link unfurls with a picture of the season, a player's card (only what anyone may see; nothing for players hidden with `/web privacy`), a gallery or the museum. `previews:` in `web.yml` turns them or players' skins off. `/p/<name>` links to a player's profile.
+- Seasons API 1.4: `playerId(name)`.
 - Find your server's dashboard from the address you play on: type `play.example.com` on the connect page and land on its Seasons Web dashboard, or be told whether the server runs Seasons Web or is offline. List your game addresses under `game-addresses` in `web.yml` and publish the DNS record `/web discovery` prints; `/web discovery check` checks it. `seasons.web.discovery` (ops by default) runs them.
 
 ### Fixed

@@ -20,10 +20,47 @@ dependencies {
     testImplementation(libs.slf4j.api)
 }
 
+// The shared design (design/: tokens, fonts, theme, icons, art) and the players' guides from the
+// public docs, bundled beside the dashboard so the page needs nothing from another site (M9). The
+// index lists them for Assets' allow-list.
+val designDir = rootProject.layout.projectDirectory.dir("design")
+val helpDir = rootProject.layout.projectDirectory.dir("site/src/content/docs/docs/players")
+val dashboardResources = "com/petepeterepeat/seasons/web/dashboard"
+val bundledIndex = tasks.register("dashboardIndex") {
+    description = "Lists the design files and guides bundled with the dashboard."
+    val design = designDir.asFile
+    val help = helpDir.asFile
+    val out = layout.buildDirectory.file("generated/dashboard/$dashboardResources/bundled.txt")
+    inputs.dir(design)
+    inputs.dir(help)
+    outputs.file(out)
+    doLast {
+        val files =
+            design.walkTopDown()
+                .filter { it.isFile && !it.relativeTo(design).path.startsWith("tools") && it.name != "README.md" && !it.name.startsWith(".") }
+                .map { "design/" + it.relativeTo(design).invariantSeparatorsPath }
+                .sorted()
+                .toList() +
+                (help.listFiles { f -> f.name.endsWith(".md") } ?: emptyArray()).map { "help/" + it.name }.sorted()
+        out.get().asFile.apply { parentFile.mkdirs() }.writeText(files.joinToString("\n") + "\n")
+    }
+}
+
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/dashboard")) }
+
 tasks.processResources {
+    dependsOn(bundledIndex)
     val props = mapOf("version" to project.version)
     inputs.properties(props)
     filesMatching("paper-plugin.yml") { expand(props) }
+    from(designDir) {
+        into("$dashboardResources/design")
+        exclude("tools/**", "README.md")
+    }
+    from(helpDir) {
+        into("$dashboardResources/help")
+        include("*.md")
+    }
 }
 
 tasks.jar { enabled = false }

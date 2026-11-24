@@ -110,6 +110,8 @@ previews:
   skins: true        # draw players' heads from their skins; false uses a plain figure
 ```
 
+Previews need an https `public-url`, since that's the address the pictures are served from. Short links work too: `https://seasons.example.com/p/Alex` goes to Alex's profile.
+
 ## Rate limits and caching
 
 The defaults suit a small community; raise them for a big one:

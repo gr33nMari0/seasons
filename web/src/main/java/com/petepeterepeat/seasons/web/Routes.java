@@ -85,6 +85,8 @@ final class Routes {
   private final Clock clock;
   private final Assets assets;
   private final Supplier<Framing.State> framing;
+  private final Optional<String> rules;
+  private final Previews previews;
 
   Routes(
       WebConfig config,
@@ -98,7 +100,9 @@ final class Routes {
       String version,
       Clock clock,
       Assets assets,
-      Supplier<Framing.State> framing) {
+      Supplier<Framing.State> framing,
+      Optional<String> rules,
+      Previews previews) {
     this.config = config;
     this.api = api;
     this.sessions = sessions;
@@ -111,10 +115,39 @@ final class Routes {
     this.clock = clock;
     this.assets = assets;
     this.framing = framing;
+    this.rules = rules;
+    this.previews = previews;
   }
+
+  /** A short link to a player's profile: /p/<name>. */
+  private static final java.util.regex.Pattern SHORT =
+      java.util.regex.Pattern.compile("/p/([A-Za-z0-9_]{1,16})");
 
   Reply route(Request r) {
     Optional<Assets.Asset> asset = assets.find(r.path());
+    if (asset.isPresent() && asset.get().contentType().startsWith("text/html")) {
+      // A page: the same file for every address, with that address's preview tags (questions 337).
+      return method(r, "GET")
+          .orElseGet(() -> {
+            String html =
+                asset.get().body().replace("<!--seasons:head-->", previews.head(r.path()));
+            Assets.Asset page =
+                new Assets.Asset(
+                    asset.get().contentType(),
+                    html,
+                    Assets.etag(html.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            return Assets.reply(
+                page, r.ifNoneMatch().isEmpty() ? Optional.empty() : Optional.of(r.ifNoneMatch()));
+          });
+    }
+    if (r.path().startsWith("/og/")) {
+      return method(r, "GET")
+          .orElseGet(() -> previews.image(r.path()).orElseGet(() -> Reply.error(404, "not-found")));
+    }
+    java.util.regex.Matcher shortLink = SHORT.matcher(r.path());
+    if (shortLink.matches()) {
+      return method(r, "GET").orElseGet(() -> shortLink(shortLink.group(1)));
+    }
     if (asset.isPresent()) {
       // The page and its files are the same for everyone.
       return method(r, "GET")
@@ -273,12 +306,88 @@ final class Routes {
     JsonObject screens = new JsonObject();
     config.screens().forEach((name, list) -> screens.add(name, strings(list)));
     o.add("screens", screens);
+    o.add("help", help());
+    o.addProperty("site", SITE);
+    o.addProperty("sessionDays", Math.max(1, config.settings().sessions().lifetime().toDays()));
     o.addProperty("refresh", 30);
     JsonObject texts = new JsonObject();
     messages.get().section("dashboard").forEach(texts::addProperty);
     o.add("texts", texts);
     o.addProperty("now", clock.instant().toString());
     return Reply.ok(o);
+  }
+
+  /** /p/<name>: to that player's profile, or home when there is no such player. */
+  private Reply shortLink(String name) {
+    Optional<java.util.UUID> id = Optional.empty();
+    Optional<SeasonsApi> seasons = api.get();
+    if (seasons.isPresent()) {
+      try {
+        id = seasons.get().playerId(name).get(3, java.util.concurrent.TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+        id = Optional.empty();
+      }
+    }
+    String to = id.map(u -> "/player/" + u).orElse("/");
+    return new Reply(
+        302, "text/plain; charset=utf-8", "", Map.of("Location", to), List.of(), false);
+  }
+
+  /** The public site, for the login page's "Wrong server?" (its connect page). */
+  static final String SITE = "https://seasonsmc.petepeterepeat.com/";
+
+  /** Where the public players' guides live, for "Full docs" links on the Help page. */
+  static final String DOCS = SITE + "docs/";
+
+  /**
+   * The Help page: the players' guides bundled from the public docs (their files, at {@code
+   * /app/help/<name>.md}, with each one's title), and this server's own links and rules from
+   * web.yml. Public: it holds nothing about anyone.
+   */
+  private JsonObject help() {
+    JsonObject h = new JsonObject();
+    JsonArray guides = new JsonArray();
+    for (String file : assets.under("help/")) {
+      JsonObject g = new JsonObject();
+      String name = file.substring("help/".length(), file.length() - ".md".length());
+      g.addProperty("name", name);
+      g.addProperty("file", Assets.PREFIX + file);
+      g.addProperty("title", assets.text(file).flatMap(Routes::title).orElse(name));
+      g.addProperty("docs", DOCS + "players/" + name + "/");
+      guides.add(g);
+    }
+    h.add("guides", guides);
+    JsonArray links = new JsonArray();
+    for (WebSettings.Link link : config.helpLinks()) {
+      JsonObject l = new JsonObject();
+      l.addProperty("label", link.label());
+      l.addProperty("url", link.url());
+      links.add(l);
+    }
+    h.add("links", links);
+    if (rules.isPresent()) {
+      h.addProperty("rules", rules.get());
+    } else {
+      h.add("rules", JsonNull.INSTANCE);
+    }
+    h.addProperty("docs", DOCS);
+    return h;
+  }
+
+  /** A Markdown file's title, from its front matter. */
+  static Optional<String> title(String markdown) {
+    if (!markdown.startsWith("---")) {
+      return Optional.empty();
+    }
+    int end = markdown.indexOf("\n---", 3);
+    String front = end < 0 ? "" : markdown.substring(3, end);
+    return front
+        .lines()
+        .filter(l -> l.startsWith("title:"))
+        .map(l -> l.substring("title:".length()).strip().replaceAll("^[\"']|[\"']$", ""))
+        .findFirst();
   }
 
   private Reply wellKnown() {

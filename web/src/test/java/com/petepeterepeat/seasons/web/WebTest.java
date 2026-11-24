@@ -424,4 +424,95 @@ class WebTest {
     assertThat(links).contains("Discord").doesNotContain("map.example.com");
     assertThat(get("/api/v1/dashboard", "").body()).contains("\"map\":null");
   }
+
+  // Link previews (M9, questions 337)
+
+  private void withPublicUrl(String extra) throws Exception {
+    Files.writeString(
+        dir.resolve("plugin/web.yml"),
+        "enabled: true\nbind: 127.0.0.1:"
+            + port
+            + "\npublic-url: https://seasons.example.com\nname: Example SMP\n"
+            + extra);
+    assertThat(web.reload()).startsWith("listening on");
+  }
+
+  private static String meta(String html, String property) {
+    java.util.regex.Matcher m =
+        java.util.regex.Pattern.compile(
+                "<meta (?:property|name)=\""
+                    + java.util.regex.Pattern.quote(property)
+                    + "\" content=\"([^\"]*)\"")
+            .matcher(html);
+    return m.find() ? m.group(1) : "";
+  }
+
+  @Test
+  void everyPageCarriesItsPreviewTagsAndThePictureIsDrawn() throws Exception {
+    withPublicUrl("");
+    String home = get("/", "").body();
+    assertThat(meta(home, "og:title")).isEqualTo("Season 3 · Example SMP");
+    assertThat(meta(home, "og:description")).contains("Frontier").contains("1 online");
+    assertThat(meta(home, "twitter:card")).isEqualTo("summary_large_image");
+    String image = meta(home, "og:image");
+    assertThat(image).matches("https://seasons\\.example\\.com/og/server/-[0-9a-f]{12}\\.png");
+
+    HttpResponse<byte[]> png =
+        http.send(
+            HttpRequest.newBuilder(
+                    URI.create(
+                        "http://127.0.0.1:"
+                            + port
+                            + image.substring("https://seasons.example.com".length())))
+                .build(),
+            HttpResponse.BodyHandlers.ofByteArray());
+    assertThat(png.statusCode()).isEqualTo(200);
+    assertThat(png.headers().firstValue("Content-Type")).contains("image/png");
+    java.awt.image.BufferedImage drawn =
+        javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png.body()));
+    assertThat(drawn.getWidth()).isEqualTo(1200);
+    assertThat(drawn.getHeight()).isEqualTo(630);
+    assertThat(png.headers().firstValue("Cache-Control"))
+        .hasValueSatisfying(c -> assertThat(c).contains("immutable"));
+  }
+
+  @Test
+  void aPlayersPreviewNamesThemOnlyIfAnyoneMaySeeTheirSummaryAndTheyArentHidden() throws Exception {
+    api.profile = Optional.of(new PlayerProfile(alex, "Alex", Optional.empty(), List.of(), false));
+    withPublicUrl("");
+    assertThat(meta(get("/player/" + alex, "").body(), "og:title")).isEqualTo("Alex · Example SMP");
+
+    api.profile = Optional.of(new PlayerProfile(alex, "Alex", Optional.empty(), List.of(), true));
+    assertThat(meta(get("/player/" + alex, "").body(), "og:title"))
+        .isEqualTo("A player on Example SMP");
+
+    api.profile = Optional.of(new PlayerProfile(alex, "Alex", Optional.empty(), List.of(), false));
+    withPublicUrl("visibility:\n  profiles.summary: players\n");
+    String html = get("/player/" + alex, "").body();
+    assertThat(html).doesNotContain("Alex");
+    assertThat(meta(html, "og:description")).isEqualTo("Log in to see their profile.");
+  }
+
+  @Test
+  void withoutAPublicAddressOrWithPreviewsOffThereAreNoTags() throws Exception {
+    assertThat(get("/", "").body())
+        .contains("<title>Test server</title>")
+        .doesNotContain("og:image");
+    withPublicUrl("previews:\n  enabled: false\n");
+    assertThat(get("/", "").body()).doesNotContain("og:image");
+    assertThat(get("/og/server/-0123456789ab.png", "").statusCode()).isEqualTo(404);
+  }
+
+  @Test
+  void aShortLinkGoesToThePlayersProfileOrHome() throws Exception {
+    HttpResponse<String> r = get("/p/Nobody", "");
+    assertThat(r.statusCode()).isEqualTo(302);
+    assertThat(r.headers().firstValue("Location")).contains("/");
+  }
+
+  @Test
+  void escapingKeepsTagsOutOfTheHead() {
+    assertThat(Previews.escape("<b>\"Alex\" & 'Sam'</b>"))
+        .isEqualTo("&lt;b&gt;&quot;Alex&quot; &amp; &#39;Sam&#39;&lt;/b&gt;");
+  }
 }
