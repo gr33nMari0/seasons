@@ -827,7 +827,17 @@ public final class LinkCommands implements Wand.LinkActions {
       source.reply(messages().get("hof.link.unknown", "link", id));
       return;
     }
-    visits.takeLink(source.player().get(), link.get());
+    PlayerId player = source.player().get();
+    // A player takes a link where it is, as a click or a step would (questions 334): from
+    // anywhere it would be /hof without the bed, or a way to any season's spawn. Link admins
+    // take any link from anywhere, to try it.
+    if (!platform.permissions().has(player, LinkService.PERMISSION_ADMIN)
+        && !platform.permissions().has(player, HallCommands.PERMISSION_ADMIN)
+        && !LinkService.reaches(link.get(), platform.players().position(player))) {
+      source.reply(messages().get("hof.link.go-far", "link", id));
+      return;
+    }
+    visits.takeLink(player, link.get());
   }
 
   /**

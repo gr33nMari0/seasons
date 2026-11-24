@@ -391,6 +391,40 @@ public final class LinkService {
     return false;
   }
 
+  /** How near a player must stand to a trigger to take its link with {@code /hof link go}. */
+  public static final double GO_REACH = 6;
+
+  /**
+   * Whether a player standing at {@code feet} is at one of a link's triggers, within {@link
+   * #GO_REACH} of a block or a floating text, or that near an area. A link with no trigger is
+   * reached by nobody: only admins and {@code /hof link send} take it.
+   */
+  public static boolean reaches(HallLayout.Link link, Position feet) {
+    for (HallLayout.Trigger trigger : link.triggers()) {
+      boolean close =
+          switch (trigger) {
+            case HallLayout.Trigger.OnBlock(Position at, HallLayout.BlockKind kind) ->
+                near(
+                    Position.of(at.dimension(), at.blockX() + 0.5, at.blockY(), at.blockZ() + 0.5),
+                    feet,
+                    GO_REACH);
+            case HallLayout.Trigger.Area(Bounds box) ->
+                box.dimension().equals(feet.dimension())
+                    && feet.x() >= box.minX() - GO_REACH
+                    && feet.x() <= box.maxX() + 1 + GO_REACH
+                    && feet.y() >= box.minY() - GO_REACH
+                    && feet.y() <= box.maxY() + 1 + GO_REACH
+                    && feet.z() >= box.minZ() - GO_REACH
+                    && feet.z() <= box.maxZ() + 1 + GO_REACH;
+            case HallLayout.Trigger.Text text -> near(text.at(), feet, GO_REACH);
+          };
+      if (close) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean near(Position a, Position b, double distance) {
     return a.dimension().equals(b.dimension())
         && Math.hypot(Math.hypot(a.x() - b.x(), a.y() - b.y()), a.z() - b.z()) <= distance;

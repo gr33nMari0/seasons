@@ -49,7 +49,8 @@ export default {
     assert(linkInFile(ctx, 'l-xyz').to.pos[0] === SPOT.x, `l-xyz is in links.yml: ${JSON.stringify(linkInFile(ctx, 'l-xyz'))}`)
     assert(linkInFile(ctx, 'l-sel').triggers[0].area, 'l-sel is an area')
 
-    // Each destination, by /hof link go.
+    // Each destination, by /hof link go, which a link admin takes from anywhere (questions 334).
+    await ctx.command(admin, '/scenario permit Visitor seasons.admin.links', /^Permitted /)
     await standAt(ctx, admin, 'Visitor', HOME)
     await go(ctx, visitor, 'l-xyz', FOLLOWED)
     await waitNear(ctx, admin, 'Visitor', middle(SPOT))
@@ -76,7 +77,9 @@ export default {
     assert(!sameBlock(landed, LODESTONE), 'not on the trigger')
     await go(ctx, visitor, 'l-back', /^Back where you left\.$/)
 
-    // The triggers themselves: a click on the typed block, a walk through the selection.
+    // The triggers themselves, as a plain player: a click on the typed block, a walk through the
+    // selection.
+    await ctx.command(admin, '/scenario unpermit Visitor seasons.admin.links', /^Unpermitted /)
     await standAt(ctx, admin, 'Visitor', { x: 12, y: FLOOR, z: 22 })
     const trip = ctx.waitForMessages(visitor, FOLLOWED)
     await click(ctx, admin, 'Visitor', LODESTONE)
