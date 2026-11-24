@@ -354,6 +354,12 @@ final class PaperEvents implements Events, Listener {
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
   void onDrop(PlayerDropItemEvent event) {
+    if (inventories.isWand(event.getItemDrop().getItemStack())
+        && handler.decide(new Intent.WandDrop(id(event.getPlayer()))) instanceof Decision.Deny) {
+      // Drop (Q) with the wand cycles the nudging step (M8); the wand stays in hand.
+      event.setCancelled(true);
+      return;
+    }
     apply(event, event.getPlayer(), new Intent.DropItem(id(event.getPlayer())));
   }
 

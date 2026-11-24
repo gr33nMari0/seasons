@@ -188,6 +188,9 @@ public sealed interface Intent {
   /** The sign editor opening for a player, on placing a sign or clicking one (M8). */
   record EditSign(PlayerId player, Position block) implements Intent {}
 
+  /** Drop (Q) with the Seasons wand in the main hand: the next nudging step (M8). */
+  record WandDrop(PlayerId player) implements Intent {}
+
   /** Taking damage of any kind. */
   record TakeDamage(PlayerId player) implements Intent {}
 

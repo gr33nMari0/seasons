@@ -35,6 +35,8 @@ import com.petepeterepeat.seasons.core.guard.ArchiveHold;
 import com.petepeterepeat.seasons.core.guard.Immunity;
 import com.petepeterepeat.seasons.core.guard.IntentRouter;
 import com.petepeterepeat.seasons.core.guard.Tripwire;
+import com.petepeterepeat.seasons.core.hall.AnchorDrag;
+import com.petepeterepeat.seasons.core.hall.BoxEdits;
 import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
 import com.petepeterepeat.seasons.core.hall.CellFixes;
@@ -729,6 +731,17 @@ public final class Seasons implements SeasonsApi {
         new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
     hallCommands.bindLinks(linkCommands);
     wanding.bindLinks(linkCommands, hallCommands);
+    BoxEdits boxEdits = new BoxEdits(platform, config, halls, wanding);
+    boxEdits.bindCommands(hallCommands);
+    AnchorDrag anchorDrag = new AnchorDrag(platform, config, halls, cellEdits);
+    wanding.bindEdits(boxEdits, anchorDrag);
+    outlining.bindPreviews(player -> {
+      List<com.petepeterepeat.seasons.core.port.Displays.Outline> all =
+          new ArrayList<>(rows.previews(player));
+      all.addAll(boxEdits.outlines(player));
+      all.addAll(anchorDrag.outlines(player));
+      return all;
+    });
     LinkEditor linkEditor = new LinkEditor(platform, config, halls, linkCommands, visiting);
     linkCommands.bindEditor(linkEditor::open);
     linkWorld.bindEditor(linkEditor::open);
@@ -742,6 +755,8 @@ public final class Seasons implements SeasonsApi {
                     .bindLinks(linkCommands)
                     .root())
             .merge(linkCommands.root())
+            .merge(boxEdits.root())
+            .merge(anchorDrag.root())
             .merge(
                 new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
                     .root())

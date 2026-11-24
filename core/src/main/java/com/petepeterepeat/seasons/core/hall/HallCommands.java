@@ -278,7 +278,10 @@ public final class HallCommands {
                             CommandNode.argument("cell", ArgumentType.id())
                                 .then(
                                     CommandNode.argument("type", ArgumentType.word())
-                                        .executes(this::cellUnanchor))))
+                                        .executes(this::cellUnanchor)
+                                        .then(
+                                            CommandNode.argument("which", ArgumentType.greedy())
+                                                .executes(this::cellUnanchor)))))
                 .then(
                     CommandNode.literal("assign")
                         .then(
@@ -1315,6 +1318,49 @@ public final class HallCommands {
       return;
     }
     HallService.CellRef ref = found.get();
+    Optional<String> which = arguments.optionalString("which");
+    if (which.isPresent()) {
+      // One of several, by number (M8).
+      int n = -1;
+      try {
+        n = Integer.parseInt(which.get().replace("#", ""));
+      } catch (NumberFormatException e) {
+        // Refused below.
+      }
+      Optional<Anchor> one = AnchorDrag.nth(ref.cell(), type.get(), n);
+      if (one.isEmpty()) {
+        source.reply(
+            messages()
+                .get(
+                    "hof.drag.no-such",
+                    "cell",
+                    ref.key(),
+                    "type",
+                    type.get().id(),
+                    "n",
+                    which.get()));
+        return;
+      }
+      List<Anchor> kept = new ArrayList<>(ref.cell().anchors());
+      kept.remove(one.get());
+      saved(
+          source,
+          hall.save(ref.gallery().withCell(ref.cell().withAnchors(kept))),
+          messages()
+              .get(
+                  "hof.wand.removed",
+                  "type",
+                  type.get().id(),
+                  "cell",
+                  ref.key(),
+                  "x",
+                  Integer.toString(one.get().at().blockX()),
+                  "y",
+                  Integer.toString(one.get().at().blockY()),
+                  "z",
+                  Integer.toString(one.get().at().blockZ())));
+      return;
+    }
     int count = ref.cell().anchors(type.get()).size();
     saved(
         source,

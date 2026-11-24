@@ -121,6 +121,20 @@ public final class Wand {
     return Optional.ofNullable(pending.remove(player));
   }
 
+  /** Sets an admin's selection to a whole box, as nudging a face does (M8). */
+  public void setSelection(PlayerId player, Bounds box) {
+    selections.put(player, Selection.startingAt(box.min()).withSecond(box.max()));
+  }
+
+  private @Nullable BoxEdits boxes;
+  private @Nullable AnchorDrag drag;
+
+  /** Connects nudging faces and dragging anchors (M8). */
+  public void bindEdits(BoxEdits nextBoxes, AnchorDrag nextDrag) {
+    this.boxes = nextBoxes;
+    this.drag = nextDrag;
+  }
+
   /** An admin's complete selection, if they have one. */
   public Optional<Bounds> selection(PlayerId player) {
     return Optional.ofNullable(selections.get(player)).flatMap(Selection::bounds);
@@ -210,6 +224,12 @@ public final class Wand {
 
   /** {@code /hof sel info}. */
   public void selInfo(CommandSource source, Arguments arguments) {
+    Optional<Message> editing =
+        source.player().flatMap(p -> boxes == null ? Optional.empty() : boxes.describe(p));
+    if (editing.isPresent()) {
+      source.reply(editing.get());
+      return;
+    }
     Optional<Bounds> box = source.player().flatMap(this::selection);
     if (box.isEmpty()) {
       source.reply(messages().get("hof.wand.no-selection"));
@@ -236,7 +256,35 @@ public final class Wand {
       if (!admin) {
         return Optional.of(Decision.allow());
       }
+      if (boxes != null
+          && boxes.editing(swap.player())
+          && config.get().config().wand().nudge().swapHandsApplies()) {
+        // Swap-hands applies an edited box (M8), as /hof sel apply does.
+        boxes.apply(source(swap.player()), com.petepeterepeat.seasons.core.command.Arguments.NONE);
+        return Optional.of(new Decision.Deny(Optional.empty()));
+      }
       setMode(swap.player(), !placing.contains(swap.player()));
+      return Optional.of(new Decision.Deny(Optional.empty()));
+    }
+    if (intent instanceof Intent.WandScroll scroll && scroll.sneaking()) {
+      // Sneak and scroll: a held anchor turns, an edited box's face moves (M8). A scroll up is a
+      // step back in the hotbar.
+      int back = Math.floorMod(scroll.from() - scroll.to(), 9);
+      boolean up = back > 0 && back < 5;
+      if (drag != null && drag.holding(scroll.player())) {
+        drag.turn(scroll.player(), up ? 1 : -1);
+        return Optional.of(new Decision.Deny(Optional.empty()));
+      }
+      if (boxes != null && boxes.editing(scroll.player())) {
+        boxes.scroll(scroll.player(), up);
+        return Optional.of(new Decision.Deny(Optional.empty()));
+      }
+      return Optional.empty();
+    }
+    if (intent instanceof Intent.WandDrop drop) {
+      if (boxes != null) {
+        boxes.cycleStep(drop.player());
+      }
       return Optional.of(new Decision.Deny(Optional.empty()));
     }
     if (!(intent instanceof Intent.UseWand use)) {
@@ -258,6 +306,20 @@ public final class Wand {
     }
     if (!linkAdmin) {
       return Optional.of(Decision.allow());
+    }
+    if (hallAdmin && drag != null && drag.holding(player)) {
+      // A held anchor: a right-click puts it down, a left-click puts it back (M8).
+      if (use.left()) {
+        drag.cancel(player);
+      } else {
+        drag.place(player, block(use.block()), use.face());
+      }
+      return Optional.of(new Decision.Deny(Optional.empty()));
+    }
+    if (use.left() && hallAdmin && boxes != null) {
+      // A left-click takes the box it is in to edit, the face clicked picked (M8).
+      boxes.pick(player, block(use.block()), use.face());
+      return Optional.of(new Decision.Deny(Optional.empty()));
     }
     if (!use.left()) {
       Position clicked = block(use.block());
@@ -402,6 +464,16 @@ public final class Wand {
     // A link on the block, from anywhere (M8).
     choices.add(new Menus.Choice("minecraft:lodestone", messages().get("hof.wand.link")));
     actions.add(() -> later(() -> linkMenu(player, block, front, false)));
+    // Move: pick the anchor on the block, or in front of it, up (M8).
+    Optional<Anchor> movable =
+        ref.cell().anchors().stream()
+            .filter(a -> a.type() != AnchorType.GATE && (a.isAt(block) || a.isAt(front)))
+            .findFirst();
+    if (movable.isPresent() && drag != null) {
+      AnchorDrag dragging = drag;
+      choices.add(new Menus.Choice("minecraft:piston", messages().get("hof.wand.move")));
+      actions.add(() -> current(ref).ifPresent(now -> dragging.pickUp(player, now, movable.get())));
+    }
     boolean onBlock = ref.cell().anchors().stream().anyMatch(a -> a.isAt(block));
     boolean inFront = ref.cell().anchors().stream().anyMatch(a -> a.isAt(front));
     if (onBlock || inFront) {

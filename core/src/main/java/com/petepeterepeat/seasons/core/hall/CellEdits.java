@@ -65,6 +65,13 @@ public final class CellEdits {
         return;
       }
     }
+    // Nor the hub, which would leave hall.yml out at the next start (questions 243; M8 found the
+    // gap when growing a gallery towards the hub by a face).
+    if (hall.layout().hub().map(h -> h.overlaps(bounds)).orElse(false)) {
+      source.reply(
+          messages().get("hof.gallery.overlaps", "gallery", gallery.id(), "other", "the hub"));
+      return;
+    }
     for (Cell cell : gallery.cells()) {
       if (cell.bounds().isPresent() && !bounds.contains(cell.bounds().get())) {
         source.reply(
