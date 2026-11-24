@@ -191,6 +191,18 @@ class LinksMigrationTest {
   }
 
   @Test
+  void linkTextsAreDrawnOnce() throws IOException {
+    start(null);
+    TestSource source = TestSource.console();
+    TestCommands.run(fake.commands.get(1), source, "/hof link text add sign 0 64 0 <gold>Season 3");
+    assertThat(source.text()).contains("Link sign gains a trigger: floating text at 0, 64, 0.");
+    int before = fake.texts.size();
+    fake.tick();
+    fake.tick();
+    assertThat(fake.texts.size()).as("drawn once, not every sweep").isEqualTo(before + 1);
+  }
+
+  @Test
   void linksYmlReadsBackAsWritten() throws Exception {
     HallLayout.Link full =
         new HallLayout.Link(

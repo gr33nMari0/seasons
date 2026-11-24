@@ -176,6 +176,18 @@ public sealed interface Intent {
     }
   }
 
+  /**
+   * Hitting one of Seasons' displays, such as a floating text's hitbox (M8). The adapter cancels
+   * the hit itself.
+   */
+  record HitDisplay(PlayerId player, String tag) implements Intent {}
+
+  /** Placing a link sign from {@code /hof link item} (M8): the block it became. */
+  record PlaceLinkItem(PlayerId player, Position block, String link) implements Intent {}
+
+  /** The sign editor opening for a player, on placing a sign or clicking one (M8). */
+  record EditSign(PlayerId player, Position block) implements Intent {}
+
   /** Taking damage of any kind. */
   record TakeDamage(PlayerId player) implements Intent {}
 

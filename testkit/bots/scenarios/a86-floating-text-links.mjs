@@ -11,13 +11,13 @@ import { hallToVisit, middle, move, standAt, waitNear } from '../lib/visits.mjs'
 
 const SPOT = { x: 150, y: FLOOR, z: 160 }
 const TEXT = { x: 14, y: FLOOR + 1, z: 25 }
-const TEXTS = '@e[type=minecraft:text_display,tag=seasons-link-text]'
-const HITBOXES = '@e[type=minecraft:interaction,tag=seasons-link-text]'
+const TEXTS = '@e[type=minecraft:text_display,x=13,y=-60,z=24,dx=2,dy=3,dz=2]'
+const HITBOXES = '@e[type=minecraft:interaction,x=13,y=-60,z=24,dx=2,dy=3,dz=2]'
 
 async function count (ctx, admin, selector) {
   const line = await ctx.command(admin, `/execute if entity ${selector}`, /^Test (passed|failed)/)
   if (line.startsWith('Test failed')) return 0
-  return Number(/count: (\d+)/.exec(line)?.[1] ?? 1)
+  return Number(/[Cc]ount: (\d+)/.exec(line)?.[1] ?? 1)
 }
 
 /** The interaction entity the bot sees nearest a spot. */

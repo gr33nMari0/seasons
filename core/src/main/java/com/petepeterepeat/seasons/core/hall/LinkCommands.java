@@ -171,6 +171,54 @@ public final class LinkCommands implements Wand.LinkActions {
                                         .executes(this::upgradeImport)))
                         .then(CommandNode.literal("forget-old").executes(this::upgradeForget)))
                 .then(
+                    CommandNode.literal("item")
+                        .permission(admin)
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .executes(this::item)
+                                .then(
+                                    CommandNode.argument("rest", ArgumentType.greedy())
+                                        .executes(this::item))))
+                .then(
+                    CommandNode.literal("sign")
+                        .permission(admin)
+                        .then(
+                            CommandNode.argument("link", ArgumentType.word())
+                                .then(
+                                    CommandNode.argument("rest", ArgumentType.greedy())
+                                        .executes(this::sign))))
+                .then(
+                    CommandNode.literal("text")
+                        .permission(admin)
+                        .then(
+                            CommandNode.literal("add")
+                                .then(
+                                    CommandNode.argument("link", ArgumentType.word())
+                                        .then(
+                                            CommandNode.argument("rest", ArgumentType.greedy())
+                                                .executes(this::textAdd))))
+                        .then(
+                            CommandNode.literal("edit")
+                                .then(
+                                    CommandNode.argument("link", ArgumentType.word())
+                                        .then(
+                                            CommandNode.argument("rest", ArgumentType.greedy())
+                                                .executes(this::textEdit))))
+                        .then(
+                            CommandNode.literal("scale")
+                                .then(
+                                    CommandNode.argument("link", ArgumentType.word())
+                                        .then(
+                                            CommandNode.argument("rest", ArgumentType.greedy())
+                                                .executes(this::textScale))))
+                        .then(
+                            CommandNode.literal("line")
+                                .then(
+                                    CommandNode.argument("link", ArgumentType.word())
+                                        .then(
+                                            CommandNode.argument("rest", ArgumentType.greedy())
+                                                .executes(this::textLine)))))
+                .then(
                     CommandNode.literal("send")
                         .permission(admin)
                         .then(
@@ -1001,6 +1049,330 @@ public final class LinkCommands implements Wand.LinkActions {
             at -> lines.add(messages().get("hof.link.info-landing", place("link", link.id(), at))));
     link.pair().ifPresent(p -> lines.add(messages().get("hof.link.info-pair", "other", p)));
     return lines;
+  }
+
+  // Link signs and text (M8)
+
+  /** {@code /hof link item <id> [count] [player]}: link signs to place. */
+  void item(CommandSource source, Arguments arguments) {
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    List<String> words = Words.of(arguments.optionalString("rest").orElse(""));
+    int count = words.isEmpty() ? 1 : number(words.getFirst());
+    if (count < 1 || count > 64 || words.size() > 2) {
+      source.reply(messages().get("hof.link.item-usage"));
+      return;
+    }
+    Optional<PlayerRef> to =
+        words.size() == 2
+            ? platform.players().findByName(words.get(1))
+            : source.player().flatMap(p -> platform.players().find(p));
+    if (to.isEmpty()) {
+      source.reply(messages().get("hof.player-only"));
+      return;
+    }
+    var item = config.get().config().links().item();
+    platform
+        .inventories()
+        .giveLinkItem(
+            to.get().id(), item.material(), Message.of(item.name()), link.get().id(), count);
+    source.reply(
+        messages()
+            .get(
+                count == 1 ? "hof.link.item-given-one" : "hof.link.item-given",
+                "count",
+                Integer.toString(count),
+                "link",
+                link.get().id(),
+                "player",
+                to.get().name()));
+  }
+
+  /** {@code /hof link sign <id> line <n> <text>} or {@code glow on|off}: a link sign's text. */
+  void sign(CommandSource source, Arguments arguments) {
+    if (!styler(source)) {
+      return;
+    }
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    Optional<Position> sign =
+        link.get().triggers().stream()
+            .filter(t -> t instanceof HallLayout.Trigger.OnBlock)
+            .map(HallLayout.Trigger::at)
+            .filter(at -> platform.world().block(at).type().endsWith("_sign"))
+            .findFirst();
+    if (sign.isEmpty()) {
+      source.reply(messages().get("hof.link.no-sign", "link", link.get().id()));
+      return;
+    }
+    String rest = arguments.string("rest").trim();
+    List<String> words = Words.of(rest);
+    String id = link.get().id();
+    if (words.size() == 2 && words.getFirst().equals("glow")) {
+      boolean on = words.get(1).equals("on");
+      platform.world().glowSign(sign.get(), on);
+      source.reply(messages().get(on ? "hof.link.sign-glows" : "hof.link.sign-dull", "link", id));
+      return;
+    }
+    int n = words.size() >= 2 && words.getFirst().equals("line") ? number(words.get(1)) : -1;
+    if (n < 1 || n > 4) {
+      source.reply(messages().get("hof.link.sign-usage"));
+      return;
+    }
+    String text = LinkText.clean(afterWords(rest, 2), styleTags());
+    platform.world().writeSignLine(sign.get(), n - 1, Message.of(text));
+    hall.audited(actor(source), "link-sign", "link:" + id, "line " + n + ": " + text);
+    source.reply(
+        messages()
+            .get(
+                "hof.link.sign-line",
+                "link",
+                id,
+                "n",
+                Integer.toString(n),
+                "text",
+                LinkText.plain(text)));
+  }
+
+  /** {@code /hof link text add <id> <x y z> <text>}: a floating text trigger. */
+  void textAdd(CommandSource source, Arguments arguments) {
+    if (left(source) || !styler(source)) {
+      return;
+    }
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    String rest = arguments.string("rest").trim();
+    List<String> words = Words.of(rest);
+    Optional<Position> origin = origin(source);
+    String dimension = origin.map(Position::dimension).orElse(OVERWORLD);
+    Positions.Read read = Positions.block(words, 0, origin, dimension);
+    if (!(read instanceof Positions.Read.Block at) || words.size() <= at.used()) {
+      source.reply(messages().get("hof.link.text-usage"));
+      return;
+    }
+    Position block = at.block();
+    Position spot =
+        new Position(
+            dimension,
+            block.blockX() + 0.5,
+            block.blockY(),
+            block.blockZ() + 0.5,
+            origin.map(o -> o.yaw() + 180f).orElse(0f),
+            0f);
+    String text = LinkText.clean(afterWords(rest, at.used()), styleTags());
+    var look = config.get().config().links().text();
+    HallLayout.Trigger.Text trigger =
+        new HallLayout.Trigger.Text(spot, List.of(text), look.scale(), look.billboard(), 0, false);
+    addTrigger(source, link.get(), trigger);
+  }
+
+  /** {@code /hof link text edit <id> <n> [--walk r] [--left] [--no-left] [--billboard b]}. */
+  void textEdit(CommandSource source, Arguments arguments) {
+    if (left(source)) {
+      return;
+    }
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    List<String> words = Words.of(arguments.string("rest"));
+    Optional<TextAt> found = textAt(source, link.get(), words.isEmpty() ? "" : words.getFirst());
+    if (found.isEmpty()) {
+      return;
+    }
+    HallLayout.Trigger.Text text = found.get().text();
+    double walk = text.walk();
+    boolean leftClick = text.left();
+    String billboard = text.billboard();
+    for (int i = 1; i < words.size(); i++) {
+      switch (words.get(i)) {
+        case "--walk" -> walk = i + 1 < words.size() ? decimal(words.get(++i)) : -1;
+        case "--left" -> leftClick = true;
+        case "--no-left" -> leftClick = false;
+        case "--billboard" -> billboard = i + 1 < words.size() ? words.get(++i) : "";
+        default -> walk = -1;
+      }
+    }
+    if (walk < 0 || walk > 8 || !List.of("center", "vertical", "fixed").contains(billboard)) {
+      source.reply(messages().get("hof.link.text-usage"));
+      return;
+    }
+    HallLayout.Trigger.Text next =
+        new HallLayout.Trigger.Text(
+            text.at(), text.lines(), text.scale(), billboard, walk, leftClick);
+    String how = messages().text("hof.link.how-click");
+    if (leftClick) {
+      how = how + messages().text("hof.link.how-left");
+    }
+    if (walk > 0) {
+      how = how + messages().text("hof.link.how-walk", "walk", number(walk));
+    }
+    replaceTrigger(
+        source,
+        link.get(),
+        found.get().index(),
+        next,
+        messages()
+            .get(
+                "hof.link.text-edited",
+                "link",
+                link.get().id(),
+                "n",
+                Integer.toString(found.get().n()),
+                "how",
+                how));
+  }
+
+  /** {@code /hof link text scale <id> <n> <scale>}. */
+  void textScale(CommandSource source, Arguments arguments) {
+    if (left(source)) {
+      return;
+    }
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    List<String> words = Words.of(arguments.string("rest"));
+    Optional<TextAt> found = textAt(source, link.get(), words.isEmpty() ? "" : words.getFirst());
+    if (found.isEmpty()) {
+      return;
+    }
+    double scale = words.size() == 2 ? decimal(words.get(1)) : -1;
+    if (scale < 0.25 || scale > 4) {
+      source.reply(messages().get("hof.link.text-bad-scale"));
+      return;
+    }
+    replaceTrigger(
+        source,
+        link.get(),
+        found.get().index(),
+        found.get().text().withScale(scale),
+        messages()
+            .get(
+                "hof.link.text-scaled",
+                "link",
+                link.get().id(),
+                "n",
+                Integer.toString(found.get().n()),
+                "size",
+                number(scale)));
+  }
+
+  /** {@code /hof link text line <id> <n> <line> <text>}: one line of a floating text. */
+  void textLine(CommandSource source, Arguments arguments) {
+    if (left(source) || !styler(source)) {
+      return;
+    }
+    Optional<HallLayout.Link> link = link(source, arguments.string("link"));
+    if (link.isEmpty()) {
+      return;
+    }
+    String rest = arguments.string("rest").trim();
+    List<String> words = Words.of(rest);
+    Optional<TextAt> found = textAt(source, link.get(), words.isEmpty() ? "" : words.getFirst());
+    if (found.isEmpty()) {
+      return;
+    }
+    int line = words.size() >= 3 ? number(words.get(1)) : -1;
+    List<String> lines = new ArrayList<>(found.get().text().lines());
+    if (line < 1 || line > Math.min(8, lines.size() + 1)) {
+      source.reply(messages().get("hof.link.text-usage"));
+      return;
+    }
+    String text = LinkText.clean(afterWords(rest, 2), styleTags());
+    if (line > lines.size()) {
+      lines.add(text);
+    } else {
+      lines.set(line - 1, text);
+    }
+    replaceTrigger(
+        source,
+        link.get(),
+        found.get().index(),
+        found.get().text().withLines(lines),
+        messages()
+            .get(
+                "hof.link.text-line",
+                "link",
+                link.get().id(),
+                "n",
+                Integer.toString(found.get().n()),
+                "line",
+                Integer.toString(line),
+                "text",
+                LinkText.plain(text)));
+  }
+
+  /** A link's floating text, numbered among its floating texts from 1, and its trigger index. */
+  private record TextAt(HallLayout.Trigger.Text text, int index, int n) {}
+
+  private Optional<TextAt> textAt(CommandSource source, HallLayout.Link link, String word) {
+    int wanted = number(word);
+    int n = 0;
+    for (int i = 0; i < link.triggers().size(); i++) {
+      if (link.triggers().get(i) instanceof HallLayout.Trigger.Text text && ++n == wanted) {
+        return Optional.of(new TextAt(text, i, n));
+      }
+    }
+    source.reply(messages().get("hof.link.no-text", "link", link.id(), "n", word));
+    return Optional.empty();
+  }
+
+  private void replaceTrigger(
+      CommandSource source,
+      HallLayout.Link link,
+      int index,
+      HallLayout.Trigger next,
+      Message reply) {
+    List<HallLayout.Trigger> triggers = new ArrayList<>(link.triggers());
+    triggers.set(index, next);
+    save(
+        source,
+        hall.layout().withLink(link.withTriggers(triggers)),
+        List.of(reply),
+        "link-trigger-change",
+        link.id(),
+        describe(next));
+  }
+
+  /** Whether the source may style link text; says so if not. */
+  private boolean styler(CommandSource source) {
+    if (source.player().isPresent()
+        && !platform.permissions().has(source.player().get(), LinkService.PERMISSION_STYLE)) {
+      source.reply(messages().get("hof.link.style-not-allowed"));
+      return false;
+    }
+    return true;
+  }
+
+  /** The text after the first {@code count} words, spaces kept. */
+  private static String afterWords(String text, int count) {
+    String rest = text.trim();
+    for (int i = 0; i < count; i++) {
+      int space = rest.indexOf(' ');
+      rest = space < 0 ? "" : rest.substring(space + 1).trim();
+    }
+    return rest;
+  }
+
+  private static double decimal(String word) {
+    try {
+      return Double.parseDouble(word.trim());
+    } catch (NumberFormatException e) {
+      return -1;
+    }
+  }
+
+  private static String number(double value) {
+    return value == Math.rint(value)
+        ? Long.toString(Math.round(value))
+        : Double.toString(Math.round(value * 100) / 100.0);
   }
 
   // The upgrade from 1.1 (M8, Upgrading existing setups)

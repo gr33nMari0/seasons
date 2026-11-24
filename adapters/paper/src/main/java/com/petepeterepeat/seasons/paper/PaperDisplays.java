@@ -110,6 +110,59 @@ final class PaperDisplays implements Displays {
     return display.getUniqueId();
   }
 
+  /** The scoreboard tag on link texts and hitboxes, so selectors can find them (M8). */
+  static final String LINK_TEXT = "seasons-link-text";
+
+  @Override
+  public UUID spawnLinkText(Position position, Message message, String tag, LinkLook look) {
+    Location location = PaperPositions.toLocation(position);
+    TextDisplay display =
+        location
+            .getWorld()
+            .spawn(
+                location,
+                TextDisplay.class,
+                spawned -> {
+                  spawned.text(text.render(message).compact());
+                  spawned.setBillboard(
+                      switch (look.billboard()) {
+                        case "fixed" -> Display.Billboard.FIXED;
+                        case "vertical" -> Display.Billboard.VERTICAL;
+                        default -> Display.Billboard.CENTER;
+                      });
+                  spawned.setBackgroundColor(org.bukkit.Color.fromARGB(look.background()));
+                  spawned.setShadowed(look.shadow());
+                  if (look.fullBright()) {
+                    spawned.setBrightness(new Display.Brightness(15, 15));
+                  }
+                  scale(spawned, look.scale());
+                  tag(spawned, tag);
+                  spawned.setPersistent(false);
+                  spawned.addScoreboardTag(LINK_TEXT);
+                });
+    return display.getUniqueId();
+  }
+
+  @Override
+  public UUID spawnHitbox(Position position, double width, double height, String tag) {
+    Location location = PaperPositions.toLocation(position);
+    org.bukkit.entity.Interaction box =
+        location
+            .getWorld()
+            .spawn(
+                location,
+                org.bukkit.entity.Interaction.class,
+                spawned -> {
+                  spawned.setInteractionWidth((float) width);
+                  spawned.setInteractionHeight((float) height);
+                  spawned.setResponsive(true);
+                  tag(spawned, tag);
+                  spawned.setPersistent(false);
+                  spawned.addScoreboardTag(LINK_TEXT);
+                });
+    return box.getUniqueId();
+  }
+
   @Override
   public boolean scaleText(UUID id, double scale) {
     if (server.getEntity(id) instanceof TextDisplay display) {

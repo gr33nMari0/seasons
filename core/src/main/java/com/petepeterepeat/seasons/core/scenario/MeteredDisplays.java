@@ -41,6 +41,16 @@ public final class MeteredDisplays implements Displays {
   }
 
   @Override
+  public UUID spawnLinkText(Position position, Message text, String tag, LinkLook look) {
+    return timed("spawnLinkText", () -> platform.spawnLinkText(position, text, tag, look));
+  }
+
+  @Override
+  public UUID spawnHitbox(Position position, double width, double height, String tag) {
+    return timed("spawnHitbox", () -> platform.spawnHitbox(position, width, height, tag));
+  }
+
+  @Override
   public boolean scaleText(UUID display, double scale) {
     return timed("scaleText", () -> platform.scaleText(display, scale));
   }

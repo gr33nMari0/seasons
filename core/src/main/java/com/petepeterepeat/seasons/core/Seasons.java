@@ -54,6 +54,7 @@ import com.petepeterepeat.seasons.core.hall.HallService;
 import com.petepeterepeat.seasons.core.hall.HallVisits;
 import com.petepeterepeat.seasons.core.hall.LinkCommands;
 import com.petepeterepeat.seasons.core.hall.LinkService;
+import com.petepeterepeat.seasons.core.hall.LinkWorld;
 import com.petepeterepeat.seasons.core.hall.Museum;
 import com.petepeterepeat.seasons.core.hall.MuseumFiles;
 import com.petepeterepeat.seasons.core.hall.PlaqueScale;
@@ -161,6 +162,7 @@ public final class Seasons implements SeasonsApi {
   private @Nullable ScheduledTask flusher;
   private @Nullable HallService hallService;
   private @Nullable LinkService linkService;
+  private @Nullable LinkWorld linkWorld;
   private @Nullable HallVisits visits;
   private @Nullable Reconciler reconciler;
   private @Nullable HallRenderer hallRenderer;
@@ -295,6 +297,8 @@ public final class Seasons implements SeasonsApi {
     LinkService linking = new LinkService(platform, config, halls, players, entry::spawn, clock);
     linkService = linking;
     visiting.bindLinks(linking);
+    LinkWorld linkWorld = new LinkWorld(platform, config, halls, visiting);
+    this.linkWorld = linkWorld;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
     hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
@@ -635,6 +639,7 @@ public final class Seasons implements SeasonsApi {
                         .decide(intent)
                         .or(() ->
                             plaqueScale == null ? Optional.empty() : plaqueScale.decide(intent))
+                        .or(() -> linkWorld.decide(intent))
                         .or(() -> visiting.decide(intent))
                         .or(() -> halls.decide(intent))
                         .or(() -> hallRules.decide(intent))
@@ -723,6 +728,8 @@ public final class Seasons implements SeasonsApi {
         new LinkCommands(platform, config, halls, cellEdits, wanding, linking, visiting);
     hallCommands.bindLinks(linkCommands);
     wanding.bindLinks(linkCommands, hallCommands);
+    linkWorld.bindEditor(linkCommands::edit);
+    linkWorld.start();
     CommandNode hof =
         hallCommands
             .root()
@@ -1023,6 +1030,9 @@ public final class Seasons implements SeasonsApi {
     }
     if (hallService != null) {
       hallService.stop();
+      if (linkWorld != null) {
+        linkWorld.stop();
+      }
     }
     if (visits != null) {
       visits.stop();

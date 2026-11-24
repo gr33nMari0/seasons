@@ -26,6 +26,28 @@ public interface Displays {
     return false;
   }
 
+  /**
+   * How a link's floating text looks (M8).
+   *
+   * @param background ARGB colour behind the letters
+   * @param billboard {@code center}, {@code vertical} or {@code fixed}
+   */
+  record LinkLook(
+      double scale, String billboard, int background, boolean shadow, boolean fullBright) {}
+
+  /**
+   * Spawns a link's floating text (M8), never saved with the world: Seasons draws it again from
+   * links.yml whenever its chunk is loaded.
+   */
+  default UUID spawnLinkText(Position position, Message text, String tag, LinkLook look) {
+    return spawnText(position, text, tag, look.scale());
+  }
+
+  /** Spawns the hitbox players click on a link's floating text (M8), never saved either. */
+  default UUID spawnHitbox(Position position, double width, double height, String tag) {
+    return UUID.randomUUID();
+  }
+
   /** Spawns a figure. */
   UUID spawnFigure(Figure figure);
 

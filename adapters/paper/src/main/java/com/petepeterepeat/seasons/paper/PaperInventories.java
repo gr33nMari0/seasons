@@ -70,6 +70,41 @@ final class PaperInventories implements Inventories {
     return player.getInventory().addItem(wand).isEmpty();
   }
 
+  /** The mark on link signs from /hof link item (M8), holding the link's id. */
+  private @Nullable NamespacedKey linkKey;
+
+  void linkKey(NamespacedKey key) {
+    this.linkKey = key;
+  }
+
+  @Override
+  public boolean giveLinkItem(PlayerId id, String item, Message name, String link, int count) {
+    Player player = online(id);
+    Material material = Material.matchMaterial(item);
+    ItemStack signs =
+        ItemStack.of(material != null && material.isItem() ? material : Material.OAK_SIGN, count);
+    NamespacedKey key = java.util.Objects.requireNonNull(linkKey);
+    signs.editMeta(meta -> {
+      meta.displayName(text.render(name).decoration(TextDecoration.ITALIC, false));
+      meta.getPersistentDataContainer().set(key, PersistentDataType.STRING, link);
+    });
+    player
+        .getInventory()
+        .addItem(signs)
+        .values()
+        .forEach(left -> player.getWorld().dropItem(player.getLocation(), left));
+    return true;
+  }
+
+  /** The link a link sign is for, if the item is one. */
+  Optional<String> linkOf(@Nullable ItemStack item) {
+    if (linkKey == null || item == null || item.isEmpty() || !item.hasItemMeta()) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(
+        item.getItemMeta().getPersistentDataContainer().get(linkKey, PersistentDataType.STRING));
+  }
+
   @Override
   public boolean holdsWand(PlayerId id) {
     return players.player(id).map(p -> isWand(p.getInventory().getItemInMainHand())).orElse(false);

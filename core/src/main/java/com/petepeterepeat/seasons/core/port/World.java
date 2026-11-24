@@ -51,6 +51,20 @@ public interface World {
   /** One above the highest y a block can have in a dimension, such as 320 in the overworld. */
   int maxHeight(String dimension);
 
+  /**
+   * Writes one line (0 to 3) on the front of a sign (M8); false if the block isn't a sign. The
+   * chunk must be loaded.
+   */
+  default boolean writeSignLine(
+      Position sign, int line, com.petepeterepeat.seasons.core.message.Message text) {
+    return false;
+  }
+
+  /** Makes a sign's front glow, as glow ink does, or not (M8); false if it isn't a sign. */
+  default boolean glowSign(Position sign, boolean glowing) {
+    return false;
+  }
+
   /** Loads (and generates if needed) the chunk holding a position without stalling the tick. */
   CompletableFuture<Void> loadChunk(Position position);
 }

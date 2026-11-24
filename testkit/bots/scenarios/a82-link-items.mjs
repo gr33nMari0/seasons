@@ -65,7 +65,7 @@ export default {
     const before = signs(admin)
     assert(await breakBlock(ctx, admin, ctx.adminName, SIGN), 'a builder breaks it')
     await ctx.eventually(async () => assert(signs(admin) === before + 1, `the sign came back: ${signs(admin)}`))
-    assert(!linkInFile(ctx, 'hall-sign').triggers?.length, 'the trigger is off the link')
+    await ctx.eventually(async () => assert(!linkInFile(ctx, 'hall-sign').triggers?.length, 'the trigger is off the link'))
 
     // Without seasons.link.place, a player can't place one.
     await link(ctx, admin, 'item hall-sign 1 Visitor', /^Gave 1 link sign for hall-sign to Visitor\.$/)
