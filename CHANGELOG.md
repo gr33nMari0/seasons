@@ -4,6 +4,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-24
+
 ### Added
 
 - Hall links, reworked (M8): a link leads to the Hall, any season's spawn, a named point (`/hof point`), another link (`--two-way` makes a pair), a gallery's entry or back where you came from, and can have any number of triggers: blocks, areas and floating text. `/hof link add <id> from <source> to <destination>`, with `from`, `trigger`, `landing`, `pair`, `rename`, `name`, `access`, `when`, `go` and `send`.
@@ -22,6 +24,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - Links live in `<world>/seasons/links.yml`. On the first start, the links in `hall.yml` are copied there once: buttons, signs, doors and levers become click-only, everything else fires as before (`links.upgrade.keepStepping: all` keeps every one as it was), and everyone may still take them. `hall.yml` is left as it was, so going back to 1.2 is swapping the jar. `/hof link upgrade report` lists what changed, and admins are reminded until one runs `/hof link upgrade done`.
 - `/hof <season>` visits a legacy gallery when its season has no other with an entry, and says when a season's gallery has no entry yet.
 - A gallery's bounds can't be set over the hub.
+- `/hof link go` takes a link only within 6 blocks of one of its triggers; link admins can take any link from anywhere.
+- Placing a link sign and breaking a link block follow the Hall's and the zones' rules, like any other block.
 
 ### Upgrading from 1.2
 
