@@ -21,7 +21,7 @@ SeasonsApi seasons = reg.getProvider();
 
 Declare Seasons as a dependency in your `paper-plugin.yml`, and check `seasons.apiVersion()` against the range you support.
 
-**Queries:** `version()`, `apiVersion()`, `currentSeason()`, `season()`, `online()`, `isOnline(uuid)`, `profile(uuid)`, `gallery(season)`, `archive(season, uuid)`, `leaderboards(season)`, `waypoints()`, `seasons()`, `museum()`, `pending()`, `audit(count)`. Those that read files return a `CompletableFuture`.
+**Queries:** `version()`, `apiVersion()`, `currentSeason()`, `season()`, `online()`, `isOnline(uuid)`, `profile(uuid)`, `gallery(season)`, `archive(season, uuid)`, `leaderboards(season)`, `waypoints()`, `seasons()`, `museum()`, `pending()`, `audit(count)`, and since 1.4 `playerId(name)`. Those that read files return a `CompletableFuture`.
 
 **Events** (`subscribe(listener)`): `PlayerJoined`, `SeasonFirst`, `DragonSlain`, `ZoneEntered`, `PhaseChanged`, `HomecomingStarted`, `PlayerArchived`.
 
@@ -44,5 +44,7 @@ Seasons Web serves a read-only JSON API under `/api/v1`, versioned, on your dash
 | `GET /api/v1/events` | By visibility | A server-sent event stream |
 | `GET /api/v1/dashboard` | Public | The page's settings and text |
 | `GET /api/v1/admin/health`, `/admin/pending`, `/admin/audit` | Admin | Tick time, TPS, memory; pending players; recent audit entries |
+| `GET /og/<kind>/<key>-<hash>.png` | Public, when previews are on | A page's preview picture |
+| `GET /p/<name>` | Public | A redirect to that player's profile |
 
 Sessions are an HttpOnly, Secure, SameSite=Strict cookie, so tokens never reach JavaScript.

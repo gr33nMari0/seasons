@@ -29,7 +29,9 @@ record WebConfig(
     List<String> frameOrigins,
     Visibility visibility,
     Map<String, List<String>> screens,
-    List<String> gameAddresses) {
+    List<String> gameAddresses,
+    List<WebSettings.Link> helpLinks,
+    Optional<String> rulesFile) {
   static final String SPOTIFY = "https://open.spotify.com";
 
   /**
@@ -153,6 +155,27 @@ record WebConfig(
         gameAddresses.add(address.get());
       }
     }
+    List<WebSettings.Link> helpLinks = new ArrayList<>();
+    for (WebSettings.Link link : settings.help().links()) {
+      Optional<String> problem = linkProblem(link);
+      if (problem.isPresent()) {
+        warnings.add("help.links: \"" + link.label() + "\" is left out: " + problem.get());
+      } else {
+        helpLinks.add(new WebSettings.Link(link.label(), link.url(), null));
+      }
+    }
+    String rules = settings.help().rules().strip();
+    Optional<String> rulesFile = Optional.empty();
+    if (!rules.isEmpty()) {
+      if (rules.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.md")) {
+        rulesFile = Optional.of(rules);
+      } else {
+        warnings.add(
+            "help.rules: \""
+                + rules
+                + "\" is left out: a Markdown file name in plugins/SeasonsWeb/");
+      }
+    }
     return new Ready(
         new WebConfig(
             settings,
@@ -163,7 +186,9 @@ record WebConfig(
             List.copyOf(frames),
             visibility,
             screens,
-            List.copyOf(gameAddresses)),
+            List.copyOf(gameAddresses),
+            List.copyOf(helpLinks),
+            rulesFile),
         warnings);
   }
 

@@ -8,7 +8,9 @@
 // - When the system theme changes, the page follows it at once and the toggle's choice is dropped.
 //   A change while the page was closed counts too: the choice remembers the system it was made
 //   against, and is dropped if the system has changed since.
-// - <html data-theme-lock="dark"> pins a page dark (the second screen), whatever the rest says.
+// - <html data-theme-lock="dark"> pins a page dark (the second screen), whatever the rest says, and
+//   <html data-theme-lock-paths="/screen"> does so for any address under those paths. A page that
+//   changes address itself calls seasonsTheme.refresh() afterwards.
 ;(function () {
   'use strict'
   var KEY = 'seasons-theme'
@@ -35,8 +37,17 @@
 
   function current () { return root.getAttribute('data-theme') || system() }
 
+  function lockedByPath () {
+    var paths = (root.getAttribute('data-theme-lock-paths') || '').split(',')
+    for (var i = 0; i < paths.length; i++) {
+      var p = paths[i].trim()
+      if (p && (location.pathname === p || location.pathname.indexOf(p + '/') === 0)) return 'dark'
+    }
+    return null
+  }
+
   function apply (theme) {
-    var locked = root.getAttribute('data-theme-lock')
+    var locked = root.getAttribute('data-theme-lock') || lockedByPath()
     var next = locked || theme
     root.setAttribute('data-theme', next)
     var toggles = document.querySelectorAll('[data-theme-toggle]')
@@ -69,5 +80,7 @@
   })
   document.addEventListener('DOMContentLoaded', function () { apply(current()) })
 
-  window.seasonsTheme = { current: current, toggle: toggle, system: system }
+  function refresh () { apply(read() || system()) }
+
+  window.seasonsTheme = { current: current, toggle: toggle, system: system, refresh: refresh }
 })()

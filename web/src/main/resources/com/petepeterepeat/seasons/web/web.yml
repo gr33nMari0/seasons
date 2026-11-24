@@ -62,6 +62,20 @@ screens:
     layout: landscape
     widgets: [season-clock, online, leaderboard, event-feed, map, links]
 
+# The dashboard's Help page and widget: the players' guides bundled with Seasons Web, plus your
+# own links and rules. rules names a Markdown file in plugins/SeasonsWeb/, such as rules.md.
+help:
+  links: []
+  #  - { label: Server rules, url: "https://example.com/rules" }
+  rules: ""
+
+# Rich previews when a dashboard link is shared (Discord, iMessage, Slack, X and the like): a title,
+# a description and a picture drawn here, showing only what anyone may see without logging in.
+# skins: false draws a plain figure instead of fetching players' skins from Mojang.
+previews:
+  enabled: true
+  skins: true
+
 # How long a login lasts on a device.
 sessions:
   lifetime: 30d

@@ -559,6 +559,6 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | --- | --- | --- |
 | `m9-design` (#42) | 0, design foundation | `site/test/design.test.mjs` (WCAG AA for every token pair), `theme.spec.mjs` (the theme rule in Chromium and WebKit) |
 | `m9-site` | 1 to 4 and 8: the site, generated references, the docs, discovery, the rules for agents | `site/test`: strict CSP, links, previews, axe on every page, generic content, docs coverage against the code, the connect flow against stubbed DNS; `SiteReferenceTest`, `WebCommandReferenceTest`, `DiscoveryTest`; `m7-connect`, `m9-discovery` |
-| `m9-dashboard` | 5 to 7: the dashboard's look, help, previews and layouts | See below, when it lands |
+| `m9-dashboard` | 5 to 7: the dashboard's look, help, previews and layouts | `WebTest` (preview tags, pictures, hidden players, short links), `WebConfigTest`, `layout.test.mjs`, `help.test.mjs`, `page.test.mjs`; `m9-dashboard` (login page, Help, theme, layout editing, a shared layout's unavailable widget) and every `m7-*` scenario |
 
 The public site is published at each release tag (`pages.yml`), so the docs describe the version people can download.

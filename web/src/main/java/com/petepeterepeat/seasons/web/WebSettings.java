@@ -23,6 +23,9 @@ import org.spongepowered.configurate.objectmapping.meta.Setting;
  * @param visibility each widget's or field's visibility: public, players, admins or hidden
  * @param screens second-screen layouts by name, shown at {@code /screen/<name>}; {@code
  *     second-screen} is the one at {@code /screen}
+ * @param help the dashboard's Help page: this server's own links and rules beside the bundled
+ *     players' guides (M9)
+ * @param previews rich link previews: the tags and pictures shared links unfurl with (M9)
  */
 @ConfigSerializable
 record WebSettings(
@@ -40,7 +43,9 @@ record WebSettings(
     RateLimits rateLimits,
     Stream stream,
     Cache cache,
-    Map<String, Screen> screens) {
+    Map<String, Screen> screens,
+    Help help,
+    Previews previews) {
   WebSettings {
     gameAddresses = List.copyOf(gameAddresses);
     links = List.copyOf(links);
@@ -105,4 +110,26 @@ record WebSettings(
   /** How long public responses may be cached by a proxy. */
   @ConfigSerializable
   record Cache(Duration publicMaxAge) {}
+
+  /**
+   * The Help page's own part: links, and a Markdown file of rules in {@code plugins/SeasonsWeb/}.
+   *
+   * @param rules a file name such as {@code rules.md}; empty for none
+   */
+  @ConfigSerializable
+  record Help(List<Link> links, String rules) {
+    Help {
+      links = List.copyOf(links);
+    }
+  }
+
+  /**
+   * Rich link previews.
+   *
+   * @param enabled whether pages carry preview tags and their pictures are drawn
+   * @param skins whether players' heads are drawn from their skins, fetched once from Mojang's
+   *     texture server; false draws a plain figure
+   */
+  @ConfigSerializable
+  record Previews(boolean enabled, boolean skins) {}
 }
