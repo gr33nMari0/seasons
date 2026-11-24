@@ -1,0 +1,53 @@
+---
+title: Rollover day
+description: The week before, the day before, the live event and the launch, step by step.
+art: firework
+audience: owners
+sidebar:
+  order: 2
+---
+import Checklist from '../../../../components/Checklist.astro'
+
+The rollover is one live event: end the season, enjoy the Intermission, launch the next one. Here's the run of show; tick steps off as you go (kept in this browser).
+
+## A week or more before
+
+<Checklist id="rollover-1">
+
+1. The group decides to end. Run `/season schedule end <time>`, at least a week out. Reminders start.
+2. Make sure the season's gallery has a cell for everyone who played (`/hof gallery info <gallery>`). Anyone without a free cell is archived without displays, and admins are alerted.
+3. Set the next spawn: `/season spawn set <candidate>` (see [Picking a spawn](/docs/guides/spawn-picking/)).
+4. Remind everyone to register their pets (`/pet add`) and take chests off pack animals.
+5. Seven days before the planned end, the decorating window opens and everyone gets a cell.
+
+</Checklist>
+
+## The day before
+
+<Checklist id="rollover-2">
+
+1. Take a full backup.
+2. Run `/season end --dry-run` and fix what it reports: too few cells, no spawn set, a gallery without an entry, no museum egg plinth for the season.
+3. Run `/season launch --dry-run` too.
+
+</Checklist>
+
+## The live event
+
+1. **Everyone online at the agreed time.** Run `/season end`. A boss bar counts down (`schedule.endCountdown`, 10 minutes by default). `/season cancel` stops it; `--now` skips it.
+2. **The end.** When the countdown runs out, every gallery locks, then everyone online is archived and wakes up in their own cell (`archive.arrival: cell`, or `hub` for the Hall spawn). Owners get 15 minutes to arrange their cell around their new figure.
+3. **The Intermission.** Tour the Hall. Awards and season firsts are announced; `/season firsts` lists them again. Nobody can leave the Hall now except holders of `seasons.hof.roam`, who can, for example, show the spawn candidates on a stream.
+4. **Launch.** Run `/season launch`, or press the gallery's launch button. Everyone, with their registered pets, arrives at the new spawn with a fanfare. The old world locks.
+
+## Afterwards
+
+<Checklist id="rollover-3">
+
+1. Check `/season status` for players and pets still pending.
+2. Put a link to the Hall at the new spawn and a link to the new spawn in the hub: `/hof link add to-hall from looked to hall` at the spawn, and `/hof link add to-s3 from looked to season 3` in the hub. See [Links](/docs/owners/links/).
+3. Record the old season's spawn for links to it: `/season spawn record 2`.
+4. Post the new area on your map and Discord.
+
+</Checklist>
+
+Anyone offline at the end is archived the moment they next log in, then sent to the new spawn.

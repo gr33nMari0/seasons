@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-// After the build: gives every page a strict content security policy (ADR 0008).
+// After the build: gives every page a strict content security policy (ADR 0008), and makes
+// scrollable code blocks focusable.
 //
 // - Inline <script> blocks Starlight keeps (search, the sidebar's scroll position) are allowed by
 //   their SHA-256 hash; nothing else inline runs.
@@ -67,6 +68,9 @@ for (const file of pages()) {
     else attrs += ` class="${cls}"`
     return `<${tag}${attrs.replace(/\s+/g, ' ').replace(/ $/, '')}>`
   })
+  // Code blocks scroll sideways on narrow screens, so keyboard users must be able to focus them to
+  // scroll (WCAG 2.1.1); Expressive Code doesn't make them focusable.
+  html = html.replace(/<pre (?![^>]*tabindex)([^>]*data-language=)/g, '<pre tabindex="0" $1')
   if (!html.includes('__CSP__')) throw new Error(`${path} has no CSP placeholder`)
   html = html.replace('__CSP__', policy(path, scripts))
   html = html.replace('</head>', '<link rel="stylesheet" href="/_astro/attrs.css"></head>')

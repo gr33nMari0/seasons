@@ -650,6 +650,9 @@
 .connect-help { font-size: 0.9rem; color: var(--text-3); margin: 0.6rem 0 0; }
 .connect-help code, .connect-side code { font-family: var(--font-mono); font-size: 0.9em; color: var(--accent-text); }
 
+.connect-remember { display: flex !important; gap: 0.5rem; align-items: center; margin-top: 0.75rem; font-weight: 500 !important; color: var(--text-2) !important; min-height: var(--touch); cursor: pointer; }
+.connect-remember input { width: 20px; height: 20px; accent-color: var(--grass); }
+
 .connect-progress { display: flex; gap: 4px; margin: 1.25rem 0 0; }
 .connect-progress b { display: block; width: 18px; height: 12px; background: var(--border-soft); }
 .connect-progress[data-step='1'] b:nth-child(-n + 3),

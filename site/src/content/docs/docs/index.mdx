@@ -1,7 +1,34 @@
 ---
 title: Seasons docs
-description: Install Seasons, run your first season, and look up every command.
-template: splash
+description: Install Seasons, run your first season, and look up every command, permission and setting.
+template: doc
+art: logo
+tableOfContents: false
+sidebar:
+  hidden: true
 ---
+import RoleCards from '../../../components/RoleCards.astro'
+import { LinkCard, CardGrid } from '@astrojs/starlight/components'
 
-Placeholder.
+Seasons runs your Minecraft server in seasons on one world that never resets. At the end of a season everyone's gear goes into a Hall of Fame, everyone starts again at a fresh spawn, and the old world stays locked until the group votes for Homecoming. These docs cover installing it, running a season from start to finish, and every command, permission and setting.
+
+## Start here
+
+<RoleCards />
+
+## Popular pages
+
+<CardGrid>
+  <LinkCard title="Your first season" href="/docs/start/first-season/" description="A checklist from install to launch, ticked off as you go." />
+  <LinkCard title="Old-world zones" href="/docs/owners/zones/" description="Lock old land until Homecoming, without wiping anything." />
+  <LinkCard title="Anchors" href="/docs/owners/anchors/" description="Where figures, chests, plaques, trophies, entries and gates go in a cell." />
+  <LinkCard title="Links" href="/docs/owners/links/" description="Buttons, signs, plates and doorways that take players anywhere." />
+  <LinkCard title="Commands" href="/docs/reference/commands/" description="Every command, filterable, with who can run it." />
+  <LinkCard title="Troubleshooting" href="/docs/guides/troubleshooting/" description="What you see, why, and what to do about it." />
+</CardGrid>
+
+## Getting help
+
+- Search these docs with the box at the top, or press <kbd>/</kbd>.
+- In game, `/season help` and `/hof help` list every command you may run, with each argument explained. Tab completion fills in the rest.
+- Found a bug? [Report it on GitHub](https://github.com/gr33nMari0/seasons/issues). Found a dupe or an exploit? Never post it in public: see the [security policy](https://github.com/gr33nMari0/seasons/blob/main/SECURITY.md).

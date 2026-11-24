@@ -1,0 +1,53 @@
+---
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// A list of steps you can tick off: the ticks are kept in this browser only (localStorage, by the
+// list's id), so you can come back to where you were. Without storage it still works for the visit.
+interface Props { id: string }
+const { id } = Astro.props
+---
+<div class="checklist not-content" data-checklist={id}>
+  <p class="checklist-progress"><span data-checklist-count>0</span> of <span data-checklist-total>0</span> done <button type="button" class="checklist-reset" data-checklist-reset>Start over</button></p>
+  <div class="checklist-bar" aria-hidden="true"><b data-checklist-bar></b></div>
+  <slot />
+</div>
+
+<script>
+  for (const list of document.querySelectorAll<HTMLElement>('[data-checklist]')) {
+    const key = `seasons-checklist-${list.dataset.checklist}`
+    const steps = [...list.querySelectorAll<HTMLElement>('ol > li')]
+    let done: number[] = []
+    try { done = JSON.parse(localStorage.getItem(key) ?? '[]') } catch {}
+    const count = list.querySelector('[data-checklist-count]')!
+    const bar = list.querySelector<HTMLElement>('[data-checklist-bar]')!
+    list.querySelector('[data-checklist-total]')!.textContent = String(steps.length)
+
+    const save = () => {
+      try { localStorage.setItem(key, JSON.stringify(done)) } catch {}
+      count.textContent = String(done.length)
+      bar.dataset.done = String(Math.round((done.length / Math.max(steps.length, 1)) * 10))
+    }
+
+    steps.forEach((step, i) => {
+      const box = document.createElement('input')
+      box.type = 'checkbox'
+      box.className = 'checklist-box'
+      box.checked = done.includes(i)
+      const title = step.querySelector('strong')?.textContent ?? (step.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 60)
+      box.setAttribute('aria-label', `Done: ${title}`)
+      step.prepend(box)
+      step.classList.toggle('is-done', box.checked)
+      box.addEventListener('change', () => {
+        done = box.checked ? [...new Set([...done, i])] : done.filter((d) => d !== i)
+        step.classList.toggle('is-done', box.checked)
+        save()
+      })
+    })
+    list.querySelector('[data-checklist-reset]')!.addEventListener('click', () => {
+      done = []
+      for (const b of list.querySelectorAll<HTMLInputElement>('.checklist-box')) b.checked = false
+      for (const s of steps) s.classList.remove('is-done')
+      save()
+    })
+    save()
+  }
+</script>

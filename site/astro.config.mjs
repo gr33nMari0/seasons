@@ -44,7 +44,7 @@ export default defineConfig({
         { label: 'Reference', items: [{ autogenerate: { directory: 'docs/reference' } }, { label: 'Configuration', link: '/docs/reference/config/' }] },
         { label: 'FAQ', link: '/docs/faq/' }
       ],
-      plugins: [starlightLinksValidator({ errorOnLocalLinks: false, exclude: ['/', '/download/', '/connect/', '/changelog/', '/connect/**'] })]
+      plugins: [starlightLinksValidator({ errorOnLocalLinks: false, exclude: ['/', '/download/', '/connect/', '/changelog/', '/connect/**', '/docs/reference/config/', '/docs/reference/config/#*'] })]
     })
   ]
 })
