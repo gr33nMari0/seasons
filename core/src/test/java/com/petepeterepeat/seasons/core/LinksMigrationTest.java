@@ -203,6 +203,26 @@ class LinksMigrationTest {
   }
 
   @Test
+  void theCheckReportsLinksLeadingNowhereAndChangedOldLinks() throws IOException {
+    start(null);
+    TestSource made = TestSource.console();
+    TestCommands.run(fake.commands.get(1), made, "/hof point add p 5 64 5");
+    TestCommands.run(fake.commands.get(1), made, "/hof link add away to point p --two-way");
+    TestCommands.run(fake.commands.get(1), made, "/hof point remove p --force");
+    Files.writeString(
+        dir.resolve("world/seasons/hall.yml"), HALL_YML.replace("season: 3", "season: 1"));
+    TestCommands.run(fake.commands.getFirst(), TestSource.console(), "/season reload");
+    TestSource check = TestSource.console();
+    TestCommands.run(fake.commands.get(1), check, "/hof hall check");
+    assertThat(check.text())
+        .contains(
+            "Link away leads nowhere yet.",
+            "Link away's partner away-back has no trigger yet.",
+            "hall.yml's links from before links.yml differ from links.yml: /hof link upgrade import"
+                + " --replace takes them, /hof link upgrade forget-old drops them.");
+  }
+
+  @Test
   void linksYmlReadsBackAsWritten() throws Exception {
     HallLayout.Link full =
         new HallLayout.Link(
