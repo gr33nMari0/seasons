@@ -16,7 +16,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M6 Public release | Done (#29), released as 1.0.0 (#30) | A43, `m6-metrics-off`; the full suite; see M6, below |
 | Post-M6 Server log | Done (#33), released as 1.1.0 | `log-startup`, `log-milestones`; A43 widened; see Post-M6, below |
 | M7 Seasons Web | Done: part 1 (web server and API, #36), part 2 (dashboard, second screen, connect page, #37), released as 1.2.0 | A48, A49; `m7-*`; see M7 part 1 and part 2, below |
-| M8 Reliable links | Built on `m8-reliable-links` | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
+| M8 Reliable links | Done (#40), released as 1.3.0 | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -499,7 +499,7 @@ The public site's address is `seasonsmc.petepeterepeat.com` (`site/public/CNAME`
 
 ## M8: reliable links
 
-**Links from anywhere to anywhere, the wand anywhere, anchors and boxes edited in place** (branch `m8-reliable-links`; plan in `docs/plans/m8-reliable-links.md`; readings in `docs/questions.md` 317 to 333; ADR 0003's M8 amendment). Each scenario was written before its code and failed first.
+**Links from anywhere to anywhere, the wand anywhere, anchors and boxes edited in place** (branch `m8-reliable-links`, #40; plan in `docs/plans/m8-reliable-links.md`; readings in `docs/questions.md` 317 to 334; ADR 0003's M8 amendment). Each scenario was written before its code and failed first.
 
 Passing end to end on Paper 26.3:
 
