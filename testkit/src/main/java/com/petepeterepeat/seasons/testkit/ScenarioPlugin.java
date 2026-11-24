@@ -138,6 +138,14 @@ public final class ScenarioPlugin extends JavaPlugin implements Listener {
         getSLF4JLogger().error("Can't record the fresh boot", e);
         failures.add("Can't record the fresh boot: " + e);
       }
+    } else if (resettable != null) {
+      try {
+        resettable.afterRestart();
+      } catch (RuntimeException e) {
+        getSLF4JLogger()
+            .error("Can't copy the chunks loaded before the restart's first scenario", e);
+        failures.add("Can't copy the chunks loaded at the restart: " + e);
+      }
     }
     checkSeasonsEnabled(failures);
     writeItemSamples(failures);
