@@ -4,6 +4,13 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-28
+
+### Fixed
+
+- The public docs publish reliably at each release again. The Pages workflow uses the current Pages actions, after 1.4.1's first publish failed to find the site it had just uploaded.
+- A wand-zone acceptance scenario no longer fails at random on a freshly wiped server.
+
 ## [1.4.1] - 2026-11-28
 
 ### Added
