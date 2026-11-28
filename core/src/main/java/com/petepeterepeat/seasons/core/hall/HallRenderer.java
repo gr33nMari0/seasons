@@ -31,9 +31,6 @@ import java.util.concurrent.Executor;
  * spike.
  */
 public final class HallRenderer implements DisplayRenderer {
-  /** How high above the plaque anchor's block its text floats. */
-  private static final double PLAQUE_HEIGHT = 1.2;
-
   /** The drawing a tick may take, so a rollover draws a few cells a tick (A43). */
   static final long DRAW_BUDGET_NANOS = 2_000_000;
 
@@ -73,7 +70,7 @@ public final class HallRenderer implements DisplayRenderer {
               if (found.isEmpty()) {
                 return CompletableFuture.completedFuture(null);
               }
-              Optional<HallService.CellRef> ref = hall.ensureCell(player, season);
+              Optional<HallService.CellRef> ref = hall.ensureArchivedCell(player, season);
               if (ref.isEmpty() || ref.get().cell().bounds().isEmpty()) {
                 return CompletableFuture.completedFuture(null);
               }
@@ -194,9 +191,19 @@ public final class HallRenderer implements DisplayRenderer {
 
     Position at();
 
-    record Text(Position at, Message text, String tag, double scale) implements Planned {
+    /**
+     * A text display.
+     *
+     * @param fixed whether it keeps {@code at}'s yaw rather than turning to the viewer (1.4.1)
+     */
+    record Text(Position at, Message text, String tag, double scale, boolean fixed)
+        implements Planned {
       public Text(Position at, Message text, String tag) {
-        this(at, text, tag, 1.0);
+        this(at, text, tag, 1.0, false);
+      }
+
+      public Text(Position at, Message text, String tag, double scale) {
+        this(at, text, tag, scale, false);
       }
     }
 
@@ -283,13 +290,8 @@ public final class HallRenderer implements DisplayRenderer {
     }
     ref.cell()
         .anchor(AnchorType.PLAQUE)
-        .ifPresent(anchor ->
-            planned.add(
-                new Planned.Text(
-                    above(anchor.at(), PLAQUE_HEIGHT),
-                    plaque(messages, archive, won),
-                    new DisplayTag(gallery, cell, season, DisplayTag.PLAQUE).toString(),
-                    ref.gallery().plaqueScale(anchor))));
+        .ifPresent(
+            anchor -> planned.add(plaqueText(ref, anchor, plaque(messages, archive, won), season)));
     if (archive.imported().isPresent()) {
       List<ImportedCell.Frame> frames = new ArrayList<>(archive.imported().get().frames());
       for (Anchor trophy : ref.cell().anchors(AnchorType.TROPHY)) {
@@ -308,12 +310,36 @@ public final class HallRenderer implements DisplayRenderer {
     return planned;
   }
 
+  /**
+   * A cell's plaque, placed so it doesn't clip into blocks (1.4.1, H4). How it fitted is kept for
+   * {@code /hof hall check}, and a facing guessed for an anchor without one is written to the
+   * gallery file, once.
+   */
+  private Planned.Text plaqueText(
+      HallService.CellRef ref, Anchor anchor, Message text, int season) {
+    String tag =
+        new DisplayTag(ref.gallery().id(), ref.cell().id(), season, DisplayTag.PLAQUE).toString();
+    PlaqueFit.Placed placed =
+        PlaqueFit.place(
+            anchor.at(),
+            anchor.facing(),
+            ref.cell().bounds(),
+            text,
+            ref.gallery().plaqueScale(anchor),
+            at -> platform.world().block(at).solid());
+    hall.plaqueFitted(ref.key(), placed.fit());
+    placed.guessed().ifPresent(facing -> hall.keepGuessedFacing(ref, anchor, facing));
+    return new Planned.Text(placed.at(), text, tag, placed.fit().shown(), placed.fixed());
+  }
+
   /** Spawns one planned display. */
   UUID spawn(Planned planned) {
     return switch (planned) {
       case Planned.Shape shape -> platform.displays().spawnFigure(shape.figure());
       case Planned.Text text ->
-          platform.displays().spawnText(text.at(), text.text(), text.tag(), text.scale());
+          platform
+              .displays()
+              .spawnText(text.at(), text.text(), text.tag(), text.scale(), text.fixed());
       case Planned.Item item -> platform.displays().spawnItem(item.at(), item.item(), item.tag());
     };
   }

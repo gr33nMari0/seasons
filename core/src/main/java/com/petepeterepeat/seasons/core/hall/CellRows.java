@@ -348,20 +348,31 @@ public final class CellRows {
     double y = to.minY() + (at.y() - from.minY());
     double z = to.minZ() + (at.z() - from.minZ());
     float yaw = at.yaw();
+    Optional<PlaqueFit.Facing> facing = anchor.facing();
     if (reflectedAcross.isPresent()) {
       if (reflectedAcross.get().endsWith("x")) {
         x = to.maxX() - (at.blockX() - from.minX()) + (at.x() - at.blockX());
         yaw = Wand.facing(-yaw);
+        facing = facing.map(f -> mirrored(f, PlaqueFit.Facing.WEST, PlaqueFit.Facing.EAST));
       } else {
         z = to.maxZ() - (at.blockZ() - from.minZ()) + (at.z() - at.blockZ());
         yaw = Wand.facing(180f - yaw);
+        facing = facing.map(f -> mirrored(f, PlaqueFit.Facing.NORTH, PlaqueFit.Facing.SOUTH));
       }
     }
     return new Anchor(
         anchor.type(),
         new Position(at.dimension(), x, y, z, yaw, at.pitch()),
         anchor.page(),
-        anchor.egg());
+        anchor.egg(),
+        Optional.empty(),
+        anchor.scale(),
+        facing);
+  }
+
+  private static PlaqueFit.Facing mirrored(
+      PlaqueFit.Facing facing, PlaqueFit.Facing one, PlaqueFit.Facing other) {
+    return facing == one ? other : facing == other ? one : facing;
   }
 
   /** The direction along a gallery's longer axis that points away from the hub. */

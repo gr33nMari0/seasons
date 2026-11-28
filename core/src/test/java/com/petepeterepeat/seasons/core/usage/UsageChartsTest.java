@@ -59,7 +59,8 @@ class UsageChartsTest {
             cells.containers(),
             cells.gateBlock(),
             cells.gates(),
-            cells.moveOut());
+            cells.moveOut(),
+            cells.protectShell());
     return new SeasonsConfig(
         config.schedule(),
         config.launch(),

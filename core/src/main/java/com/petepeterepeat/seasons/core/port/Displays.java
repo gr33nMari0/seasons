@@ -21,6 +21,14 @@ public interface Displays {
     return spawnText(position, text, tag);
   }
 
+  /**
+   * Spawns a text display at a size; with {@code fixed}, it keeps the position's yaw rather than
+   * turning to the viewer, as a plaque on a wall does (1.4.1, questions 344).
+   */
+  default UUID spawnText(Position position, Message text, String tag, double scale, boolean fixed) {
+    return spawnText(position, text, tag, scale);
+  }
+
   /** Sets a text display's size; false if there is no such display. */
   default boolean scaleText(UUID display, double scale) {
     return false;

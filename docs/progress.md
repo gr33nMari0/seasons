@@ -562,3 +562,26 @@ Within M0 to M3 nothing is on hold: what was left is built (Finishing M0 to M3, 
 | `m9-dashboard` | 5 to 7: the dashboard's look, help, previews and layouts | `WebTest` (preview tags, pictures, hidden players, short links), `WebConfigTest`, `layout.test.mjs`, `help.test.mjs`, `page.test.mjs`; `m9-dashboard` (login page, Help, theme, layout editing, a shared layout's unavailable widget) and every `m7-*` scenario |
 
 The public site is published at each release tag (`pages.yml`), so the docs describe the version people can download.
+
+## 1.4.1: Hall fixes
+
+**Cells that take in their walls, late returners' cells and plaque text that clipped into walls** (the parts of `docs/plans/m11-setup-and-hall.md` marked 1.4.1: H1, H2's diagnosis and fix, H4; readings in `docs/questions.md` 339 to 346). Branch `hall-fixes-patch`.
+
+Passing end to end on Paper 26.3:
+
+| Scenario | Test |
+| --- | --- |
+| A96 Two cells selected from the outside: the bounds warning, `/hof hall check`, an owner decorating refused on the walls, floor and roof but breaking what they placed, `/hof cell shrink` previewed and confirmed, again with nothing to do, `/hof undo`, then `/hof gallery shrink` for both | `a96-cell-walls.mjs`; unit: `CellWallsTest` |
+| A97 Two players from before `/season init`, away until the season ended: one back in the Intermission and one after launch each get a free cell and a figure there; a figure anchor moved redraws the figure at once | `a97-late-returners.mjs`; unit: `LateReturnersTest` |
+| A98 A plaque on a wall block in front of its north face, fixed, full size; one in a three-block nook shrunk to fit, listed by `/hof hall check`; one with no facing given north from its open side and listed so; one on the floor floating and turning as before | `a98-plaque-fit.mjs`; unit: `PlaqueFitTest` |
+| A71 widened: a new gallery plaque size draws the plaques again | `a71-plaque-scale.mjs` |
+
+Built: `CellWalls` (wall faces, the walls kept per decorating window), `CellShrink` (`/hof cell shrink`, `/hof gallery shrink`), `cells.protectShell` in `HallRules`, `HallService.ensureArchivedCell` and the redraw on a changed cell (`bindRedraw`), `PlaqueFit` (placement, fitting and the guessed facing), the anchor's `facing` in gallery files, `/hof cell plaque <cell> facing`, fixed text displays (`Displays#spawnText(…, fixed)`).
+
+**H2's cause.** A player Seasons had no record for, who had played before `/season init`, was archived into the init season at their next login, but earning a cell asked for play time Seasons had seen in that season, which was none, so no cell was handed out and no figure drawn. At TheRanch that was everyone who hadn't logged in between installing Seasons in Season 2 and the rollover. Players with a record who were merely offline at the end were never affected.
+
+Different from the plan:
+
+- The wall warning needs two faces or more (questions 341): bounds that take in only their floor are common and not warned about, though `cells.protectShell` still keeps the owner off that floor.
+- Shell protection only refuses breaking; placing and using are as before (342).
+- Placeholder figures, `/hof why` and the cell CRUD stay for 1.6 as planned; museum plinth plaques keep their old placement (344).

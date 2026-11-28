@@ -59,6 +59,7 @@ Hall of Fame cells: who gets one, and how visitors get in.
 | `cells.gateBlock` | `iron_bars` | With access: gate, what a cell's gate plane is while it is shut; air while it is open. |
 | `cells.gates` | `open` | open: a gate is open unless an admin (/hof cell gate, /hof gallery gate) or its owner (/hof gate) shut it. auto: shut whenever its cell is locked, open while its owner decorates. One of `open`, `auto`. |
 | `cells.moveOut` | `false` | false: nobody is ever moved out of a cell; a shutting gate waits until the cell is empty, and a bounds cell only refuses entry at its edge. true: they are moved to the gallery's entry. |
+| `cells.protectShell` | `true` | true: where a cell's bounds take in its walls, floor or roof (selected from outside rather than inside), its owner can't break them while decorating; only builders can. |
 
 ### `decorating`
 

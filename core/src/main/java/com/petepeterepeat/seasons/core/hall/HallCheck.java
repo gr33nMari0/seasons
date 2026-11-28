@@ -64,6 +64,36 @@ public final class HallCheck {
       Predicate<Position> floor,
       IntFunction<Optional<Position>> seasonSpawn,
       Messages messages) {
+    return run(
+        hall,
+        galleries,
+        air,
+        blockType,
+        gateBlock,
+        floor,
+        seasonSpawn,
+        b -> List.of(),
+        cell -> Optional.empty(),
+        messages);
+  }
+
+  /**
+   * Checks a Hall, with what the world holds and what the last drawing found.
+   *
+   * @param walls the faces of a box that are walls (1.4.1, H1)
+   * @param plaques how a cell's plaque fitted when last drawn, by cell key (1.4.1, H4)
+   */
+  public static Report run(
+      HallLayout hall,
+      Collection<Gallery> galleries,
+      Predicate<Position> air,
+      java.util.function.Function<Position, String> blockType,
+      String gateBlock,
+      Predicate<Position> floor,
+      IntFunction<Optional<Position>> seasonSpawn,
+      java.util.function.Function<Bounds, List<CellWalls.Face>> walls,
+      java.util.function.Function<String, Optional<PlaqueFit.Fit>> plaques,
+      Messages messages) {
     List<Message> found = new ArrayList<>();
     List<Gallery> sorted = galleries.stream().sorted(Comparator.comparing(Gallery::id)).toList();
     if (hall.hub().isEmpty()) {
@@ -136,6 +166,30 @@ public final class HallCheck {
             }
           }
         }
+        if (cell.bounds().isPresent()) {
+          List<CellWalls.Face> faces = walls.apply(cell.bounds().get());
+          if (faces.size() >= CellWalls.LOOKS_WALLED) {
+            found.add(
+                messages.get("hof.check.walls", "cell", key, "faces", CellWalls.names(faces)));
+          }
+        }
+        plaques
+            .apply(key)
+            .ifPresent(fit -> {
+              if (!fit.fits()) {
+                found.add(messages.get("hof.check.plaque-no-room", "cell", key));
+              } else if (fit.shown() < fit.asked()) {
+                found.add(
+                    messages.get(
+                        "hof.check.plaque-shrunk",
+                        "cell",
+                        key,
+                        "size",
+                        PlaqueFit.text(fit.shown()),
+                        "asked",
+                        PlaqueFit.text(fit.asked())));
+              }
+            });
         cell.anchor(AnchorType.ENTRY)
             .flatMap(Anchor::area)
             .filter(area -> area.blocks().stream().noneMatch(floor))

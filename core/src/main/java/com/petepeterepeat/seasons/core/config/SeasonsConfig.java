@@ -130,7 +130,10 @@ public record SeasonsConfig(
           GateMode gates,
       @Comment(
               "false: nobody is ever moved out of a cell; a shutting gate waits until the cell is empty, and a bounds cell only refuses entry at its edge. true: they are moved to the gallery's entry.")
-          boolean moveOut) {
+          boolean moveOut,
+      @Comment(
+              "true: where a cell's bounds take in its walls, floor or roof (selected from outside rather than inside), its owner can't break them while decorating; only builders can.")
+          boolean protectShell) {
     public Cells {
       containers = List.copyOf(containers);
     }

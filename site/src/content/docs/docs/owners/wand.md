@@ -19,7 +19,7 @@ Commands that take a box use the selection when you give none: `/hof hall hub`, 
 
 ## 2. Place anchors and make links
 
-**Right-click** a block for its menu. In a cell: an anchor type (figure, archive, plaque, trophy, entry, gate; in a museum, an egg plinth). Anywhere, in any world: **Make a link**, or set the block aside for the next `/hof link add`. In the Hall it also sets the Hall spawn, exits and a gallery's entry from the block or the selection. See [Anchors](/docs/owners/anchors/) and [Links](/docs/owners/links/).
+**Right-click** a block for its menu. In a cell: an anchor type (figure, archive, plaque, trophy, entry, gate; in a museum, an egg plinth). Anywhere, in any world: **Make a link**, or set the block aside for the next `/hof link add`. In the Hall it also sets the Hall spawn, exits and a gallery's entry from the block or the selection. A plaque faces the side of the block you clicked. Setting a cell's bounds with the wand warns you when they look like they take in the cell's walls (see [Select the inside of a cell](/docs/owners/the-hall/#select-the-inside-of-a-cell-not-its-walls)). See [Anchors](/docs/owners/anchors/) and [Links](/docs/owners/links/).
 
 ## 3. See everything
 
