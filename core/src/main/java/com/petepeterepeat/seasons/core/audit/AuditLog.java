@@ -179,18 +179,24 @@ public final class AuditLog {
       int start = Math.max(0, found.size() - count);
       List<Entry> page = List.copyOf(found.subList(start, found.size()));
       Optional<Cursor> next = Optional.empty();
-      boolean olderMonths = Files.exists(directory)
-          && hasOlderFiles(MONTH.format(monthBefore));
+      boolean olderMonths = Files.exists(directory) && hasOlderFiles(MONTH.format(monthBefore));
       if (!page.isEmpty() && (start > 0 || olderMonths)) {
         Instant oldest = page.getFirst().time();
         int shownAt = (int) page.stream().filter(e -> e.time().equals(oldest)).count();
         // Entries at that instant that an earlier page showed are still left out.
-        int already =
-            before.filter(c -> c.time().equals(oldest)).map(Cursor::shown).orElse(0);
+        int already = before.filter(c -> c.time().equals(oldest)).map(Cursor::shown).orElse(0);
         next = Optional.of(new Cursor(oldest, shownAt + already));
       } else if (page.isEmpty() && olderMonths) {
-        next = Optional.of(new Cursor(monthBefore.atZone(ZoneOffset.UTC)
-            .withDayOfMonth(1).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant(), 0));
+        next =
+            Optional.of(
+                new Cursor(
+                    monthBefore
+                        .atZone(ZoneOffset.UTC)
+                        .withDayOfMonth(1)
+                        .toLocalDate()
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant(),
+                    0));
       }
       return new Page(page, next);
     });

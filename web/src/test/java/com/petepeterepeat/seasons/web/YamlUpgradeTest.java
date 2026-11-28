@@ -75,8 +75,9 @@ class YamlUpgradeTest {
   void aDeeperIndentIsFollowed() throws Exception {
     String text = "schema-version: 1\nproxy:\n    trusted: []\n";
     YamlUpgrade.Result r = YamlUpgrade.add(text, bundled(), List.of("proxy.client-ip-header"));
-    assertThat(r.text()).isEqualTo(
-        "schema-version: 1\nproxy:\n    trusted: []\n    client-ip-header: CF-Connecting-IP\n");
+    assertThat(r.text())
+        .isEqualTo(
+            "schema-version: 1\nproxy:\n    trusted: []\n    client-ip-header: CF-Connecting-IP\n");
   }
 
   @Test

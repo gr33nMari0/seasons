@@ -60,8 +60,7 @@ final class SettingsFile {
     if (!Files.exists(file)) {
       return java.util.List.of();
     }
-    ConfigurationNode written =
-        YamlConfigurationLoader.builder().path(file).build().load();
+    ConfigurationNode written = YamlConfigurationLoader.builder().path(file).build().load();
     return SettingsAudit.missing(written, bundledNode(name));
   }
 
@@ -105,10 +104,12 @@ final class SettingsFile {
     return out;
   }
 
-  private static void flatten(ConfigurationNode node, String prefix, java.util.Map<String, String> out) {
+  private static void flatten(
+      ConfigurationNode node, String prefix, java.util.Map<String, String> out) {
     if (node.isMap()) {
-      node.childrenMap().forEach((k, child) ->
-          flatten(child, prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, out));
+      node.childrenMap()
+          .forEach((k, child) ->
+              flatten(child, prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, out));
       if (node.childrenMap().isEmpty() && !prefix.isEmpty()) {
         out.put(prefix, "{}");
       }

@@ -128,7 +128,8 @@ final class YamlUpgrade {
   }
 
   /** Adds a key's lines at the end of its section in the admin's file, indented as it is. */
-  private static Optional<String> insertNested(List<String> lines, List<String> path, List<String> block) {
+  private static Optional<String> insertNested(
+      List<String> lines, List<String> path, List<String> block) {
     int from = 0;
     int to = lines.size();
     int indent = 0;
@@ -148,10 +149,14 @@ final class YamlUpgrade {
       to = end;
       indent = childIndent(lines, from, to).orElse(indent + 2);
     }
-    int bundledIndent = block.stream().filter(l -> !l.isBlank()).mapToInt(YamlUpgrade::indentOf).min().orElse(0);
+    int bundledIndent =
+        block.stream().filter(l -> !l.isBlank()).mapToInt(YamlUpgrade::indentOf).min().orElse(0);
     List<String> shifted = new ArrayList<>();
     for (String line : block) {
-      shifted.add(line.isBlank() ? line : " ".repeat(indent) + line.substring(Math.min(bundledIndent, indentOf(line))));
+      shifted.add(
+          line.isBlank()
+              ? line
+              : " ".repeat(indent) + line.substring(Math.min(bundledIndent, indentOf(line))));
     }
     // After the section's last line that isn't blank.
     int insertAt = to;
@@ -174,8 +179,8 @@ final class YamlUpgrade {
   }
 
   /**
-   * Where a key's own lines end: after the lines indented deeper, and blank lines between them,
-   * up to the next line at its indent or less.
+   * Where a key's own lines end: after the lines indented deeper, and blank lines between them, up
+   * to the next line at its indent or less.
    */
   private static int end(List<String> lines, int at, int indent) {
     int last = at;

@@ -116,7 +116,8 @@ public interface SeasonsApi {
 
   /**
    * A page of Seasons' audit log, filtered by kind and player, paging back with a cursor (since
-   * 1.5). Without it, the last {@link AuditQuery#count()} entries as {@link #audit(int)} reads them.
+   * 1.5). Without it, the last {@link AuditQuery#count()} entries as {@link #audit(int)} reads
+   * them.
    */
   default CompletableFuture<AuditPage> audit(AuditQuery query) {
     return audit(query.count()).thenApply(entries -> new AuditPage(entries, Optional.empty()));

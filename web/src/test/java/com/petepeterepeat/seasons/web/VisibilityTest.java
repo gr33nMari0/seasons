@@ -34,12 +34,13 @@ class VisibilityTest {
   void eachAdminWidgetNeedsItsOwnPart() {
     Visibility v = new Visibility(Map.of("leaderboards", "admins"), true, new ArrayList<>());
     Viewer auditor =
-        new Viewer.Player(
-            UUID.randomUUID(), "Sam", Grants.of(List.of(Grants.Grant.AUDIT)), "ghi");
+        new Viewer.Player(UUID.randomUUID(), "Sam", Grants.of(List.of(Grants.Grant.AUDIT)), "ghi");
     assertThat(v.allows("audit-log", auditor)).isTrue();
     assertThat(v.allows("server-health", auditor)).isFalse();
     assertThat(v.allows("pending-players", auditor)).isFalse();
-    assertThat(v.allows("leaderboards", auditor)).as("admins-only, with no part of its own").isTrue();
+    assertThat(v.allows("leaderboards", auditor))
+        .as("admins-only, with no part of its own")
+        .isTrue();
     assertThat(v.allows("leaderboards", player)).isFalse();
     assertThat(v.allows("pending-players", admin)).as("seasons.web.admin: every part").isTrue();
   }

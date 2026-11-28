@@ -168,7 +168,11 @@ class SessionStoreTest {
     SessionStore sessions = store(writer);
     SessionStore.Created ipad =
         sessions.create(
-            alex, "Alex", "Safari on iPad", Grants.of(List.of(Grants.Grant.AUDIT)), Duration.ofDays(1));
+            alex,
+            "Alex",
+            "Safari on iPad",
+            Grants.of(List.of(Grants.Grant.AUDIT)),
+            Duration.ofDays(1));
     writer.flush();
     String file = Files.readString(dir.resolve("sessions.json"));
     assertThat(file).contains("\"admin\":true").contains("\"grants\":[\"audit\"]");
@@ -181,8 +185,7 @@ class SessionStoreTest {
     // As 1.4 wrote it: an admin flag and no grants.
     writer.flush();
     Files.writeString(
-        dir.resolve("sessions.json"),
-        file.replaceAll(",\"grants\":\\[[^\\]]*\\]", ""));
+        dir.resolve("sessions.json"), file.replaceAll(",\"grants\":\\[[^\\]]*\\]", ""));
     SessionStore old = store(writer);
     old.load();
     assertThat(old.find(ipad.token())).map(SessionStore.Session::grants).contains(Grants.ALL);

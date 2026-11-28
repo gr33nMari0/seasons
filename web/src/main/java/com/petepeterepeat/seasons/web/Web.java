@@ -165,7 +165,11 @@ final class Web implements AutoCloseable {
    * @param kept whether the dashboard kept running as it was, rather than staying off
    */
   record Reloaded(
-      String state, List<String> changed, List<String> problems, List<String> warnings, boolean kept) {
+      String state,
+      List<String> changed,
+      List<String> problems,
+      List<String> warnings,
+      boolean kept) {
     Reloaded {
       changed = List.copyOf(changed);
       problems = List.copyOf(problems);
@@ -213,14 +217,20 @@ final class Web implements AutoCloseable {
       appliedMessages = messagesBefore;
       String reason = state.substring("off (".length(), state.length() - 1);
       String again = restoreFrom(before);
-      return new Reloaded(again, List.of(), List.of(reason), result.warnings(), again.startsWith("listening"));
+      return new Reloaded(
+          again, List.of(), List.of(reason), result.warnings(), again.startsWith("listening"));
     }
     return new Reloaded(state, changed, List.of(), result.warnings(), false);
   }
 
   private Reloaded notApplied(List<String> problems, List<String> warnings) {
     log.warn("web.yml isn't applied: {}", String.join("; ", problems));
-    return new Reloaded(serving() ? "listening on " + config.where() : "off", List.of(), problems, warnings, serving());
+    return new Reloaded(
+        serving() ? "listening on " + config.where() : "off",
+        List.of(),
+        problems,
+        warnings,
+        serving());
   }
 
   /** Listens again as last applied, after a reload that couldn't. */

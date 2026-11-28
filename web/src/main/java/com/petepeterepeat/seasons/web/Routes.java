@@ -273,7 +273,9 @@ final class Routes {
       who.addProperty("name", p.name());
       who.addProperty("admin", p.admin());
       JsonArray grants = new JsonArray();
-      p.grants().held().stream().sorted().forEach(g -> grants.add(g.name().toLowerCase(java.util.Locale.ROOT)));
+      p.grants().held().stream()
+          .sorted()
+          .forEach(g -> grants.add(g.name().toLowerCase(java.util.Locale.ROOT)));
       who.add("grants", grants);
     } else {
       who.addProperty("kind", "anonymous");

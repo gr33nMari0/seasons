@@ -76,7 +76,8 @@ final class DiscoveryLookups
             new WebCheck.Fetched(answer.statusCode(), answer.body(), Optional.<String>empty()))
         .exceptionally(e -> {
           Throwable cause = e.getCause() == null ? e : e.getCause();
-          String why = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+          String why =
+              cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
           return new WebCheck.Fetched(0, "", Optional.of(why));
         });
   }

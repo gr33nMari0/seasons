@@ -518,17 +518,14 @@ class WebTest {
 
   private void writeWebYml(String body) throws Exception {
     Files.writeString(
-        dir.resolve("plugin/web.yml"),
-        "enabled: true\nbind: 127.0.0.1:" + port + "\n" + body);
+        dir.resolve("plugin/web.yml"), "enabled: true\nbind: 127.0.0.1:" + port + "\n" + body);
   }
 
   @Test
   void reloadAppliesWhatChecksOutAndKeepsRunningOtherwise() throws Exception {
     WebCommands commands = new WebCommands(web, Optional::empty, clock);
     writeWebYml("name: Example SMP\n");
-    assertThat(commands.reload())
-        .extracting(Line::key)
-        .startsWith("reload.done", "reload.changed");
+    assertThat(commands.reload()).extracting(Line::key).startsWith("reload.done", "reload.changed");
     assertThat(commands.reload().get(1).values()).isEmpty();
     assertThat(commands.reload()).extracting(Line::key).contains("reload.unchanged");
     Files.writeString(dir.resolve("plugin/web.yml"), "enabled: true\nbind: nowhere\n");
@@ -558,7 +555,12 @@ class WebTest {
             URI asked = URI.create(url);
             HttpRequest request =
                 HttpRequest.newBuilder(
-                        URI.create("http://127.0.0.1:" + port + asked.getRawPath() + "?" + asked.getRawQuery()))
+                        URI.create(
+                            "http://127.0.0.1:"
+                                + port
+                                + asked.getRawPath()
+                                + "?"
+                                + asked.getRawQuery()))
                     .header("CF-Connecting-IP", "198.51.100.7")
                     .build();
             return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -576,14 +578,21 @@ class WebTest {
         commands
             .check(
                 net,
-                name -> CompletableFuture.completedFuture(
-                    List.of("v=seasons1; url=https://seasons.example.com")),
-                origin -> CompletableFuture.completedFuture(Optional.of(List.of("play.example.com"))))
+                name ->
+                    CompletableFuture.completedFuture(
+                        List.of("v=seasons1; url=https://seasons.example.com")),
+                origin ->
+                    CompletableFuture.completedFuture(Optional.of(List.of("play.example.com"))))
             .get(20, java.util.concurrent.TimeUnit.SECONDS);
     Messages m = web.messages();
     List<String> text =
         lines.stream()
-            .map(l -> l.key() + " " + l.values().getOrDefault("area", "") + ": " + l.values().getOrDefault("text", ""))
+            .map(l ->
+                l.key()
+                    + " "
+                    + l.values().getOrDefault("area", "")
+                    + ": "
+                    + l.values().getOrDefault("text", ""))
             .toList();
     assertThat(text)
         .contains(

@@ -29,7 +29,9 @@ final class SettingsAudit {
 
   private SettingsAudit() {}
 
-  /** The dotted paths of the bundled settings the file lacks: a whole section once, not its keys. */
+  /**
+   * The dotted paths of the bundled settings the file lacks: a whole section once, not its keys.
+   */
   static List<String> missing(ConfigurationNode written, ConfigurationNode bundled) {
     List<String> out = new ArrayList<>();
     missing(written, bundled, "", out);

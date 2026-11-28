@@ -91,7 +91,13 @@ final class WebCommands {
     r.warnings().forEach(w -> lines.add(Line.of("reload.warning", "warning", w)));
     int missing = web.missingSettings();
     if (missing > 0) {
-      lines.add(Line.of("reload.missing", "count", Integer.toString(missing), "settings", missing == 1 ? "setting" : "settings"));
+      lines.add(
+          Line.of(
+              "reload.missing",
+              "count",
+              Integer.toString(missing),
+              "settings",
+              missing == 1 ? "setting" : "settings"));
     }
     return lines;
   }
@@ -107,8 +113,18 @@ final class WebCommands {
       settings = SettingsFile.load(web.folder());
     } catch (java.io.IOException e) {
       return CompletableFuture.completedFuture(
-          List.of(Line.of("check.header"), Line.of("check.fail", "area", web.messages().text("check.area.settings"),
-              "text", web.messages().text("check.text.settings.unreadable", "why", String.valueOf(e.getMessage())))));
+          List.of(
+              Line.of("check.header"),
+              Line.of(
+                  "check.fail",
+                  "area",
+                  web.messages().text("check.area.settings"),
+                  "text",
+                  web.messages()
+                      .text(
+                          "check.text.settings.unreadable",
+                          "why",
+                          String.valueOf(e.getMessage())))));
     }
     WebCheck.State state =
         new WebCheck.State(
@@ -145,7 +161,14 @@ final class WebCommands {
     String word = missing.size() == 1 ? "setting" : "settings";
     if (dryRun) {
       return List.of(
-          Line.of("upgrade.would", "count", count, "settings", word, "list", String.join(", ", missing)),
+          Line.of(
+              "upgrade.would",
+              "count",
+              count,
+              "settings",
+              word,
+              "list",
+              String.join(", ", missing)),
           Line.of("upgrade.then"));
     }
     YamlUpgrade.Result r =

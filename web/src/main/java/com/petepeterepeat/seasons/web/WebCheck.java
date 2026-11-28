@@ -15,8 +15,8 @@ import org.spongepowered.configurate.yaml.YamlConfigurationLoader;
 /**
  * {@code /web check} (M10 plan, O2): web.yml checked without applying it, then how the dashboard is
  * reached, each line passed, a warning, a problem or skipped, with what to do. The network checks
- * run off the server thread with short timeouts, and only ask for what the dashboard's own
- * settings name: its public-url, its game addresses' DNS records and its map.
+ * run off the server thread with short timeouts, and only ask for what the dashboard's own settings
+ * name: its public-url, its game addresses' DNS records and its map.
  */
 final class WebCheck {
   /** How long the check waits for its own request to arrive. */
@@ -66,22 +66,30 @@ final class WebCheck {
     lines.add(Line.of("check.header"));
     settings(s, lines);
     Optional<WebConfig> config =
-        s.result() instanceof WebConfig.Ready ready ? Optional.of(ready.config()) : Optional.empty();
+        s.result() instanceof WebConfig.Ready ready
+            ? Optional.of(ready.config())
+            : Optional.empty();
     CompletableFuture<List<Line>> reach = reach(s, config, net);
     CompletableFuture<List<Line>> discovery = discovery(s, config, net, resolver, asker);
     List<Line> mapLines = map(s, config);
-    return reach.thenCombine(discovery, (a, b) -> {
-      lines.addAll(a);
-      lines.addAll(b);
-      lines.addAll(mapLines);
-      lines.add(summary(s.messages(), lines));
-      return List.copyOf(lines);
-    });
+    return reach.thenCombine(
+        discovery,
+        (a, b) -> {
+          lines.addAll(a);
+          lines.addAll(b);
+          lines.addAll(mapLines);
+          lines.add(summary(s.messages(), lines));
+          return List.copyOf(lines);
+        });
   }
 
   private static Line line(Messages m, Status status, String area, String text, String... pairs) {
     return Line.of(
-        status.key(), "area", m.text("check.area." + area), "text", m.text("check.text." + text, pairs));
+        status.key(),
+        "area",
+        m.text("check.area." + area),
+        "text",
+        m.text("check.text." + text, pairs));
   }
 
   // Settings
@@ -95,7 +103,15 @@ final class WebCheck {
       for (SettingsAudit.Unknown u : SettingsAudit.unknown(written, bundled)) {
         lines.add(
             u.meant().isPresent()
-                ? line(m, Status.WARN, "settings", "settings.unknown", "path", u.path(), "meant", u.meant().get())
+                ? line(
+                    m,
+                    Status.WARN,
+                    "settings",
+                    "settings.unknown",
+                    "path",
+                    u.path(),
+                    "meant",
+                    u.meant().get())
                 : line(m, Status.WARN, "settings", "settings.unknown-plain", "path", u.path()));
       }
       int missing = SettingsAudit.missing(written, bundled).size();
@@ -115,7 +131,9 @@ final class WebCheck {
         lines.add(line(m, Status.WARN, "settings", "settings.placeholder", "path", path));
       }
     } catch (ConfigurateException e) {
-      lines.add(line(m, Status.FAIL, "settings", "settings.unreadable", "why", firstLine(e.getMessage())));
+      lines.add(
+          line(
+              m, Status.FAIL, "settings", "settings.unreadable", "why", firstLine(e.getMessage())));
       return;
     }
     for (String w : s.result().warnings()) {
@@ -123,7 +141,13 @@ final class WebCheck {
     }
     if (s.result() instanceof WebConfig.Off off) {
       lines.add(
-          line(m, s.settings().enabled() ? Status.FAIL : Status.WARN, "settings", "settings.off", "why", off.reason()));
+          line(
+              m,
+              s.settings().enabled() ? Status.FAIL : Status.WARN,
+              "settings",
+              "settings.off",
+              "why",
+              off.reason()));
     }
     if (lines.size() == before) {
       lines.add(line(m, Status.PASS, "settings", "settings.ok"));
@@ -155,10 +179,19 @@ final class WebCheck {
           if (fetched.failed().isPresent()) {
             arrival.cancel(false);
             return done(
-                line(m, Status.FAIL, "address", "address.down", "url", origin, "why", fetched.failed().get()),
+                line(
+                    m,
+                    Status.FAIL,
+                    "address",
+                    "address.down",
+                    "url",
+                    origin,
+                    "why",
+                    fetched.failed().get()),
                 line(m, Status.SKIP, "proxy", "proxy.unseen"));
           }
-          boolean seasons = fetched.status() == 200 && fetched.body().contains("\"service\":\"seasons\"");
+          boolean seasons =
+              fetched.status() == 200 && fetched.body().contains("\"service\":\"seasons\"");
           return arrival
               .handle((a, e) -> Optional.ofNullable(e == null ? a : null))
               .thenApply(seen -> {
@@ -229,12 +262,13 @@ final class WebCheck {
             : Discovery.check(c.gameAddresses(), c.publicUrl(), resolver, asker)
                 .thenApply(each ->
                     each.stream()
-                        .map(l -> Line.of(
-                            (l.key().equals("discovery.ok") ? Status.PASS : Status.WARN).key(),
-                            "area",
-                            m.text("check.area.discovery"),
-                            "text",
-                            plain(m, l)))
+                        .map(l ->
+                            Line.of(
+                                (l.key().equals("discovery.ok") ? Status.PASS : Status.WARN).key(),
+                                "area",
+                                m.text("check.area.discovery"),
+                                "text",
+                                plain(m, l)))
                         .toList());
     List<CompletableFuture<Line>> dns = new ArrayList<>();
     List<String> hosts = new ArrayList<>();
@@ -248,11 +282,13 @@ final class WebCheck {
     CompletableFuture<List<Line>> records =
         CompletableFuture.allOf(dns.toArray(CompletableFuture[]::new))
             .thenApply(v -> dns.stream().map(CompletableFuture::join).toList());
-    return found.thenCombine(records, (a, b) -> {
-      List<Line> out = new ArrayList<>(a);
-      out.addAll(b);
-      return out;
-    });
+    return found.thenCombine(
+        records,
+        (a, b) -> {
+          List<Line> out = new ArrayList<>(a);
+          out.addAll(b);
+          return out;
+        });
   }
 
   /** Whether players can join with an address: an SRV record, or an A or AAAA record. */
@@ -271,7 +307,15 @@ final class WebCheck {
             return line(m, Status.PASS, "dns", "dns.srv", "address", host, "target", target);
           }
           if (!a.join().isEmpty() || !aaaa.join().isEmpty()) {
-            return line(m, Status.PASS, "dns", "dns.address", "address", host, "type", !a.join().isEmpty() ? "A" : "AAAA");
+            return line(
+                m,
+                Status.PASS,
+                "dns",
+                "dns.address",
+                "address",
+                host,
+                "type",
+                !a.join().isEmpty() ? "A" : "AAAA");
           }
           return line(m, Status.FAIL, "dns", "dns.none", "address", host);
         })
@@ -293,7 +337,16 @@ final class WebCheck {
     return List.of(
         switch (s.map()) {
           case ALLOWED -> line(m, Status.PASS, "map", "map.ok", "url", url);
-          case BLOCKED -> line(m, Status.WARN, "map", "map.blocked", "url", url, "dashboard", origin(config.get()));
+          case BLOCKED ->
+              line(
+                  m,
+                  Status.WARN,
+                  "map",
+                  "map.blocked",
+                  "url",
+                  url,
+                  "dashboard",
+                  origin(config.get()));
           case UNREACHABLE -> line(m, Status.FAIL, "map", "map.down", "url", url);
           case CHECKING, UNKNOWN -> line(m, Status.SKIP, "map", "map.unknown", "url", url);
         });
@@ -326,10 +379,11 @@ final class WebCheck {
   /** A line of another command's as plain text, its placeholders filled. */
   private static String plain(Messages m, Line l) {
     List<String> pairs = new ArrayList<>();
-    l.values().forEach((k, v) -> {
-      pairs.add(k);
-      pairs.add(v);
-    });
+    l.values()
+        .forEach((k, v) -> {
+          pairs.add(k);
+          pairs.add(v);
+        });
     String text = m.text(l.key(), pairs.toArray(String[]::new));
     return net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().stripTags(text);
   }
