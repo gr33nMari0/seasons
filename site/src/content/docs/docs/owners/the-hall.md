@@ -43,7 +43,7 @@ To fix it, shrink the cell by its walls. The new bounds are shown as outlines fi
 /hof cell shrink confirm
 ```
 
-`/hof gallery shrink season-2` does every such cell of a gallery at once, then `/hof gallery shrink confirm`. Either takes a number of blocks (1 to 4, 1 by default) and `--all` to move every face in, walls or not. A shrink that would leave an anchor outside the cell is refused, `cancel` drops the preview, and `/hof undo` puts the old bounds back.
+`/hof gallery shrink season-2` does every such cell of a gallery at once, then `/hof gallery shrink confirm`. Either takes a number of blocks (1 to 4, 1 by default) and `--all` to move every face in, walls or not. A shrink that would leave an anchor outside the cell is refused, `/hof cell shrink cancel` or `/hof gallery shrink cancel` drops the preview, and `/hof undo` puts the old bounds back.
 
 Until you fix them, `cells.protectShell` (on by default) keeps owners off any wall, floor or roof inside their bounds: they can't break it, but they can still break whatever they placed themselves.
 
