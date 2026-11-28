@@ -205,7 +205,7 @@ final class Routes {
       return method(r, "GET").orElseGet(() -> pending(r.viewer()));
     }
     if (path.equals("/api/v1/admin/audit")) {
-      return method(r, "GET").orElseGet(() -> audit(r.viewer()));
+      return method(r, "GET").orElseGet(() -> audit(r));
     }
     Matcher m = HALL_PLAYER.matcher(path);
     if (m.matches()) {
@@ -807,7 +807,16 @@ final class Routes {
     return Reply.ok(o);
   }
 
-  private Reply audit(Viewer viewer) {
+  /** The most entries one page of the audit log holds. */
+  static final int AUDIT_PAGE_MAX = 200;
+
+  /**
+   * Seasons' audit log, a page at a time (M10 plan, R9): {@code limit} entries (50 by default),
+   * older than the {@code before} cursor a page gave as {@code next}, of a {@code kind} of action
+   * and a {@code player}. With no query it answers as 1.4 did, with {@code next} added.
+   */
+  private Reply audit(Request r) {
+    Viewer viewer = r.viewer();
     Optional<Reply> denied = deny("audit-log", viewer);
     if (denied.isPresent()) {
       return denied.get();
@@ -816,12 +825,27 @@ final class Routes {
     if (seasons.isEmpty()) {
       return unavailable();
     }
-    Optional<List<AuditEntry>> list = await(seasons.get().audit(AUDIT_ENTRIES));
-    if (list.isEmpty()) {
+    int limit = AUDIT_ENTRIES;
+    String asked = r.query().getOrDefault("limit", "");
+    if (!asked.isEmpty()) {
+      try {
+        limit = Integer.parseInt(asked);
+      } catch (NumberFormatException e) {
+        return Reply.error(400, "bad-limit");
+      }
+      if (limit < 1 || limit > AUDIT_PAGE_MAX) {
+        return Reply.error(400, "bad-limit");
+      }
+    }
+    com.petepeterepeat.seasons.api.AuditQuery query =
+        new com.petepeterepeat.seasons.api.AuditQuery(
+            limit, given(r, "before", 64), given(r, "kind", 64), given(r, "player", 36));
+    Optional<com.petepeterepeat.seasons.api.AuditPage> page = await(seasons.get().audit(query));
+    if (page.isEmpty()) {
       return unavailable();
     }
     JsonArray out = new JsonArray();
-    for (AuditEntry e : list.get()) {
+    for (AuditEntry e : page.get().entries()) {
       JsonObject o = new JsonObject();
       o.addProperty("time", e.time().toString());
       o.addProperty("actor", e.actor());
@@ -832,7 +856,14 @@ final class Routes {
     }
     JsonObject o = new JsonObject();
     o.add("entries", out);
+    page.get().next().ifPresent(n -> o.addProperty("next", n));
     return Reply.ok(o);
+  }
+
+  /** A query value, stripped, if it is there and not too long; too long counts as not given. */
+  private static Optional<String> given(Request r, String key, int max) {
+    String v = r.query().getOrDefault(key, "").strip();
+    return v.isEmpty() || v.length() > max ? Optional.empty() : Optional.of(v);
   }
 
   // Leaderboards

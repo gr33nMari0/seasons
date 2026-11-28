@@ -517,6 +517,20 @@ public final class ApiService {
     return CompletableFuture.supplyAsync(() -> ApiReference.pending(players.all(), now), worker);
   }
 
+  public CompletableFuture<com.petepeterepeat.seasons.api.AuditPage> audit(
+      com.petepeterepeat.seasons.api.AuditQuery query) {
+    return audit
+        .page(
+            query.before().flatMap(AuditLog.Cursor::parse),
+            query.kind().filter(k -> !k.isBlank()),
+            query.player().filter(p -> !p.isBlank()),
+            Math.max(0, Math.min(query.count(), 500)))
+        .thenApply(page ->
+            new com.petepeterepeat.seasons.api.AuditPage(
+                page.entries().stream().map(ApiReference::audit).toList(),
+                page.next().map(AuditLog.Cursor::toString)));
+  }
+
   public CompletableFuture<List<AuditEntry>> audit(int count) {
     return audit
         .recent(Optional.empty(), Math.max(0, Math.min(count, 500)))

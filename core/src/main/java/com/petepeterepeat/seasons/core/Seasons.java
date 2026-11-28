@@ -1225,6 +1225,16 @@ public final class Seasons implements SeasonsApi {
   }
 
   @Override
+  public CompletableFuture<com.petepeterepeat.seasons.api.AuditPage> audit(
+      com.petepeterepeat.seasons.api.AuditQuery query) {
+    ApiService running = api;
+    return running == null
+        ? CompletableFuture.completedFuture(
+            new com.petepeterepeat.seasons.api.AuditPage(List.of(), Optional.empty()))
+        : running.audit(query);
+  }
+
+  @Override
   public List<WaypointView> waypoints() {
     return api == null ? List.of() : api.waypoints();
   }
