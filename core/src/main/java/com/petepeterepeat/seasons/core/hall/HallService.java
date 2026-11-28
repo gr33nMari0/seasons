@@ -99,6 +99,10 @@ public final class HallService {
 
   private Consumer<UnaryOperator<Decorating>> decorating = change -> {};
   private Instant lastTick;
+
+  /** Redraws an owner's displays for a season: their cell's anchors or bounds changed. */
+  private java.util.function.BiConsumer<PlayerId, Integer> redraw = (player, season) -> {};
+
   private @Nullable ScheduledTask sweeper;
   private @Nullable ScheduledTask ticker;
 
@@ -160,6 +164,14 @@ public final class HallService {
   /** The season state, as last bound; empty before {@code /season init}. */
   public Optional<SeasonState> seasonState() {
     return state.get();
+  }
+
+  /**
+   * Connects the redraw a cell gets when its anchors or bounds change, so displays follow their
+   * anchors at once (questions 340).
+   */
+  public void bindRedraw(java.util.function.BiConsumer<PlayerId, Integer> redraw) {
+    this.redraw = redraw;
   }
 
   /** Connects the launch button to {@code /season launch}, run as the player who pressed it. */
@@ -367,8 +379,23 @@ public final class HallService {
    * Saves a gallery: the live config has it at once, and its file is written on the writer thread.
    */
   public CompletableFuture<Void> save(Gallery gallery) {
+    return save(gallery, true);
+  }
+
+  /**
+   * {@link #save(Gallery)}, without redrawing the cells whose anchors changed: for a change the
+   * drawing itself makes, such as a plaque's guessed facing.
+   */
+  CompletableFuture<Void> saveWithoutRedraw(Gallery gallery) {
+    return save(gallery, false);
+  }
+
+  private CompletableFuture<Void> save(Gallery gallery, boolean redrawMoved) {
     Optional<Gallery> before = gallery(gallery.id());
     config.set(config.get().withGallery(gallery));
+    if (redrawMoved && before.isPresent()) {
+      redrawMoved(before.get(), gallery);
+    }
     Path file = galleryFile.apply(gallery.id());
     Path backupDir = backups.resolve("galleries");
     return pending(
@@ -384,6 +411,31 @@ public final class HallService {
                 LOG.error("Can't write {}", file, failure);
               }
             }));
+  }
+
+  /**
+   * Redraws each owned cell of a season gallery whose anchors or bounds a save changed. A stamp
+   * draws its own cells, so a gallery held for one is left alone.
+   */
+  private void redrawMoved(Gallery before, Gallery after) {
+    if (after.kind() != Gallery.Kind.SEASON || heldForStamp(after.id())) {
+      return;
+    }
+    for (Cell cell : after.cells()) {
+      Optional<PlayerId> owner = cell.owner(after.season());
+      Optional<Cell> was = before.cell(cell.id());
+      if (owner.isPresent() && was.isPresent() && !placed(was.get()).equals(placed(cell))) {
+        redraw.accept(owner.get(), after.season());
+      }
+    }
+  }
+
+  /** What decides where a cell's displays stand: its bounds and anchors, sizes aside. */
+  private static List<Object> placed(Cell cell) {
+    return List.of(
+        cell.bounds(),
+        cell.pose(),
+        cell.anchors().stream().map(a -> a.withScale(java.util.OptionalDouble.empty())).toList());
   }
 
   /** Removes a gallery and its file, keeping a backup (questions 269). */
@@ -688,12 +740,26 @@ public final class HallService {
    * assignment strategy hands cells out. Tells them which, if they are online.
    */
   public Optional<CellRef> ensureCell(PlayerId player, int season) {
+    return ensureCell(player, season, false);
+  }
+
+  /**
+   * {@link #ensureCell(PlayerId, int)} for a player archived into the season. One Seasons never saw
+   * play it, because they played it before {@code /season init} and were away from then until its
+   * end, earns a cell too: their play time is unknown, not short (questions 339).
+   */
+  public Optional<CellRef> ensureArchivedCell(PlayerId player, int season) {
+    return ensureCell(player, season, true);
+  }
+
+  private Optional<CellRef> ensureCell(PlayerId player, int season, boolean archived) {
     Optional<CellRef> owned = cellOf(player, season);
     if (owned.isPresent()) {
       return owned;
     }
     Optional<PlayerRecord> record = players.find(player);
-    if (record.isEmpty() || !earnsCell(record.get(), season)) {
+    if (record.isEmpty()
+        || !(earnsCell(record.get(), season) || (archived && !record.get().played(season)))) {
       return Optional.empty();
     }
     List<CellRef> free = freeCells(season).stream().filter(ref -> handsOut(ref.gallery())).toList();
@@ -734,9 +800,13 @@ public final class HallService {
    * A player archived without a cell who could have claimed one gets a free one at random, so
    * nobody who played goes without displays while a cell is free (questions 167).
    */
-  private Optional<CellRef> unclaimed(PlayerId player, int season) {
+  private Optional<CellRef> unclaimed(PlayerId player, int season, boolean archived) {
     List<CellRef> free = claimable(season);
-    if (free.isEmpty() || !players.find(player).map(r -> earnsCell(r, season)).orElse(false)) {
+    if (free.isEmpty()
+        || !players
+            .find(player)
+            .map(r -> earnsCell(r, season) || (archived && !r.played(season)))
+            .orElse(false)) {
       return Optional.empty();
     }
     CellRef assigned = assign(free.get(random.nextInt(free.size())), season, Optional.of(player));
@@ -1445,7 +1515,8 @@ public final class HallService {
     return new CellDirectory() {
       @Override
       public Optional<Position> cell(PlayerId player, int season) {
-        Optional<CellRef> cell = ensureCell(player, season).or(() -> unclaimed(player, season));
+        Optional<CellRef> cell =
+            ensureArchivedCell(player, season).or(() -> unclaimed(player, season, true));
         Optional<Position> arrival = cell.flatMap(HallService.this::arrival);
         if (arrival.isEmpty()) {
           return arrival;

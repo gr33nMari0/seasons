@@ -73,7 +73,7 @@ public final class HallRenderer implements DisplayRenderer {
               if (found.isEmpty()) {
                 return CompletableFuture.completedFuture(null);
               }
-              Optional<HallService.CellRef> ref = hall.ensureCell(player, season);
+              Optional<HallService.CellRef> ref = hall.ensureArchivedCell(player, season);
               if (ref.isEmpty() || ref.get().cell().bounds().isEmpty()) {
                 return CompletableFuture.completedFuture(null);
               }

@@ -304,6 +304,9 @@ public final class Seasons implements SeasonsApi {
     LinkWorld linkWorld = new LinkWorld(platform, config, halls, visiting);
     this.linkWorld = linkWorld;
     HallRenderer renderer = new HallRenderer(platform, config, writer, archives, halls);
+    halls.bindRedraw((player, season) -> {
+      var _ = renderer.render(player, season);
+    });
     hallRenderer = renderer;
     Hall hall = halls.hall(renderer);
     MuseumFiles museumFiles =
