@@ -75,7 +75,29 @@ final class SettingsFile {
     return node;
   }
 
-  private static ConfigurationNode bundledNode(String name) throws ConfigurateException {
+  /**
+   * Every value of a node by its dotted path, such as {@code proxy.trusted}: lists and other
+   * scalars as their text, for telling what a reload changed.
+   */
+  static java.util.Map<String, String> flatten(ConfigurationNode node) {
+    java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+    flatten(node, "", out);
+    return out;
+  }
+
+  private static void flatten(ConfigurationNode node, String prefix, java.util.Map<String, String> out) {
+    if (node.isMap()) {
+      node.childrenMap().forEach((k, child) ->
+          flatten(child, prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, out));
+      if (node.childrenMap().isEmpty() && !prefix.isEmpty()) {
+        out.put(prefix, "{}");
+      }
+    } else {
+      out.put(prefix, String.valueOf(node.raw()));
+    }
+  }
+
+  static ConfigurationNode bundledNode(String name) throws ConfigurateException {
     return YamlConfigurationLoader.builder()
         .source(
             () -> new BufferedReader(new InputStreamReader(bundled(name), StandardCharsets.UTF_8)))

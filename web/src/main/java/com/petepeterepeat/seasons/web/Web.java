@@ -9,7 +9,10 @@ import java.net.BindException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -106,6 +109,12 @@ final class Web implements AutoCloseable {
   synchronized String reload() {
     stopServer();
     messages = loadMessages();
+    appliedMessages = text(folder.resolve(SettingsFile.MESSAGES));
+    try {
+      applied = SettingsFile.flatten(SettingsFile.loadMerged(folder, SettingsFile.WEB));
+    } catch (ConfigurateException e) {
+      applied = Map.of();
+    }
     WebSettings settings;
     try {
       settings = SettingsFile.load(folder);
@@ -128,6 +137,116 @@ final class Web implements AutoCloseable {
       }
       case WebConfig.Ready ready -> listen(ready.config());
     };
+  }
+
+  /**
+   * What {@code /web reload} did.
+   *
+   * @param state as {@link #reload} says it, such as "listening on 127.0.0.1:8019"
+   * @param changed web.yml's top-level settings that changed, and messages.yml if it did
+   * @param problems why web.yml wasn't applied: empty when it was
+   * @param kept whether the dashboard kept running as it was, rather than staying off
+   */
+  record Reloaded(
+      String state, List<String> changed, List<String> problems, List<String> warnings, boolean kept) {
+    Reloaded {
+      changed = List.copyOf(changed);
+      problems = List.copyOf(problems);
+      warnings = List.copyOf(warnings);
+    }
+
+    boolean applied() {
+      return problems.isEmpty();
+    }
+  }
+
+  private Map<String, String> applied = Map.of();
+  private String appliedMessages = "";
+
+  /**
+   * {@code /web reload} (M10 plan, O1): reads web.yml and messages.yml and checks them first. A
+   * web.yml that checks out (or turns the dashboard off on purpose) is applied: the listener starts
+   * again on it, sessions kept. One that doesn't is not applied: the dashboard goes on as it was,
+   * and the problems are listed. Server thread.
+   */
+  synchronized Reloaded reloadChecked() {
+    String messagesNow = text(folder.resolve(SettingsFile.MESSAGES));
+    WebSettings settings;
+    Map<String, String> flat;
+    try {
+      settings = SettingsFile.load(folder);
+      flat = SettingsFile.flatten(SettingsFile.loadMerged(folder, SettingsFile.WEB));
+    } catch (ConfigurateException e) {
+      return notApplied(List.of("web.yml doesn't read: " + firstLine(e.getMessage())), List.of());
+    }
+    WebConfig.Result result = WebConfig.check(settings);
+    if (result instanceof WebConfig.Off off && settings.enabled()) {
+      return notApplied(List.of(off.reason()), result.warnings());
+    }
+    List<String> changed = new ArrayList<>(changedTop(applied, flat));
+    if (!messagesNow.equals(appliedMessages)) {
+      changed.add("messages.yml");
+    }
+    Map<String, String> before = applied;
+    String messagesBefore = appliedMessages;
+    String state = reload();
+    if (state.startsWith("off (") && settings.enabled() && !serving()) {
+      // It checked out but couldn't listen (a port in use): back to what ran before.
+      applied = before;
+      appliedMessages = messagesBefore;
+      String reason = state.substring("off (".length(), state.length() - 1);
+      String again = restoreFrom(before);
+      return new Reloaded(again, List.of(), List.of(reason), result.warnings(), again.startsWith("listening"));
+    }
+    return new Reloaded(state, changed, List.of(), result.warnings(), false);
+  }
+
+  private Reloaded notApplied(List<String> problems, List<String> warnings) {
+    log.warn("web.yml isn't applied: {}", String.join("; ", problems));
+    return new Reloaded(serving() ? "listening on " + config.where() : "off", List.of(), problems, warnings, serving());
+  }
+
+  /** Listens again as last applied, after a reload that couldn't. */
+  private String restoreFrom(Map<String, String> before) {
+    if (before.isEmpty() || lastReady == null) {
+      return "off";
+    }
+    return listen(lastReady);
+  }
+
+  private @Nullable WebConfig lastReady;
+
+  /** The top-level settings whose values differ, in web.yml's order. */
+  static List<String> changedTop(Map<String, String> before, Map<String, String> after) {
+    if (before.isEmpty()) {
+      return List.of();
+    }
+    java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+    java.util.Set<String> paths = new java.util.LinkedHashSet<>(after.keySet());
+    paths.addAll(before.keySet());
+    for (String path : paths) {
+      if (!java.util.Objects.equals(before.get(path), after.get(path))) {
+        int dot = path.indexOf('.');
+        out.add(dot < 0 ? path : path.substring(0, dot));
+      }
+    }
+    return List.copyOf(out);
+  }
+
+  private static String text(Path file) {
+    try {
+      return Files.exists(file) ? Files.readString(file) : "";
+    } catch (IOException e) {
+      return "";
+    }
+  }
+
+  private static String firstLine(@Nullable String message) {
+    if (message == null) {
+      return "unreadable";
+    }
+    int cut = message.indexOf('\n');
+    return (cut < 0 ? message : message.substring(0, cut)).strip();
   }
 
   private String listen(WebConfig next) {
@@ -167,6 +286,7 @@ final class Web implements AutoCloseable {
       WebServer started = new WebServer(next, routes, sessions, limiter, hub, log);
       started.start();
       server = started;
+      lastReady = next;
       if (looking != null) {
         looking.start();
         probe = looking;
