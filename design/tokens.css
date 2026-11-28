@@ -52,6 +52,8 @@
   --gutter: 16px;
   --touch: 44px;
   --speed: 120ms;
+  /* The tallest a long list grows inside its card before it scrolls there instead */
+  --widget-max-h: 360px;
 
   /* Semantic tokens, dark (the default) */
   color-scheme: dark;

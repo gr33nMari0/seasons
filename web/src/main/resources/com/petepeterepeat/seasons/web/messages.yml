@@ -379,3 +379,4 @@ dashboard:
   audit:
     title: "Audit log"
     none: "Nothing logged yet."
+    older: "Older entries"

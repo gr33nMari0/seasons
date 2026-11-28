@@ -254,6 +254,19 @@ button { font: inherit; color: inherit; }
 .board .rank { color: var(--text-3); display: inline-block; min-width: 1.8em; font-family: var(--font-mono); }
 .board .value { float: right; font-family: var(--font-mono); }
 
+/* A long list scrolls inside its card, its title staying put, so the page doesn't run down (M10, L2).
+   In a placed layout it fills what the card leaves; elsewhere it stops at --widget-max-h. */
+.scroll {
+  max-height: var(--widget-max-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  mask-image: linear-gradient(to bottom, var(--bg) calc(100% - 24px), transparent);
+}
+.scroll:focus-visible { outline: var(--border-width) solid var(--accent-pressed); outline-offset: 2px; }
+.grid.placed > .widget:has(> .scroll) { display: flex; flex-direction: column; }
+.grid.placed > .widget > .scroll { flex: 1 1 0; min-height: 0; max-height: none; }
+.more { margin-top: 8px; }
 .feed li { border-bottom: 1px solid var(--border-soft); }
 .feed li:last-child { border-bottom: 0; }
 .feed time { color: var(--text-3); font-variant-numeric: tabular-nums; margin-right: 6px; font-family: var(--font-mono); font-size: 0.88em; }
