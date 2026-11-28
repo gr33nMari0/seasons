@@ -10,22 +10,25 @@ sidebar:
 
 Players should type one address to join and open two web pages, with no port numbers anywhere. These records get you there. Add them at your DNS host, for your own domain (here `example.com`, with `203.0.113.10` standing in for your server's public IP address).
 
-| Name | Type | Value | What it's for |
-| --- | --- | --- | --- |
-| `play` | A (and AAAA for IPv6) | `203.0.113.10` | The address players join with. Never proxied: web proxies can't carry Minecraft |
-| `_minecraft._tcp.play` | SRV | `0 5 25565 play.example.com` | Lets players leave the port off. Needed when your port isn't 25565, and harmless when it is |
-| `map` | A, or a CNAME to your tunnel | `203.0.113.10` | Your BlueMap |
-| `seasons` | A, or a CNAME to your tunnel | `203.0.113.10` | Your Seasons Web dashboard |
-| `_seasons.play` | TXT | `v=seasons1; url=https://seasons.example.com` | Lets players find the dashboard from the address they play on |
+| Name | Type | Value |
+| --- | --- | --- |
+| `play` | A | `203.0.113.10` |
+| `_minecraft._tcp.play` | SRV | `0 5 25565 play` |
+| `map` | A or CNAME | `203.0.113.10` |
+| `seasons` | A or CNAME | `203.0.113.10` |
+| `_seasons.play` | TXT | see below |
+
+- **`play`** is the address players join with. Add an AAAA record too if you have IPv6. Never proxy it: web proxies can't carry Minecraft.
+- **`_minecraft._tcp.play`** (SRV) lets players leave the port off. It's needed when your port isn't 25565 and harmless when it is. Its target is `play.example.com`.
+- **`map`** is your BlueMap and **`seasons`** your Seasons Web dashboard. Each is an A record to your IP, or a CNAME to your tunnel.
+- **`_seasons.play`** (TXT) lets players find the dashboard from the address they play on. Its value is `v=seasons1; url=https://seasons.example.com`.
 
 ## How it fits together
 
 ```text
-                     ┌──────────────── your server ─────────────────┐
-play.example.com ──▶ │ Minecraft on port 25565                      │
-map.example.com ───▶ │ HTTPS (proxy or tunnel) ──▶ BlueMap 127.0.0.1:8100     │
-seasons.example.com ▶│                         └─▶ Seasons Web 127.0.0.1:8019 │
-                     └──────────────────────────────────────────────┘
+play.example.com     ──▶  Minecraft, port 25565
+map.example.com      ──▶  HTTPS (proxy or tunnel)  ──▶  BlueMap, 127.0.0.1:8100
+seasons.example.com  ──▶  HTTPS (proxy or tunnel)  ──▶  Seasons Web, 127.0.0.1:8019
 ```
 
 Minecraft's port is the only one players reach directly. The map and the dashboard listen only on `127.0.0.1`, and something in front of them adds HTTPS. Choose one:
