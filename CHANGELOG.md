@@ -14,6 +14,13 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 - Seasons API 1.5: `audit(AuditQuery)`, a page of the audit log by cursor, kind and player.
 - New docs: [Addresses and hosting](https://seasonsmc.petepeterepeat.com/docs/hosting/records/), the DNS records you need and each way to put the dashboard and map on HTTPS, starting with a reverse proxy on your own machine, then game-server hosts, Cloudflare Tunnel and other tunnels, and how to read `/web check`.
 
+## [1.4.2] - 2026-11-28
+
+### Fixed
+
+- The public docs publish reliably at each release again. The Pages workflow uses the current Pages actions, after 1.4.1's first publish failed to find the site it had just uploaded.
+- A wand-zone acceptance scenario no longer fails at random on a freshly wiped server.
+
 ## [1.4.1] - 2026-11-28
 
 ### Added

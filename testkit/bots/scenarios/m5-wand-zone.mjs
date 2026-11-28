@@ -46,7 +46,12 @@ export default {
     await ctx.command(admin, '/execute in minecraft:the_nether run forceload add 80 80 120 120', /^(Marked|No chunks were marked)/)
     await ctx.command(admin, '/execute in minecraft:the_nether run tp SeasonsAdmin 100 70 100', /^Teleported /)
     await select(ctx, admin, admin, { x: 90, y: 30, z: 90 }, { x: 110, y: 100, z: 110 }, /^Selected 90, 30, 90 to 110, 100, 110 in minecraft:the_nether: 21 × 71 × 21 blocks\.$/)
+    // The admin stands inside the new zone, so the sweep sends them out of it; wait for that
+    // before teleporting, or the two moves race and the teleport command can be lost.
+    const sentOut = ctx.waitForMessages(admin, /^(The nether base is locked until Homecoming\.|You were in the nether base, which is locked, so you're back at the spawn\.)$/, 10 * SECOND, 'sent out of the nether base')
     await ctx.command(admin, '/season zone add nether-base box', /^Added zone nether-base: a box from 90, 30, 90 to 110, 100, 110 in minecraft:the_nether, /)
+    await sentOut
+    await ctx.sync(admin, [admin], 20)
 
     // A corner in another dimension starts a new selection, so there are no two corners.
     await ctx.command(admin, '/execute in minecraft:overworld run tp SeasonsAdmin 3000.5 -60 0.5', /^Teleported /)

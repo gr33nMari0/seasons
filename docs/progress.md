@@ -19,6 +19,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M8 Reliable links | Done (#40), released as 1.3.0 | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
 | M9 Dashboard and docs design overhaul | Done (#42, #43, #44), released as 1.4.0 | Site and docs checks in `site/test`; `m9-*`; see M9, below |
 | 1.4.1 Hall fixes | Done (#47), released as 1.4.1 | A96 to A98; A71 widened; see 1.4.1, below |
+| 1.4.2 Release fixes | Released as 1.4.2 | The Pages workflow on current actions; `m5-wand-zone` waits for the zone sweep before teleporting |
 | M10 Rich dashboard and web operations | In progress (plan in `docs/plans/m10-rich-dashboard.md`), for 1.5.0: part 1, web operations | `m10-web-reload`, `m10-web-check`, `m10-web-upgrade`, `m10-admin-audit`; see M10, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
