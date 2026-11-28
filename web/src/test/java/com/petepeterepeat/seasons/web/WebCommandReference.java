@@ -75,9 +75,12 @@ public final class WebCommandReference {
           .append(
               array(
                   List.of(
-                      e.words().get(1).equals("discovery")
-                          ? PaperWebCommands.DISCOVERY_PERMISSION
-                          : PaperWebCommands.PERMISSION)))
+                      switch (e.words().get(1)) {
+                        case "discovery" -> PaperWebCommands.DISCOVERY_PERMISSION;
+                        case "reload", "upgrade" -> PaperWebCommands.RELOAD_PERMISSION;
+                        case "check" -> PaperWebCommands.SETUP_PERMISSION;
+                        default -> PaperWebCommands.PERMISSION;
+                      })))
           .append('}')
           .append(i + 1 < entries.size() ? ",\n" : "\n");
     }

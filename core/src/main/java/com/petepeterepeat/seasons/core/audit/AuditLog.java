@@ -12,6 +12,7 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.petepeterepeat.seasons.core.log.SeasonsLog;
 import com.petepeterepeat.seasons.core.store.SerialWriter;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -96,6 +97,119 @@ public final class AuditLog {
       }
       return List.copyOf(found.subList(Math.max(0, found.size() - count), found.size()));
     });
+  }
+
+  /**
+   * Where a page of {@link #page} ended: entries older than {@code time}, and of those at exactly
+   * {@code time}, all but the last {@code shown}, which that page already showed. Written as {@code
+   * <time>~<shown>}.
+   */
+  public record Cursor(Instant time, int shown) {
+    @Override
+    public String toString() {
+      return time + "~" + shown;
+    }
+
+    /** A cursor as {@link #toString} wrote it, or empty if it isn't one. */
+    public static Optional<Cursor> parse(String text) {
+      int cut = text.lastIndexOf('~');
+      if (cut <= 0) {
+        return Optional.empty();
+      }
+      try {
+        int shown = Integer.parseInt(text.substring(cut + 1));
+        return shown < 0
+            ? Optional.empty()
+            : Optional.of(new Cursor(Instant.parse(text.substring(0, cut)), shown));
+      } catch (NumberFormatException | java.time.format.DateTimeParseException e) {
+        return Optional.empty();
+      }
+    }
+  }
+
+  /** A page of entries, oldest first, and where the next, older, page starts if there is one. */
+  public record Page(List<Entry> entries, Optional<Cursor> next) {}
+
+  /**
+   * The newest {@code count} entries older than {@code before}, of the action {@code kind} (or one
+   * starting with it) and the {@code player} as actor or target, all ignoring case. Read from the
+   * cursor's month and the one before it, or this month's and last month's: a page never reaches
+   * back further than two months from where it starts, and the next page carries on from there.
+   */
+  public CompletableFuture<Page> page(
+      Optional<Cursor> before, Optional<String> kind, Optional<String> player, int count) {
+    Instant from = before.map(Cursor::time).orElseGet(clock::instant);
+    Instant monthBefore = from.atZone(ZoneOffset.UTC).minusMonths(1).toInstant();
+    List<Path> files =
+        List.of(
+            directory.resolve(MONTH.format(monthBefore) + ".jsonl"),
+            directory.resolve(MONTH.format(from) + ".jsonl"));
+    String wanted = kind.map(k -> k.strip().toLowerCase(java.util.Locale.ROOT)).orElse("");
+    return writer.submit(() -> {
+      List<Entry> found = new ArrayList<>();
+      for (Path file : files) {
+        if (!Files.exists(file)) {
+          continue;
+        }
+        for (String line : Files.readAllLines(file, UTF_8)) {
+          entry(line)
+              .filter(e -> e.action().toLowerCase(java.util.Locale.ROOT).startsWith(wanted))
+              .filter(e ->
+                  player.isEmpty()
+                      || e.actor().equalsIgnoreCase(player.get())
+                      || e.target().equalsIgnoreCase(player.get()))
+              .ifPresent(found::add);
+        }
+      }
+      if (before.isPresent()) {
+        Cursor c = before.get();
+        long at = found.stream().filter(e -> e.time().equals(c.time())).count();
+        long keepAt = Math.max(0, at - c.shown());
+        List<Entry> older = new ArrayList<>();
+        long seenAt = 0;
+        for (Entry e : found) {
+          if (e.time().isBefore(c.time())) {
+            older.add(e);
+          } else if (e.time().equals(c.time()) && seenAt++ < keepAt) {
+            older.add(e);
+          }
+        }
+        found = older;
+      }
+      int start = Math.max(0, found.size() - count);
+      List<Entry> page = List.copyOf(found.subList(start, found.size()));
+      Optional<Cursor> next = Optional.empty();
+      boolean olderMonths = Files.exists(directory) && hasOlderFiles(MONTH.format(monthBefore));
+      if (!page.isEmpty() && (start > 0 || olderMonths)) {
+        Instant oldest = page.getFirst().time();
+        int shownAt = (int) page.stream().filter(e -> e.time().equals(oldest)).count();
+        // Entries at that instant that an earlier page showed are still left out.
+        int already = before.filter(c -> c.time().equals(oldest)).map(Cursor::shown).orElse(0);
+        next = Optional.of(new Cursor(oldest, shownAt + already));
+      } else if (page.isEmpty() && olderMonths) {
+        next =
+            Optional.of(
+                new Cursor(
+                    monthBefore
+                        .atZone(ZoneOffset.UTC)
+                        .withDayOfMonth(1)
+                        .toLocalDate()
+                        .atStartOfDay(ZoneOffset.UTC)
+                        .toInstant(),
+                    0));
+      }
+      return new Page(page, next);
+    });
+  }
+
+  /** Whether a month file older than {@code month} exists. */
+  private boolean hasOlderFiles(String month) throws IOException {
+    try (java.util.stream.Stream<Path> files = Files.list(directory)) {
+      return files
+          .map(f -> f.getFileName().toString())
+          .filter(n -> n.endsWith(".jsonl"))
+          .anyMatch(n -> n.substring(0, n.length() - ".jsonl".length()).compareTo(month) < 0);
+    }
   }
 
   private static final List<String> FIELDS =

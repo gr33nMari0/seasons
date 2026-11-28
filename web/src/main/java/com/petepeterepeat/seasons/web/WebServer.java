@@ -41,6 +41,7 @@ final class WebServer implements AutoCloseable {
   private final HttpServer server;
   private final ExecutorService threads;
   private final String securityPolicy;
+  private final SelfCheck selfCheck;
 
   /**
    * Binds the server; it doesn't answer until {@link #start}.
@@ -53,8 +54,10 @@ final class WebServer implements AutoCloseable {
       SessionStore sessions,
       RateLimiter limiter,
       EventHub hub,
-      Logger log)
+      Logger log,
+      SelfCheck selfCheck)
       throws IOException {
+    this.selfCheck = selfCheck;
     this.config = config;
     this.routes = routes;
     this.sessions = sessions;
@@ -116,6 +119,18 @@ final class WebServer implements AutoCloseable {
   private void serve(HttpExchange exchange) throws IOException {
     Headers in = exchange.getRequestHeaders();
     InetAddress peer = exchange.getRemoteAddress().getAddress();
+    if (exchange.getRequestURI().getRawPath().equals(Routes.WELL_KNOWN)) {
+      String nonce = query(exchange.getRequestURI().getRawQuery()).getOrDefault("check", "");
+      if (!nonce.isEmpty()) {
+        String header = config.clientIp().header();
+        selfCheck.arrived(
+            nonce,
+            new SelfCheck.Arrival(
+                peer,
+                !header.isEmpty() && in.getFirst(header) != null,
+                config.clientIp().trusts(peer)));
+      }
+    }
     String ip =
         config.clientIp().key(peer, Optional.ofNullable(in.getFirst(config.clientIp().header())));
     WebSettings.RateLimits limits = config.settings().rateLimits();
@@ -131,7 +146,7 @@ final class WebServer implements AutoCloseable {
       Optional<SessionStore.Session> session = sessions.find(token);
       if (session.isPresent()) {
         SessionStore.Session s = session.get();
-        viewer = new Viewer.Player(s.player(), s.name(), s.admin(), s.id());
+        viewer = new Viewer.Player(s.player(), s.name(), s.grants(), s.id());
         wait = limiter.take("account:" + s.player(), limits.requestsPerMinutePerAccount());
         if (wait > 0) {
           send(exchange, limited(wait));

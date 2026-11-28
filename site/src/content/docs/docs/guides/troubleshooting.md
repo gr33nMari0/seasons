@@ -57,7 +57,11 @@ A `block` zone refuses changes across its edge too: pistons, hoppers, liquids an
 
 ## Players can't find the dashboard
 
-Check `enabled: true`, an https `public-url`, and a tunnel or proxy in front of the `bind` address. Then publish and check the discovery record: [Let players find your dashboard](/docs/guides/publish-dashboard/).
+Run `/web check`. It tests `web.yml`, fetches your `public-url` from outside, and checks the proxy, the DNS records and the map, each with what to do: see [Check it](/docs/hosting/check-it/). Then publish and check the discovery record: [Let players find your dashboard](/docs/hosting/find-your-dashboard/).
+
+## A web.yml change did nothing
+
+Run `/web reload` to apply it. If `web.yml` has a problem, the dashboard keeps running as it was and the reply lists what's wrong.
 
 ## Chasing anything else
 

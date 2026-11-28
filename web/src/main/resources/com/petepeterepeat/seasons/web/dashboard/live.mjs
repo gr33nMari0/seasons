@@ -20,6 +20,14 @@ export function empty (text) {
   return el('p', { class: 'empty' }, text)
 }
 
+/**
+ * A long list's box, which scrolls inside its card (M10, L2): a labelled region the keyboard can
+ * focus and scroll.
+ */
+export function scrolling (label, ...children) {
+  return el('div', { class: 'scroll', role: 'region', tabindex: 0, 'aria-label': label }, ...children)
+}
+
 /** A link to another of the dashboard's pages, followed without reloading. */
 export function link (href, ...children) {
   return el('a', { href, data: { internal: true } }, ...children)
@@ -178,7 +186,7 @@ export function feedLine (app, type, d) {
 
 export function eventFeed (app) {
   const list = el('ol', { class: 'feed' })
-  const node = card('event-feed', app.t('feed.title'), list)
+  const node = card('event-feed', app.t('feed.title'), scrolling(app.t('feed.title'), list))
 
   function draw () {
     if (app.feed.length === 0) {
@@ -382,7 +390,7 @@ export function serverHealth (app) {
 }
 
 export function pendingPlayers (app) {
-  const body = el('div', {})
+  const body = scrolling(app.t('pending.title'))
   const node = card('pending-players', app.t('pending.title'), body)
   async function refresh () {
     const r = await get('/api/v1/admin/pending')
@@ -396,20 +404,51 @@ export function pendingPlayers (app) {
 }
 
 export function auditLog (app) {
-  const body = el('div', {})
-  const node = card('audit-log', app.t('audit.title'), body)
-  async function refresh () {
-    const r = await get('/api/v1/admin/audit')
-    if (r.status !== 200) return
-    const entries = [...r.json.entries].reverse()
-    replace(body, entries.length === 0
-      ? empty(app.t('audit.none'))
-      : el('ol', { class: 'audit' }, entries.map((e) => el('li', {},
+  const list = el('ol', { class: 'audit' })
+  const region = scrolling(app.t('audit.title'), list)
+  const older = el('button', { type: 'button', class: ['quiet-button', 'older', 'more'], hidden: true }, app.t('audit.older'))
+  const node = card('audit-log', app.t('audit.title'), region, older)
+  // The newest page, refreshed; and older pages, loaded on asking and kept across refreshes.
+  let newest = []
+  let earlier = []
+  let cursor = null
+  const key = (e) => `${e.time}|${e.actor}|${e.action}|${e.target}|${e.result}`
+
+  function draw () {
+    const seen = new Set()
+    const all = [...newest].reverse().concat([...earlier].reverse())
+      .filter((e) => !seen.has(key(e)) && seen.add(key(e)))
+    if (all.length === 0) {
+      replace(list, el('li', { class: 'empty' }, app.t('audit.none')))
+    } else {
+      replace(list, all.map((e) => el('li', {},
         el('time', { datetime: e.time }, `${date(e.time)} ${time(e.time)}`), ' ',
         el('span', { class: 'actor' }, e.actor), ' ',
         el('span', { class: 'action' }, e.action), ' ',
         el('span', { class: 'target' }, e.target), ' ',
-        el('span', { class: `result result-${e.result}` }, e.result)))))
+        el('span', { class: `result result-${e.result}` }, e.result))))
+    }
+    older.hidden = !cursor
   }
+
+  async function refresh () {
+    const r = await get('/api/v1/admin/audit')
+    if (r.status !== 200) return
+    newest = r.json.entries
+    if (earlier.length === 0) cursor = r.json.next ?? null
+    draw()
+  }
+
+  older.addEventListener('click', async () => {
+    if (!cursor) return
+    older.disabled = true
+    const r = await get(`/api/v1/admin/audit?limit=100&before=${encodeURIComponent(cursor)}`)
+    older.disabled = false
+    if (r.status !== 200) return
+    earlier = r.json.entries.concat(earlier)
+    cursor = r.json.next ?? null
+    draw()
+  })
+
   return { node, refresh }
 }

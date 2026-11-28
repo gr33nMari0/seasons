@@ -48,8 +48,12 @@ final class DeviceCodes {
     }
   }
 
-  /** Who linked a code, and whether they held seasons.web.admin then. */
-  record Linked(UUID player, String name, boolean admin) {}
+  /** Who linked a code, and the parts of seasons.web.admin they held then. */
+  record Linked(UUID player, String name, Grants grants) {
+    Linked(UUID player, String name, boolean admin) {
+      this(player, name, Grants.of(admin));
+    }
+  }
 
   /** A new code and the secret for the browser's cookie. */
   record Issued(String code, String deviceSecret) {

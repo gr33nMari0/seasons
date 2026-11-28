@@ -18,5 +18,26 @@ permissions:
     description: /web discovery, the DNS records that let players find the dashboard from the game address
     default: op
   seasons.web.admin:
-    description: Admin dashboard widgets. Never granted by default
+    description: Every part of Seasons Web's admin side, the dashboard's admin widgets included. Never granted by default
     default: false
+    children:
+      seasons.web.admin.audit: true
+      seasons.web.admin.health: true
+      seasons.web.admin.players: true
+      seasons.web.admin.setup: true
+      seasons.web.admin.reload: true
+  seasons.web.admin.audit:
+    description: The audit-log widget. Never granted by default
+    default: false
+  seasons.web.admin.health:
+    description: The server-health widget. Never granted by default
+    default: false
+  seasons.web.admin.players:
+    description: The pending-players widget. Never granted by default
+    default: false
+  seasons.web.admin.setup:
+    description: /web check, which checks web.yml and how the dashboard is reached
+    default: op
+  seasons.web.admin.reload:
+    description: /web reload and /web upgrade, which apply web.yml and add the settings it lacks
+    default: op

@@ -515,4 +515,92 @@ class WebTest {
     assertThat(Previews.escape("<b>\"Alex\" & 'Sam'</b>"))
         .isEqualTo("&lt;b&gt;&quot;Alex&quot; &amp; &#39;Sam&#39;&lt;/b&gt;");
   }
+
+  private void writeWebYml(String body) throws Exception {
+    Files.writeString(
+        dir.resolve("plugin/web.yml"), "enabled: true\nbind: 127.0.0.1:" + port + "\n" + body);
+  }
+
+  @Test
+  void reloadAppliesWhatChecksOutAndKeepsRunningOtherwise() throws Exception {
+    WebCommands commands = new WebCommands(web, Optional::empty, clock);
+    writeWebYml("name: Example SMP\n");
+    assertThat(commands.reload()).extracting(Line::key).startsWith("reload.done", "reload.changed");
+    assertThat(commands.reload().get(1).values()).isEmpty();
+    assertThat(commands.reload()).extracting(Line::key).contains("reload.unchanged");
+    Files.writeString(dir.resolve("plugin/web.yml"), "enabled: true\nbind: nowhere\n");
+    List<Line> kept = commands.reload();
+    assertThat(kept).extracting(Line::key).startsWith("reload.kept", "reload.problem");
+    assertThat(kept.get(1).values().get("problem")).startsWith("bind: ");
+    assertThat(get("/api/v1/season", "").statusCode()).as("still serving").isEqualTo(200);
+    assertThat(web.config().settings().name()).isEqualTo("Example SMP");
+  }
+
+  @Test
+  void theCheckSeesItsOwnRequestArriveThroughTheProxy() throws Exception {
+    writeWebYml(
+        """
+        public-url: https://seasons.example.com
+        proxy:
+          trusted: [127.0.0.1]
+          client-ip-header: CF-Connecting-IP
+        game-addresses: [play.example.com]
+        """);
+    assertThat(web.reload()).startsWith("listening");
+    WebCheck.Network net =
+        new WebCheck.Network() {
+          @Override
+          public CompletableFuture<WebCheck.Fetched> fetch(String url) {
+            // The tunnel: the public address, carried to the dashboard with the visitor's address.
+            URI asked = URI.create(url);
+            HttpRequest request =
+                HttpRequest.newBuilder(
+                        URI.create(
+                            "http://127.0.0.1:"
+                                + port
+                                + asked.getRawPath()
+                                + "?"
+                                + asked.getRawQuery()))
+                    .header("CF-Connecting-IP", "198.51.100.7")
+                    .build();
+            return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(r -> new WebCheck.Fetched(r.statusCode(), r.body(), Optional.empty()));
+          }
+
+          @Override
+          public CompletableFuture<List<String>> records(String name, int type) {
+            return CompletableFuture.completedFuture(
+                type == 33 ? List.of("0 5 25566 mc.example.com.") : List.of());
+          }
+        };
+    WebCommands commands = new WebCommands(web, Optional::empty, clock);
+    List<Line> lines =
+        commands
+            .check(
+                net,
+                name ->
+                    CompletableFuture.completedFuture(
+                        List.of("v=seasons1; url=https://seasons.example.com")),
+                origin ->
+                    CompletableFuture.completedFuture(Optional.of(List.of("play.example.com"))))
+            .get(20, java.util.concurrent.TimeUnit.SECONDS);
+    Messages m = web.messages();
+    List<String> text =
+        lines.stream()
+            .map(l ->
+                l.key()
+                    + " "
+                    + l.values().getOrDefault("area", "")
+                    + ": "
+                    + l.values().getOrDefault("text", ""))
+            .toList();
+    assertThat(text)
+        .contains(
+            "check.pass Address: https://seasons.example.com answers as this dashboard.",
+            "check.pass Proxy: requests arrive from 127.0.0.1, which proxy.trusted lists, with CF-Connecting-IP.",
+            "check.pass DNS: play.example.com points at mc.example.com:25566 with its SRV record.")
+        .anyMatch(t -> t.startsWith("check.pass Discovery: play.example.com: found"));
+    assertThat(lines.getLast().key()).isEqualTo("check.summary");
+    assertThat(m.get("check.summary")).contains("<passed>");
+  }
 }

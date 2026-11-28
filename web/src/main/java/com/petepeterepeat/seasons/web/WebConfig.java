@@ -263,7 +263,8 @@ record WebConfig(
   /** An https address with nothing after the host, or empty for none. */
   static Optional<URI> publicUrl(String text) {
     String t = text.strip();
-    if (t.isEmpty()) {
+    // /web upgrade writes [fill me] where only the admin knows the value: unset until then.
+    if (t.isEmpty() || t.equals(SettingsAudit.PLACEHOLDER)) {
       return Optional.empty();
     }
     URI uri;

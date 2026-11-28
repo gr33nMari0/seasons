@@ -25,7 +25,7 @@ It's **off by default** and **read-only**: admin actions stay in game. It runs o
    name: Example SMP                        # shown on the dashboard and in previews
    ```
 
-3. Put a **Cloudflare Tunnel** or an **HTTPS reverse proxy** in front of `127.0.0.1:8019`, at your `public-url`. HTTPS comes from there. Binding beyond localhost without an https `public-url` stops the dashboard from starting.
+3. Put an **HTTPS reverse proxy** or a **tunnel** in front of `127.0.0.1:8019`, at your `public-url`. HTTPS comes from there. Binding beyond localhost without an https `public-url` stops the dashboard from starting. [Addresses and hosting](/docs/hosting/records/) walks through the DNS records and each way to do it, starting with the simplest.
 4. Tell it about the proxy, so rate limits see visitors' real addresses:
 
    ```yaml
@@ -34,8 +34,8 @@ It's **off by default** and **read-only**: admin actions stay in game. It runs o
      client-ip-header: CF-Connecting-IP # Cloudflare's; X-Forwarded-For for most proxies
    ```
 
-5. Restart, then open your `public-url`. `web.yml` changes take effect at the next restart.
-6. Publish the discovery record so players can find the dashboard from the address they play on: see [Let players find your dashboard](/docs/guides/publish-dashboard/).
+5. Run `/web reload`, then open your `public-url`. Run [`/web check`](/docs/hosting/check-it/) to test the whole setup.
+6. Publish the discovery record so players can find the dashboard from the address they play on: see [Let players find your dashboard](/docs/hosting/find-your-dashboard/).
 
 ## Logging in
 
@@ -48,6 +48,10 @@ The dashboard shows a one-time code, such as `K7QX-2M`; the player types `/web l
 | Public | Anyone with the address, when `public: true` | The season clock, who's online and the area they're in, the event feed, the map, the Hall and museum, history, waypoints, links |
 | Player | Logged in with `/web link` | Everything public, plus leaderboards, full profiles and archived gear as text |
 | Admin | Players with `seasons.web.admin` (nobody by default) | Server health, pending players, the audit log |
+
+`seasons.web.admin` grants every admin widget. To give someone only part of it, grant its children instead: `seasons.web.admin.audit` (the audit log), `seasons.web.admin.health` (server health) or `seasons.web.admin.players` (players waiting to be archived). Its other two children are commands, which ops have by default: `seasons.web.admin.reload` runs `/web reload` and `/web upgrade`, and `seasons.web.admin.setup` runs `/web check`. Neither shows anything on the dashboard.
+
+The audit log scrolls inside its card; **Older entries** loads the page before, as far back as the log goes. Long lists such as the event feed scroll inside their cards too, so the page doesn't run on.
 
 Every widget and field has a visibility setting: `public`, `players`, `admins` or `hidden`.
 

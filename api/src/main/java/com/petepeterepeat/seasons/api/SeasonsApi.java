@@ -19,7 +19,7 @@ import java.util.function.Consumer;
  */
 public interface SeasonsApi {
   /** This API's version, which Seasons Web checks against the range it supports. */
-  String API_VERSION = "1.4.0";
+  String API_VERSION = "1.5.0";
 
   /**
    * The Seasons plugin version.
@@ -112,6 +112,15 @@ public interface SeasonsApi {
    */
   default CompletableFuture<List<AuditEntry>> audit(int count) {
     return CompletableFuture.completedFuture(List.of());
+  }
+
+  /**
+   * A page of Seasons' audit log, filtered by kind and player, paging back with a cursor (since
+   * 1.5). Without it, the last {@link AuditQuery#count()} entries as {@link #audit(int)} reads
+   * them.
+   */
+  default CompletableFuture<AuditPage> audit(AuditQuery query) {
+    return audit(query.count()).thenApply(entries -> new AuditPage(entries, Optional.empty()));
   }
 
   /**

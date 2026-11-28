@@ -628,7 +628,7 @@ Why not call the instance from the public site: browsers block cookies set by an
 | --- | --- | --- |
 | Public | Anyone with the address, when `public: true` | Season clock and countdowns, rules, who's online and the area they're in, the event feed, the embedded map, the Hall of Fame and museum browser, shared waypoints, links |
 | Player | Logged in with a linked account | Everything public, plus leaderboards, full profiles with every statistic, and archived gear as text |
-| Admin | Players with `seasons.web.admin` | Server health (TPS, tick time, memory), the audit log, pending players |
+| Admin | Players with `seasons.web.admin`, or the child of it for one widget (M10): `.audit`, `.health`, `.players` | Server health (TPS, tick time, memory), the audit log, pending players |
 
 Every widget and field has a visibility setting in `web.yml`. Players can hide themselves from leaderboards with `/web privacy`.
 
@@ -693,6 +693,7 @@ sessions:
 | `GET /api/v1/events` | Player | A server-sent event stream |
 | `GET /api/v1/waypoints`, `/api/v1/links` | By visibility | Shared waypoints and links |
 | `GET /api/v1/admin/health` | Admin | Tick time, TPS, memory |
+| `GET /api/v1/admin/audit?limit=&before=&kind=&player=` | Admin (`.audit`) | A page of the audit log, without details, and a cursor to the page before it (M10) |
 
 **Security**
 
@@ -757,7 +758,15 @@ Players get a handful of commands, plus four web commands with the Seasons Web a
 | `/web logout [all]` | End one session, or all of them |
 | `/web privacy` | Show or hide yourself on leaderboards |
 
-Admin dashboard widgets need `seasons.web.admin`, which is never granted by default.
+Admin dashboard widgets need `seasons.web.admin`, which is never granted by default, or one of its children for one widget: `seasons.web.admin.audit`, `.health` or `.players` (M10).
+
+**Web admin commands** (M10; the console, or the node shown, which ops hold by default; both are children of `seasons.web.admin`)
+
+| Command | Permission | Does |
+| --- | --- | --- |
+| `/web reload` | `seasons.web.admin.reload` | Apply web.yml and messages.yml without a restart, naming the settings that changed. A web.yml with a problem isn't applied: the dashboard keeps running as it was and the problems are listed |
+| `/web check` | `seasons.web.admin.setup` | Check web.yml without applying it (unknown settings with the likely one meant, missing settings, `[fill me]` values), then how the dashboard is reached: the public-url fetched from outside and seen arriving here, the proxy's address and header, discovery records, the game addresses' A, AAAA or SRV records, and the map |
+| `/web upgrade [--dry-run]` | `seasons.web.admin.reload` | Add the settings web.yml lacks, with their defaults and comments, keeping a backup and every line the admin wrote; settings only the admin knows are written as `[fill me]` |
 
 **Season admin** (`seasons.admin.season`)
 
