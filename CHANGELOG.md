@@ -4,6 +4,8 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-28
+
 ### Added
 
 - Cells whose bounds take in their walls, floor and roof (selected from the outside) are warned about as you set them and listed by `/hof hall check`. `/hof cell shrink <cell>` and `/hof gallery shrink <gallery>` move the walls out of the bounds, previewed as outlines, then `confirm`; `/hof undo` puts them back.
