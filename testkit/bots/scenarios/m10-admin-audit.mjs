@@ -5,10 +5,8 @@
 // shape with no query; on the page the log scrolls inside its card, with a labelled region the
 // keyboard can scroll, and a button that loads older entries; seasons.web.admin shows everything.
 import { MINUTE, assert } from '../lib/context.mjs'
-import { FLOOR } from '../lib/hall.mjs'
 import { dashboard, loginOnPage, openPage } from '../lib/browser.mjs'
 import { WebClient, login } from '../lib/web.mjs'
-import { box } from '../lib/zones.mjs'
 
 export default {
   name: 'm10-admin-audit',
@@ -18,11 +16,10 @@ export default {
     const alex = await ctx.join('Alex')
     const { origin } = await dashboard(ctx, admin)
     await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
-    await box(ctx, admin, 'old-base', { x: 500, y: FLOOR - 1, z: 500 }, { x: 520, y: FLOOR + 10, z: 520 })
-    // 60 entries: each unlock and lock is audited.
+    // 60 entries: each change to config.yml is audited.
     for (let i = 0; i < 30; i++) {
-      await ctx.command(admin, '/season unlock old-base', /^Zone old-base is unlocked/)
-      await ctx.command(admin, '/season lock old-base', /^Zone old-base is locked again/)
+      await ctx.command(admin, '/season config set hof.creativeBuilds false', /^Set hof\.creativeBuilds to false/)
+      await ctx.command(admin, '/season config set hof.creativeBuilds true', /^Set hof\.creativeBuilds to true/)
     }
 
     await ctx.command(admin, `/scenario permit ${admin.username} seasons.web.admin.audit`, /^Permitted /)
@@ -42,12 +39,12 @@ export default {
     const older = await api.get(`/api/v1/admin/audit?limit=50&before=${encodeURIComponent(plain.json.next)}`)
     assert(older.status === 200, `older: ${older.status}`)
     const all = [...older.json.entries, ...plain.json.entries]
-    const locks = all.filter((e) => e.action === 'zone-lock' || e.action === 'zone-unlock')
-    assert(locks.length === 60, `every lock and unlock across the two pages: ${locks.length}`)
+    const edits = all.filter((e) => e.action === 'config')
+    assert(edits.length === 60, `every config edit across the two pages: ${edits.length}`)
     assert(older.json.entries.every((e) => e.time <= plain.json.entries[0].time), 'the older page is older')
 
-    const kind = await api.get('/api/v1/admin/audit?kind=zone-unlock&limit=100')
-    assert(kind.json.entries.length === 30 && kind.json.entries.every((e) => e.action === 'zone-unlock'),
+    const kind = await api.get('/api/v1/admin/audit?kind=CONFIG&limit=100')
+    assert(kind.json.entries.length === 60 && kind.json.entries.every((e) => e.action === 'config'),
       `the kind filter: ${kind.json.entries.length}`)
     const nobody = await api.get('/api/v1/admin/audit?player=Alex')
     assert(nobody.json.entries.length === 0, 'nothing Alex did')
@@ -63,7 +60,7 @@ export default {
     // On the page: the log scrolls inside its card and loads older entries.
     const page = await openPage(ctx, origin, '/')
     await loginOnPage(ctx, page, admin)
-    await page.waitForWidget('audit-log', /zone-lock/)
+    await page.waitForWidget('audit-log', /config/)
     assert(await page.widget('server-health') === null, 'no health widget with audit alone')
     const region = page.page.locator('[data-widget="audit-log"] [role="region"]')
     assert(await region.count() === 1, 'the log is a region')
