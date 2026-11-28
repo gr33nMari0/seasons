@@ -46,6 +46,6 @@ export default {
       SUMMARY
     ], 30_000)
 
-    await ctx.command(alex, '/web check', /Unknown or incomplete command|You do not have permission/i)
+    await ctx.command(alex, '/web check', /Unknown or incomplete command|Incorrect argument for command|You do not have permission/i)
   }
 }

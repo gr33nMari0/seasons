@@ -1,13 +1,13 @@
 {
   "plugin": "Seasons Web",
   "commands": [
-    {"words": ["web", "reload"], "usages": ["/web reload"], "description": "Apply web.yml and messages.yml now, without a restart. A web.yml with a problem isn't applied: the dashboard keeps running as it was, and the problems are listed.", "permissions": ["seasons.web.admin.reload"]},
-    {"words": ["web", "check"], "usages": ["/web check"], "description": "Check web.yml without applying it, then how the dashboard is reached: its public address, the proxy in front, its DNS records and its map.", "permissions": ["seasons.web.admin.setup"]},
-    {"words": ["web", "upgrade"], "usages": ["/web upgrade", "/web upgrade --dry-run"], "description": "Add the settings web.yml lacks that this version has, with their defaults and explanations, keeping a backup and every line you wrote. --dry-run lists them first.", "permissions": ["seasons.web.admin.reload"]},
     {"words": ["web", "link"], "usages": ["/web link", "/web link <code>"], "description": "Log this device in to the dashboard: show a code on the dashboard, then type it here.", "permissions": ["seasons.web"]},
     {"words": ["web", "sessions"], "usages": ["/web sessions"], "description": "List the devices logged in to the dashboard as you.", "permissions": ["seasons.web"]},
     {"words": ["web", "logout"], "usages": ["/web logout", "/web logout <device>"], "description": "Log out of one device by its id from /web sessions, or of every device with all.", "permissions": ["seasons.web"]},
     {"words": ["web", "privacy"], "usages": ["/web privacy"], "description": "Hide yourself from the dashboard's leaderboards, or show yourself again.", "permissions": ["seasons.web"]},
-    {"words": ["web", "discovery"], "usages": ["/web discovery", "/web discovery check"], "description": "Print the DNS records that let players find this dashboard from the address they play on; check looks them up.", "permissions": ["seasons.web.discovery"]}
+    {"words": ["web", "discovery"], "usages": ["/web discovery", "/web discovery check"], "description": "Print the DNS records that let players find this dashboard from the address they play on; check looks them up.", "permissions": ["seasons.web.discovery"]},
+    {"words": ["web", "reload"], "usages": ["/web reload"], "description": "Apply web.yml and messages.yml now, without a restart. A web.yml with a problem isn't applied: the dashboard keeps running as it was, and the problems are listed.", "permissions": ["seasons.web.admin.reload"]},
+    {"words": ["web", "check"], "usages": ["/web check"], "description": "Check web.yml without applying it, then how the dashboard is reached: its public address, the proxy in front, its DNS records and its map.", "permissions": ["seasons.web.admin.setup"]},
+    {"words": ["web", "upgrade"], "usages": ["/web upgrade", "/web upgrade --dry-run"], "description": "Add the settings web.yml lacks that this version has, with their defaults and explanations, keeping a backup and every line you wrote. --dry-run lists them first.", "permissions": ["seasons.web.admin.reload"]}
   ]
 }

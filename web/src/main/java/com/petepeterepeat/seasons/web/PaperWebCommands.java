@@ -68,35 +68,6 @@ final class PaperWebCommands {
     return Commands.literal("web")
         .requires(s -> playerWithWeb(s) || mayDiscover(s) || mayReload(s) || mayCheck(s))
         .then(
-            Commands.literal("reload")
-                .requires(PaperWebCommands::mayReload)
-                .executes(c -> tell(c, commands.get().reload())))
-        .then(
-            Commands.literal("check")
-                .requires(PaperWebCommands::mayCheck)
-                .executes(c -> {
-                  CommandSender sender = c.getSource().getSender();
-                  send(sender, List.of(Line.of("check.checking")));
-                  DiscoveryLookups look = lookups.get();
-                  var _ =
-                      commands
-                          .get()
-                          .check(look, look, look)
-                          .thenAccept(lines ->
-                              plugin
-                                  .getServer()
-                                  .getGlobalRegionScheduler()
-                                  .execute(plugin, () -> send(sender, lines)));
-                  return Command.SINGLE_SUCCESS;
-                }))
-        .then(
-            Commands.literal("upgrade")
-                .requires(PaperWebCommands::mayReload)
-                .executes(c -> tell(c, commands.get().upgrade(false)))
-                .then(
-                    Commands.literal("--dry-run")
-                        .executes(c -> tell(c, commands.get().upgrade(true)))))
-        .then(
             Commands.literal("link")
                 .requires(PaperWebCommands::playerWithWeb)
                 .executes(c -> tell(c, commands.get().linkUsage()))
@@ -176,6 +147,35 @@ final class PaperWebCommands {
                                           .execute(plugin, () -> send(sender, lines)));
                           return Command.SINGLE_SUCCESS;
                         })))
+        .then(
+            Commands.literal("reload")
+                .requires(PaperWebCommands::mayReload)
+                .executes(c -> tell(c, commands.get().reload())))
+        .then(
+            Commands.literal("check")
+                .requires(PaperWebCommands::mayCheck)
+                .executes(c -> {
+                  CommandSender sender = c.getSource().getSender();
+                  send(sender, List.of(Line.of("check.checking")));
+                  DiscoveryLookups look = lookups.get();
+                  var _ =
+                      commands
+                          .get()
+                          .check(look, look, look)
+                          .thenAccept(lines ->
+                              plugin
+                                  .getServer()
+                                  .getGlobalRegionScheduler()
+                                  .execute(plugin, () -> send(sender, lines)));
+                  return Command.SINGLE_SUCCESS;
+                }))
+        .then(
+            Commands.literal("upgrade")
+                .requires(PaperWebCommands::mayReload)
+                .executes(c -> tell(c, commands.get().upgrade(false)))
+                .then(
+                    Commands.literal("--dry-run")
+                        .executes(c -> tell(c, commands.get().upgrade(true)))))
         .build();
   }
 

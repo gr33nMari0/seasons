@@ -44,6 +44,6 @@ export default {
     const off = await device.get('/api/v1/dashboard').catch(() => ({ status: 0 }))
     assert(off.status === 0, 'nothing listens once it is off')
 
-    await ctx.command(alex, '/web reload', /Unknown or incomplete command|You do not have permission/i)
+    await ctx.command(alex, '/web reload', /Unknown or incomplete command|Incorrect argument for command|You do not have permission/i)
   }
 }

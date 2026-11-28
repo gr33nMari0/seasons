@@ -28,7 +28,8 @@ export default {
       await ctx.command(admin, '/web reload', /^Seasons Web reloaded: listening on /)
     },
     async (ctx) => {
-      assert(/web\.yml lacks \d+ settings this version has; run \/web upgrade to add them/.test(ctx.serverLog()),
+      // The restart's own log, from before this session began.
+      assert(/web\.yml lacks \d+ settings this version has; run \/web upgrade to add them/.test(ctx.readFile('logs/latest.log')),
         'the startup log says settings are missing')
       const admin = await ctx.admin()
       const written = OLD.replace('PORT', ctx.webPort)

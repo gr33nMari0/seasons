@@ -17,6 +17,7 @@ export default {
     const admin = await ctx.admin()
     const alex = await ctx.join('Alex')
     const { origin } = await dashboard(ctx, admin)
+    await ctx.command(admin, '/season init 2', /^Recorded Season 2 /)
     await box(ctx, admin, 'old-base', { x: 500, y: FLOOR - 1, z: 500 }, { x: 520, y: FLOOR + 10, z: 520 })
     // 60 entries: each unlock and lock is audited.
     for (let i = 0; i < 30; i++) {
