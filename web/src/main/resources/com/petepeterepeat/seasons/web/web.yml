@@ -1,5 +1,5 @@
 # Seasons Web: a read-only live dashboard for phones, iPads and second screens.
-# Changes take effect at the next restart.
+# /web reload applies changes; /web check tests the whole setup.
 schema-version: 1
 
 # Off until you turn it on.
@@ -19,7 +19,7 @@ name: ""
 
 # The addresses players join the game with, such as play.example.com or play.example.com:25566.
 # Players can type one on the public connect page and land here; publish the DNS record
-# /web discovery prints for each. https://seasonsmc.petepeterepeat.com/docs/guides/publish-dashboard/
+# /web discovery prints for each. https://seasonsmc.petepeterepeat.com/docs/hosting/find-your-dashboard/
 game-addresses: []
 
 # true: anyone with the address sees the public widgets without logging in.
@@ -40,7 +40,8 @@ links: []
 #  - { label: Discord, url: "https://discord.gg/[INVITE]" }
 #  - { label: Map, url: "https://map.example.com", embed: frame }
 
-# Who sees each widget or field: public, players (logged in), admins (seasons.web.admin) or
+# Who sees each widget or field: public, players (logged in), admins (seasons.web.admin, or the one
+# child of it for that widget, such as seasons.web.admin.audit for audit-log) or
 # hidden. Anything not listed keeps its default:
 #   season: public          online: public           online.dimension: public
 #   online.region: public   online.afk: public       event-feed: public

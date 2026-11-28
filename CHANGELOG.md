@@ -4,6 +4,16 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- `/web reload` applies `web.yml` and `messages.yml` without a restart and names what changed. A `web.yml` with a problem isn't applied: the dashboard keeps running as it was and the reply lists what's wrong.
+- `/web check` tests `web.yml` (unknown settings with the one you probably meant, missing ones, values still `[fill me]`) and how players reach your dashboard: it fetches your `public-url` from outside and sees it arrive, says where requests come from and whether the proxy's header comes with them, and checks the discovery records, your game addresses' DNS records and the map, each with what to do.
+- `/web upgrade` adds the settings your `web.yml` lacks after an update, with their defaults and explanations, keeping a backup and every line you wrote; `--dry-run` lists them first. The startup log says when any are missing.
+- Admin widgets one at a time: `seasons.web.admin.audit`, `.health` and `.players` each show one admin widget, and `seasons.web.admin` still shows them all. `seasons.web.admin.reload` and `.setup` (ops by default) run the new commands.
+- The audit log, the event feed and the players waiting scroll inside their cards instead of running down the page, and the audit log's **Older entries** loads the page before. `GET /api/v1/admin/audit` takes `limit`, `before`, `kind` and `player`, and answers with a `next` cursor.
+- Seasons API 1.5: `audit(AuditQuery)`, a page of the audit log by cursor, kind and player.
+- New docs: [Addresses and hosting](https://seasonsmc.petepeterepeat.com/docs/hosting/records/), the DNS records you need and each way to put the dashboard and map on HTTPS, starting with a reverse proxy on your own machine, then game-server hosts, Cloudflare Tunnel and other tunnels, and how to read `/web check`.
+
 ## [1.4.1] - 2026-11-28
 
 ### Added

@@ -175,7 +175,10 @@
     "/web sessions": "1.2.0",
     "/web logout": "1.2.0",
     "/web privacy": "1.2.0",
-    "/web discovery": "1.4.0"
+    "/web discovery": "1.4.0",
+    "/web reload": "1.5.0",
+    "/web check": "1.5.0",
+    "/web upgrade": "1.5.0"
   },
   "permissions": {
     "seasons.info": "1.0.0",
@@ -205,6 +208,11 @@
     "seasons.hof.roam": "1.0.0",
     "seasons.web": "1.0.0",
     "seasons.web.admin": "1.0.0",
-    "seasons.web.discovery": "1.4.0"
+    "seasons.web.discovery": "1.4.0",
+    "seasons.web.admin.audit": "1.5.0",
+    "seasons.web.admin.health": "1.5.0",
+    "seasons.web.admin.players": "1.5.0",
+    "seasons.web.admin.setup": "1.5.0",
+    "seasons.web.admin.reload": "1.5.0"
   }
 }

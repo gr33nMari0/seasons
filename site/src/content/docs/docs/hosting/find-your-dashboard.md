@@ -5,7 +5,7 @@ art: map
 audience: owners
 since: 1.4.0
 sidebar:
-  order: 5
+  order: 6
 ---
 
 Players shouldn't need to know your dashboard's address. On the [connect page](/connect/) they type the address they **join the game with**, such as `play.example.com`, and are taken to your dashboard. For that, publish one DNS record.
@@ -19,7 +19,7 @@ public-url: https://seasons.example.com
 game-addresses: [play.example.com, mc.example.com]
 ```
 
-List every address players join with. Restart.
+List every address players join with, then run `/web reload`.
 
 ## 2. Publish the record
 
@@ -39,7 +39,7 @@ If your game address is an SRV record (`_minecraft._tcp.example.com`), put the T
 /web discovery check
 ```
 
-It looks the record up, checks it points at your `public-url`, and checks the dashboard answers. Then try the [connect page](/connect/) yourself with your game address.
+It looks the record up, checks it points at your `public-url`, and checks the dashboard answers. [`/web check`](/docs/hosting/check-it/) does the same as part of checking everything else. Then try the [connect page](/connect/) yourself with your game address.
 
 ## How it's found
 

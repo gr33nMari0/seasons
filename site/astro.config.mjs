@@ -40,6 +40,7 @@ export default defineConfig({
         { label: 'Start here', items: [{ autogenerate: { directory: 'docs/start' } }] },
         { label: 'Running a server', items: [{ autogenerate: { directory: 'docs/owners' } }] },
         { label: 'Guides', items: [{ autogenerate: { directory: 'docs/guides' } }] },
+        { label: 'Addresses and hosting', items: [{ autogenerate: { directory: 'docs/hosting' } }] },
         { label: 'For players', items: [{ autogenerate: { directory: 'docs/players' } }] },
         { label: 'Reference', items: [{ autogenerate: { directory: 'docs/reference' } }, { label: 'Configuration', link: '/docs/reference/config/' }] },
         { label: 'FAQ', link: '/docs/faq/' }

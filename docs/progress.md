@@ -19,6 +19,7 @@ Where each milestone stands. A milestone is done when its acceptance scenarios p
 | M8 Reliable links | Done (#40), released as 1.3.0 | A77 to A95; A54, A58, A63, A64, A67, A68 and m5-wand widened; see M8, below |
 | M9 Dashboard and docs design overhaul | Done (#42, #43, #44), released as 1.4.0 | Site and docs checks in `site/test`; `m9-*`; see M9, below |
 | 1.4.1 Hall fixes | Done (#47), released as 1.4.1 | A96 to A98; A71 widened; see 1.4.1, below |
+| M10 Rich dashboard and web operations | In progress (plan in `docs/plans/m10-rich-dashboard.md`), for 1.5.0: part 1, web operations | `m10-web-reload`, `m10-web-check`, `m10-web-upgrade`, `m10-admin-audit`; see M10, below |
 
 Before the first beta, branch `m3-finish` built what was left within M0 to M3 scope (see Finishing M0 to M3, below; readings in `docs/questions.md` 165 to 177).
 
@@ -586,3 +587,30 @@ Different from the plan:
 - The wall warning needs two faces or more (questions 341): bounds that take in only their floor are common and not warned about, though `cells.protectShell` still keeps the owner off that floor.
 - Shell protection only refuses breaking; placing and using are as before (342).
 - Placeholder figures, `/hof why` and the cell CRUD stay for 1.6 as planned; museum plinth plaques keep their old placement (344).
+
+## M10: rich dashboard and web operations
+
+Plan in `docs/plans/m10-rich-dashboard.md`; readings in `docs/questions.md` from 347. Three pull requests, as the plan has them.
+
+### Part 1: web operations (branch `m10-web-ops`)
+
+O1 to O4, the hosting docs (§D), scrolling lists (L2), and from R9 the admin permission split and the paged audit log.
+
+| Scenario | Test |
+| --- | --- |
+| `/web reload` names what changed, the dashboard shows it at once and a device stays logged in; a broken web.yml isn't applied and the dashboard keeps running; `enabled: false` is applied; a player has no such command | `m10-web-reload.mjs`; unit: `WebTest#reloadAppliesWhatChecksOutAndKeepsRunningOtherwise` |
+| `/web check` behind the tunnel: an unknown setting and the one meant, missing settings, the public-url reaching this dashboard, the proxy trusted with its header, no game addresses, no map; the proxy not trusted; no public-url; nothing changed; a player has no such command | `m10-web-check.mjs`; unit: `WebTest#theCheckSeesItsOwnRequestArriveThroughTheProxy` (discovery, SRV) |
+| An older web.yml with the admin's notes: the startup log, `--dry-run` changing nothing, the upgrade's backup and each setting added with its comments, nested ones in their section, every admin line kept; nothing missing after, and nothing to add again | `m10-web-upgrade.mjs` (two sessions); unit: `YamlUpgradeTest` |
+| `seasons.web.admin.audit` alone: the audit log and not health or pending; the 1.4 shape, paging back with no overlap, the kind and player filters, a bad limit; the log scrolls in its card as a labelled region and loads older entries; `seasons.web.admin` shows health | `m10-admin-audit.mjs`; unit: `AuditLogTest` (cursors through one instant, filters, older months), `VisibilityTest#eachAdminWidgetNeedsItsOwnPart`, `SessionStoreTest#grantsAreKeptAndA14AdminFlagMeansEveryPart` |
+
+Built: `Grants` (the widget children of `seasons.web.admin` on sessions), `SettingsAudit` (missing, unknown and `[fill me]` settings), `YamlUpgrade` (adding settings to web.yml as text), `WebCheck` and `SelfCheck` (the check, and its own request seen arriving), `Web#reloadChecked`; in the core `AuditLog#page` and its cursor; Seasons API 1.5's `AuditQuery` and `AuditPage`; the dashboard's `scrolling` lists; the docs' Addresses and hosting group.
+
+Different from the plan:
+
+- `bind` applies on `/web reload` too, since the listener starts again; nothing waits for a restart (348).
+- `/web check` looks DNS up through the same DNS-over-HTTPS resolvers as the discovery check, not the JDK's resolver (349).
+- `/web upgrade` adds settings as text, without a YAML library, and doesn't comment out removed settings, since none have been removed (351). messages.yml isn't upgraded.
+- No startup message to admins as they join: the hint is in the log and in `/web reload`'s reply (352).
+- The hosting docs are a sidebar group of their own at `/docs/hosting/`, and the old page is a hidden link to its new place rather than a redirect (355).
+- The audit log's search and filters on the page wait for part 3, with the rest of R9; the API already takes them.
+

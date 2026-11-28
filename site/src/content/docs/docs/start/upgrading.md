@@ -16,9 +16,17 @@ sidebar:
 
 Every Seasons file records its format version, so a newer Seasons reads older files. Archives store items as vanilla item data, which the game upgrades when it loads them, so they survive game updates too. Updating Seasons and the game separately is safest: one change at a time.
 
+## From 1.4 to 1.5
+
+If you run Seasons Web:
+
+1. Run `/web upgrade --dry-run` to see the settings your `web.yml` lacks, then `/web upgrade` to add them with their explanations. A backup is kept, and every line you wrote stays. See [Check it](/docs/hosting/check-it/).
+2. From now on, `/web reload` applies `web.yml` without a restart, and `/web check` tests the whole setup.
+3. Anyone given `seasons.web.admin` keeps every admin widget. To give someone only the audit log, grant `seasons.web.admin.audit` instead (see [Seasons Web](/docs/owners/seasons-web/)).
+
 ## From 1.3 to 1.4
 
-1.4 is the design overhaul of the dashboard and these docs. Nothing to do in game. If you run Seasons Web, add your game address to `web.yml` so players can find your dashboard from the address they play on (see [Let players find your dashboard](/docs/guides/publish-dashboard/)), then run `/web discovery` for the record to publish.
+1.4 is the design overhaul of the dashboard and these docs. Nothing to do in game. If you run Seasons Web, add your game address to `web.yml` so players can find your dashboard from the address they play on (see [Let players find your dashboard](/docs/hosting/find-your-dashboard/)), then run `/web discovery` for the record to publish.
 
 ## From 1.2 to 1.3
 
