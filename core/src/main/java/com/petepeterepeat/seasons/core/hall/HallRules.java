@@ -125,9 +125,12 @@ public final class HallRules implements HallGuard {
     if (halls.inGate(block)) {
       return refused(player, "place", type, block, "hof.no-build");
     }
-    if (decorating(player, block).isEmpty()) {
+    Optional<HallService.CellRef> own = decorating(player, block);
+    if (own.isEmpty()) {
       return refused(player, "place", type, block, "hof.no-build");
     }
+    // Its walls seen before this block goes in, should nothing have seen them yet (questions 342).
+    var _ = halls.walls().remember(own.get());
     if (platform.inventories().container(block).isPresent() && !cellContainer(type)) {
       return refused(player, "place", type, block, "hof.rules.no-container");
     }
@@ -150,8 +153,13 @@ public final class HallRules implements HallGuard {
     if (halls.inGate(block)) {
       return refused(player, "break", type, block, "hof.no-build");
     }
-    if (decorating(player, block).isEmpty()) {
+    Optional<HallService.CellRef> own = decorating(player, block);
+    if (own.isEmpty()) {
       return refused(player, "break", type, block, "hof.no-build");
+    }
+    // Walls, floor and roof taken into the bounds stay the builders' (1.4.1, H1).
+    if (config.get().config().cells().protectShell() && halls.walls().inWall(own.get(), block)) {
+      return refused(player, "break", type, block, "hof.rules.shell");
     }
     boolean holdsSomething =
         platform

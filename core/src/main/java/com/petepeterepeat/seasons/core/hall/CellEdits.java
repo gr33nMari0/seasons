@@ -146,8 +146,20 @@ public final class CellEdits {
                 "from",
                 corner(bounds.min()),
                 "to",
-                corner(bounds.max())));
+                corner(bounds.max())),
+        () -> warnWalls(source, ref.key(), bounds));
     return true;
+  }
+
+  /**
+   * Says so when a cell's new bounds look as if they take in its walls, floor or roof, as when they
+   * were selected from the outside (1.4.1, H1).
+   */
+  void warnWalls(CommandSource source, String cell, Bounds bounds) {
+    List<CellWalls.Face> walls = hall.walls().walls(bounds);
+    if (walls.size() >= CellWalls.LOOKS_WALLED) {
+      source.reply(messages().get("hof.cell.walls", "cell", cell, "faces", CellWalls.names(walls)));
+    }
   }
 
   /** Adds an anchor inside a cell that has bounds. */
