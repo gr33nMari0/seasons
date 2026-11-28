@@ -44,6 +44,7 @@ final class Web implements AutoCloseable {
   private final EventHub hub;
 
   private final Assets assets;
+  private final SelfCheck selfCheck = new SelfCheck();
   private volatile @Nullable WebServer server;
   private volatile @Nullable MapProbe probe;
   private volatile WebConfig config;
@@ -99,6 +100,22 @@ final class Web implements AutoCloseable {
     }
     messages = loadMessages();
     sessions.load();
+    int missing = missingSettings();
+    if (missing > 0) {
+      log.info(
+          "web.yml lacks {} {} this version has; run /web upgrade to add them",
+          missing,
+          missing == 1 ? "setting" : "settings");
+    }
+  }
+
+  /** How many settings web.yml lacks that this version has; 0 if it doesn't read. */
+  int missingSettings() {
+    try {
+      return SettingsFile.missing(folder, SettingsFile.WEB).size();
+    } catch (ConfigurateException e) {
+      return 0;
+    }
   }
 
   /**
@@ -283,7 +300,7 @@ final class Web implements AutoCloseable {
                 cards(),
                 previewHttp));
     try {
-      WebServer started = new WebServer(next, routes, sessions, limiter, hub, log);
+      WebServer started = new WebServer(next, routes, sessions, limiter, hub, log, selfCheck);
       started.start();
       server = started;
       lastReady = next;
@@ -518,6 +535,24 @@ final class Web implements AutoCloseable {
 
   EventHub hub() {
     return hub;
+  }
+
+  SelfCheck selfCheck() {
+    return selfCheck;
+  }
+
+  Path folder() {
+    return folder;
+  }
+
+  String version() {
+    return version;
+  }
+
+  /** How the map's headers look, as the probe last saw them; unknown with no map. */
+  Framing.State mapState() {
+    MapProbe looking = probe;
+    return looking == null ? Framing.State.UNKNOWN : looking.state();
   }
 
   /** The port listened on, for tests. */

@@ -26,7 +26,8 @@ import java.util.concurrent.Executors;
  * never the server thread, with short timeouts. Only the record's name is sent, and only when an
  * admin runs the check.
  */
-final class DiscoveryLookups implements Discovery.Resolver, Discovery.Asker, AutoCloseable {
+final class DiscoveryLookups
+    implements Discovery.Resolver, Discovery.Asker, WebCheck.Network, AutoCloseable {
   private static final Duration TIMEOUT = Duration.ofSeconds(5);
   private static final List<String> RESOLVERS =
       List.of("https://cloudflare-dns.com/dns-query", "https://dns.google/resolve");
@@ -50,14 +51,40 @@ final class DiscoveryLookups implements Discovery.Resolver, Discovery.Asker, Aut
 
   @Override
   public CompletableFuture<List<String>> txt(String name) {
-    return txtFrom(RESOLVERS.getFirst(), name)
-        .exceptionallyCompose(first -> txtFrom(RESOLVERS.get(1), name));
+    return records(name, TXT);
   }
 
-  /** One resolver's TXT answer for a name: empty when the name has none. */
-  private CompletableFuture<List<String>> txtFrom(String resolver, String name) {
+  /** {@code /web check}'s look-ups of A, AAAA and SRV records, the same way as TXT. */
+  @Override
+  public CompletableFuture<List<String>> records(String name, int type) {
+    return recordsFrom(RESOLVERS.getFirst(), name, type)
+        .exceptionallyCompose(first -> recordsFrom(RESOLVERS.get(1), name, type));
+  }
+
+  /** {@code /web check}'s fetch of the dashboard's own public address. */
+  @Override
+  public CompletableFuture<WebCheck.Fetched> fetch(String url) {
+    HttpRequest request =
+        HttpRequest.newBuilder(URI.create(url))
+            .timeout(TIMEOUT)
+            .header("Accept", "application/json")
+            .header("User-Agent", "SeasonsWeb/" + version + " check")
+            .GET()
+            .build();
+    return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+        .thenApply(answer ->
+            new WebCheck.Fetched(answer.statusCode(), answer.body(), Optional.<String>empty()))
+        .exceptionally(e -> {
+          Throwable cause = e.getCause() == null ? e : e.getCause();
+          String why = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+          return new WebCheck.Fetched(0, "", Optional.of(why));
+        });
+  }
+
+  /** One resolver's answer of a type for a name: empty when the name has none. */
+  private CompletableFuture<List<String>> recordsFrom(String resolver, String name, int type) {
     String query =
-        resolver + "?name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&type=TXT";
+        resolver + "?name=" + URLEncoder.encode(name, StandardCharsets.UTF_8) + "&type=" + type;
     HttpRequest request =
         HttpRequest.newBuilder(URI.create(query))
             .timeout(TIMEOUT)
@@ -74,7 +101,7 @@ final class DiscoveryLookups implements Discovery.Resolver, Discovery.Asker, Aut
           if (o.get("Answer") instanceof JsonArray records) {
             for (JsonElement record : records) {
               JsonObject r = record.getAsJsonObject();
-              if (r.has("type") && r.get("type").getAsInt() == TXT && r.has("data")) {
+              if (r.has("type") && r.get("type").getAsInt() == type && r.has("data")) {
                 out.add(r.get("data").getAsString());
               }
             }

@@ -17,7 +17,10 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
-/** {@code /web link|sessions|logout|privacy} through Paper's Commands API, players only. */
+/**
+ * {@code /web link|sessions|logout|privacy} for players, and {@code /web
+ * discovery|reload|check|upgrade} for admins and the console, through Paper's Commands API.
+ */
 final class PaperWebCommands {
   static final String PERMISSION = "seasons.web";
   static final String ADMIN_PERMISSION = "seasons.web.admin";
@@ -51,9 +54,48 @@ final class PaperWebCommands {
     return !(s.getSender() instanceof Player) || s.getSender().hasPermission(DISCOVERY_PERMISSION);
   }
 
+  /** The console, or a holder of {@code seasons.web.admin.reload}: reload and upgrade. */
+  private static boolean mayReload(CommandSourceStack s) {
+    return !(s.getSender() instanceof Player) || s.getSender().hasPermission(RELOAD_PERMISSION);
+  }
+
+  /** The console, or a holder of {@code seasons.web.admin.setup}: the check. */
+  private static boolean mayCheck(CommandSourceStack s) {
+    return !(s.getSender() instanceof Player) || s.getSender().hasPermission(SETUP_PERMISSION);
+  }
+
   LiteralCommandNode<CommandSourceStack> node() {
     return Commands.literal("web")
-        .requires(s -> playerWithWeb(s) || mayDiscover(s))
+        .requires(s -> playerWithWeb(s) || mayDiscover(s) || mayReload(s) || mayCheck(s))
+        .then(
+            Commands.literal("reload")
+                .requires(PaperWebCommands::mayReload)
+                .executes(c -> tell(c, commands.get().reload())))
+        .then(
+            Commands.literal("check")
+                .requires(PaperWebCommands::mayCheck)
+                .executes(c -> {
+                  CommandSender sender = c.getSource().getSender();
+                  send(sender, List.of(Line.of("check.checking")));
+                  DiscoveryLookups look = lookups.get();
+                  var _ =
+                      commands
+                          .get()
+                          .check(look, look, look)
+                          .thenAccept(lines ->
+                              plugin
+                                  .getServer()
+                                  .getGlobalRegionScheduler()
+                                  .execute(plugin, () -> send(sender, lines)));
+                  return Command.SINGLE_SUCCESS;
+                }))
+        .then(
+            Commands.literal("upgrade")
+                .requires(PaperWebCommands::mayReload)
+                .executes(c -> tell(c, commands.get().upgrade(false)))
+                .then(
+                    Commands.literal("--dry-run")
+                        .executes(c -> tell(c, commands.get().upgrade(true)))))
         .then(
             Commands.literal("link")
                 .requires(PaperWebCommands::playerWithWeb)

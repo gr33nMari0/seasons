@@ -27,6 +27,11 @@
     {"node": "seasons.hof.roam", "plugin": "Seasons", "default": "op", "description": "Leave the Hall of Fame by any route, the Intermission included", "children": []},
     {"node": "seasons.web", "plugin": "Seasons Web", "default": "true", "description": "/web link, sessions, logout and privacy", "children": []},
     {"node": "seasons.web.discovery", "plugin": "Seasons Web", "default": "op", "description": "/web discovery, the DNS records that let players find the dashboard from the game address", "children": []},
-    {"node": "seasons.web.admin", "plugin": "Seasons Web", "default": "false", "description": "Admin dashboard widgets. Never granted by default", "children": []}
+    {"node": "seasons.web.admin", "plugin": "Seasons Web", "default": "false", "description": "Every part of Seasons Web's admin side, the dashboard's admin widgets included. Never granted by default", "children": ["seasons.web.admin.audit", "seasons.web.admin.health", "seasons.web.admin.players", "seasons.web.admin.setup", "seasons.web.admin.reload"]},
+    {"node": "seasons.web.admin.audit", "plugin": "Seasons Web", "default": "false", "description": "The audit-log widget. Never granted by default", "children": []},
+    {"node": "seasons.web.admin.health", "plugin": "Seasons Web", "default": "false", "description": "The server-health widget. Never granted by default", "children": []},
+    {"node": "seasons.web.admin.players", "plugin": "Seasons Web", "default": "false", "description": "The pending-players widget. Never granted by default", "children": []},
+    {"node": "seasons.web.admin.setup", "plugin": "Seasons Web", "default": "op", "description": "/web check, which checks web.yml and how the dashboard is reached", "children": []},
+    {"node": "seasons.web.admin.reload", "plugin": "Seasons Web", "default": "op", "description": "/web reload and /web upgrade, which apply web.yml and add the settings it lacks", "children": []}
   ]
 }
