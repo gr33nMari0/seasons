@@ -13,7 +13,6 @@ import com.petepeterepeat.seasons.core.player.PlayerStore;
 import com.petepeterepeat.seasons.core.port.Platform;
 import com.petepeterepeat.seasons.core.port.PlayerId;
 import com.petepeterepeat.seasons.core.port.PlayerRef;
-import com.petepeterepeat.seasons.core.port.Position;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -192,19 +191,7 @@ public final class CellFixes {
     }
     List<Anchor> anchors = new ArrayList<>();
     for (Anchor anchor : ref.cell().anchors()) {
-      Position at = anchor.at();
-      anchors.add(
-          new Anchor(
-              anchor.type(),
-              new Position(
-                  at.dimension(),
-                  at.x() + by[0],
-                  at.y() + by[1],
-                  at.z() + by[2],
-                  at.yaw(),
-                  at.pitch()),
-              anchor.page(),
-              anchor.egg()));
+      anchors.add(anchor.movedBy(by[0], by[1], by[2]));
     }
     Cell cell = ref.cell();
     Cell next =

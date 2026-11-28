@@ -244,7 +244,9 @@ public final class AnchorDrag {
       source.reply(
           messages()
               .get(
-                  "hof.drag.line",
+                  anchor.facing().isPresent() ? "hof.drag.line-facing" : "hof.drag.line",
+                  "facing",
+                  anchor.facing().map(PlaqueFit.Facing::id).orElse(""),
                   "n",
                   Integer.toString(i + 1),
                   "type",

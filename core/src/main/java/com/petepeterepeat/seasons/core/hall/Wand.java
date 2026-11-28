@@ -439,8 +439,14 @@ public final class Wand {
               messages().get("hof.wand.types." + type.id())));
       actions.add(() ->
           current(ref)
-              .ifPresent(
-                  now -> edits.anchor(source(player), now, Anchor.of(type, withYaw(spot, yaw)))));
+              .ifPresent(now ->
+                  edits.anchor(
+                      source(player),
+                      now,
+                      type == AnchorType.PLAQUE
+                          ? Anchor.of(type, withYaw(spot, yaw))
+                              .withFacing(PlaqueFit.Facing.of(face))
+                          : Anchor.of(type, withYaw(spot, yaw)))));
     }
     if (ref.gallery().kind() == Gallery.Kind.MUSEUM) {
       for (int egg : eggSeasons()) {

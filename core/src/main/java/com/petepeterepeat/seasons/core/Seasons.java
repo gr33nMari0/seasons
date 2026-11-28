@@ -42,6 +42,7 @@ import com.petepeterepeat.seasons.core.hall.Cell;
 import com.petepeterepeat.seasons.core.hall.CellEdits;
 import com.petepeterepeat.seasons.core.hall.CellFixes;
 import com.petepeterepeat.seasons.core.hall.CellRows;
+import com.petepeterepeat.seasons.core.hall.CellShrink;
 import com.petepeterepeat.seasons.core.hall.Gallery;
 import com.petepeterepeat.seasons.core.hall.Gates;
 import com.petepeterepeat.seasons.core.hall.Hall;
@@ -739,6 +740,7 @@ public final class Seasons implements SeasonsApi {
             stamper,
             help);
     CellRows rows = new CellRows(platform, config, halls, cellEdits, wanding, clock, help);
+    CellShrink shrinking = new CellShrink(platform, config, halls, cellEdits, clock);
     PlaqueScale plaques = new PlaqueScale(platform, config, halls, cellEdits);
     plaqueScale = plaques;
     HallOutlines outlining = new HallOutlines(platform, config, halls, wanding);
@@ -757,6 +759,7 @@ public final class Seasons implements SeasonsApi {
     outlining.bindPreviews(player -> {
       List<com.petepeterepeat.seasons.core.port.Displays.Outline> all =
           new ArrayList<>(rows.previews(player));
+      all.addAll(shrinking.previews(player));
       all.addAll(boxEdits.outlines(player));
       all.addAll(anchorDrag.outlines(player));
       return all;
@@ -780,6 +783,7 @@ public final class Seasons implements SeasonsApi {
                 new CellFixes(platform, config, halls, players, cellEdits, wanding, reconciling)
                     .root())
             .merge(rows.root())
+            .merge(shrinking.root())
             .merge(plaques.root());
     if (curation != null) {
       List<CommandNode> children = new ArrayList<>(hof.children());

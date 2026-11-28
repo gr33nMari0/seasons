@@ -14,6 +14,8 @@ import java.util.OptionalInt;
  * @param egg for a trophy anchor in a museum, the season whose dragon egg it shows: an egg plinth
  * @param area for an entry anchor, a box arrivals spread over (questions 279), from {@code at}
  * @param scale for a plaque anchor, the size of its text (questions 278); else the gallery's
+ * @param facing for a plaque anchor, the side of its block its text stands on (1.4.1, questions
+ *     344); empty until set or guessed
  */
 public record Anchor(
     AnchorType type,
@@ -21,9 +23,20 @@ public record Anchor(
     OptionalInt page,
     OptionalInt egg,
     Optional<Bounds> area,
-    OptionalDouble scale) {
+    OptionalDouble scale,
+    Optional<PlaqueFit.Facing> facing) {
   public Anchor(AnchorType type, Position at, OptionalInt page, OptionalInt egg) {
-    this(type, at, page, egg, Optional.empty(), OptionalDouble.empty());
+    this(type, at, page, egg, Optional.empty(), OptionalDouble.empty(), Optional.empty());
+  }
+
+  public Anchor(
+      AnchorType type,
+      Position at,
+      OptionalInt page,
+      OptionalInt egg,
+      Optional<Bounds> area,
+      OptionalDouble scale) {
+    this(type, at, page, egg, area, scale, Optional.empty());
   }
 
   public static Anchor of(AnchorType type, Position at) {
@@ -52,18 +65,22 @@ public record Anchor(
                 b.maxX() + dx,
                 b.maxY() + dy,
                 b.maxZ() + dz));
-    return new Anchor(type, next, page, egg, moved, scale);
+    return new Anchor(type, next, page, egg, moved, scale, facing);
   }
 
   public Anchor withAt(Position next) {
-    return new Anchor(type, next, page, egg, area, scale);
+    return new Anchor(type, next, page, egg, area, scale, facing);
   }
 
   public Anchor withArea(Optional<Bounds> next) {
-    return new Anchor(type, at, page, egg, next, scale);
+    return new Anchor(type, at, page, egg, next, scale, facing);
   }
 
   public Anchor withScale(OptionalDouble next) {
-    return new Anchor(type, at, page, egg, area, next);
+    return new Anchor(type, at, page, egg, area, next, facing);
+  }
+
+  public Anchor withFacing(Optional<PlaqueFit.Facing> next) {
+    return new Anchor(type, at, page, egg, area, scale, next);
   }
 }

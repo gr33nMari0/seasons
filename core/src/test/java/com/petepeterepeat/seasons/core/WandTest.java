@@ -275,7 +275,9 @@ class WandTest {
             "/hof cell anchor season-2:c2 figure 14 64 6 180",
             "/hof cell anchor season-2:c2 plaque 15 64 6 180",
             "/hof cell anchor season-2:c2 trophy 13 65 7 180",
-            "/hof cell anchor season-2:c2 entry 14 64 3 180")) {
+            "/hof cell anchor season-2:c2 entry 14 64 3 180",
+            // The wand's plaque faces the side clicked (1.4.1, H4).
+            "/hof cell plaque season-2:c2 facing up")) {
       hof(command);
     }
     String text = file();

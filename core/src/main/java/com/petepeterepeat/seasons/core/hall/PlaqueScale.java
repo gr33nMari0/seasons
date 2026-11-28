@@ -56,7 +56,13 @@ public final class PlaqueScale {
                                     CommandNode.literal("scale")
                                         .then(
                                             CommandNode.argument("size", ArgumentType.word())
-                                                .executes(this::cellScale))))))
+                                                .executes(this::cellScale)))
+                                .then(
+                                    CommandNode.literal("facing")
+                                        .then(
+                                            CommandNode.argument("facing", ArgumentType.word())
+                                                .suggests((s, t) -> FACINGS)
+                                                .executes(this::cellFacing))))))
         .then(
             CommandNode.literal("gallery")
                 .permission(admin)
@@ -107,6 +113,45 @@ public final class PlaqueScale {
         hall.save(next),
         messages().get("hof.plaque-size.scaled", "cell", ref.key(), "size", text(size.get())),
         () -> redraw(next));
+  }
+
+  /** What {@code /hof cell plaque <cell> facing} takes: a side, or auto to guess it again. */
+  private static final java.util.List<String> FACINGS =
+      java.util.List.of("north", "south", "west", "east", "up", "auto");
+
+  /**
+   * {@code /hof cell plaque <cell> facing <side|auto>} (1.4.1, H4): which side of its block the
+   * plaque's text stands on; auto forgets it, so the next drawing guesses it again.
+   */
+  void cellFacing(CommandSource source, Arguments arguments) {
+    String word = arguments.string("facing");
+    Optional<PlaqueFit.Facing> facing = PlaqueFit.Facing.of(word);
+    if (facing.isEmpty() && !word.equals("auto")) {
+      source.reply(messages().get("hof.plaque-facing.bad"));
+      return;
+    }
+    String name = arguments.string("cell");
+    if (!(hall.resolve(name) instanceof HallService.Resolved.Found found)) {
+      source.reply(messages().get("hof.no-cell", "cell", name));
+      return;
+    }
+    HallService.CellRef ref = found.ref();
+    Optional<Anchor> plaque = ref.cell().anchor(AnchorType.PLAQUE);
+    if (plaque.isEmpty()) {
+      source.reply(messages().get("hof.plaque-size.none", "cell", ref.key()));
+      return;
+    }
+    java.util.List<Anchor> anchors = new java.util.ArrayList<>();
+    for (Anchor anchor : ref.cell().anchors()) {
+      anchors.add(anchor.equals(plaque.get()) ? anchor.withFacing(facing) : anchor);
+    }
+    Gallery next = ref.gallery().withCell(ref.cell().withAnchors(anchors));
+    edits.saved(
+        source,
+        hall.save(next),
+        facing.isPresent()
+            ? messages().get("hof.plaque-facing.set", "cell", ref.key(), "facing", word)
+            : messages().get("hof.plaque-facing.auto", "cell", ref.key()));
   }
 
   void galleryScale(CommandSource source, Arguments arguments) {

@@ -984,6 +984,8 @@ public final class HallCommands {
                         .solid()
                     && platform.world().block(at).passable(),
             visits::seasonSpawn,
+            hall.walls()::walls,
+            hall::plaqueFit,
             messages());
     source.reply(messages().get("hof.check.header"));
     report.findings().forEach(source::reply);

@@ -38,6 +38,8 @@ export default {
     await ctx.command(admin, `/hof cell anchor season-2:c2 plaque 28 ${FLOOR + 2} 29`, /^Added a plaque anchor /)
     await ctx.command(admin, '/hof cell plaque season-2:c2 facing north', /^The plaque of season-2:c2 now faces north\.$/)
     await ctx.command(admin, `/hof cell anchor season-2:c3 plaque 34 ${FLOOR + 2} 29`, /^Added a plaque anchor /)
+    // c4's plaque moves away from c3's wall, so it has room all round.
+    await ctx.command(admin, `/hof cell anchor season-2:c4 plaque 41 ${FLOOR} 27`, /^Added a plaque anchor /)
     for (const [cell, name] of [['c1', 'Wall'], ['c2', 'Nook'], ['c3', 'Guess'], ['c4', 'Floor']]) {
       await ctx.command(admin, `/hof cell assign season-2:${cell} ${name}`, /^Assigned /)
     }
@@ -62,6 +64,6 @@ export default {
     await ctx.command(admin, '/hof cell anchors season-2:c3', /^\d+\. plaque at 34, -58, 29, facing north$/)
 
     // On the floor, with room all round: floating and turning, as before.
-    await ctx.eventually(async () => assert(await ctx.holds(admin, `entity @e[type=minecraft:text_display,x=39,y=${FLOOR},z=27,dx=0,dy=2,dz=0,nbt={billboard:"center"}]`), 'c4\'s plaque floats above its anchor'))
+    await ctx.eventually(async () => assert(await ctx.holds(admin, `entity @e[type=minecraft:text_display,x=41,y=${FLOOR},z=27,dx=0,dy=2,dz=0,nbt={billboard:"center"}]`), 'c4\'s plaque floats above its anchor'))
   }
 }

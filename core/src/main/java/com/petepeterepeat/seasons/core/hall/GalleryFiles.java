@@ -328,7 +328,16 @@ public final class GalleryFiles {
         }
         scale = java.util.OptionalDouble.of(value);
       }
-      anchors.add(new Anchor(type, position, page, egg, area, scale));
+      Optional<PlaqueFit.Facing> facing = Optional.empty();
+      if (!anchor.node("facing").virtual()) {
+        String value = anchor.node("facing").getString("");
+        facing = PlaqueFit.Facing.of(value);
+        if (type != AnchorType.PLAQUE || facing.isEmpty()) {
+          throw new Invalid(
+              at + ".facing", "only a plaque faces a way: north, south, west, east or up");
+        }
+      }
+      anchors.add(new Anchor(type, position, page, egg, area, scale, facing));
     }
     Map<Integer, PlayerId> owners = new HashMap<>();
     for (Map.Entry<Object, ? extends ConfigurationNode> owner :
@@ -460,6 +469,9 @@ public final class GalleryFiles {
         setPoint(a, anchor.at(), anchor.area());
         if (anchor.scale().isPresent()) {
           a.node("scale").set(anchor.scale().getAsDouble());
+        }
+        if (anchor.facing().isPresent()) {
+          a.node("facing").set(anchor.facing().get().id());
         }
         if (anchor.page().isPresent()) {
           a.node("page").set(anchor.page().getAsInt());

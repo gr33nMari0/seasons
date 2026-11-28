@@ -103,6 +103,7 @@ public final class HallService {
   /** Redraws an owner's displays for a season: their cell's anchors or bounds changed. */
   private java.util.function.BiConsumer<PlayerId, Integer> redraw = (player, season) -> {};
 
+  private final CellWalls walls;
   private @Nullable ScheduledTask sweeper;
   private @Nullable ScheduledTask ticker;
 
@@ -148,6 +149,45 @@ public final class HallService {
     this.audit = audit;
     this.random = random;
     this.lastTick = clock.instant();
+    this.walls = new CellWalls(platform.world());
+  }
+
+  /** How each cell's plaque fitted when last drawn, by cell key; server thread only. */
+  private final java.util.Map<String, PlaqueFit.Fit> plaqueFits = new java.util.HashMap<>();
+
+  /** Notes how a cell's plaque fitted as it was drawn (1.4.1, H4). */
+  void plaqueFitted(String cell, PlaqueFit.Fit fit) {
+    plaqueFits.put(cell, fit);
+  }
+
+  /** How a cell's plaque fitted when last drawn, if it has been since the server started. */
+  public Optional<PlaqueFit.Fit> plaqueFit(String cell) {
+    return Optional.ofNullable(plaqueFits.get(cell));
+  }
+
+  /**
+   * Writes the facing guessed for a plaque anchor without one into its gallery file, once, so the
+   * plaque stands the same way from then on (questions 346). Not while a stamp holds the gallery.
+   */
+  void keepGuessedFacing(CellRef ref, Anchor anchor, PlaqueFit.Facing facing) {
+    Optional<Gallery> current = gallery(ref.gallery().id());
+    if (current.isEmpty() || heldForStamp(ref.gallery().id())) {
+      return;
+    }
+    Optional<Cell> cell = current.get().cell(ref.cell().id());
+    if (cell.isEmpty() || !cell.get().anchors().contains(anchor)) {
+      return;
+    }
+    List<Anchor> anchors = new ArrayList<>();
+    for (Anchor each : cell.get().anchors()) {
+      anchors.add(each.equals(anchor) ? each.withFacing(Optional.of(facing)) : each);
+    }
+    var _ = saveWithoutRedraw(current.get().withCell(cell.get().withAnchors(anchors)));
+  }
+
+  /** Which faces of each cell's bounds are walls (1.4.1, H1). */
+  public CellWalls walls() {
+    return walls;
   }
 
   /**
@@ -421,21 +461,22 @@ public final class HallService {
     if (after.kind() != Gallery.Kind.SEASON || heldForStamp(after.id())) {
       return;
     }
+    // Plaques are fitted to their room at their size, so a new size draws them again too.
+    boolean resized = !before.settings().plaqueScale().equals(after.settings().plaqueScale());
     for (Cell cell : after.cells()) {
       Optional<PlayerId> owner = cell.owner(after.season());
       Optional<Cell> was = before.cell(cell.id());
-      if (owner.isPresent() && was.isPresent() && !placed(was.get()).equals(placed(cell))) {
+      if (owner.isPresent()
+          && was.isPresent()
+          && (resized || !placed(was.get()).equals(placed(cell)))) {
         redraw.accept(owner.get(), after.season());
       }
     }
   }
 
-  /** What decides where a cell's displays stand: its bounds and anchors, sizes aside. */
+  /** What decides where and how a cell's displays stand: its bounds, pose and anchors. */
   private static List<Object> placed(Cell cell) {
-    return List.of(
-        cell.bounds(),
-        cell.pose(),
-        cell.anchors().stream().map(a -> a.withScale(java.util.OptionalDouble.empty())).toList());
+    return List.of(cell.bounds(), cell.pose(), cell.anchors());
   }
 
   /** Removes a gallery and its file, keeping a backup (questions 269). */
@@ -949,9 +990,16 @@ public final class HallService {
       return new OpenResult.Refused("decorate.already-open");
     }
     Instant now = clock.instant();
+    walls.forget();
     decorating.accept(d -> d.opened(now));
     int season = current.get().season();
     int owners = assignAll(season);
+    // Each cell's walls as they are now, before its owner builds against them (questions 342).
+    for (Gallery gallery : seasonGalleries(season)) {
+      for (Cell cell : gallery.cells()) {
+        var _ = walls.remember(new CellRef(gallery, cell));
+      }
+    }
     if (seasonGalleries(season).stream().anyMatch(this::claims)) {
       for (PlayerRecord record : withoutCell(season)) {
         if (platform.players().find(record.id()).isPresent()) {

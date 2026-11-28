@@ -93,6 +93,12 @@ final class PaperDisplays implements Displays {
 
   @Override
   public UUID spawnText(Position position, Message message, String tag, double scale) {
+    return spawnText(position, message, tag, scale, false);
+  }
+
+  @Override
+  public UUID spawnText(
+      Position position, Message message, String tag, double scale, boolean fixed) {
     Location location = PaperPositions.toLocation(position);
     TextDisplay display =
         location
@@ -103,7 +109,7 @@ final class PaperDisplays implements Displays {
                 spawned -> {
                   // Compact, so /data and clients see one text component, not a split one.
                   spawned.text(text.render(message).compact());
-                  spawned.setBillboard(Display.Billboard.CENTER);
+                  spawned.setBillboard(fixed ? Display.Billboard.FIXED : Display.Billboard.CENTER);
                   scale(spawned, scale);
                   tag(spawned, tag);
                 });
