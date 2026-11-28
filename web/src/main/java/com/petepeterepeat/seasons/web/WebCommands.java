@@ -33,6 +33,11 @@ final class WebCommands {
 
   /** {@code /web link <code>}: the dashboard that showed the code logs in as this player. */
   List<Line> link(UUID player, String name, boolean admin, String code) {
+    return link(player, name, Grants.of(admin), code);
+  }
+
+  /** {@code /web link <code>}, with the parts of seasons.web.admin the player holds. */
+  List<Line> link(UUID player, String name, Grants grants, String code) {
     if (!web.serving()) {
       return off();
     }
@@ -42,7 +47,7 @@ final class WebCommands {
       web.audit().record(name, "web.link-locked", name, "refused", "too many wrong codes");
       return List.of(Line.of("link.locked"));
     }
-    if (web.codes().link(code, new DeviceCodes.Linked(player, name, admin))) {
+    if (web.codes().link(code, new DeviceCodes.Linked(player, name, grants))) {
       web.audit().record(name, "web.login", name, "ok", "device code linked");
       return List.of(Line.of("link.linked", "player", name));
     }

@@ -22,6 +22,8 @@ final class PaperWebCommands {
   static final String PERMISSION = "seasons.web";
   static final String ADMIN_PERMISSION = "seasons.web.admin";
   static final String DISCOVERY_PERMISSION = "seasons.web.discovery";
+  static final String SETUP_PERMISSION = "seasons.web.admin.setup";
+  static final String RELOAD_PERMISSION = "seasons.web.admin.reload";
 
   private final Plugin plugin;
   private final Supplier<Web> web;
@@ -67,7 +69,7 @@ final class PaperWebCommands {
                                   .link(
                                       p.getUniqueId(),
                                       p.getName(),
-                                      p.hasPermission(ADMIN_PERMISSION),
+                                      Grants.from(p::hasPermission),
                                       StringArgumentType.getString(c, "code")));
                         })))
         .then(

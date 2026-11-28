@@ -43,7 +43,7 @@ final class SessionStore {
    * @param id a short id for {@code /web sessions} and {@code /web logout}
    * @param hash the token's SHA-256
    * @param device such as "Safari on iPad"
-   * @param admin whether the player held seasons.web.admin when last checked
+   * @param grants the parts of seasons.web.admin the player held when last checked
    */
   record Session(
       String id,
@@ -54,13 +54,18 @@ final class SessionStore {
       Instant created,
       Instant lastSeen,
       Instant expires,
-      boolean admin) {
+      Grants grants) {
     Session seen(Instant at) {
-      return new Session(id, hash, player, name, device, created, at, expires, admin);
+      return new Session(id, hash, player, name, device, created, at, expires, grants);
     }
 
-    Session withAdmin(boolean next) {
+    Session withGrants(Grants next) {
       return new Session(id, hash, player, name, device, created, lastSeen, expires, next);
+    }
+
+    /** Whether the player held any part of seasons.web.admin. */
+    boolean admin() {
+      return grants.any();
     }
   }
 
@@ -106,7 +111,7 @@ final class SessionStore {
                 Instant.parse(o.get("created").getAsString()),
                 Instant.parse(o.get("lastSeen").getAsString()),
                 Instant.parse(o.get("expires").getAsString()),
-                o.has("admin") && o.get("admin").getAsBoolean());
+                grants(o));
         sessions.put(s.hash(), s);
       }
     } catch (IOException | RuntimeException e) {
@@ -120,7 +125,26 @@ final class SessionStore {
     }
   }
 
+  /**
+   * A session's grants: its {@code grants} list (1.5), or its {@code admin} flag as 1.4 wrote it,
+   * which was all of them.
+   */
+  private static Grants grants(JsonObject o) {
+    if (o.get("grants") instanceof JsonArray list) {
+      List<Grants.Grant> held = new ArrayList<>();
+      for (JsonElement e : list) {
+        Grants.Grant.parse(e.getAsString()).ifPresent(held::add);
+      }
+      return Grants.of(held);
+    }
+    return Grants.of(o.has("admin") && o.get("admin").getAsBoolean());
+  }
+
   Created create(UUID player, String name, String device, boolean admin, Duration lifetime) {
+    return create(player, name, device, Grants.of(admin), lifetime);
+  }
+
+  Created create(UUID player, String name, String device, Grants grants, Duration lifetime) {
     Instant now = clock.instant();
     String token = Tokens.secret();
     Session s =
@@ -133,7 +157,7 @@ final class SessionStore {
             now,
             now,
             now.plus(lifetime),
-            admin);
+            grants);
     sessions.put(s.hash(), s);
     save();
     return new Created(s, token);
@@ -201,8 +225,13 @@ final class SessionStore {
     return mine.size();
   }
 
-  /** Records whether a player holds seasons.web.admin, on every session of theirs. */
+  /** Records whether a player holds seasons.web.admin, all of it or none, on their sessions. */
   void setAdmin(UUID player, boolean admin) {
+    setGrants(player, Grants.of(admin));
+  }
+
+  /** Records the parts of seasons.web.admin a player holds, on every session of theirs. */
+  void setGrants(UUID player, Grants grants) {
     boolean[] changed = {false};
     for (Session s : List.copyOf(sessions.values())) {
       if (s.player().equals(player)) {
@@ -210,11 +239,11 @@ final class SessionStore {
         sessions.computeIfPresent(
             s.hash(),
             (k, now) -> {
-              if (now.admin() == admin) {
+              if (now.grants().equals(grants)) {
                 return now;
               }
               changed[0] = true;
-              return now.withAdmin(admin);
+              return now.withGrants(grants);
             });
       }
     }
@@ -256,7 +285,13 @@ final class SessionStore {
           o.addProperty("created", s.created().toString());
           o.addProperty("lastSeen", s.lastSeen().toString());
           o.addProperty("expires", s.expires().toString());
+          // admin as 1.4 reads it; grants, the parts held, from 1.5.
           o.addProperty("admin", s.admin());
+          JsonArray grants = new JsonArray();
+          s.grants().held().stream()
+              .sorted()
+              .forEach(g -> grants.add(g.name().toLowerCase(java.util.Locale.ROOT)));
+          o.add("grants", grants);
           list.add(o);
         });
     root.add("sessions", list);

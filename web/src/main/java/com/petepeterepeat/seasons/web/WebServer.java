@@ -131,7 +131,7 @@ final class WebServer implements AutoCloseable {
       Optional<SessionStore.Session> session = sessions.find(token);
       if (session.isPresent()) {
         SessionStore.Session s = session.get();
-        viewer = new Viewer.Player(s.player(), s.name(), s.admin(), s.id());
+        viewer = new Viewer.Player(s.player(), s.name(), s.grants(), s.id());
         wait = limiter.take("account:" + s.player(), limits.requestsPerMinutePerAccount());
         if (wait > 0) {
           send(exchange, limited(wait));

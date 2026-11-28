@@ -272,6 +272,9 @@ final class Routes {
       who.addProperty("uuid", p.id().toString());
       who.addProperty("name", p.name());
       who.addProperty("admin", p.admin());
+      JsonArray grants = new JsonArray();
+      p.grants().held().stream().sorted().forEach(g -> grants.add(g.name().toLowerCase(java.util.Locale.ROOT)));
+      who.add("grants", grants);
     } else {
       who.addProperty("kind", "anonymous");
     }
@@ -458,7 +461,7 @@ final class Routes {
                 c.linked().player(),
                 c.linked().name(),
                 Devices.label(messages.get(), r.userAgent()),
-                c.linked().admin(),
+                c.linked().grants(),
                 config.sessionLifetime());
         JsonObject o = new JsonObject();
         o.addProperty("status", "linked");

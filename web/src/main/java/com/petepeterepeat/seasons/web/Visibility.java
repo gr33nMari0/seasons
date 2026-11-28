@@ -125,7 +125,7 @@ final class Visibility {
     return switch (level(key)) {
       case PUBLIC -> true;
       case PLAYERS -> !(viewer instanceof Viewer.Anonymous);
-      case ADMINS -> viewer instanceof Viewer.Player p && p.admin();
+      case ADMINS -> viewer instanceof Viewer.Player p && p.grants().sees(key);
       case HIDDEN -> false;
     };
   }

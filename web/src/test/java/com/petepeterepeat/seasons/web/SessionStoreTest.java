@@ -161,4 +161,33 @@ class SessionStoreTest {
     assertThat(sessions.find(ipad.token())).isEmpty();
     writer.close();
   }
+
+  @Test
+  void grantsAreKeptAndA14AdminFlagMeansEveryPart() throws Exception {
+    FileWriter writer = new FileWriter(LoggerFactory.getLogger("test"));
+    SessionStore sessions = store(writer);
+    SessionStore.Created ipad =
+        sessions.create(
+            alex, "Alex", "Safari on iPad", Grants.of(List.of(Grants.Grant.AUDIT)), Duration.ofDays(1));
+    writer.flush();
+    String file = Files.readString(dir.resolve("sessions.json"));
+    assertThat(file).contains("\"admin\":true").contains("\"grants\":[\"audit\"]");
+    SessionStore again = store(writer);
+    again.load();
+    assertThat(again.find(ipad.token()))
+        .map(SessionStore.Session::grants)
+        .contains(Grants.of(List.of(Grants.Grant.AUDIT)));
+
+    // As 1.4 wrote it: an admin flag and no grants.
+    writer.flush();
+    Files.writeString(
+        dir.resolve("sessions.json"),
+        file.replaceAll(",\"grants\":\\[[^\\]]*\\]", ""));
+    SessionStore old = store(writer);
+    old.load();
+    assertThat(old.find(ipad.token())).map(SessionStore.Session::grants).contains(Grants.ALL);
+    old.setGrants(alex, Grants.NONE);
+    assertThat(old.find(ipad.token())).map(SessionStore.Session::admin).contains(false);
+    writer.close();
+  }
 }

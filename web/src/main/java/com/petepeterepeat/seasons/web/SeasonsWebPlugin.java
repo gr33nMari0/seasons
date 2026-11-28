@@ -191,9 +191,7 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
     Web running = web;
     if (running != null) {
       Player p = event.getPlayer();
-      running
-          .sessions()
-          .setAdmin(p.getUniqueId(), p.hasPermission(PaperWebCommands.ADMIN_PERMISSION));
+      running.sessions().setGrants(p.getUniqueId(), Grants.from(p::hasPermission));
     }
   }
 
@@ -207,9 +205,7 @@ public final class SeasonsWebPlugin extends JavaPlugin implements Listener {
       return;
     }
     for (Player p : getServer().getOnlinePlayers()) {
-      running
-          .sessions()
-          .setAdmin(p.getUniqueId(), p.hasPermission(PaperWebCommands.ADMIN_PERMISSION));
+      running.sessions().setGrants(p.getUniqueId(), Grants.from(p::hasPermission));
     }
   }
 
