@@ -31,9 +31,21 @@ Since 1.3, block links fire on a click, except pressure plates and tripwire. To 
 
 `/season end --dry-run` reports a shortfall. Add cells (`/hof cell row`, `/hof stamp`), or set `cells.minPlaytime` so people who barely played don't take one. A player archived without a free cell keeps their archive; give them a cell and run `/hof restore <player> <season>` to draw it.
 
+## A player who came back late has no cell or figure
+
+Players who played before you installed Seasons and ran `/season init`, and who were away from then until the season ended, are archived when they next log in. Since 1.4.1 they also get a free cell in that season's gallery, and their figure is drawn there, whether they come back during the Intermission or after the next launch. On 1.4.0 they were archived without a cell: give them one with `/hof cell assign <cell> <player>`, then `/hof restore <player> <season>`.
+
+## Owners broke through their cell's walls, floor or roof
+
+The cell's bounds take in its walls: they were selected from the outside. Run `/hof hall check` to find such cells and `/hof gallery shrink <gallery>` to fix them all; see [Select the inside of a cell](/docs/owners/the-hall/#select-the-inside-of-a-cell-not-its-walls). Builders repair the damage.
+
+## A plaque's text is inside a wall or cut off
+
+Since 1.4.1 a plaque's text stands in front of its block and shrinks to fit. If it faces the wrong way, set it with `/hof cell plaque <cell> facing <side>`; `/hof hall check` lists plaques that had to shrink. See [Which way a plaque faces](/docs/owners/anchors/#which-way-a-plaque-faces).
+
 ## A figure or plaque is missing or wrong
 
-`/hof reconcile <gallery>` checks and redraws the gallery's displays; `/hof restore <player> <season>` redraws one player's. Displays are always rebuilt from the archives, so nothing is lost.
+Moving or changing a cell's anchors redraws that cell at once. `/hof reconcile <gallery>` checks and redraws the gallery's displays; `/hof restore <player> <season>` redraws one player's. Displays are always rebuilt from the archives, so nothing is lost.
 
 ## "That's in the <zone>, which is locked"
 

@@ -8,9 +8,12 @@ import { assert } from '../lib/context.mjs'
 import { FLOOR } from '../lib/hall.mjs'
 import { hallToVisit } from '../lib/visits.mjs'
 
-/** The text displays standing in one block. */
+/**
+ * The text displays standing in one column of blocks, from the block below y to y: a plaque's
+ * text is centred on its block's height, so its display stands a little below it.
+ */
 function texts (x, y, z, extra = '') {
-  return `@e[type=minecraft:text_display,x=${x},y=${y},z=${z},dx=0,dy=0,dz=0${extra}]`
+  return `@e[type=minecraft:text_display,x=${x},y=${y - 1},z=${z},dx=0,dy=1,dz=0,limit=1${extra}]`
 }
 
 async function scaleOf (ctx, admin, selector) {

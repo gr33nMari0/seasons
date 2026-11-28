@@ -52,9 +52,10 @@ export default {
       await ctx.command(admin, '/hof cell plaque season-2:c1 scale 2', /^The plaque of season-2:c1 is now 2\.0 times its size\.$/)
       await ctx.eventually(async () => assert(await scale(ctx, admin) === 2, 'set to 2'))
       await ctx.command(admin, '/hof gallery plaque season-2 scale 1.5', /^Plaques in season-2 are now 1\.5 times their size/)
-      // The cell's own size wins over the gallery's.
+      // The cell's own size wins over the gallery's. A new gallery size draws its plaques again,
+      // to fit (1.4.1), so the plaque may be gone for a moment.
       await ctx.sync(admin, [], 5)
-      assert(await scale(ctx, admin) === 2, 'the cell keeps its own size')
+      await ctx.eventually(async () => assert(await scale(ctx, admin) === 2, 'the cell keeps its own size'))
 
       // Reconciliation keeps it.
       await ctx.command(admin, '/hof reconcile season-2', /^Reconciled season-2/)

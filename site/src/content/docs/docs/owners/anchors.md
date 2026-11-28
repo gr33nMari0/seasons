@@ -42,9 +42,23 @@ While you hold the wand (or after `/hof show on`), the hub, galleries, cells, ga
 - **By command:** `/hof cell anchors <cell>` lists a cell's anchors, numbered. `/hof cell anchor move <cell> <type> [#n] <position>` moves one; `/hof cell unanchor <cell> <type> [#n]` removes one, or all of a type.
 - **Undo:** `/hof undo` puts back your last Hall edit.
 
+## Which way a plaque faces
+
+A plaque anchor on a wall block (a solid block with another solid block above it) shows its text just in front of the face it faces, fixed flat against the wall like a sign, so it never sits inside the wall. A plaque on a lectern, a chest or the floor floats above it and turns to whoever looks at it, as long as there's room for it to turn; if it would turn into a wall, it stays fixed facing the cell instead.
+
+- **With the wand,** the plaque faces the side of the block you clicked.
+- **By command,** `/hof cell plaque <cell> facing <north|south|west|east|up>` sets it, and `facing auto` lets Seasons choose again.
+- **Without a facing,** Seasons picks the block's open side that faces into the cell the first time it draws the plaque, and writes it to the gallery file. `/hof cell anchors <cell>` shows it: `3. plaque at 34, -58, 29, facing north`.
+
+If the text is too wide for the space in front of it, such as in a narrow nook between pillars, Seasons draws it smaller until it fits, down to 0.25. `/hof hall check` says when a plaque is shown smaller than asked, or doesn't fit even at 0.25:
+
+```text
+Cell season-2:c2's plaque is shown at 0.59 to fit in front of its block (asked 1.0).
+```
+
 ## Plaque size
 
-A plaque's text is 1.0 by default, 0.25 to 4. Sneak and scroll while looking at a plaque with the wand to resize it, or `/hof cell plaque <cell> scale <n>`, or a whole gallery's with `/hof gallery plaque <gallery> scale <n>`.
+A plaque's text is 1.0 by default, 0.25 to 4, and may be drawn smaller to fit (above). Sneak and scroll while looking at a plaque with the wand to resize it, or `/hof cell plaque <cell> scale <n>`, or a whole gallery's with `/hof gallery plaque <gallery> scale <n>`.
 
 ## Editing boxes in place
 

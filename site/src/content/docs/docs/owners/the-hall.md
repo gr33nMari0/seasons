@@ -20,11 +20,32 @@ Build the Hall however you like, anywhere in the world. Then tell Seasons where 
 | **Exits** | `/hof hall exit` | A block or area that sends visitors back where they came from. |
 | **Gallery** | `/hof gallery create <id> <season>`, then `/hof gallery bounds <id>` | One per season: a wing, a room or a building. |
 | **Gallery entry** | `/hof gallery entry <id>` | Where `/hof <season>` lands. |
-| **Cell** | `/hof cell new <gallery>`, then two wand corners | One player's slot. Ids run `c1`, `c2`, … unless you name them. |
+| **Cell** | `/hof cell new <gallery>`, then two wand corners | One player's slot. Ids run `c1`, `c2`, … unless you name them. Select the space **inside** the cell, not its walls (below). |
 
 `/hof hall check` reports anything that doesn't fit together: a gallery that doesn't touch the hub, odd-sized cells, a gallery without an entry, cells without a figure, links leading nowhere. After each setup step, Seasons suggests the next one in chat.
 
 A gallery that doesn't touch the hub (a museum in another building, say) is allowed; `/hof hall check` warns, because walking across the gap means leaving the Hall. Connect it, or reach it by a [link](/docs/owners/links/).
+
+### Select the inside of a cell, not its walls
+
+A cell's bounds are the space inside it: the air above its floor, up to its ceiling, between its walls. Owners may build and break anything in their bounds while decorating, so bounds selected from the outside let them break through the walls, floor and roof. Blocks they place against a wall still land inside, so selecting the inside costs them nothing.
+
+When a cell's bounds look like they take in its walls, Seasons says so as you set them, and `/hof hall check` lists it:
+
+```text
+Cell season-2:c1's bounds look like they include its walls (floor, roof, north, south, west, east). A cell's bounds are the space inside: run /hof cell shrink season-2:c1.
+```
+
+To fix it, shrink the cell by its walls. The new bounds are shown as outlines first:
+
+```text
+/hof cell shrink season-2:c1
+/hof cell shrink confirm
+```
+
+`/hof gallery shrink season-2` does every such cell of a gallery at once, then `/hof gallery shrink confirm`. Either takes a number of blocks (1 to 4, 1 by default) and `--all` to move every face in, walls or not. A shrink that would leave an anchor outside the cell is refused, `cancel` drops the preview, and `/hof undo` puts the old bounds back.
+
+Until you fix them, `cells.protectShell` (on by default) keeps owners off any wall, floor or roof inside their bounds: they can't break it, but they can still break whatever they placed themselves.
 
 ## Many cells at once
 
@@ -66,6 +87,7 @@ Nobody is ever teleported out of a cell: a gate waits until its cell and doorway
 ## Decorating
 
 - During the window, owners are in survival inside their own cell and decorate with their own blocks.
+- An owner can't break a wall, floor or roof that their cell's bounds take in (`cells.protectShell`); see [Select the inside of a cell](#select-the-inside-of-a-cell-not-its-walls).
 - Containers are allowed as decoration: chests, barrels, shulker boxes and decorated pots (`cells.containers`). Only the owner opens them while decorating; anyone else sees a view-only copy. Owners can't place hoppers, droppers, dispensers, crafters or ender chests.
 - Cells lock when the season ends, before anyone is archived. Whatever was placed becomes protected Hall, and every container opens as a view-only copy from then on, so items left in one are on display forever. A stash gains nothing.
 - After archiving, owners get `decorating.afterArchive` (15 minutes) to arrange their cell around their new figure.
@@ -74,7 +96,7 @@ Nobody is ever teleported out of a cell: a gate waits until its cell and doorway
 
 Inside the Hall: adventure mode, no item dropping or pickup, no ender pearls or chorus fruit, no riding entities in. Displays can't be hit, moved or taken. Players in creative mode and holders of `seasons.hof.bypass` are **builders**: they can change the hub, hallways and archways and place anything, crafting tables and ender chests included. Seasons never removes or changes decoration; it only touches its own figures, displays, gate planes and stamped markers.
 
-Seasons keeps the displays right by itself: every display is checked against the archives and redrawn if anything breaks or goes missing. `/hof reconcile <gallery>` runs that check now, and `/hof restore <player> <season>` redraws one player's displays.
+Seasons keeps the displays right by itself: every display is checked against the archives and redrawn if anything breaks or goes missing. When you move, add or remove a cell's anchors or change its bounds, that cell is drawn again at once. `/hof reconcile <gallery>` runs that check now, and `/hof restore <player> <season>` redraws one player's displays.
 
 ## Keeping a hand-built Hall
 
@@ -101,5 +123,7 @@ If your server already has a hand-built Hall of Fame, you can keep it exactly as
 | `/hof cell unassign <cell> [season]` | Free a cell |
 | `/hof cell remove <cell>` | Remove a cell with no owner |
 | `/hof cell row cancel` | Drop a row you previewed |
+| `/hof cell shrink <cell> [n] [--all]` | Move a cell's walls out of its bounds; `confirm` writes it, `cancel` drops it |
+| `/hof gallery shrink <gallery> [n] [--all]` | The same for every cell of a gallery; `confirm` or `cancel` |
 
 To get around: `/hof tp hub`, `/hof tp gallery <gallery>`, `/hof tp cell <cell>`, `/hof tp player <player>` and `/hof tp link <link>` go there with no entry checks.

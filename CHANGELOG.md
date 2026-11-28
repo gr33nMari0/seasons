@@ -4,6 +4,19 @@ Every behaviour change gets an entry. The format follows [Keep a Changelog](http
 
 ## [Unreleased]
 
+### Added
+
+- Cells whose bounds take in their walls, floor and roof (selected from the outside) are warned about as you set them and listed by `/hof hall check`. `/hof cell shrink <cell>` and `/hof gallery shrink <gallery>` move the walls out of the bounds, previewed as outlines, then `confirm`; `/hof undo` puts them back.
+- `cells.protectShell` (on by default): an owner decorating can't break a wall, floor or roof their cell's bounds take in, only what they placed themselves.
+- `/hof cell plaque <cell> facing <side|auto>`: which side of its block a plaque's text stands on. The wand sets it from the side you click, and `/hof cell anchors` shows it.
+
+### Fixed
+
+- Players who played before `/season init` and were away until the season ended got no cell or figure when they came back. They now get a free cell and their figure, during the Intermission or after the next launch.
+- Moving, adding or removing a cell's anchors, or changing its bounds, now redraws that cell at once, without `/hof reconcile`.
+- A plaque's text no longer clips into walls: on a wall block it stands just in front of the face, fixed; floating plaques stop turning where they'd turn into a wall; and text too wide for its space shrinks to fit, down to 0.25, with `/hof hall check` saying so. Plaques without a facing get one guessed from their block's open side, once.
+- `/hof cell move` keeps an entry anchor's area and a plaque's size, and `/hof cell row --like` copies a plaque's size and facing.
+
 ## [1.4.0] - 2026-11-25
 
 ### Added

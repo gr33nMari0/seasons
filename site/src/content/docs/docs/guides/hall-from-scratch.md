@@ -44,11 +44,11 @@ Build one cell. Then:
 /hof cell new season-3
 ```
 
-Sneak-click two corners of the cell's inside (floor not included). Now right-click blocks with the wand and pick:
+Sneak-click two corners of the cell's inside (floor not included): the air between its walls, not the walls themselves. If you select the outside by mistake, Seasons warns you, and `/hof cell shrink` fixes it. Now right-click blocks with the wand and pick:
 
 - **figure** where the mannequin should stand;
 - **archive** on a chest or barrel;
-- **plaque** on a lectern or a wall block;
+- **plaque** on a lectern or a wall block (its text stands on the side you click);
 - **trophy** on a shelf or two, for awards.
 
 ## 4. The rest of the row
